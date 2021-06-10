@@ -23,11 +23,8 @@ from matplotlib.dates import date2num
 from scipy import interpolate
 from scipy.constants import convert_temperature
 from sklearn.metrics import mean_absolute_error
+import XMLReport
 
-try:
-    import pyhecdss
-except:
-    print('pyhecdss import failed! W2 results not available')
 
 sat_data_do = [14.60, 14.19, 13.81, 13.44, 13.09, 12.75, 12.43, 12.12, 11.83, 11.55, 11.27, 11.01, 10.76, 10.52, 10.29,
                10.07, 9.85, 9.65, 9.45, 9.26, 9.07, 8.90, 8.72, 8.56, 8.40, 8.24, 8.09, 7.95, 7.81, 7.67, 7.54, 7.41,
@@ -1289,35 +1286,67 @@ def get_XML_template():
     return XML_template
 
 
-def XML_reservior(profile_stats, n_element=0, n_fig=0, n_table=0):
+def get_reservoir_description(region):
+    if region.lower() == 'shasta':
+        return "Shasta Reservoir Temperature Profiles Near Dam"
+    elif region.lower() == 'keswick':
+        return "Keswick Reservoir Temperature Profiles Near Dam"
+    elif region.lower() == 'uppersac':
+        return "Sacramento River Above Clear Creek"
+
+def get_ts_description(region):
+    if region.lower() == 'shasta':
+        return "Shasta Reservoir Outflow and Outflow Temperature"
+    elif region.lower() == 'keswick':
+        return "Keswick Reservoir Outflow and Outflow Temperature"
+    elif region.lower() == 'uppersac':
+        return "Sacramento River Above Clear Creek"
+
+
+def XML_reservior(profile_stats, XML_class, region_name, n_element=0, n_fig=0, n_table=0):
     # only writing one reservoir XLM section here
-    XML = ""
+
+    XML = ''
+
+    #res name, year, list of pngs, stats dictionary
     for subdomain_name, figure_sets in profile_stats.items():
+        XML += XML_class.make_Reservoir_Group_header(subdomain_name) #TODO CHANGE GROUP ORDER
         if len(figure_sets) > 0:
-            XML_figs = ""
             for ps in figure_sets:
                 reservoir, yr, fig_names, stats = ps
-                for i, fn in enumerate(fig_names):
-                    XML_f = copy.copy(get_XML_template()['reservoir_fig'])
-                    XML_f = XML_f.replace("$$FIG_NUM$$", str(n_fig))
-                    n_fig += 1
-                    XML_f = XML_f.replace("$$FIG_DESCRIPTION$$", reservoir + ' %i: %i of %i' % (yr, i, len(fig_names)))
-                    XML_f = XML_f.replace("$$FIG_FILENAME$$", fn)
-                    XML_figs = XML_figs + XML_f
+                fig_names = [os.path.join('..','Images', n) for n in fig_names]
+                subgroup_desc = get_reservoir_description(region_name)
+                XML += XML_class.make_ReservoirSubgroup_lines(reservoir,fig_names, subgroup_desc, yr)
 
-            XML_r = copy.copy(get_XML_template()['reservoir'])
-            XML_r = XML_r.replace("$$ORDER$$", str(n_element))
-            n_element += 1
-            XML_r = XML_r.replace("$$RESERVOIR_NAME$$", reservoir)
-            XML_r = XML_r.replace("$$RESERVOIR_FIGS$$", XML_figs)
-        else:
-            XML_r = ""  # reservoir plots requested, but no observation data found
-        XML = XML + XML_r
+    return XML, n_element, n_fig, n_table #TODO these are all extra, do we need them?
 
-    return XML, n_element, n_fig, n_table
+    # XML = ""
+    # for subdomain_name, figure_sets in profile_stats.items():
+    #     if len(figure_sets) > 0:
+    #         XML_figs = ""
+    #         for ps in figure_sets:
+    #             reservoir, yr, fig_names, stats = ps
+    #             for i, fn in enumerate(fig_names):
+    #                 XML_f = copy.copy(get_XML_template()['reservoir_fig'])
+    #                 XML_f = XML_f.replace("$$FIG_NUM$$", str(n_fig))
+    #                 n_fig += 1
+    #                 XML_f = XML_f.replace("$$FIG_DESCRIPTION$$", reservoir + ' %i: %i of %i' % (yr, i, len(fig_names)))
+    #                 XML_f = XML_f.replace("$$FIG_FILENAME$$", os.path.join('..', 'Images', fn))
+    #                 XML_figs = XML_figs + XML_f
+    #
+    #         XML_r = copy.copy(get_XML_template()['reservoir'])
+    #         XML_r = XML_r.replace("$$ORDER$$", str(n_element))
+    #         n_element += 1
+    #         XML_r = XML_r.replace("$$RESERVOIR_NAME$$", reservoir)
+    #         XML_r = XML_r.replace("$$RESERVOIR_FIGS$$", XML_figs)
+    #     else:
+    #         XML_r = ""  # reservoir plots requested, but no observation data found
+    #     XML = XML + XML_r
+    #
+    # return XML, n_element, n_fig, n_table
 
 
-def XML_time_series(ts_results, output_path, n_element=0, n_fig=0, n_table=0):
+def XML_time_series(ts_results, XML_class, region_name, n_element=0, n_fig=0, n_table=0):
     stats_labels = {
         'Mean Bias': r'Mean Bias (&lt;sup&gt;O&lt;/sup&gt;C)',
         'MAE': r'MAE (&lt;sup&gt;O&lt;/sup&gt;C)',
@@ -1330,25 +1359,34 @@ def XML_time_series(ts_results, output_path, n_element=0, n_fig=0, n_table=0):
     XML = ""
     for ts in ts_results:
         station, x, y, metric, fig_name, stats, stats_mo = ts
+        fig_name = os.path.join('..','Images', fig_name)
+        subgroup_desc = get_ts_description(region_name)
+        XML += XML_class.make_TS_Subgroup_lines(station, fig_name, subgroup_desc)
+        XML += XML_class.make_TS_Tables_lines(station, stats, stats_mo, stats_ordered, stats_labels)
+        XML += '        </Report_Subgroup>\n'
+        # XML += '     </Report_Group>\n'
 
-        XML_f = copy.copy(get_XML_template()['time_series_fig'])
-        XML_f = XML_f.replace("$$FIG_NUM$$", str(n_fig))
-        n_fig += 1
-        XML_f = XML_f.replace("$$FIG_DESCRIPTION$$", station)
-        XML_f = XML_f.replace("$$FIG_FILENAME$$", fig_name)
-
-        # error stats table by year-column
-        n_table, XML_t_error = XML_error_stats_table(n_table, station, stats, stats_ordered, stats_labels)
-        n_table, XML_t_month_means = XML_mean_monthly_stats_table(n_table, station, stats_mo)
-
-        XML_ts = copy.copy(get_XML_template()['time_series'])
-        XML_ts = XML_ts.replace("$$ORDER$$", str(n_element))
-        n_element += 1
-        XML_ts = XML_ts.replace("$$TS_NAME$$", station)
-        XML_ts = XML_ts.replace("$$TS_FIGURE$$", XML_f)
-        XML_ts = XML_ts.replace("$$TS_TABLE$$", XML_t_error + XML_t_month_means)
-
-        XML += XML_ts
+    # for ts in ts_results:
+    #     station, x, y, metric, fig_name, stats, stats_mo = ts
+    #
+    #     XML_f = copy.copy(get_XML_template()['time_series_fig'])
+    #     XML_f = XML_f.replace("$$FIG_NUM$$", str(n_fig))
+    #     n_fig += 1
+    #     XML_f = XML_f.replace("$$FIG_DESCRIPTION$$", station)
+    #     XML_f = XML_f.replace("$$FIG_FILENAME$$", os.path.join('..', 'Images', fig_name))
+    #
+    #     # error stats table by year-column
+    #     n_table, XML_t_error = XML_error_stats_table(n_table, station, stats, stats_ordered, stats_labels)
+    #     n_table, XML_t_month_means = XML_mean_monthly_stats_table(n_table, station, stats_mo)
+    #
+    #     XML_ts = copy.copy(get_XML_template()['time_series'])
+    #     XML_ts = XML_ts.replace("$$ORDER$$", str(n_element))
+    #     n_element += 1
+    #     XML_ts = XML_ts.replace("$$TS_NAME$$", station)
+    #     XML_ts = XML_ts.replace("$$TS_FIGURE$$", XML_f)
+    #     XML_ts = XML_ts.replace("$$TS_TABLE$$", XML_t_error + XML_t_month_means)
+    #
+    #     XML += XML_ts
 
     return XML, n_element, n_fig, n_table
 
@@ -1417,7 +1455,10 @@ def XML_mean_monthly_stats_table(n_table, station, stats_mo):
     return n_table, XML_t
 
 
-def XML_write(output_path, profile_stats, ts_results, report_name):
+def XML_write(output_path, profile_stats, ts_results, report_name, region_name):
+
+    XML = XMLReport.makeXMLReport("USBRAutomatedReportOutput.xml")
+
     n_element = 1
     n_fig = 1
     n_table = 1
@@ -1425,18 +1466,22 @@ def XML_write(output_path, profile_stats, ts_results, report_name):
     XML_res = ""
     XML_ts = ""
     if len(profile_stats) > 0:
-        XML_res, n_element, n_fig, n_table = XML_reservior(profile_stats, n_element, n_fig, n_table)
+        XML_res, n_element, n_fig, n_table = XML_reservior(profile_stats, XML, region_name, n_element, n_fig, n_table)
     if len(ts_results) > 0:
-        XML_ts, n_element, n_fig, n_table = XML_time_series(ts_results, output_path, n_element, n_fig, n_table)
+        XML_ts, n_element, n_fig, n_table = XML_time_series(ts_results,XML, region_name,  n_element, n_fig, n_table)
 
-    XML_start = copy.copy(get_XML_template()['start'])
-    XML_start = XML_start.replace("$$SIMULATION_NAME$$", report_name)
-    XML_start = XML_start.replace("$$REPORT_DATE$$", dt.datetime.now().strftime('%Y-%m-%d %H:%M'))
-    XML_end = copy.copy(get_XML_template()['end'])
 
-    XML = XML_start + XML_res + XML_ts + XML_end
-    with open(os.path.join(output_path, XML_fname), 'w') as fp:
-        fp.write(XML)
+    XML.write_Reservoir(region_name, XML_res, XML_ts)
+
+
+    # XML_start = copy.copy(get_XML_template()['start'])
+    # XML_start = XML_start.replace("$$SIMULATION_NAME$$", report_name)
+    # XML_start = XML_start.replace("$$REPORT_DATE$$", dt.datetime.now().strftime('%Y-%m-%d %H:%M'))
+    # XML_end = copy.copy(get_XML_template()['end'])
+
+    # XML = XML_start + XML_res + XML_ts + XML_end
+    # with open(os.path.join(output_path, XML_fname), 'w') as fp:
+    #     fp.write(XML)
 
 
 XML_fname = 'USBRAutomatedReportOutput.xml'
@@ -1448,21 +1493,57 @@ def clean_output_dir(dir_name):
     for file in filtered_files:
         path_to_file = os.path.join(dir_name, file)
         os.remove(path_to_file)
-    xml_file = os.path.join(dir_name, XML_fname)
-    if os.path.exists(xml_file):
-        os.remove(xml_file)
+    # xml_file = os.path.join(dir_name, XML_fname)
+    # if os.path.exists(xml_file):
+    #     os.remove(xml_file)
 
 
-def generate_report_plots_ResSim(simulation_path, alternative, observed_data_directory, temperature_only=False,
-                                 use_depth=False, clean_out_dir=True):
-    # output_path = r"J:\Ben\temp"  # WAT will start path where we need to write
-    output_path = ""  # WAT will start path where we need to write
+# def generate_report_plots_ResSim(simulation_path, alternative, observed_data_directory, temperature_only=False,
+#                                  use_depth=False, clean_out_dir=True):
+#     output_path = r"Z:\USBR\test"  # WAT will start path where we need to write
+#     # output_path = "."  # WAT will start path where we need to write
+#
+#     if clean_out_dir:
+#         clean_output_dir(output_path)
+#
+#     profile_meta_file = os.path.join(observed_data_directory, "Profile_stations.txt")
+#     ts_meta_file = os.path.join(observed_data_directory, "TS_stations.txt")
+#
+#     # we should only need to generate a single instance of ResSimModelResults; while we need to pass in a
+#     # subdomain/reservoir for legacy purposes at this point, and subdomain/reservoir can be passed to through
+#     # to the get_profile command
+#     profile_subdomains, _ = read_obs_profile_meta_file(profile_meta_file)
+#     mr = ResSimModelResults(simulation_path, alternative)
+#
+#     profile_stats = {}
+#     for subdomain, meta in profile_subdomains.items():
+#         if meta['metric'].lower() == 'temperature' or not temperature_only:
+#             profile_stats[subdomain] = plot_profiles(mr, meta['metric'], observed_data_directory, subdomain,
+#                                                      output_path,
+#                                                      use_depth=use_depth)
+#
+#     ts_results = plot_time_series(mr, ts_meta_file, output_path, simulation_path, alternative,
+#                                   temperature_only=temperature_only)
+#
+#     _, sim_name = os.path.split(simulation_path)
+#     report_name = " : ".join([sim_name, alternative])
+#     XML_write(output_path, profile_stats, ts_results, report_name)
+
+def generate_region_plots_ResSim(simulation_path, alternative, observed_data_directory, region_name, temperature_only=False,
+                                     use_depth=False, clean_out_dir=False):
+    # output_path = r"Z:\USBR\test"  # WAT will start path where we need to write
+    output_path = "."  # WAT will start path where we need to write
+    images_path = os.path.join(output_path, '..', "Images")
+    if not os.path.exists(images_path):
+        os.makedirs(images_path)
 
     if clean_out_dir:
-        clean_output_dir(output_path)
+        clean_output_dir(images_path)
+
 
     profile_meta_file = os.path.join(observed_data_directory, "Profile_stations.txt")
     ts_meta_file = os.path.join(observed_data_directory, "TS_stations.txt")
+
 
     # we should only need to generate a single instance of ResSimModelResults; while we need to pass in a
     # subdomain/reservoir for legacy purposes at this point, and subdomain/reservoir can be passed to through
@@ -1474,15 +1555,16 @@ def generate_report_plots_ResSim(simulation_path, alternative, observed_data_dir
     for subdomain, meta in profile_subdomains.items():
         if meta['metric'].lower() == 'temperature' or not temperature_only:
             profile_stats[subdomain] = plot_profiles(mr, meta['metric'], observed_data_directory, subdomain,
-                                                     output_path,
+                                                     images_path,
                                                      use_depth=use_depth)
 
-    ts_results = plot_time_series(mr, ts_meta_file, output_path, simulation_path, alternative,
+    ts_results = plot_time_series(mr, ts_meta_file, images_path, simulation_path, alternative,
                                   temperature_only=temperature_only)
 
     _, sim_name = os.path.split(simulation_path)
     report_name = " : ".join([sim_name, alternative])
-    XML_write(output_path, profile_stats, ts_results, report_name)
+    XML_write(output_path, profile_stats, ts_results, report_name, region_name)
+
 
 
 if __name__ == '__main__':
@@ -1491,23 +1573,28 @@ if __name__ == '__main__':
 
     # exit()
 
-    # generate_report_plots_ResSim(r'J:\Ben\Shasta\SimpleShasta\rss\test02_longModel-2015', 'test02_LM-0',
-    #                            r'J:\Ben\Shasta\ShastaData',
-    #                            temperature_only=True, use_depth=True)
+    generate_region_plots_ResSim(r'D:\Work2021\USBR\UpperSacTemperature-demo.2021.06.07.jfd\UpperSacTemperature-demo\rss\test02_longModel-2015', 'test02_LM-0',
+                               r'D:\Work2021\USBR\observed_data_Shasta', 'Keswick',
+                               temperature_only=True, use_depth=True)
+    exit()
 
     # generate_report_plots_ResSim(r'J:\Ben\RussianRiver\RussianRiver-plot-test\rss\2020.08.24-1400', 'V2260_WQ--0',
     #                             r'J:\Ben\RussianRiver\observed_data',
     #                             temperature_only=True, use_depth=True)
 
+
+    #w2, ressim,
+
     if sys.argv[1] == 'ResSim':
         simulation_directory = sys.argv[2]
         alternative_name = sys.argv[3]
         obs_data_path = sys.argv[4]
+        region_name = sys.argv[5]
 
         # ben test values
         # ResSim J:\Ben\RussianRiver\RussianRiver-plot-test\rss\2020.08.24-1400 V2260_WQ--0 J:\Ben\RussianRiver\observed_data
 
-        generate_report_plots_ResSim(simulation_directory, alternative_name, obs_data_path,
+        generate_region_plots_ResSim(simulation_directory, alternative_name, obs_data_path, region_name,
                                      temperature_only=True, use_depth=True)
     else:
         print('WAT model "%s" not understood!' % sys.argv[0])
