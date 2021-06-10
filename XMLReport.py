@@ -73,11 +73,12 @@ class makeXMLReport(object):
                     line = line.replace(key, cover_keys[key])
                 xmlf.write(line)
 
-    def write_Reservoir(self, region, Res_Text, TS_Text):
+    def write_Reservoir(self, region, Group_Text, Res_Text, TS_Text):
         with open(self.XML_fn, 'w') as XML:
             for line in self.XMLFile:
                 sline = line.strip()
                 if sline.startswith("<!--$${0}$$-->".format(region)):
+                    XML.write(Group_Text)
                     XML.write(Res_Text)
                     XML.write(TS_Text)
                     XML.write('     </Report_Group>\n')
@@ -186,7 +187,7 @@ class makeXMLReport(object):
         fig_keys = {"$$FIG_NUM$$": self.current_fig_num,
                     "$$FIG_DESCRIPTION$$": fig_description,
                     "$$FIG_FILENAME$$": figfilename}
-        fig_line = ['                    <Output_Image FigureNumber="$$FIG_NUM$$" FigureDescription="$$FIG_DESCRIPTION$$">"$$FIG_FILENAME$$"</Output_Image>']
+        fig_line = ['                    <Output_Image FigureNumber="$$FIG_NUM$$" FigureDescription="$$FIG_DESCRIPTION$$">$$FIG_FILENAME$$</Output_Image>']
         out = ''
         for i, line in enumerate(fig_line):
             for key in fig_keys.keys():
@@ -225,7 +226,7 @@ class makeXMLReport(object):
 
     def make_TS_error_stats_table(self, station, stats, stats_ordered, stats_labels):
         error_table_keys = {"$$TABLENUM$$": self.current_table_num,
-                            "$$TABLE_DESC": station}
+                            "$$TABLE_DESC$$": station}
         error_table_lines = ['                  <Output_Table TableNumber="$$TABLENUM$$" TableDescription="$$TABLE_DESC$$" TableType="Statistics">']
 
         out = ''
@@ -239,16 +240,20 @@ class makeXMLReport(object):
                     line = line.replace(key, str(error_table_keys[key]))
             out += line+'\n'
 
-        colname = ''
-        column_keys = {'$$COL_ORDER$$': self.column_order,
-                       '$$COLNAME$$': colname}
+        # colname = ''
+        # column_keys = {'$$COL_ORDER$$': self.column_order,
+        #                '$$COL_NAME$$': colname}
 
         for j, colname in enumerate(stats.keys()):
+            column_keys = {'$$COL_ORDER$$': j,
+                           '$$COL_NAME$$': colname}
             column_line = '                        <Column Column_Order="$$COL_ORDER$$" Column_Name="$$COL_NAME$$">'
             for key in column_keys:
                 if key == '$$COL_ORDER$$':
                     column_line = column_line.replace(key, str(column_keys[key]))
                     self.column_order += 1
+                else:
+                    column_line = column_line.replace(key, str(column_keys[key]))
             out += column_line + '\n'
             for i, st in enumerate(stats_ordered):
                 row = '                            <Row Row_Order="$$ORDER$$" Row_name="$$STATS_LABEL$$">$$STAT_NUM$$</Row>'
@@ -268,7 +273,7 @@ class makeXMLReport(object):
 
     def make_TS_mean_monthly_stats_table(self, station, stats_mo):
         month_table_keys = {"$$TABLENUM$$": self.current_table_num,
-                            "$$TABLE_DESC": station}
+                            "$$TABLE_DESC$$": station}
         month_table_lines = ['                  <Output_Table TableNumber="$$TABLENUM$$" TableDescription="$$TABLE_DESC$$" TableType="Month">']
 
         out = ''
@@ -283,17 +288,22 @@ class makeXMLReport(object):
             out += line+'\n'
 
         col_names = list(stats_mo.keys())
-        colname = ''
-        column_keys = {'$$COL_ORDER$$': self.column_order,
-                       '$$COLNAME$$': colname}
+        # colname = ''
+        # column_keys = {'$$COL_ORDER$$': self.column_order,
+        #                '$$COL_NAME$$': colname}
 
         for j, colname in enumerate(sorted(col_names)):
+            column_keys = {'$$COL_ORDER$$': j,
+                           '$$COL_NAME$$': colname}
             stats_col = stats_mo[colname]
             column_line = '                        <Column Column_Order="$$COL_ORDER$$" Column_Name="$$COL_NAME$$">'
             for key in column_keys:
                 if key == '$$COL_ORDER$$':
                     column_line = column_line.replace(key, str(column_keys[key]))
-                    self.column_order += 1
+                    # self.column_order += 1
+                elif key == '$$COL_NAME$$':
+                    column_line = column_line.replace(key, str(column_keys[key]))
+            out += column_line + '\n'
             for mo in range(1, 13):
                 row = '                            <Row Row_Order="$$ORDER$$" Row_name="$$STATS_LABEL$$">$$STAT_NUM$$</Row>'
                 row = row.replace("$$ORDER$$", str(mo))

@@ -141,6 +141,7 @@ def read_obs_ts_meta_file(obs_ts_meta_file):
                 northing = 0
                 dss_path = None
                 dss_fn = None
+                region = ''
             elif line.startswith('name'):
                 name = line.split('=')[1]
             elif line.startswith('metric'):
@@ -153,8 +154,10 @@ def read_obs_ts_meta_file(obs_ts_meta_file):
                 dss_path = line.split('=')[1]
             elif line.startswith('dss_fn'):
                 dss_fn = float(line.split('=')[1])
+            elif line.startswith('region'):
+                region = line.split('=')[1]
             elif line.startswith('end station'):
-                stations[name] = {'easting': easting, 'northing': northing, 'metric': metric, 'dss_computed': dss_path}
+                stations[name] = {'easting': easting, 'northing': northing, 'metric': metric, 'dss_computed': dss_path, 'region':region}
     return stations, obs_dss_file
 
 
@@ -169,14 +172,17 @@ def read_obs_profile_meta_file(obs_profile_meta_file):
             elif line.startswith('start station'):
                 name = ''
                 metric = ''
+                region = ''
                 easting = 0
                 northing = 0
             elif line.startswith('name'):
                 name = line.split('=')[1]
             elif line.startswith('metric'):
                 metric = line.split('=')[1]
+            elif line.startswith('region'):
+                region = line.split('=')[1]
             elif line.startswith('end station'):
-                stations[name] = {'metric': metric}
+                stations[name] = {'metric': metric, 'region':region}
     return stations, obs_dss_file
 
 
@@ -1142,7 +1148,7 @@ def plot_profiles(mr, metric, observed_data_drct, reservoir, out_path, use_depth
 mo_str_3 = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
 
-def plot_time_series(mr, observed_data_meta_file, fig_path_stub, rss_sim_name, rss_alt_name,
+def plot_time_series(mr, observed_data_meta_file, fig_path_stub, rss_sim_name, rss_alt_name, region_name,
                      temperature_only=False):
     # parse observed data file
     stations, obs_ts_dss_file = read_obs_ts_meta_file(observed_data_meta_file)
@@ -1157,6 +1163,9 @@ def plot_time_series(mr, observed_data_meta_file, fig_path_stub, rss_sim_name, r
         x = data['easting']
         y = data['northing']
         metric = data['metric']
+        region = data['region'].lower()
+        if region != region_name.lower():
+            continue
         if not temperature_only or metric.lower() == 'temperature':
             obs_dates, obs_vals = read_observed_ts_data(ts_data_path, station, metric)
             # print('Getting computed data')
@@ -1310,11 +1319,11 @@ def XML_reservior(profile_stats, XML_class, region_name, n_element=0, n_fig=0, n
 
     #res name, year, list of pngs, stats dictionary
     for subdomain_name, figure_sets in profile_stats.items():
-        XML += XML_class.make_Reservoir_Group_header(subdomain_name) #TODO CHANGE GROUP ORDER
+        # XML += XML_class.make_Reservoir_Group_header(subdomain_name) #TODO CHANGE GROUP ORDER
         if len(figure_sets) > 0:
             for ps in figure_sets:
                 reservoir, yr, fig_names, stats = ps
-                fig_names = [os.path.join('..','Images', n) for n in fig_names]
+                # fig_names = [os.path.join('..','Images', n) for n in fig_names]
                 subgroup_desc = get_reservoir_description(region_name)
                 XML += XML_class.make_ReservoirSubgroup_lines(reservoir,fig_names, subgroup_desc, yr)
 
@@ -1359,7 +1368,7 @@ def XML_time_series(ts_results, XML_class, region_name, n_element=0, n_fig=0, n_
     XML = ""
     for ts in ts_results:
         station, x, y, metric, fig_name, stats, stats_mo = ts
-        fig_name = os.path.join('..','Images', fig_name)
+        # fig_name = os.path.join('..','Images', fig_name)
         subgroup_desc = get_ts_description(region_name)
         XML += XML_class.make_TS_Subgroup_lines(station, fig_name, subgroup_desc)
         XML += XML_class.make_TS_Tables_lines(station, stats, stats_mo, stats_ordered, stats_labels)
@@ -1462,16 +1471,17 @@ def XML_write(output_path, profile_stats, ts_results, report_name, region_name):
     n_element = 1
     n_fig = 1
     n_table = 1
-
     XML_res = ""
     XML_ts = ""
+    XML_Groupheader = XML.make_Reservoir_Group_header(region_name) #TODO CHANGE GROUP ORDER
+
     if len(profile_stats) > 0:
         XML_res, n_element, n_fig, n_table = XML_reservior(profile_stats, XML, region_name, n_element, n_fig, n_table)
     if len(ts_results) > 0:
         XML_ts, n_element, n_fig, n_table = XML_time_series(ts_results,XML, region_name,  n_element, n_fig, n_table)
 
 
-    XML.write_Reservoir(region_name, XML_res, XML_ts)
+    XML.write_Reservoir(region_name, XML_Groupheader, XML_res, XML_ts)
 
 
     # XML_start = copy.copy(get_XML_template()['start'])
@@ -1553,12 +1563,13 @@ def generate_region_plots_ResSim(simulation_path, alternative, observed_data_dir
 
     profile_stats = {}
     for subdomain, meta in profile_subdomains.items():
-        if meta['metric'].lower() == 'temperature' or not temperature_only:
-            profile_stats[subdomain] = plot_profiles(mr, meta['metric'], observed_data_directory, subdomain,
-                                                     images_path,
-                                                     use_depth=use_depth)
+        if region_name.lower() == meta['region'].lower():
+            if meta['metric'].lower() == 'temperature' or not temperature_only:
+                profile_stats[subdomain] = plot_profiles(mr, meta['metric'], observed_data_directory, subdomain,
+                                                         images_path,
+                                                         use_depth=use_depth)
 
-    ts_results = plot_time_series(mr, ts_meta_file, images_path, simulation_path, alternative,
+    ts_results = plot_time_series(mr, ts_meta_file, images_path, simulation_path, alternative, region_name,
                                   temperature_only=temperature_only)
 
     _, sim_name = os.path.split(simulation_path)
