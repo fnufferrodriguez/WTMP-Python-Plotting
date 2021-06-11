@@ -64,9 +64,8 @@ class makeXMLReport(object):
                 if Table_num > self.current_table_num:
                     self.current_table_num = Table_num
 
-    def writeCover(self, report_name, report_date):
-        cover_keys = {"$$SIMULATION_NAME$$": report_name,
-                      "$$REPORT_DATE$$": report_date}
+    def writeCover(self, report_date):
+        cover_keys = {"$$REPORT_DATE$$": report_date}
         with open(self.XML_fn, 'w') as xmlf:
             for line in self.XMLFile:
                 for key in cover_keys.keys():

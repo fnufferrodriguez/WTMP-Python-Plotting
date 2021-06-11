@@ -24,6 +24,7 @@ from scipy import interpolate
 from scipy.constants import convert_temperature
 from sklearn.metrics import mean_absolute_error
 import XMLReport
+import report_utils as RU
 
 
 sat_data_do = [14.60, 14.19, 13.81, 13.44, 13.09, 12.75, 12.43, 12.12, 11.83, 11.55, 11.27, 11.01, 10.76, 10.52, 10.29,
@@ -139,6 +140,7 @@ def read_obs_ts_meta_file(obs_ts_meta_file):
                 metric = ''
                 easting = 0
                 northing = 0
+                dss_computed = None
                 dss_path = None
                 dss_fn = None
                 region = ''
@@ -153,11 +155,12 @@ def read_obs_ts_meta_file(obs_ts_meta_file):
             elif line.startswith('dss_path'):
                 dss_path = line.split('=')[1]
             elif line.startswith('dss_fn'):
-                dss_fn = float(line.split('=')[1])
+                dss_fn = line.split('=')[1]
             elif line.startswith('region'):
                 region = line.split('=')[1]
             elif line.startswith('end station'):
-                stations[name] = {'easting': easting, 'northing': northing, 'metric': metric, 'dss_computed': dss_path, 'region':region}
+                stations[name] = {'easting': easting, 'northing': northing, 'metric': metric,
+                                  'dss_computed': dss_computed, 'region':region, 'dss_path': dss_path}
     return stations, obs_dss_file
 
 
@@ -187,6 +190,7 @@ def read_obs_profile_meta_file(obs_profile_meta_file):
 
 
 def observed_ts_txt_file(ts_data_path, station_name, metric):
+     #TODO: change reading to assume regular, do normal way, and check end date, if not what we expect, go back find missing dates
     dss_util_fname = os.path.join(ts_data_path, '{0} {1}.txt'.format(metric, station_name))
     t = []
     v = []
@@ -454,20 +458,22 @@ class W2ModelResults(ModelResults):
 
     # 'ELEV' seems to be the same for all layers/depths
 
-    def __init__(self, W2_dss_output_file, part6):
+    def __init__(self, simulation_path, alternative):
 
-        self.dss_file = W2_dss_output_file
+        output_path = "."
+        csv_results_dir = os.path.join(output_path, '..', 'CSV')
 
+
+        # self.dss_file = W2_dss_output_file
         # with pyhecdss.DSSFile(W2_dss_output_file) as d:
-        self.d = pyhecdss.DSSFile(W2_dss_output_file)
-
-        self.dss_cat = self.d.read_catalog()
-        self.temp_two_recs = self.dss_cat[self.dss_cat['C'] == 'TEMP-TWO']
-        self.temp_water_recs = self.dss_cat[self.dss_cat['C'] == 'TEMP-WATER']
-
-        self.build_depths()
-
-        self.build_elevations()
+        # self.d = pyhecdss.DSSFile(W2_dss_output_file)
+        # self.dss_cat = self.d.read_catalog()
+        # self.temp_two_recs = self.dss_cat[self.dss_cat['C'] == 'TEMP-TWO']
+        # self.temp_water_recs = self.dss_cat[self.dss_cat['C'] == 'TEMP-WATER']
+        #
+        # self.build_depths()
+        #
+        # self.build_elevations()
 
     def build_elevations(self):
         # call after build_depths
@@ -1576,6 +1582,43 @@ def generate_region_plots_ResSim(simulation_path, alternative, observed_data_dir
     report_name = " : ".join([sim_name, alternative])
     XML_write(output_path, profile_stats, ts_results, report_name, region_name)
 
+def generate_region_plots_W2(simulation_path, alternative, observed_data_directory, region_name, temperature_only=False,
+                                     use_depth=False, clean_out_dir=False):
+    # output_path = r"Z:\USBR\test"  # WAT will start path where we need to write
+    output_path = "."  # WAT will start path where we need to write
+    images_path = os.path.join(output_path, '..', "Images")
+    if not os.path.exists(images_path):
+        os.makedirs(images_path)
+
+    if clean_out_dir:
+        clean_output_dir(images_path)
+
+
+    profile_meta_file = os.path.join(observed_data_directory, "Profile_stations.txt")
+    ts_meta_file = os.path.join(observed_data_directory, "TS_stations.txt")
+
+
+    # we should only need to generate a single instance of ResSimModelResults; while we need to pass in a
+    # subdomain/reservoir for legacy purposes at this point, and subdomain/reservoir can be passed to through
+    # to the get_profile command
+    profile_subdomains, _ = read_obs_profile_meta_file(profile_meta_file)
+    mr = W2ModelResults(simulation_path, alternative)
+
+    profile_stats = {}
+    for subdomain, meta in profile_subdomains.items():
+        if region_name.lower() == meta['region'].lower():
+            if meta['metric'].lower() == 'temperature' or not temperature_only:
+                profile_stats[subdomain] = plot_profiles(mr, meta['metric'], observed_data_directory, subdomain,
+                                                         images_path,
+                                                         use_depth=use_depth)
+
+    ts_results = plot_time_series(mr, ts_meta_file, images_path, simulation_path, alternative, region_name,
+                                  temperature_only=temperature_only)
+
+    _, sim_name = os.path.split(simulation_path)
+    report_name = " : ".join([sim_name, alternative])
+    XML_write(output_path, profile_stats, ts_results, report_name, region_name)
+
 
 
 if __name__ == '__main__':
@@ -1584,29 +1627,43 @@ if __name__ == '__main__':
 
     # exit()
 
-    generate_region_plots_ResSim(r'D:\Work2021\USBR\UpperSacTemperature-demo.2021.06.07.jfd\UpperSacTemperature-demo\rss\test02_longModel-2015', 'test02_LM-0',
-                               r'D:\Work2021\USBR\observed_data_Shasta', 'Keswick',
-                               temperature_only=True, use_depth=True)
-    exit()
 
-    # generate_report_plots_ResSim(r'J:\Ben\RussianRiver\RussianRiver-plot-test\rss\2020.08.24-1400', 'V2260_WQ--0',
-    #                             r'J:\Ben\RussianRiver\observed_data',
-    #                             temperature_only=True, use_depth=True)
+    # rem %1 studyDir,
+    # rem %2 simDir,
+    # rem %3 program name ( ResSim, RAS etc)
+    # rem %4 fpart (ressim .h5 file)
+    # rem %5 obs data folder
+    # rem %6 model alternative name
+    # rem %7 simulation name (for the .rptgen file
 
+    study_dir = sys.argv[1]
+    simulation_directory = sys.argv[2]
+    plugin_name = sys.argv[3]
+    alternative_name = sys.argv[4]
+    obs_data_path = sys.argv[5]
+    model_alt_name = sys.argv[6]
+    simulation_name = sys.argv[7]
 
-    #w2, ressim,
+    reg_info = RU.find_rptrgn(simulation_name)
+    print('SYSARG', sys.argv)
+    print('REGINFO', reg_info)
+    print(reg_info[model_alt_name]['plugin'], plugin_name)
+    region_names = reg_info[model_alt_name]['regions']
+    for region_name in region_names:
 
-    if sys.argv[1] == 'ResSim':
-        simulation_directory = sys.argv[2]
-        alternative_name = sys.argv[3]
-        obs_data_path = sys.argv[4]
-        region_name = sys.argv[5]
+        if plugin_name == 'ResSim':
 
-        # ben test values
-        # ResSim J:\Ben\RussianRiver\RussianRiver-plot-test\rss\2020.08.24-1400 V2260_WQ--0 J:\Ben\RussianRiver\observed_data
+            # ben/scott test values
+            # generate_region_plots_ResSim(r'D:\Work2021\USBR\UpperSacTemperature-demo.2021.06.07.jfd\UpperSacTemperature-demo\rss\test02_longModel-2015', 'test02_LM-0',
+            #                              r'D:\Work2021\USBR\observed_data_Shasta', 'Keswick',
+            #                              temperature_only=True, use_depth=True)
+            # exit()
 
-        generate_region_plots_ResSim(simulation_directory, alternative_name, obs_data_path, region_name,
+            generate_region_plots_ResSim(simulation_directory, alternative_name, obs_data_path, region_name,
+                                         temperature_only=True, use_depth=True)
+        elif plugin_name == 'CeQual-W2':
+            generate_region_plots_W2(simulation_directory, alternative_name, obs_data_path, region_name,
                                      temperature_only=True, use_depth=True)
-    else:
-        print('WAT model "%s" not understood!' % sys.argv[0])
+        else:
+            print('WAT model "%s" not understood!' % sys.argv[0])
     exit()

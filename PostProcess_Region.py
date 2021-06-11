@@ -7,7 +7,7 @@ Created on 6/8/2021
 '''
 
 
-import os
+import os, sys
 import datetime as dt
 import traceback
 import subprocess
@@ -15,22 +15,27 @@ from hec.hecmath import DSS
 
 class reportPreprocess(object):
 
-    def __init__(self, runpath, model, region, rtw): #TODO: edit to take in more args
+    def __init__(self, studyFolder, simulationFolder,modelName,
+                       alternativeName, obsDataFolder, alternativeFpart,
+                       simulationName, startTime, endTime): #TODO: edit to take in more args
 
-        self.runpath = runpath #TODO: get this
-        self.model = model
-        self.region = region
-        self.rtw = rtw
-        self.starttime_str = self.rtw.getStartTimeString() #Forecast Time
-        self.endtime_str = self.rtw.getEndTimeString() # End of Forecast time
-        print(self.starttime_str, self.endtime_str)
+        self.studyFolder = studyFolder
+        self.simulationFolder = simulationFolder
+        self.modelName = modelName
+        self.alternativeName = alternativeName
+        self.obsDataFolder = obsDataFolder
+        self.alternativeFpart = alternativeFpart
+        self.simulationName = simulationName
+        self.startTime = startTime
+        self.endTime = endTime
 
     def PreProcess(self):
         try:
+            self.get_regions()
             self.make_output_Folder()
-            self.write_Date_File()
-            self.convert_DSS_Records()
-            self.run_Bat_File()
+            for region in self.region_names:
+                self.region = region
+                self.convert_DSS_Records()
             return 0
 
         except:
@@ -38,42 +43,103 @@ class reportPreprocess(object):
             print(traceback.format_exc())
             return 1
 
-    def run_Bat_File(self):
-        bat_file_cmd = ['runPython38.bat', self.watershed_folder, self.sim_folder, self.model, self.alt_name,
-                        self.csv_folder, self.region]
-        subprocess.call(bat_file_cmd)
+    def get_regions(self):
+        reg_info = self.find_rptrgn(self.simulationName)
+        print('reg_info')
+        self.region_names = reg_info[self.alternativeName]['regions']
+
 
     def Get_DSS_Commands(self):
-        stations_file = os.path.join('stations', '{0}_stations.txt'.format(self.region)) #TODO: does this need model?
-        dss_records = self.read_stations_file(stations_file)
+        stations_file = os.path.join(self.obsDataFolder, 'TS_stations.txt')
+        if not os.path.exists(stations_file):
+            print('Stations DSS file {0} does not exist.'.format(stations_file))
+            return []
+        station_information = self.read_stations_file(stations_file)
+        dss_records = {}
+        for station in station_information.keys():
+            region = station_information[station]['region']
+            if self.region.lower() == region.lower():
+                dss_records[station] = {}
+                #only grab observed, but we wont do anything with this for a little..
+                if station_information[station]['dss_path'] != '': 
+                    print('self.studyFolder', self.studyFolder)
+                    print('station_information', station_information[station]['dss_path'])
+                    dss_records[station]['dss_path'] = os.path.join(self.studyFolder, 'shared', station_information[station]['dss_path'])
+                    dss_records[station]['dss_fn'] = station_information[station]['dss_fn']
+                    dss_records[station]['metric'] = station_information[station]['metric']
+
+        if self.modelName == 'CeQualW2': #get temp profiles
+            TempProfile = self.region.lower() + '_tempprofile'
+            dss_records[TempProfile] = {}
+            dss_records[TempProfile]['dss_path'] = []
+
+            if self.region.lower() == 'shasta':
+                dss_path = '/W2:TSR_$$INDEX$$_SEG77.OPT/TSR SEG 77 DEPTH $$DEPTH$$/TEMP-WATER//1HOUR/$$FPART$$/'
+
+            dss_path = station_information[TempProfile]['w2_path']
+            correct_fpart = self.alternativeFpart
+            correct_fpart = correct_fpart.replace(self.simulationName[:10]+'_', self.simulationName[:10]+':')
+            correct_fpart = correct_fpart.replace('_'+self.modelName, +':'+self.modelName)
+            dss_path = dss_path.replace('$$FPART$$', correct_fpart)
+            print('USING DSS PATH {0} for W2 TEMPERATURE PROFILE'.format(dss_path))
+            start = 0
+            increment = 2
+            end = 160
+            depths = range(start, end, increment)
+            for i, depth in enumerate(depths):
+                dpth = dss_path.replace('$$DEPTH$$', depth)
+                dpth = dpth.replace('$$INDEX$$', i)
+                dss_records[TempProfile]['dss_path'].append(dpth)
+            # build dss path
+            dss_path = os.path.join(self.simulationFolder, 'runs', self.simulationName.replace(' ', '_')
+
+
         return dss_records
 
     def read_stations_file(self, stations_file):
-        dss_records = {}
-        station_name, dss_path, dss_fn, metric = ''
-        with open(stations_file, 'r') as sf:
+        stations = {}
+        obs_dss_file = None
+        with open(stations_file) as sf:
             for line in sf:
-                sline = line.strip().lower()
-                if sline.startswith('end station'):
-                    dss_records[station_name] = {'dss_path': dss_path,
-                                                 'dss_fn': dss_fn,
-                                                 'metric': metric}
-                elif sline.startswith('name'):
-                    station_name = sline.split('=')[1]
-                elif sline.startswith('metric'):
-                    metric = sline.split('=')[1]
-                elif sline.startswith('dss_fn'):
-                    dss_fn = sline.split('=')[1]
-                elif sline.startswith('dss_path'):
-                    dss_path = sline.split('=')[1]
-        return dss_records
+                line = line.strip()
+                if line.startswith('OBS_FILE'):
+                    obs_dss_file = os.path.join(os.getcwd(), line.split('=')[1])
+                elif line.startswith('start station'):
+                    name = ''
+                    metric = ''
+                    easting = 0
+                    northing = 0
+                    dss_path = ''
+                    dss_fn = ''
+                    region = ''
+                    w2path = ''
+                elif line.startswith('name'):
+                    name = line.split('=')[1]
+                elif line.startswith('metric'):
+                    metric = line.split('=')[1]
+                elif line.startswith('easting'):
+                    easting = float(line.split('=')[1])
+                elif line.startswith('northing'):
+                    northing = float(line.split('=')[1])
+                elif line.startswith('dss_path'):
+                    dss_path = line.split('=')[1]
+                elif line.startswith('dss_fn'):
+                    dss_fn = line.split('=')[1]
+                elif line.startswith('region'):
+                    region = line.split('=')[1]
+                elif line.startswith('w2_path'):
+                    w2path = line.split('=')[1]
+                elif line.startswith('end station'):
+                    stations[name] = {'easting': easting, 'northing': northing, 'metric': metric,
+                                      'dss_path': dss_path, 'region':region, 'w2path':w2path, 'dss_fn': dss_fn}
+        return stations
 
 
 
     def read_DSS_Record(self, dssFile, dssrecord):
         try:
-            print("Opening record {0} from {1} to {2}".format(dssrecord, self.lookback_str, self.endtime_str))
-            vals = dssFile.read(dssrecord, self.lookback_str, self.endtime_str)
+            print("Opening record {0} from {1} to {2}".format(dssrecord, self.startTime, self.endTime))
+            vals = dssFile.read(dssrecord, self.startTime, self.endTime)
             print(vals)
         except:
             print("Error with DSS data, record empty or missing.")
@@ -95,12 +161,11 @@ class reportPreprocess(object):
 
         return dates, vals.getData().values
 
-    def write_DSS_CSV_file(self, DSSRecordinfo, dates, vals):
-        dssname = DSSRecordinfo['name']
+    def write_DSS_CSV_file(self, station, DSSRecordinfo, dates, vals):
         metric = DSSRecordinfo['metric']
 
-        file_name = '{0}_{1}.csv'.format(dssname.replace(' ', '_'), metric)
-        csv_directory = os.path.join(self.csv_folder)
+        file_name = '{0}_{1}.csv'.format(station.replace(' ', '_'), metric)
+        csv_directory = os.path.join(self.output_folder)
         with open(os.path.join(csv_directory, file_name), 'w') as out:
             if len(dates) == 0:
                 out.write('No Data Found.')
@@ -112,51 +177,72 @@ class reportPreprocess(object):
 
     def convert_DSS_Records(self):
         dss_records = self.Get_DSS_Commands()
+        print('dss_records', dss_records)
+        
         for dssrec in dss_records:
-            dssFile = DSS.open(dss_records[dssrec]['dss_fn'])
-            dss_path = dss_records[dssrec]['dss_path']
-            dates, vals = self.read_DSS_Record(dssFile, dss_path)
-            self.write_DSS_CSV_file(dss_records[dssrec], dates, vals)
-            dssFile.close()
+            if len(dss_records[dssrec]) > 0:
+                print(os.path.join(self.obsDataFolder, dss_records[dssrec]['dss_fn']))
+                dssFile = DSS.open(os.path.join(self.obsDataFolder, dss_records[dssrec]['dss_fn']))
+                dss_path = dss_records[dssrec]['dss_path']
+                dates, vals = self.read_DSS_Record(dssFile, dss_path)
+                self.write_DSS_CSV_file(dssrec, dss_records[dssrec], dates, vals)
+                dssFile.close()
 
     def make_output_Folder(self):
-        self.output_folder = os.path.join('PostProcessing', '{0}-{1}'.format(self.region, self.model)) #TODO: get runpath
-        if not os.path.isdir(self.report_folder):
-            os.makedirs(self.report_folder)
-        self.csv_folder = os.path.join(self.output_folder, 'CSV')
+        self.output_folder = os.path.join(self.studyFolder, 'reports', 'CSV')
+        print('OUTPUT FOLDER:', self.output_folder)
+        if not os.path.isdir(self.output_folder):
+            os.makedirs(self.output_folder)
 
     def write_Date_File(self):
         with open(os.path.join(self.output_folder, 'dates.txt'), 'w') as dates:
             dates.write('starttime={0}\n'.format(self.starttime_str))
             dates.write('endtime={0}\n'.format(self.endtime_str))
 
+    def find_rptrgn(self, simulation_name):
+        #find the rpt file go up a dir, reports, .rptrgn
+        rptrgn_file = os.path.join(self.studyFolder, 'reports', '{0}.rptrgn'.format(simulation_name))
+        if not os.path.exists(rptrgn_file):
+            print('ERROR: no RPTRGN file for simulation:', simulation_name)
+            exit()
+        reg_info = {}
+        with open(rptrgn_file, 'r') as rf:
+            for line in rf:
+                sline = line.strip().split(',')
+                plugin = sline[0].strip()
+                model_alt_name = sline[1].strip()
+                regions = sline[2:]
+                regions = [n.strip() for n in regions]
+                reg_info[model_alt_name] = {'plugin': plugin,
+                                            'regions': regions}
+        return reg_info
 
 
-def computeAlternative(currentAlternative, computeOptions):
-    '''
-    Main function called to run the code. Acts as the __main__.
-    :param currentAlternative: forecast info from RTS
-    :param computeOptions: Compute options from RTS
-    :return: 0 and 1 depending on completion of script. 0 for success, 1 for fail
 
-    VARS I NEED TODO
-    rem %1 the watershed folder
-    rem %2 the simulation folder      <sim dir>
-    rem %3 model name ...ie. ResSim   <modelname>
-    rem %4 alternative name           <alt name>
-    rem %5 obs data folder            <obs dir>
-    rem %6 region name ...ie.ShastaRes<reg name>
+'''
+Main function called to run the code. Acts as the __main__.
 
-    '''
+These vars are set by WAT and do not have to be defined
+studyFolder
+simulationFolder
+modelName  (ResSim)
+alternativeName
+alternativeFpart
+simulationName
+obsDataFolder
+startTime
+endTime
+'''
+print('STARTING JYTHON CODE')
+print('simulationFolder', simulationFolder)
+print('modelName', modelName)
+print('simName', simulationName)
+print('alternativeFpart', alternativeFpart)
+print('alternativeName', alternativeName)
+
+rgp = reportPreprocess(studyFolder, simulationFolder,modelName,
+                       alternativeName, obsDataFolder, alternativeFpart,
+                       simulationName, startTime, endTime) #TODO: pass in other args
+rv = rgp.PreProcess()
 
 
-    rtw = computeOptions.getRunTimeWindow()
-    #TODO: Get passed in region
-    global _currentAlt
-    _currentAlt = currentAlternative
-    rgp = reportPreprocess(rtw) #TODO: pass in other args
-    rv = rgp.PreProcess()
-    print(rv)
-    if rv == 0:
-        return 1
-    return 0
