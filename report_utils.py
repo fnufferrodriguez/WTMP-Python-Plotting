@@ -10,7 +10,7 @@ import os
 
 def find_rptrgn(simulation_name):
     #find the rpt file go up a dir, reports, .rptrgn
-    rptrgn_file = os.path.join('..', '{0}.rptrgn'.format(simulation_name))
+    rptrgn_file = os.path.join('..', '{0}.rptrgn'.format(simulation_name.replace(' ', '_')))
     if not os.path.exists(rptrgn_file):
         print('ERROR: no RPTRGN file for simulation:', simulation_name)
         exit()

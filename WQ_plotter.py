@@ -144,6 +144,7 @@ def read_obs_ts_meta_file(obs_ts_meta_file):
                 dss_path = None
                 dss_fn = None
                 region = ''
+                w2_path = ''
             elif line.startswith('name'):
                 name = line.split('=')[1]
             elif line.startswith('metric'):
@@ -158,9 +159,12 @@ def read_obs_ts_meta_file(obs_ts_meta_file):
                 dss_fn = line.split('=')[1]
             elif line.startswith('region'):
                 region = line.split('=')[1]
+            elif line.startswith('w2_path'):
+                w2_path = line.split('=')[1]
             elif line.startswith('end station'):
                 stations[name] = {'easting': easting, 'northing': northing, 'metric': metric,
-                                  'dss_computed': dss_computed, 'region':region, 'dss_path': dss_path}
+                                  'dss_computed': dss_computed, 'region':region, 'dss_path': dss_path,
+                                  'dss_fn': dss_fn, 'w2_path': w2_path}
     return stations, obs_dss_file
 
 
@@ -190,15 +194,25 @@ def read_obs_profile_meta_file(obs_profile_meta_file):
 
 
 def observed_ts_txt_file(ts_data_path, station_name, metric):
-     #TODO: change reading to assume regular, do normal way, and check end date, if not what we expect, go back find missing dates
+    #TODO: change reading to assume regular, do normal way, and check end date, if not what we expect, go back find missing dates
     dss_util_fname = os.path.join(ts_data_path, '{0} {1}.txt'.format(metric, station_name))
+    return observed_ts_txt_file_read(dss_util_fname)
+
+def observed_ts_txt_file_read(file_name, skipheader=False):
+     #TODO: change reading to assume regular, do normal way, and check end date, if not what we expect, go back find missing dates
+    dss_util_fname = file_name
     t = []
     v = []
+    print(file_name)
     with open(dss_util_fname) as f:
-        for _ in range(4):
-            next(f)
+        if not skipheader:
+            for _ in range(4):
+                next(f)
         for _ in range(2):
             line = f.readline()
+            if line.startswith('No Data Found.'):
+                print('No Data found.')
+                return [], []
             sline = line.split(';')
             try:
                 if '2400' in sline[0]:
@@ -209,6 +223,9 @@ def observed_ts_txt_file(ts_data_path, station_name, metric):
                     dt_tmp = dt.datetime.strptime(sline[0], '%d%b%Y, %H%M')
             except ValueError:
                 dt_tmp = dt.datetime.strptime(sline[0], '%Y%m%d, %H%M')
+
+
+
             t.append(dt_tmp)
             v.append(float(sline[1]))
         delta_t = t[1] - t[0]
@@ -455,72 +472,67 @@ class ModelResults(object):
 
 
 class W2ModelResults(ModelResults):
-
     # 'ELEV' seems to be the same for all layers/depths
-
-    def __init__(self, simulation_path, alternative):
-
+    def __init__(self, simulation_path, alternative, region_name):
+        self.region_name = region_name
         output_path = "."
-        csv_results_dir = os.path.join(output_path, '..', 'CSV')
-
-
-        # self.dss_file = W2_dss_output_file
-        # with pyhecdss.DSSFile(W2_dss_output_file) as d:
-        # self.d = pyhecdss.DSSFile(W2_dss_output_file)
-        # self.dss_cat = self.d.read_catalog()
-        # self.temp_two_recs = self.dss_cat[self.dss_cat['C'] == 'TEMP-TWO']
-        # self.temp_water_recs = self.dss_cat[self.dss_cat['C'] == 'TEMP-WATER']
-        #
-        # self.build_depths()
-        #
-        # self.build_elevations()
-
-    def build_elevations(self):
-        # call after build_depths
-        self.elev = {}
-        elev_cat = self.dss_cat[self.dss_cat['C'] == 'ELEV']
-        for sg in self.segs:
-            # grab 1st one for each seg
-            seg_str = 'SEG %i' % sg
-            seg_elev_path = self.d.get_pathnames(elev_cat[elev_cat['B'].str.contains(seg_str)])[0]
-            df, units, _ = self.d.read_rts(seg_elev_path)
-            elev = df[df.columns[0]].values
-            elev_dt = pd.to_datetime(df.index).to_pydatetime()
-            self.elev[sg] = (elev_dt, elev)
+        self.csv_results_dir = os.path.join(output_path, '..', 'CSV')
+        self.build_depths()
+        self.load_time()
 
     def build_depths(self):
-        self.segment_depths = {}
-        for B_part in self.temp_water_recs['B'].values:
-            # try:
-            tsr, seg, seg_num, lyr, depth_str = B_part.split(' ')
-            sg = int(seg_num)
-            depth = float(depth_str)
-            if not sg in self.segment_depths.keys():
-                self.segment_depths[sg] = []
-            self.segment_depths[sg].append(depth)
-            # except:
-            #    print('could not understand W2 reservoir output B part: ',B_part)
+        start = 0
+        increment = 2
+        end = 160
+        depths = range(start, end, increment)
+        self.segment_depths = np.array(list(depths), dtype=np.int)
 
-        self.segs = self.segment_depths.keys()
-        for sg in self.segs:
-            self.segment_depths[sg] = np.asarray(sorted(self.segment_depths[sg]))
+    def load_time(self):
+        depth = 0
+        i = 0
+        ts_data_file = '{0}_tempprofile_Depth{1}_Idx{2}_Temperature.csv'.format(self.region_name.lower(), depth, i+1)
+        t, v = observed_ts_txt_file_read(os.path.join(self.csv_results_dir, ts_data_file), skipheader=True) #TODO: rename skip header
+        self.stime = t[0]
+        self.etime = t[-1]
 
-    def get_profile(self, time_in, WQ_metric, segment_num):
-        pass
-        # Hi Scott.  You are awesome.
-        # if you get to this: for each segment_num/profile, you will need to dss records for EACH DEPTH in self.segment_depths[segment_num]
-        # because each layer is a dss record.  Sorry.
-        # check out the pyhecdss read_rts(seg_elev_path) commands.  Returns a pandas dataframe with a god-awful column name wthat is the whole dss path.
-        # I just get the datetimes/values this way:
-        # df, units, _ = self.d.read_rts(seg_elev_path)
-        # elev = df[df.columns[0]].values
-        # elev_dt = pd.to_datetime(df.index).to_pydatetime()
-        # hopefully timeseries below is more straightforward
-        # NOTE: pyhecdss that I found via anaconda is not DSS 7 compatible. It worked on the sample W2 files that I got from Ryan,
-        # but doesn't work on ResSim output yet.
+    def load_time_array(self, t_in):
+        t = []
+        for tt in t_in:
+            ttmp = tt.toordinal() + float(tt.hour) / 24. + float(tt.minute) / (24. * 60.)
+            t.append(ttmp)
+        self.t = np.array(t)
+
+    def get_profile(self, time_in, WQ_metric, name=None, return_depth=False):
+        vals = np.zeros(len(self.segment_depths), dtype=np.float)
+        for i, depth in enumerate(self.segment_depths):
+            ts_data_file = '{0}_tempprofile_Depth{1}_Idx{2}_Temperature.csv'.format(self.region_name, depth, i+1)
+            t, v = observed_ts_txt_file_read(os.path.join(self.csv_results_dir, ts_data_file), skipheader=True)
+            if len(t) == 0:
+                vals[i:] = np.NaN
+                break
+            #if i == 0:  # find index on first entry
+            self.load_time_array(t)
+            timestep = self.get_idx_for_time(time_in)
+            if timestep == -1:
+                vals[i:] = np.NaN
+                break
+            vals[i] = v[timestep]
+        return self.segment_depths*3.28, vals #TODO: convert better.
+
+    def get_idx_for_time(self, t_in):
+        #TODO: merge this with other get_idx_for_time method?
+        ttmp = t_in.toordinal() + float(t_in.hour) / 24. + float(t_in.minute) / (24. * 60.)
+        min_diff = np.min(np.abs(self.t - ttmp))
+        tol = 1. / (24. * 60.)  # 1 minute tolerance
+        timestep = np.where((np.abs(self.t - ttmp) - min_diff) < tol)[0][0]
+        if min_diff > 1.:
+            print('Error: nearest time step > 1 day away')
+            return -1
+        return timestep
 
     def get_time_series(self, time_start, time_end, metric, xy=None, dss_path=None):
-        pass
+        w2_name = dss_path['w2_path']
+
 
 
 # Hi Scott.  You are awesome.
@@ -1044,10 +1056,10 @@ def obs_model_profile_plot(ax, obs_elev, obs_value, model_elev, model_value, met
 
     # observed
     # ax.plot(obs_value, obs_elev, '-.',zorder=4, label='Observed')
-    if len(obs_value) <= 30:
-        ax.plot(obs_value, obs_elev, marker='o', zorder=4, label='Observed')
-    else:
-        ax.plot(obs_value, obs_elev, zorder=4, label='Observed')
+    # if len(obs_value) <= 30:
+    #     ax.plot(obs_value, obs_elev, marker='o', zorder=4, label='Observed')
+    # else:
+    ax.plot(obs_value, obs_elev, zorder=4, label='Observed')
     ax.grid(zorder=0)
     ax.invert_yaxis()
 
@@ -1178,7 +1190,7 @@ def plot_time_series(mr, observed_data_meta_file, fig_path_stub, rss_sim_name, r
             if data['dss_computed'] is None:
                 comp_dates, comp_vals = mr.get_time_series(None, None, metric, xy=[x, y])
             else:
-                comp_dates, comp_vals = mr.get_time_series(None, None, metric, dss_path=data['dss_computed'])
+                comp_dates, comp_vals = mr.get_time_series(None, None, metric, dss_path=data)
             # print('Making plot')
 
             fig = plt.figure(figsize=(12, 6))
@@ -1602,7 +1614,7 @@ def generate_region_plots_W2(simulation_path, alternative, observed_data_directo
     # subdomain/reservoir for legacy purposes at this point, and subdomain/reservoir can be passed to through
     # to the get_profile command
     profile_subdomains, _ = read_obs_profile_meta_file(profile_meta_file)
-    mr = W2ModelResults(simulation_path, alternative)
+    mr = W2ModelResults(simulation_path, alternative, region_name)
 
     profile_stats = {}
     for subdomain, meta in profile_subdomains.items():
@@ -1612,8 +1624,9 @@ def generate_region_plots_W2(simulation_path, alternative, observed_data_directo
                                                          images_path,
                                                          use_depth=use_depth)
 
-    ts_results = plot_time_series(mr, ts_meta_file, images_path, simulation_path, alternative, region_name,
-                                  temperature_only=temperature_only)
+    # ts_results = plot_time_series(mr, ts_meta_file, images_path, simulation_path, alternative, region_name,
+    #                               temperature_only=temperature_only)
+    ts_results = []
 
     _, sim_name = os.path.split(simulation_path)
     report_name = " : ".join([sim_name, alternative])
@@ -1647,8 +1660,11 @@ if __name__ == '__main__':
     reg_info = RU.find_rptrgn(simulation_name)
     print('SYSARG', sys.argv)
     print('REGINFO', reg_info)
-    print(reg_info[model_alt_name]['plugin'], plugin_name)
-    region_names = reg_info[model_alt_name]['regions']
+    try:
+        print(reg_info[model_alt_name.replace(' ', '_')]['plugin'], plugin_name)
+        region_names = reg_info[model_alt_name.replace(' ', '_')]['regions']
+    except:
+        exit()
     for region_name in region_names:
 
         if plugin_name == 'ResSim':
@@ -1661,7 +1677,7 @@ if __name__ == '__main__':
 
             generate_region_plots_ResSim(simulation_directory, alternative_name, obs_data_path, region_name,
                                          temperature_only=True, use_depth=True)
-        elif plugin_name == 'CeQual-W2':
+        elif plugin_name == 'CeQualW2':
             generate_region_plots_W2(simulation_directory, alternative_name, obs_data_path, region_name,
                                      temperature_only=True, use_depth=True)
         else:

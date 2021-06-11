@@ -17,7 +17,7 @@ class reportPreprocess(object):
 
     def __init__(self, studyFolder, simulationFolder,modelName,
                        alternativeName, obsDataFolder, alternativeFpart,
-                       simulationName, startTime, endTime): #TODO: edit to take in more args
+                       simulationName, startTime, endTime):
 
         self.studyFolder = studyFolder
         self.simulationFolder = simulationFolder
@@ -34,6 +34,7 @@ class reportPreprocess(object):
             self.get_regions()
             self.make_output_Folder()
             for region in self.region_names:
+                print('WORKING ON REGION', region)
                 self.region = region
                 self.convert_DSS_Records()
             return 0
@@ -44,9 +45,12 @@ class reportPreprocess(object):
             return 1
 
     def get_regions(self):
-        reg_info = self.find_rptrgn(self.simulationName)
-        print('reg_info')
-        self.region_names = reg_info[self.alternativeName]['regions']
+        try:
+            reg_info = self.find_rptrgn(self.simulationName)
+            print('reg_info', reg_info)
+            self.region_names = reg_info[self.alternativeName.replace(' ', '_')]['regions']
+        except:
+            self.region_names = [] #TODO: this can be better
 
 
     def Get_DSS_Commands(self):
@@ -65,21 +69,52 @@ class reportPreprocess(object):
                     print('self.studyFolder', self.studyFolder)
                     print('station_information', station_information[station]['dss_path'])
                     dss_records[station]['dss_path'] = os.path.join(self.studyFolder, 'shared', station_information[station]['dss_path'])
-                    dss_records[station]['dss_fn'] = station_information[station]['dss_fn']
+                    dss_records[station]['dss_fn'] = [station_information[station]['dss_fn']]
                     dss_records[station]['metric'] = station_information[station]['metric']
+            print(station_information[station]['w2_path'])
+            if station_information[station]['w2_path'] != "''":
+                dss_records[station+'_Fromw2'] = {}
+                correct_fpart = self.alternativeFpart
+                correct_fpart = correct_fpart.replace(self.simulationName[:10]+'_', self.simulationName[:10]+':')
+                correct_fpart = correct_fpart.replace('_'+self.modelName, ':'+self.modelName)
+                correct_fpart = correct_fpart.split(self.modelName)
+                if self.region.lower() == 'shasta':
+                    dss_orig = '-SHASTA FROM DSS'
+                elif self.region.lower() == 'keswick':
+                    dss_orig = '-KESWICK FROM SHASTA W2'
+                correct_fpart = correct_fpart[0] + self.modelName + dss_orig
+                dss_path = station_information[station]['w2_path']
+                dss_path = dss_path.replace('$$FPART$$', correct_fpart)
+                dss_records[station+'_Fromw2']['dss_path'] = dss_path
+                # build dss path
+                simfolderrev = self.simulationFolder.split('\\')
+                simfolderrev.reverse()
+                for item in simfolderrev: #TODO: fix this, this is sloppy
+                    try:
+                        int(item)
+                        analysis_per = item
+                    except ValueError:
+                        continue
+                dss_fn = os.path.join(self.simulationFolder, self.simulationName.replace(' ', '_') + '-val{0}.dss'.format(analysis_per))
+                print(dss_fn)
+                dss_records[station+'_Fromw2']['dss_fn'] = dss_fn
+                dss_records[station+'_Fromw2']['metric'] = station_information[station]['metric']
+
+
 
         if self.modelName == 'CeQualW2': #get temp profiles
-            TempProfile = self.region.lower() + '_tempprofile'
-            dss_records[TempProfile] = {}
-            dss_records[TempProfile]['dss_path'] = []
-
             if self.region.lower() == 'shasta':
-                dss_path = '/W2:TSR_$$INDEX$$_SEG77.OPT/TSR SEG 77 DEPTH $$DEPTH$$/TEMP-WATER//1HOUR/$$FPART$$/'
+                dss_path = r'/W2:TSR_$$INDEX$$_SEG77.OPT/TSR SEG 77 DEPTH $$DEPTH$$.00/TEMP-WATER//1HOUR/$$FPART$$/'
+            elif self.region.lower() == 'keswick':
+                dss_path = r'/W2:TSR_14_$$INDEX$$_SEG32.OPT/TSR SEG 32 DEPTH $$DEPTH$$.00/TEMP-WATER//1HOUR/$$FPART$$/' #TODO: read these from a text file
+            else:
+                return dss_records
 
-            dss_path = station_information[TempProfile]['w2_path']
+
             correct_fpart = self.alternativeFpart
             correct_fpart = correct_fpart.replace(self.simulationName[:10]+'_', self.simulationName[:10]+':')
-            correct_fpart = correct_fpart.replace('_'+self.modelName, +':'+self.modelName)
+            correct_fpart = correct_fpart.replace('_'+self.modelName, ':'+self.modelName)
+            correct_fpart = correct_fpart.replace('_', ' ')
             dss_path = dss_path.replace('$$FPART$$', correct_fpart)
             print('USING DSS PATH {0} for W2 TEMPERATURE PROFILE'.format(dss_path))
             start = 0
@@ -87,11 +122,27 @@ class reportPreprocess(object):
             end = 160
             depths = range(start, end, increment)
             for i, depth in enumerate(depths):
-                dpth = dss_path.replace('$$DEPTH$$', depth)
-                dpth = dpth.replace('$$INDEX$$', i)
-                dss_records[TempProfile]['dss_path'].append(dpth)
-            # build dss path
-            dss_path = os.path.join(self.simulationFolder, 'runs', self.simulationName.replace(' ', '_')
+                d_pth = dss_path.replace('$$DEPTH$$', str(depth))
+                d_pth = d_pth.replace('$$INDEX$$', str(i+1))
+
+                TempProfile = self.region.lower() + '_tempprofile_Depth{0}_Idx{1}'.format(depth, i+1)
+                dss_records[TempProfile] = {}
+
+                dss_records[TempProfile]['dss_path'] = d_pth
+
+                # build dss path
+                simfolderrev = self.simulationFolder.split('\\')
+                simfolderrev.reverse()
+                for item in simfolderrev: #TODO: fix this, this is sloppy
+                    try:
+                        int(item)
+                        analysis_per = item
+                    except ValueError:
+                        continue
+                dss_fn = os.path.join(self.simulationFolder, self.simulationName.replace(' ', '_') + '-val{0}.dss'.format(analysis_per))
+                print(dss_fn)
+                dss_records[TempProfile]['dss_fn'] = dss_fn
+                dss_records[TempProfile]['metric'] = 'Temperature'
 
 
         return dss_records
@@ -112,7 +163,7 @@ class reportPreprocess(object):
                     dss_path = ''
                     dss_fn = ''
                     region = ''
-                    w2path = ''
+                    w2_path = ''
                 elif line.startswith('name'):
                     name = line.split('=')[1]
                 elif line.startswith('metric'):
@@ -128,10 +179,10 @@ class reportPreprocess(object):
                 elif line.startswith('region'):
                     region = line.split('=')[1]
                 elif line.startswith('w2_path'):
-                    w2path = line.split('=')[1]
+                    w2_path = line.split('=')[1]
                 elif line.startswith('end station'):
                     stations[name] = {'easting': easting, 'northing': northing, 'metric': metric,
-                                      'dss_path': dss_path, 'region':region, 'w2path':w2path, 'dss_fn': dss_fn}
+                                      'dss_path': dss_path, 'region':region, 'w2_path':w2_path, 'dss_fn': dss_fn}
         return stations
 
 
@@ -161,8 +212,8 @@ class reportPreprocess(object):
 
         return dates, vals.getData().values
 
-    def write_DSS_CSV_file(self, station, DSSRecordinfo, dates, vals):
-        metric = DSSRecordinfo['metric']
+    def write_DSS_CSV_file(self, station, metric, dates, vals):
+
 
         file_name = '{0}_{1}.csv'.format(station.replace(' ', '_'), metric)
         csv_directory = os.path.join(self.output_folder)
@@ -171,8 +222,11 @@ class reportPreprocess(object):
                 out.write('No Data Found.')
             else:
                 for i, date in enumerate(dates):
-                    date_frmt = date.strftime('%d %m %Y %H %M')
-                    out.write('{0},{1}\n'.format(date_frmt, vals[i]))
+                    date_frmt = date.strftime('%d%b%Y, %H%M')
+                    # date_frmt = date.strftime('%d %m %Y %H %M')
+
+                    out.write('{0};{1}\n'.format(date_frmt, vals[i]))
+                out.write('END')
 
 
     def convert_DSS_Records(self):
@@ -185,7 +239,7 @@ class reportPreprocess(object):
                 dssFile = DSS.open(os.path.join(self.obsDataFolder, dss_records[dssrec]['dss_fn']))
                 dss_path = dss_records[dssrec]['dss_path']
                 dates, vals = self.read_DSS_Record(dssFile, dss_path)
-                self.write_DSS_CSV_file(dssrec, dss_records[dssrec], dates, vals)
+                self.write_DSS_CSV_file(dssrec, dss_records[dssrec]['metric'], dates, vals)
                 dssFile.close()
 
     def make_output_Folder(self):
@@ -201,7 +255,7 @@ class reportPreprocess(object):
 
     def find_rptrgn(self, simulation_name):
         #find the rpt file go up a dir, reports, .rptrgn
-        rptrgn_file = os.path.join(self.studyFolder, 'reports', '{0}.rptrgn'.format(simulation_name))
+        rptrgn_file = os.path.join(self.studyFolder, 'reports', '{0}.rptrgn'.format(simulation_name.replace(' ', '_')))
         if not os.path.exists(rptrgn_file):
             print('ERROR: no RPTRGN file for simulation:', simulation_name)
             exit()
