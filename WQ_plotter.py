@@ -24,7 +24,7 @@ from scipy import interpolate
 from scipy.constants import convert_temperature
 from sklearn.metrics import mean_absolute_error
 import XMLReport
-import report_utils as RU
+# import report_utils as RU
 
 
 sat_data_do = [14.60, 14.19, 13.81, 13.44, 13.09, 12.75, 12.43, 12.12, 11.83, 11.55, 11.27, 11.01, 10.76, 10.52, 10.29,
@@ -129,18 +129,14 @@ def profile_dn(profile):
 
 def read_obs_ts_meta_file(obs_ts_meta_file):
     stations = {}
-    obs_dss_file = None
     with open(obs_ts_meta_file) as osf:
         for line in osf:
             line = line.strip()
-            if line.startswith('OBS_FILE'):
-                obs_dss_file = os.path.join(os.getcwd(), line.split('=')[1])
-            elif line.startswith('start station'):
+            if line.startswith('start station'):
                 name = ''
                 metric = ''
                 easting = 0
                 northing = 0
-                dss_computed = None
                 dss_path = None
                 dss_fn = None
                 region = ''
@@ -163,9 +159,9 @@ def read_obs_ts_meta_file(obs_ts_meta_file):
                 w2_path = line.split('=')[1]
             elif line.startswith('end station'):
                 stations[name] = {'easting': easting, 'northing': northing, 'metric': metric,
-                                  'dss_computed': dss_computed, 'region':region, 'dss_path': dss_path,
+                                  'region':region, 'dss_path': dss_path,
                                   'dss_fn': dss_fn, 'w2_path': w2_path}
-    return stations, obs_dss_file
+    return stations
 
 
 def read_obs_profile_meta_file(obs_profile_meta_file):
@@ -205,41 +201,67 @@ def observed_ts_txt_file_read(file_name, skipheader=False):
     v = []
     print(file_name)
     with open(dss_util_fname) as f:
-        if not skipheader:
-            for _ in range(4):
-                next(f)
-        for _ in range(2):
-            line = f.readline()
-            if line.startswith('No Data Found.'):
-                print('No Data found.')
-                return [], []
-            sline = line.split(';')
-            try:
-                if '2400' in sline[0]:
-                    tstrtmp = (sline[0]).replace('2400', '2300')
-                    dt_tmp = dt.datetime.strptime(tstrtmp, '%d%b%Y, %H%M')
-                    dt_tmp += dt.timedelta(hours=1)
-                else:
-                    dt_tmp = dt.datetime.strptime(sline[0], '%d%b%Y, %H%M')
-            except ValueError:
-                dt_tmp = dt.datetime.strptime(sline[0], '%Y%m%d, %H%M')
-
-
-
-            t.append(dt_tmp)
-            v.append(float(sline[1]))
-        delta_t = t[1] - t[0]
         for line in f:
-            if line.startswith('END'):
-                break
-            sline = line.split(';')
-            t.append(t[-1] + delta_t)
-            # empty DSS data is missing from txt file, deal with it
             try:
-                v.append(float(sline[1]))
+                if line.startswith('END'):
+                    break
+                elif line.startswith('No Data Found.'):
+                    print('No Data found for {0}'.format(file_name))
+                    return [], []
+                else:
+                    sline = line.split(';')
+                    try:
+                        if '2400' in sline[0]:
+                            tstrtmp = (sline[0]).replace('2400', '2300')
+                            dt_tmp = dt.datetime.strptime(tstrtmp, '%d%b%Y, %H%M')
+                            dt_tmp += dt.timedelta(hours=1)
+                        else:
+                            dt_tmp = dt.datetime.strptime(sline[0], '%d%b%Y, %H%M')
+                    except ValueError:
+                        dt_tmp = dt.datetime.strptime(sline[0], '%Y%m%d, %H%M')
+                    t.append(dt_tmp)
+                    v.append(float(sline[1]))
             except:
-                v.append(np.nan)
+                print('Error in File. Skipping line:', line)
     return np.array(t), np.array(v)
+
+
+    #     if not skipheader:
+    #         for _ in range(4):
+    #             next(f)
+    #     for _ in range(2):
+    #         line = f.readline()
+    #         if line.startswith('No Data Found.'):
+    #             print('No Data found.')
+    #             return [], []
+    #         sline = line.split(';')
+    #         try:
+    #             if '2400' in sline[0]:
+    #                 tstrtmp = (sline[0]).replace('2400', '2300')
+    #                 dt_tmp = dt.datetime.strptime(tstrtmp, '%d%b%Y, %H%M')
+    #                 dt_tmp += dt.timedelta(hours=1)
+    #             else:
+    #                 dt_tmp = dt.datetime.strptime(sline[0], '%d%b%Y, %H%M')
+    #         except ValueError:
+    #             dt_tmp = dt.datetime.strptime(sline[0], '%Y%m%d, %H%M')
+    #
+    #
+    #
+    #
+    #         t.append(dt_tmp)
+    #         v.append(float(sline[1]))
+    #     delta_t = t[1] - t[0]
+    #     for line in f:
+    #         if line.startswith('END'):
+    #             break
+    #         sline = line.split(';')
+    #         t.append(t[-1] + delta_t)
+    #         # empty DSS data is missing from txt file, deal with it
+    #         try:
+    #             v.append(float(sline[1]))
+    #         except:
+    #             v.append(np.nan)
+    # return np.array(t), np.array(v)
 
 
 def clean_missing(indata):
@@ -272,20 +294,47 @@ def calc_observed_dosat(ttemp, vtemp, tdo, vdo):
     return ttemp, v
 
 
-def read_observed_ts_data(ts_data_path, station_name, metric):
+def read_observed_ts_data(obs_ts_data_path, simulation_dir, station_name, metric):
     if metric.lower() == 'do_sat':
-        tt, vt = observed_ts_txt_file(ts_data_path, station_name, 'Temperature')
+        tt, vt = observed_ts_txt_file(obs_ts_data_path, station_name, 'Temperature')
         vt = clean_missing(vt)
-        tdo, vdo = observed_ts_txt_file(ts_data_path, station_name, 'DO')
+        tdo, vdo = observed_ts_txt_file(obs_ts_data_path, station_name, 'DO')
         vdo = clean_missing(vdo)
         t, v = calc_observed_dosat(tt, vt, tdo, vdo)
     else:
-        t, v = observed_ts_txt_file(ts_data_path, station_name, metric)
+        primary_csv_name = os.path.join(study_dir, 'reports', 'CSV', '{0}_{1}.csv'.format(station_name.replace(' ', '_'),metric))
+        if os.path.exists(primary_csv_name):
+            t, v = observed_ts_txt_file_read(primary_csv_name)
+            print('Primary CSV grabbed..')
+        else:
+            print('Primary CSV from DSS failed. Grabbing backup..')
+            backup_txt_name = os.path.join(obs_ts_data_path, '{0} {1}.txt'.format(metric, station_name))
+            t, v = observed_ts_txt_file_read(backup_txt_name)
         v = clean_missing(v)
         if metric.lower() == 'temperature':
             if np.any(v > 45):
                 v = convert_temperature(v, 'F', 'C')
     return t, v
+
+def find_rptrgn(simulation_name, studyfolder):
+    #find the rpt file go up a dir, reports, .rptrgn
+    rptrgn_file = os.path.join(studyfolder, 'reports', '{0}.rptrgn'.format(simulation_name.replace(' ', '_')))
+    # rptrgn_file = os.path.join('..', '{0}.rptrgn'.format(simulation_name.replace(' ', '_')))
+    print('Looking for rptrgn file at:', rptrgn_file)
+    if not os.path.exists(rptrgn_file):
+        print('ERROR: no RPTRGN file for simulation:', simulation_name)
+        exit()
+    reg_info = {}
+    with open(rptrgn_file, 'r') as rf:
+        for line in rf:
+            sline = line.strip().split(',')
+            plugin = sline[0].strip()
+            model_alt_name = sline[1].strip()
+            regions = sline[2:]
+            regions = [n.strip() for n in regions]
+            reg_info[model_alt_name] = {'plugin': plugin,
+                                        'regions': regions}
+    return reg_info
 
 
 def read_observed(observed_data_filename):
@@ -473,10 +522,10 @@ class ModelResults(object):
 
 class W2ModelResults(ModelResults):
     # 'ELEV' seems to be the same for all layers/depths
-    def __init__(self, simulation_path, alternative, region_name):
+    def __init__(self, simulation_path, alternative, study_dir, region_name):
         self.region_name = region_name
         output_path = "."
-        self.csv_results_dir = os.path.join(output_path, '..', 'CSV')
+        self.csv_results_dir = os.path.join(study_dir, 'reports', 'CSV')
         self.build_depths()
         self.load_time()
 
@@ -503,7 +552,7 @@ class W2ModelResults(ModelResults):
         self.t = np.array(t)
 
     def get_profile(self, time_in, WQ_metric, name=None, return_depth=False):
-        vals = np.zeros(len(self.segment_depths), dtype=np.float)
+        vals = np.zeros(len(self.segment_depths), dtype=np.float64)
         for i, depth in enumerate(self.segment_depths):
             ts_data_file = '{0}_tempprofile_Depth{1}_Idx{2}_Temperature.csv'.format(self.region_name, depth, i+1)
             t, v = observed_ts_txt_file_read(os.path.join(self.csv_results_dir, ts_data_file), skipheader=True)
@@ -530,9 +579,13 @@ class W2ModelResults(ModelResults):
             return -1
         return timestep
 
-    def get_time_series(self, time_start, time_end, metric, xy=None, dss_path=None):
-        w2_name = dss_path['w2_path']
+    def get_time_series(self, time_start, time_end, metric, xy=None, dss_data=None, station=None):
+        w2_name = dss_data['w2_path']
+        csv_name = '{0}_Fromw2_{1}.csv'.format(station.replace(' ', '_'), metric) #ex: Shasta_Outflow_Fromw2_Temperature
+        csv_path = os.path.join(self.csv_results_dir, csv_name)
+        t, v = observed_ts_txt_file_read(csv_path)
 
+        return t, v
 
 
 # Hi Scott.  You are awesome.
@@ -540,7 +593,7 @@ class W2ModelResults(ModelResults):
 
 class ResSimModelResults(ModelResults):
 
-    def __init__(self, sim_drct, trl_name, subdomain=None, h5_filepath=None):
+    def __init__(self, sim_drct, trl_name, study_dir, subdomain=None, h5_filepath=None):
         if h5_filepath is not None:
             # use a different hdf file, for instance, is alternative parameters were changed in simulation mode, and
             # different results were generated manually and saved somewhere besides the rss directory.
@@ -554,8 +607,9 @@ class ResSimModelResults(ModelResults):
         self.trial_name = trl_name
         self.subdomain_name = subdomain
         self.load_time()
-        # self.load_elevation()
-        # self.make_output_dir()
+        self.csv_results_dir = os.path.join(study_dir, 'reports', 'CSV')
+        self.output_dir = os.path.join(study_dir, 'reports', 'Images')
+
         self.hold_year = -1
         self.load_subdomains()
 
@@ -625,11 +679,11 @@ class ResSimModelResults(ModelResults):
             self.stime = self.t_computed[0]
             self.etime = self.t_computed[-1]
 
-    def get_time_series(self, time_start, time_end, metric, xy=None, dss_path=None):
+    def get_time_series(self, time_start, time_end, metric, xy=None, dss_path=None, dss_fn=None):
 
         if dss_path is not None:
-            dss = pyhecdss.DSSFile(self.sim_dss_fn)
-            dt, v = dss_get(dss, dss_path)
+            pass
+            #get and read the correct CSV file..
         else:
             if xy is None:
                 raise ValueError('xy or dss_path must be set for ResSimModelResults')
@@ -1110,7 +1164,7 @@ def plot_profiles(mr, metric, observed_data_drct, reservoir, out_path, use_depth
         observed_data_file_name = " ".join(['Profile', reservoir, metric.lower()]) + '_{0}.txt'.format(yr)
         observed_data_file_name = os.path.join(observed_data_drct, observed_data_file_name)
         if os.path.exists(observed_data_file_name):
-            obs_times, obs_values, obs_depths = read_observed(observed_data_file_name)
+            obs_times, obs_values, obs_depths = read_observed(observed_data_file_name) #todo: read model like this
             nof_profiles = len(obs_times)
             n_pages = math.ceil(nof_profiles / n_profiles_per_page)
 
@@ -1167,9 +1221,9 @@ mo_str_3 = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct'
 
 
 def plot_time_series(mr, observed_data_meta_file, fig_path_stub, rss_sim_name, rss_alt_name, region_name,
-                     temperature_only=False):
+                     model, temperature_only=False):
     # parse observed data file
-    stations, obs_ts_dss_file = read_obs_ts_meta_file(observed_data_meta_file)
+    stations = read_obs_ts_meta_file(observed_data_meta_file)
     ts_data_path, _ = os.path.split(observed_data_meta_file)  # put that meta file with data!
 
     station_results = []
@@ -1185,12 +1239,12 @@ def plot_time_series(mr, observed_data_meta_file, fig_path_stub, rss_sim_name, r
         if region != region_name.lower():
             continue
         if not temperature_only or metric.lower() == 'temperature':
-            obs_dates, obs_vals = read_observed_ts_data(ts_data_path, station, metric)
+            obs_dates, obs_vals = read_observed_ts_data(ts_data_path, rss_sim_name, station, metric)
             # print('Getting computed data')
-            if data['dss_computed'] is None:
+            if model.lower() == 'ressim':
                 comp_dates, comp_vals = mr.get_time_series(None, None, metric, xy=[x, y])
             else:
-                comp_dates, comp_vals = mr.get_time_series(None, None, metric, dss_path=data)
+                comp_dates, comp_vals = mr.get_time_series(None, None, metric, dss_data=data, station=station)
             # print('Making plot')
 
             fig = plt.figure(figsize=(12, 6))
@@ -1557,16 +1611,14 @@ def clean_output_dir(dir_name):
 #     report_name = " : ".join([sim_name, alternative])
 #     XML_write(output_path, profile_stats, ts_results, report_name)
 
-def generate_region_plots_ResSim(simulation_path, alternative, observed_data_directory, region_name, temperature_only=False,
-                                     use_depth=False, clean_out_dir=False):
+def generate_region_plots_ResSim(simulation_path, alternative, observed_data_directory, region_name, study_dir,
+                                 temperature_only=False, use_depth=False):
     # output_path = r"Z:\USBR\test"  # WAT will start path where we need to write
-    output_path = "."  # WAT will start path where we need to write
-    images_path = os.path.join(output_path, '..', "Images")
-    if not os.path.exists(images_path):
-        os.makedirs(images_path)
+    # output_path = "."  # WAT will start path where we need to write
+    # images_path = os.path.join(output_path, '..', "Images")
+    images_path = os.path.join(study_dir, 'reports', 'Images')
+    output_path = os.path.join(study_dir, 'reports')
 
-    if clean_out_dir:
-        clean_output_dir(images_path)
 
 
     profile_meta_file = os.path.join(observed_data_directory, "Profile_stations.txt")
@@ -1577,7 +1629,7 @@ def generate_region_plots_ResSim(simulation_path, alternative, observed_data_dir
     # subdomain/reservoir for legacy purposes at this point, and subdomain/reservoir can be passed to through
     # to the get_profile command
     profile_subdomains, _ = read_obs_profile_meta_file(profile_meta_file)
-    mr = ResSimModelResults(simulation_path, alternative)
+    mr = ResSimModelResults(simulation_path, alternative, study_dir)
 
     profile_stats = {}
     for subdomain, meta in profile_subdomains.items():
@@ -1588,22 +1640,19 @@ def generate_region_plots_ResSim(simulation_path, alternative, observed_data_dir
                                                          use_depth=use_depth)
 
     ts_results = plot_time_series(mr, ts_meta_file, images_path, simulation_path, alternative, region_name,
-                                  temperature_only=temperature_only)
+                                  'ressim', temperature_only=temperature_only)
 
     _, sim_name = os.path.split(simulation_path)
     report_name = " : ".join([sim_name, alternative])
     XML_write(output_path, profile_stats, ts_results, report_name, region_name)
 
-def generate_region_plots_W2(simulation_path, alternative, observed_data_directory, region_name, temperature_only=False,
-                                     use_depth=False, clean_out_dir=False):
+def generate_region_plots_W2(simulation_path, alternative, observed_data_directory, region_name, study_dir,
+                                temperature_only=False, use_depth=False):
     # output_path = r"Z:\USBR\test"  # WAT will start path where we need to write
     output_path = "."  # WAT will start path where we need to write
     images_path = os.path.join(output_path, '..', "Images")
-    if not os.path.exists(images_path):
-        os.makedirs(images_path)
-
-    if clean_out_dir:
-        clean_output_dir(images_path)
+    # images_path = os.path.join(study_dir, 'reports', 'Images')
+    output_path = os.path.join(study_dir, 'reports')
 
 
     profile_meta_file = os.path.join(observed_data_directory, "Profile_stations.txt")
@@ -1614,7 +1663,7 @@ def generate_region_plots_W2(simulation_path, alternative, observed_data_directo
     # subdomain/reservoir for legacy purposes at this point, and subdomain/reservoir can be passed to through
     # to the get_profile command
     profile_subdomains, _ = read_obs_profile_meta_file(profile_meta_file)
-    mr = W2ModelResults(simulation_path, alternative, region_name)
+    mr = W2ModelResults(simulation_path, alternative, study_dir, region_name)
 
     profile_stats = {}
     for subdomain, meta in profile_subdomains.items():
@@ -1624,9 +1673,9 @@ def generate_region_plots_W2(simulation_path, alternative, observed_data_directo
                                                          images_path,
                                                          use_depth=use_depth)
 
-    # ts_results = plot_time_series(mr, ts_meta_file, images_path, simulation_path, alternative, region_name,
-    #                               temperature_only=temperature_only)
-    ts_results = []
+    ts_results = plot_time_series(mr, ts_meta_file, images_path, simulation_path, alternative, region_name, 'CeQualW2',
+                                  temperature_only=temperature_only)
+    # ts_results = []
 
     _, sim_name = os.path.split(simulation_path)
     report_name = " : ".join([sim_name, alternative])
@@ -1649,6 +1698,7 @@ if __name__ == '__main__':
     # rem %6 model alternative name
     # rem %7 simulation name (for the .rptgen file
 
+
     study_dir = sys.argv[1]
     simulation_directory = sys.argv[2]
     plugin_name = sys.argv[3]
@@ -1657,13 +1707,14 @@ if __name__ == '__main__':
     model_alt_name = sys.argv[6]
     simulation_name = sys.argv[7]
 
-    reg_info = RU.find_rptrgn(simulation_name)
+    reg_info = find_rptrgn(simulation_name, study_dir)
     print('SYSARG', sys.argv)
     print('REGINFO', reg_info)
     try:
         print(reg_info[model_alt_name.replace(' ', '_')]['plugin'], plugin_name)
         region_names = reg_info[model_alt_name.replace(' ', '_')]['regions']
-    except:
+    except Exception as e:
+        print(e)
         exit()
     for region_name in region_names:
 
@@ -1675,10 +1726,10 @@ if __name__ == '__main__':
             #                              temperature_only=True, use_depth=True)
             # exit()
 
-            generate_region_plots_ResSim(simulation_directory, alternative_name, obs_data_path, region_name,
+            generate_region_plots_ResSim(simulation_directory, alternative_name, obs_data_path, region_name, study_dir,
                                          temperature_only=True, use_depth=True)
         elif plugin_name == 'CeQualW2':
-            generate_region_plots_W2(simulation_directory, alternative_name, obs_data_path, region_name,
+            generate_region_plots_W2(simulation_directory, alternative_name, obs_data_path, region_name, study_dir,
                                      temperature_only=True, use_depth=True)
         else:
             print('WAT model "%s" not understood!' % sys.argv[0])

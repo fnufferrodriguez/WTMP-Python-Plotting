@@ -8,9 +8,11 @@ Created on 6/10/2021
 
 import os
 
-def find_rptrgn(simulation_name):
+def find_rptrgn(simulation_name, studyfolder):
     #find the rpt file go up a dir, reports, .rptrgn
-    rptrgn_file = os.path.join('..', '{0}.rptrgn'.format(simulation_name.replace(' ', '_')))
+    rptrgn_file = os.path.join(studyfolder, 'reports', '{0}.rptrgn'.format(simulation_name.replace(' ', '_')))
+    # rptrgn_file = os.path.join('..', '{0}.rptrgn'.format(simulation_name.replace(' ', '_')))
+    print('Looking for rptrgn file at:', rptrgn_file)
     if not os.path.exists(rptrgn_file):
         print('ERROR: no RPTRGN file for simulation:', simulation_name)
         exit()

@@ -28,6 +28,7 @@ class reportPreprocess(object):
         self.simulationName = simulationName
         self.startTime = startTime
         self.endTime = endTime
+        print('Processing for modeltype:', self.modelName)
 
     def PreProcess(self):
         try:
@@ -69,32 +70,21 @@ class reportPreprocess(object):
                     print('self.studyFolder', self.studyFolder)
                     print('station_information', station_information[station]['dss_path'])
                     dss_records[station]['dss_path'] = os.path.join(self.studyFolder, 'shared', station_information[station]['dss_path'])
-                    dss_records[station]['dss_fn'] = [station_information[station]['dss_fn']]
+                    dss_records[station]['dss_fn'] = station_information[station]['dss_fn']
                     dss_records[station]['metric'] = station_information[station]['metric']
             print(station_information[station]['w2_path'])
-            if station_information[station]['w2_path'] != "''":
+            if station_information[station]['w2_path'] != "''" and self.modelName == 'CeQualW2':
+                print('MAKING RECORD FOR w2 STATION')
                 dss_records[station+'_Fromw2'] = {}
-                correct_fpart = self.alternativeFpart
-                correct_fpart = correct_fpart.replace(self.simulationName[:10]+'_', self.simulationName[:10]+':')
-                correct_fpart = correct_fpart.replace('_'+self.modelName, ':'+self.modelName)
-                correct_fpart = correct_fpart.split(self.modelName)
-                if self.region.lower() == 'shasta':
-                    dss_orig = '-SHASTA FROM DSS'
-                elif self.region.lower() == 'keswick':
-                    dss_orig = '-KESWICK FROM SHASTA W2'
-                correct_fpart = correct_fpart[0] + self.modelName + dss_orig
+
                 dss_path = station_information[station]['w2_path']
-                dss_path = dss_path.replace('$$FPART$$', correct_fpart)
+                dss_path = dss_path.replace('$$FPART$$', self.alternativeFpart)
                 dss_records[station+'_Fromw2']['dss_path'] = dss_path
                 # build dss path
                 simfolderrev = self.simulationFolder.split('\\')
                 simfolderrev.reverse()
-                for item in simfolderrev: #TODO: fix this, this is sloppy
-                    try:
-                        int(item)
-                        analysis_per = item
-                    except ValueError:
-                        continue
+                analysis_per = simfolderrev[1] #TODO: is the analysis period something that cna be passed?
+
                 dss_fn = os.path.join(self.simulationFolder, self.simulationName.replace(' ', '_') + '-val{0}.dss'.format(analysis_per))
                 print(dss_fn)
                 dss_records[station+'_Fromw2']['dss_fn'] = dss_fn
@@ -110,12 +100,7 @@ class reportPreprocess(object):
             else:
                 return dss_records
 
-
-            correct_fpart = self.alternativeFpart
-            correct_fpart = correct_fpart.replace(self.simulationName[:10]+'_', self.simulationName[:10]+':')
-            correct_fpart = correct_fpart.replace('_'+self.modelName, ':'+self.modelName)
-            correct_fpart = correct_fpart.replace('_', ' ')
-            dss_path = dss_path.replace('$$FPART$$', correct_fpart)
+            dss_path = dss_path.replace('$$FPART$$', self.alternativeFpart)
             print('USING DSS PATH {0} for W2 TEMPERATURE PROFILE'.format(dss_path))
             start = 0
             increment = 2
@@ -133,12 +118,8 @@ class reportPreprocess(object):
                 # build dss path
                 simfolderrev = self.simulationFolder.split('\\')
                 simfolderrev.reverse()
-                for item in simfolderrev: #TODO: fix this, this is sloppy
-                    try:
-                        int(item)
-                        analysis_per = item
-                    except ValueError:
-                        continue
+                analysis_per=simfolderrev[1] #TODO: is the analysis period something that cna be passed?
+
                 dss_fn = os.path.join(self.simulationFolder, self.simulationName.replace(' ', '_') + '-val{0}.dss'.format(analysis_per))
                 print(dss_fn)
                 dss_records[TempProfile]['dss_fn'] = dss_fn
@@ -149,13 +130,10 @@ class reportPreprocess(object):
 
     def read_stations_file(self, stations_file):
         stations = {}
-        obs_dss_file = None
         with open(stations_file) as sf:
             for line in sf:
                 line = line.strip()
-                if line.startswith('OBS_FILE'):
-                    obs_dss_file = os.path.join(os.getcwd(), line.split('=')[1])
-                elif line.startswith('start station'):
+                if line.startswith('start station'):
                     name = ''
                     metric = ''
                     easting = 0
@@ -256,6 +234,7 @@ class reportPreprocess(object):
     def find_rptrgn(self, simulation_name):
         #find the rpt file go up a dir, reports, .rptrgn
         rptrgn_file = os.path.join(self.studyFolder, 'reports', '{0}.rptrgn'.format(simulation_name.replace(' ', '_')))
+        print('Looking for rptrgn file at:', rptrgn_file)
         if not os.path.exists(rptrgn_file):
             print('ERROR: no RPTRGN file for simulation:', simulation_name)
             exit()
