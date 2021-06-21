@@ -51,6 +51,6 @@ if not os.path.exists(images_path):
 clean_output_dir('..\Images', '.png')
 
 csv_path = os.path.join(output_path,  "CSV")
-if not os.path.exists(images_path):
-    os.makedirs(images_path)
+if not os.path.exists(csv_path):
+    os.makedirs(csv_path)
 clean_output_dir('..\CSV', '.csv')

@@ -24,6 +24,7 @@ from scipy import interpolate
 from scipy.constants import convert_temperature
 from sklearn.metrics import mean_absolute_error
 import XMLReport
+from collections import Counter
 # import report_utils as RU
 
 
@@ -190,12 +191,10 @@ def read_obs_profile_meta_file(obs_profile_meta_file):
 
 
 def observed_ts_txt_file(ts_data_path, station_name, metric):
-    #TODO: change reading to assume regular, do normal way, and check end date, if not what we expect, go back find missing dates
     dss_util_fname = os.path.join(ts_data_path, '{0} {1}.txt'.format(metric, station_name))
     return observed_ts_txt_file_read(dss_util_fname)
 
-def observed_ts_txt_file_read(file_name, skipheader=False):
-     #TODO: change reading to assume regular, do normal way, and check end date, if not what we expect, go back find missing dates
+def observed_ts_txt_file_read(file_name):
     dss_util_fname = file_name
     t = []
     v = []
@@ -223,7 +222,31 @@ def observed_ts_txt_file_read(file_name, skipheader=False):
                     v.append(float(sline[1]))
             except:
                 print('Error in File. Skipping line:', line)
-    return np.array(t), np.array(v)
+    time_difference = [ti - t[i] for i, ti in enumerate(t[1:])]
+    td_counter = Counter(time_difference) #get the time deltas
+    if len(td_counter) == 1:
+        return np.array(t), np.array(v)
+    elif len(td_counter) == 0:
+        return np.array(t), np.array(v)
+    else:
+        most_common = max(td_counter.values())
+        td_keys = list(td_counter.keys())
+        td_values = list(td_counter.values())
+        pos = td_values.index(most_common)
+        mc_interval = td_keys[pos] #get most common time interval, this is probably what we want
+        new_t = []
+        new_v = []
+        current_t = t[0] #no option but to assume this is the start..
+        end_t = t[-1] #no option again...
+        while current_t < end_t:
+            new_t.append(current_t)
+            if current_t in t:
+                ti = t.index(current_t)
+                new_v.append(v[ti])
+            else:
+                new_v.append(np.nan)
+            current_t += mc_interval
+        return np.array(new_t), np.array(new_v)
 
 
     #     if not skipheader:
@@ -335,6 +358,8 @@ def find_rptrgn(simulation_name, studyfolder):
             reg_info[model_alt_name] = {'plugin': plugin,
                                         'regions': regions}
     return reg_info
+
+
 
 
 def read_observed(observed_data_filename):
@@ -539,10 +564,19 @@ class W2ModelResults(ModelResults):
     def load_time(self):
         depth = 0
         i = 0
-        ts_data_file = '{0}_tempprofile_Depth{1}_Idx{2}_Temperature.csv'.format(self.region_name.lower(), depth, i+1)
-        t, v = observed_ts_txt_file_read(os.path.join(self.csv_results_dir, ts_data_file), skipheader=True) #TODO: rename skip header
-        self.stime = t[0]
-        self.etime = t[-1]
+        print('Reading times..')
+        for i ,depth in enumerate(self.segment_depths):
+            ts_data_file = '{0}_tempprofile_Depth{1}_Idx{2}_Temperature.csv'.format(self.region_name.lower(), depth, i+1)
+            t, v = observed_ts_txt_file_read(os.path.join(self.csv_results_dir, ts_data_file))
+            try:
+                self.stime = t[0]
+                self.etime = t[-1]
+                print('found time!')
+                return
+            except:
+                print('Unable to set start and end time.')
+
+
 
     def load_time_array(self, t_in):
         t = []
@@ -555,7 +589,7 @@ class W2ModelResults(ModelResults):
         vals = np.zeros(len(self.segment_depths), dtype=np.float64)
         for i, depth in enumerate(self.segment_depths):
             ts_data_file = '{0}_tempprofile_Depth{1}_Idx{2}_Temperature.csv'.format(self.region_name, depth, i+1)
-            t, v = observed_ts_txt_file_read(os.path.join(self.csv_results_dir, ts_data_file), skipheader=True)
+            t, v = observed_ts_txt_file_read(os.path.join(self.csv_results_dir, ts_data_file))
             if len(t) == 0:
                 vals[i:] = np.NaN
                 break
@@ -567,6 +601,29 @@ class W2ModelResults(ModelResults):
                 break
             vals[i] = v[timestep]
         return self.segment_depths*3.28, vals #TODO: convert better.
+
+    def get_profiles(self,times, metric, resname=None, return_depth=False):
+        unique_times = [n[0] for n in times]
+        vals = np.full((len(unique_times), len(self.segment_depths)), np.NaN, dtype=np.float64)
+        elevations = np.full((len(unique_times), len(self.segment_depths)), np.NaN, dtype=np.float64)
+        for i, depth in enumerate(self.segment_depths):
+            ts_data_file = '{0}_tempprofile_Depth{1}_Idx{2}_Temperature.csv'.format(self.region_name, depth, i+1)
+            t, v = observed_ts_txt_file_read(os.path.join(self.csv_results_dir, ts_data_file))
+            if i == 68:
+                print('stop')
+            if len(t) > 0:
+                for j, time in enumerate(unique_times):
+                    self.load_time_array(t)
+                    timestep = self.get_idx_for_time(time)
+                    if timestep > -1:
+                        try:
+                            vals[j][i] = v[timestep]
+                        except:
+                            print('No Data at idx {0} Depth {1} at time {2}'.format(i, depth, timestep))
+        for j, time in enumerate(unique_times):
+            elevations[j,:] = self.segment_depths * 3.28
+        return elevations, vals
+
 
     def get_idx_for_time(self, t_in):
         #TODO: merge this with other get_idx_for_time method?
@@ -584,6 +641,9 @@ class W2ModelResults(ModelResults):
         csv_name = '{0}_Fromw2_{1}.csv'.format(station.replace(' ', '_'), metric) #ex: Shasta_Outflow_Fromw2_Temperature
         csv_path = os.path.join(self.csv_results_dir, csv_name)
         t, v = observed_ts_txt_file_read(csv_path)
+        if len(t) > 0:
+            self.stime = t[0]
+            self.etime = t[-1]
 
         return t, v
 
@@ -624,6 +684,47 @@ class ResSimModelResults(ModelResults):
             return np.max(el) - el[:], v
         else:
             return el, v
+
+    def get_profiles(self, times, metric, resname=None, return_depth=False):
+        self.load_elevation(alt_subdomain_name=resname)
+        unique_times = [n[0] for n in times]
+        vals = np.full((len(unique_times), len(self.elev)), np.nan, dtype=np.float64)
+        elevations = np.full((len(unique_times), len(self.elev)), np.nan, dtype=np.float64)
+        for j, time_in in enumerate(unique_times):
+            timestep = self.get_idx_for_time(time_in)
+            self.load_results(time_in, metric, alt_subdomain_name=resname)
+            ktop = self.get_top_layer(timestep)
+            v_el = self.vals[:ktop + 1]
+            el = self.elev[:ktop + 1]
+            for ei, e in enumerate(el):
+                if return_depth:
+                    elevations[j][ei] = np.max(el) - e
+                else:
+                    elevations[j][ei] = el
+            for vi, v in enumerate(v_el):
+                vals[j][vi] = v
+        return elevations, vals
+
+
+
+
+
+
+
+
+        # vals = np.full((len(unique_times), len(self.segment_depths)), np.nan, dtype=np.float64)
+        # for i, depth in enumerate(self.segment_depths):
+        #     ts_data_file = '{0}_tempprofile_Depth{1}_Idx{2}_Temperature.csv'.format(self.region_name, depth, i+1)
+        #     t, v = observed_ts_txt_file_read(os.path.join(self.csv_results_dir, ts_data_file))
+        #     if len(t) > 0:
+        #         for j, time in enumerate(unique_times):
+        #             self.load_time_array(t)
+        #             timestep = self.get_idx_for_time(time)
+        #             try:
+        #                 vals[j][i] = v[timestep]
+        #             except:
+        #                 print('No Data at idx {0} Depth {1} at time {2}'.format(i, depth, timestep))
+        # return self.segment_depths * 3.28, vals
 
     def load_subdomains(self):
         self.subdomains = {}
@@ -734,6 +835,8 @@ class ResSimModelResults(ModelResults):
             iend = np.argmin(self.t_computed, time_end)[0]
             if self.t_computed[iend] > time_end:
                 iend -= 1
+        self.stime = self.t_computed[0]
+        self.etime = self.t_computed[-1]
         return self.t_computed[istart:iend], v[istart:iend]
 
     @staticmethod
@@ -1167,6 +1270,7 @@ def plot_profiles(mr, metric, observed_data_drct, reservoir, out_path, use_depth
             obs_times, obs_values, obs_depths = read_observed(observed_data_file_name) #todo: read model like this
             nof_profiles = len(obs_times)
             n_pages = math.ceil(nof_profiles / n_profiles_per_page)
+            model_elevs, model_values = mr.get_profiles(obs_times, metric, resname=reservoir, return_depth=use_depth)
 
             # break profile indices into page groups
             prof_indices = list(range(nof_profiles))
@@ -1196,8 +1300,13 @@ def plot_profiles(mr, metric, observed_data_drct, reservoir, out_path, use_depth
                     # lflag, xflag, yflag = get_plot_label_masks(i, len(pgi), subplot_rows, subplot_cols)
                     # obs_model_profile_plot(pax, obs_elev, obs_val, model_elev, model_val, metric, dt_profile[j],
                     #                        show_legend=lflag, show_xlabel=xflag, show_ylabel=yflag)
-                    model_elev, model_val = mr.get_profile(dt_profile[0], metric, name=reservoir,
-                                                           return_depth=use_depth)
+
+                    # model_elev, model_val = mr.get_profile(dt_profile[0], metric, name=reservoir,
+                    #                                        return_depth=use_depth)
+
+                    model_val = model_values[j]
+                    model_elev = model_elevs[j]
+
                     lflag, xflag, yflag = get_plot_label_masks(i, len(pgi), subplot_rows, subplot_cols)
                     obs_model_profile_plot(pax, obs_elev, obs_val, model_elev, model_val, metric, dt_profile[0],
                                            show_legend=lflag, show_xlabel=xflag, show_ylabel=yflag)
@@ -1247,76 +1356,78 @@ def plot_time_series(mr, observed_data_meta_file, fig_path_stub, rss_sim_name, r
                 comp_dates, comp_vals = mr.get_time_series(None, None, metric, dss_data=data, station=station)
             # print('Making plot')
 
-            fig = plt.figure(figsize=(12, 6))
-            ax = fig.add_subplot(111)
-            ax.plot(obs_dates, obs_vals, label='Observed')
-            ax.plot(comp_dates, comp_vals, '-.', label='Computed')
+            if len(comp_dates) > 0:
 
-            stime = comp_dates[0]
-            etime = comp_dates[-1]
+                fig = plt.figure(figsize=(12, 6))
+                ax = fig.add_subplot(111)
+                ax.plot(obs_dates, obs_vals, label='Observed')
+                ax.plot(comp_dates, comp_vals, '-.', label='Computed')
 
-            ax.set_xlim([stime, etime])
-            omsk = (obs_dates >= stime) & (obs_dates <= etime)
-            cmsk = (comp_dates >= stime) & (comp_dates <= etime)
-            ax.legend(loc='upper right')
-            if metric.lower() == 'flow':
-                ylabel_str = 'Flow'
-                units_str = mr.units[metric]
-                ax.set_ylim([0., max([np.nanmax(obs_vals[omsk]), np.nanmax(comp_vals[cmsk])])])
-            elif metric.lower() == 'elevation':
-                ylabel_str = 'Surface Elevation'
-                units_str = 'ft'
-                ax.set_ylim([min([np.nanmin(obs_vals[omsk]), np.nanmin(comp_vals[cmsk])]),
-                             max([np.nanmax(obs_vals[omsk]), np.nanmax(comp_vals[cmsk])])])
-            elif metric.lower() == 'temperature':
-                ylabel_str = 'Water Temperature'
-                units_str = mr.units[metric.lower()]
-                ax.set_ylim([0., max([np.nanmax(obs_vals[omsk]), np.nanmax(comp_vals[cmsk])])])
-            elif metric.lower() == 'do':
-                ylabel_str = 'Dissolved Oxygen'
-                units_str = mr.units[metric]
-                ax.set_ylim([0., max([np.nanmax(obs_vals[omsk]), np.nanmax(comp_vals[cmsk])])])
-            elif metric.lower() == 'do_sat':
-                ylabel_str = 'Dissolved Oxygen Saturation'
-                units_str = mr.units[metric]
-                ax.set_ylim([min([np.nanmin(obs_vals[omsk]), np.nanmin(comp_vals[cmsk])]),
-                             max([np.nanmax(obs_vals[omsk]), np.nanmax(comp_vals[cmsk])])])
-            ax.set_ylabel('{0} ({1})'.format(metric.capitalize(), units_str))
-            ax.set_title('{0}, Simulation: {1}, {2}'.format(station, os.path.basename(rss_sim_name), rss_alt_name))
-            plt.grid()
-            fig_name = metric.capitalize() + '_' + station.replace(' ', '_') + '.png'
-            plt.savefig(os.path.join(fig_path_stub, fig_name), bbox_inches='tight', dpi=600)
-            plt.close()
+                stime = comp_dates[0]
+                etime = comp_dates[-1]
 
-        # break stats into years, months
-        # find n years
-        n_years = obs_dates[-1].year - obs_dates[0].year + 1
-        stats = {}
-        stats_months = {}
-        for yr in range(obs_dates[0].year, obs_dates[-1].year + 1):
-            stdate = dt.datetime(yr, 1, 1)
-            enddate = dt.datetime(yr + 1, 1, 1)
-            # at some point should add metric to key, which is used as label
-            print(station, metric, yr)
-            stats_yr = series_stats(comp_dates, comp_vals, obs_dates, obs_vals,
-                                    start_limit=stdate, end_limit=enddate, time_series=True)
-            if stats_yr is not None:
-                stats[str(yr)] = stats_yr
-                stats_months[str(yr) + ' Obs. Mean'] = {}
-                stats_months[str(yr) + ' Comp. Mean'] = {}
-                for mo in range(1, 13):
-                    enddate = dt.datetime(yr + 1, 1, 1) if mo == 12 else dt.datetime(yr, mo + 1, 1)
-                    mo_stat = series_stats(comp_dates, comp_vals, obs_dates, obs_vals,
-                                           start_limit=dt.datetime(yr, mo, 1), end_limit=enddate,
-                                           means_only=True, time_series=True)
-                    if mo_stat is None:
-                        stats_months[str(yr) + ' Obs. Mean'][mo_str_3[mo - 1]] = None
-                        stats_months[str(yr) + ' Comp. Mean'][mo_str_3[mo - 1]] = None
-                    else:
-                        stats_months[str(yr) + ' Obs. Mean'][mo_str_3[mo - 1]] = mo_stat['Obs. Mean']
-                        stats_months[str(yr) + ' Comp. Mean'][mo_str_3[mo - 1]] = mo_stat['Comp. Mean']
+                ax.set_xlim([stime, etime])
+                omsk = (obs_dates >= stime) & (obs_dates <= etime)
+                cmsk = (comp_dates >= stime) & (comp_dates <= etime)
+                ax.legend(loc='upper right')
+                if metric.lower() == 'flow':
+                    ylabel_str = 'Flow'
+                    units_str = mr.units[metric]
+                    ax.set_ylim([0., max([np.nanmax(obs_vals[omsk]), np.nanmax(comp_vals[cmsk])])])
+                elif metric.lower() == 'elevation':
+                    ylabel_str = 'Surface Elevation'
+                    units_str = 'ft'
+                    ax.set_ylim([min([np.nanmin(obs_vals[omsk]), np.nanmin(comp_vals[cmsk])]),
+                                 max([np.nanmax(obs_vals[omsk]), np.nanmax(comp_vals[cmsk])])])
+                elif metric.lower() == 'temperature':
+                    ylabel_str = 'Water Temperature'
+                    units_str = mr.units[metric.lower()]
+                    ax.set_ylim([0., max([np.nanmax(obs_vals[omsk]), np.nanmax(comp_vals[cmsk])])])
+                elif metric.lower() == 'do':
+                    ylabel_str = 'Dissolved Oxygen'
+                    units_str = mr.units[metric]
+                    ax.set_ylim([0., max([np.nanmax(obs_vals[omsk]), np.nanmax(comp_vals[cmsk])])])
+                elif metric.lower() == 'do_sat':
+                    ylabel_str = 'Dissolved Oxygen Saturation'
+                    units_str = mr.units[metric]
+                    ax.set_ylim([min([np.nanmin(obs_vals[omsk]), np.nanmin(comp_vals[cmsk])]),
+                                 max([np.nanmax(obs_vals[omsk]), np.nanmax(comp_vals[cmsk])])])
+                ax.set_ylabel('{0} ({1})'.format(metric.capitalize(), units_str))
+                ax.set_title('{0}, Simulation: {1}, {2}'.format(station, os.path.basename(rss_sim_name), rss_alt_name))
+                plt.grid()
+                fig_name = metric.capitalize() + '_' + station.replace(' ', '_') + '.png'
+                plt.savefig(os.path.join(fig_path_stub, fig_name), bbox_inches='tight', dpi=600)
+                plt.close()
+        if len(comp_dates) > 0:
+            # break stats into years, months
+            # find n years
+            n_years = obs_dates[-1].year - obs_dates[0].year + 1
+            stats = {}
+            stats_months = {}
+            for yr in range(obs_dates[0].year, obs_dates[-1].year + 1):
+                stdate = dt.datetime(yr, 1, 1)
+                enddate = dt.datetime(yr + 1, 1, 1)
+                # at some point should add metric to key, which is used as label
+                print(station, metric, yr)
+                stats_yr = series_stats(comp_dates, comp_vals, obs_dates, obs_vals,
+                                        start_limit=stdate, end_limit=enddate, time_series=True)
+                if stats_yr is not None:
+                    stats[str(yr)] = stats_yr
+                    stats_months[str(yr) + ' Obs. Mean'] = {}
+                    stats_months[str(yr) + ' Comp. Mean'] = {}
+                    for mo in range(1, 13):
+                        enddate = dt.datetime(yr + 1, 1, 1) if mo == 12 else dt.datetime(yr, mo + 1, 1)
+                        mo_stat = series_stats(comp_dates, comp_vals, obs_dates, obs_vals,
+                                               start_limit=dt.datetime(yr, mo, 1), end_limit=enddate,
+                                               means_only=True, time_series=True)
+                        if mo_stat is None:
+                            stats_months[str(yr) + ' Obs. Mean'][mo_str_3[mo - 1]] = None
+                            stats_months[str(yr) + ' Comp. Mean'][mo_str_3[mo - 1]] = None
+                        else:
+                            stats_months[str(yr) + ' Obs. Mean'][mo_str_3[mo - 1]] = mo_stat['Obs. Mean']
+                            stats_months[str(yr) + ' Comp. Mean'][mo_str_3[mo - 1]] = mo_stat['Comp. Mean']
 
-        station_results.append([station, x, y, metric, fig_name, stats, stats_months])
+            station_results.append([station, x, y, metric, fig_name, stats, stats_months])
 
     return station_results
 
@@ -1551,9 +1662,10 @@ def XML_write(output_path, profile_stats, ts_results, report_name, region_name):
         XML_res, n_element, n_fig, n_table = XML_reservior(profile_stats, XML, region_name, n_element, n_fig, n_table)
     if len(ts_results) > 0:
         XML_ts, n_element, n_fig, n_table = XML_time_series(ts_results,XML, region_name,  n_element, n_fig, n_table)
-
-
-    XML.write_Reservoir(region_name, XML_Groupheader, XML_res, XML_ts)
+    if len(ts_results) + len(profile_stats) > 0:
+        XML.write_Reservoir(region_name, plugin_name, XML_Groupheader, XML_res, XML_ts)
+    else:
+        print('No Results found for Region', region_name)
 
 
     # XML_start = copy.copy(get_XML_template()['start'])
@@ -1713,8 +1825,8 @@ if __name__ == '__main__':
     try:
         print(reg_info[model_alt_name.replace(' ', '_')]['plugin'], plugin_name)
         region_names = reg_info[model_alt_name.replace(' ', '_')]['regions']
-    except Exception as e:
-        print(e)
+    except Exception:
+        print('Error finding region')
         exit()
     for region_name in region_names:
 

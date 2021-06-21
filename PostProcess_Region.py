@@ -17,7 +17,8 @@ class reportPreprocess(object):
 
     def __init__(self, studyFolder, simulationFolder,modelName,
                        alternativeName, obsDataFolder, alternativeFpart,
-                       simulationName, startTime, endTime):
+                       simulationName, startTime, endTime, baseSimulationName,
+                       dssFile):
 
         self.studyFolder = studyFolder
         self.simulationFolder = simulationFolder
@@ -28,6 +29,8 @@ class reportPreprocess(object):
         self.simulationName = simulationName
         self.startTime = startTime
         self.endTime = endTime
+        self.baseSimulationName = baseSimulationName
+        self.dssFile = dssFile
         print('Processing for modeltype:', self.modelName)
 
     def PreProcess(self):
@@ -47,11 +50,12 @@ class reportPreprocess(object):
 
     def get_regions(self):
         try:
-            reg_info = self.find_rptrgn(self.simulationName)
+            reg_info = self.find_rptrgn(self.baseSimulationName)
             print('reg_info', reg_info)
             self.region_names = reg_info[self.alternativeName.replace(' ', '_')]['regions']
         except:
             self.region_names = [] #TODO: this can be better
+        print('Found Regions', self.region_names)
 
 
     def Get_DSS_Commands(self):
@@ -83,11 +87,11 @@ class reportPreprocess(object):
                 # build dss path
                 simfolderrev = self.simulationFolder.split('\\')
                 simfolderrev.reverse()
-                analysis_per = simfolderrev[1] #TODO: is the analysis period something that cna be passed?
+                # analysis_per = simfolderrev[1] #TODO: is the analysis period something that cna be passed?
 
-                dss_fn = os.path.join(self.simulationFolder, self.simulationName.replace(' ', '_') + '-val{0}.dss'.format(analysis_per))
-                print(dss_fn)
-                dss_records[station+'_Fromw2']['dss_fn'] = dss_fn
+                # dss_fn = os.path.join(self.simulationFolder, self.simulationName.replace(' ', '_') + '-val{0}.dss'.format(analysis_per))
+                print(self.dssFile)
+                dss_records[station+'_Fromw2']['dss_fn'] = self.dssFile
                 dss_records[station+'_Fromw2']['metric'] = station_information[station]['metric']
 
 
@@ -118,11 +122,11 @@ class reportPreprocess(object):
                 # build dss path
                 simfolderrev = self.simulationFolder.split('\\')
                 simfolderrev.reverse()
-                analysis_per=simfolderrev[1] #TODO: is the analysis period something that cna be passed?
+                # analysis_per=simfolderrev[1] #TODO: is the analysis period something that cna be passed?
 
-                dss_fn = os.path.join(self.simulationFolder, self.simulationName.replace(' ', '_') + '-val{0}.dss'.format(analysis_per))
-                print(dss_fn)
-                dss_records[TempProfile]['dss_fn'] = dss_fn
+                # dss_fn = os.path.join(self.simulationFolder, self.simulationName.replace(' ', '_') + '-val{0}.dss'.format(analysis_per))
+                print(self.dssFile)
+                dss_records[TempProfile]['dss_fn'] = self.dssFile
                 dss_records[TempProfile]['metric'] = 'Temperature'
 
 
@@ -272,10 +276,12 @@ print('modelName', modelName)
 print('simName', simulationName)
 print('alternativeFpart', alternativeFpart)
 print('alternativeName', alternativeName)
+print('baseSimulationName', baseSimulationName)
+print('dssFile', dssFile)
 
 rgp = reportPreprocess(studyFolder, simulationFolder,modelName,
                        alternativeName, obsDataFolder, alternativeFpart,
-                       simulationName, startTime, endTime) #TODO: pass in other args
+                       simulationName, startTime, endTime, baseSimulationName, dssFile)
 rv = rgp.PreProcess()
 
 

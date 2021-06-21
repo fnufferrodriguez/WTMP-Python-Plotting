@@ -15,6 +15,7 @@ class makeXMLReport(object):
         self.XML_fn = XML_fn
         self.read_XML()
         self.get_figure_nums()
+        self.get_model_Num()
         self.get_ReportGroup_nums()
         self.get_ReportElement_nums()
         self.get_Table_nums()
@@ -36,6 +37,15 @@ class makeXMLReport(object):
                 fig_num = [int(s.split('=')[1].replace('"','')) for s in sline if 'FigureNumber' in s][0]
                 if fig_num > self.current_fig_num:
                     self.current_fig_num = fig_num
+
+    def get_model_Num(self):
+        self.current_model_num = 0
+        for line in self.XMLFile:
+            if "ModelOrder" in line:
+                sline = line.split(' ')
+                model_num = [int(s.split('=')[1].replace('"','')) for s in sline if 'ModelOrder' in s][0]
+                if model_num > self.current_model_num:
+                    self.current_model_num = model_num
 
     def get_ReportGroup_nums(self):
         self.current_reportgroup_num = 0
@@ -72,11 +82,13 @@ class makeXMLReport(object):
                     line = line.replace(key, cover_keys[key])
                 xmlf.write(line)
 
-    def write_Reservoir(self, region, Group_Text, Res_Text, TS_Text):
+    def write_Reservoir(self, region,model_name, Group_Text, Res_Text, TS_Text):
         with open(self.XML_fn, 'w') as XML:
             for line in self.XMLFile:
                 sline = line.strip()
-                if sline.startswith("<!--$${0}$$-->".format(region)):
+                if sline.startswith('<!--$$ModelInfo$$-->'):
+                    self.write_Model_Name(XML, model_name)
+                elif sline.startswith("<!--$${0}$$-->".format(region)):
                     XML.write(Group_Text)
                     XML.write(Res_Text)
                     XML.write(TS_Text)
@@ -316,4 +328,8 @@ class makeXMLReport(object):
         out += '                    </Output_Table>\n'
 
         return out
+
+    def write_Model_Name(self,XML, model_name):
+        XML.write('	        <Model ModelOrder="{0}" >{1}</Model>\n'.format(self.current_model_num, model_name))
+        XML.write('         <!--$$ModelInfo$$-->\n')
 
