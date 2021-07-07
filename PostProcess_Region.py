@@ -99,8 +99,10 @@ class reportPreprocess(object):
         if self.modelName == 'CeQualW2': #get temp profiles
             if self.region.lower() == 'shasta':
                 dss_path = r'/W2:TSR_$$INDEX$$_SEG77.OPT/TSR SEG 77 DEPTH $$DEPTH$$.00/TEMP-WATER//1HOUR/$$FPART$$/'
+                elev_dss_path = r'/W2:TSR_1_SEG77.OPT/TSR SEG 77 DEPTH 0.00/ELEV//1HOUR/{0}/'.format(self.alternativeFpart)
             elif self.region.lower() == 'keswick':
-                dss_path = r'/W2:TSR_14_$$INDEX$$_SEG32.OPT/TSR SEG 32 DEPTH $$DEPTH$$.00/TEMP-WATER//1HOUR/$$FPART$$/' #TODO: read these from a text file
+                dss_path = r'/W2:TSR_$$INDEX$$_SEG32.OPT/TSR SEG 32 DEPTH $$DEPTH$$.00/TEMP-WATER//1HOUR/$$FPART$$/' #TODO: read these from a text file
+                elev_dss_path = r'/W2:TSR_1_SEG32.OPT/TSR SEG 32 DEPTH 0.00/ELEV//1HOUR/{0}/'.format(self.alternativeFpart) #TODO: read these from a text file
             else:
                 return dss_records
 
@@ -128,6 +130,14 @@ class reportPreprocess(object):
                 print(self.dssFile)
                 dss_records[TempProfile]['dss_fn'] = self.dssFile
                 dss_records[TempProfile]['metric'] = 'Temperature'
+
+            ElevProfile = self.region.lower() + '_WaterSurfaceElev'
+            dss_records[ElevProfile] = {}
+            dss_records[ElevProfile]['dss_path'] = elev_dss_path
+            print(self.dssFile)
+            dss_records[ElevProfile]['dss_fn'] = self.dssFile
+            dss_records[ElevProfile]['metric'] = 'Elev'
+
 
 
         return dss_records

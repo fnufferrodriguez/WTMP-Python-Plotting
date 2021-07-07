@@ -1,14 +1,13 @@
 """
 Created on 7/1/2020
 
-@author: Stephen Andrews, Ben Saenz
+@author: Stephen Andrews, Ben Saenz, Scott Burdick
 @organization: Resource Management Associates
 @contact: steve@rmanet.com
 @note: 
 """
 __updated__ = '11-21-2019 13:14'
 
-import copy
 import datetime as dt
 import math
 import os
@@ -25,7 +24,6 @@ from scipy.constants import convert_temperature
 from sklearn.metrics import mean_absolute_error
 import XMLReport
 from collections import Counter
-# import report_utils as RU
 
 
 sat_data_do = [14.60, 14.19, 13.81, 13.44, 13.09, 12.75, 12.43, 12.12, 11.83, 11.55, 11.27, 11.01, 10.76, 10.52, 10.29,
@@ -37,11 +35,9 @@ sat_data_temp = [0., 1., 2., 3., 4., 5., 6., 7., 8., 9., 10., 11., 12., 13., 14.
 f_interp = interpolate.interp1d(sat_data_temp, sat_data_do,
                                 fill_value=(sat_data_do[0], sat_data_do[-1]), bounds_error=False)
 
-
 def do_saturation(temp, diss_ox):
     do_sat = f_interp(temp)
     return diss_ox / do_sat * 100.
-
 
 def calc_computed_dosat(vtemp, vdo):
     v = np.zeros_like(vtemp)
@@ -51,7 +47,6 @@ def calc_computed_dosat(vtemp, vdo):
         else:
             v[j] = do_saturation(vtemp[j], vdo[j])
     return v
-
 
 def read_DSS_txt_header(fp):
     """Example headr:
@@ -135,6 +130,7 @@ def read_obs_ts_meta_file(obs_ts_meta_file):
             line = line.strip()
             if line.startswith('start station'):
                 name = ''
+                longname=''
                 metric = ''
                 easting = 0
                 northing = 0
@@ -144,6 +140,8 @@ def read_obs_ts_meta_file(obs_ts_meta_file):
                 w2_path = ''
             elif line.startswith('name'):
                 name = line.split('=')[1]
+            elif line.startswith('longname'):
+                longname = line.split('=')[1]
             elif line.startswith('metric'):
                 metric = line.split('=')[1]
             elif line.startswith('easting'):
@@ -160,20 +158,17 @@ def read_obs_ts_meta_file(obs_ts_meta_file):
                 w2_path = line.split('=')[1]
             elif line.startswith('end station'):
                 stations[name] = {'easting': easting, 'northing': northing, 'metric': metric,
-                                  'region':region, 'dss_path': dss_path,
+                                  'region':region, 'dss_path': dss_path, 'longname': longname,
                                   'dss_fn': dss_fn, 'w2_path': w2_path}
     return stations
 
 
 def read_obs_profile_meta_file(obs_profile_meta_file):
     stations = {}
-    obs_dss_file = None
     with open(obs_profile_meta_file) as osf:
         for line in osf:
             line = line.strip()
-            if line.startswith('OBS_FILE'):
-                obs_dss_file = os.path.join(os.getcwd(), line.split('=')[1])
-            elif line.startswith('start station'):
+            if line.startswith('start station'):
                 name = ''
                 metric = ''
                 region = ''
@@ -187,8 +182,7 @@ def read_obs_profile_meta_file(obs_profile_meta_file):
                 region = line.split('=')[1]
             elif line.startswith('end station'):
                 stations[name] = {'metric': metric, 'region':region}
-    return stations, obs_dss_file
-
+    return stations
 
 def observed_ts_txt_file(ts_data_path, station_name, metric):
     dss_util_fname = os.path.join(ts_data_path, '{0} {1}.txt'.format(metric, station_name))
@@ -248,45 +242,6 @@ def observed_ts_txt_file_read(file_name):
             current_t += mc_interval
         return np.array(new_t), np.array(new_v)
 
-
-    #     if not skipheader:
-    #         for _ in range(4):
-    #             next(f)
-    #     for _ in range(2):
-    #         line = f.readline()
-    #         if line.startswith('No Data Found.'):
-    #             print('No Data found.')
-    #             return [], []
-    #         sline = line.split(';')
-    #         try:
-    #             if '2400' in sline[0]:
-    #                 tstrtmp = (sline[0]).replace('2400', '2300')
-    #                 dt_tmp = dt.datetime.strptime(tstrtmp, '%d%b%Y, %H%M')
-    #                 dt_tmp += dt.timedelta(hours=1)
-    #             else:
-    #                 dt_tmp = dt.datetime.strptime(sline[0], '%d%b%Y, %H%M')
-    #         except ValueError:
-    #             dt_tmp = dt.datetime.strptime(sline[0], '%Y%m%d, %H%M')
-    #
-    #
-    #
-    #
-    #         t.append(dt_tmp)
-    #         v.append(float(sline[1]))
-    #     delta_t = t[1] - t[0]
-    #     for line in f:
-    #         if line.startswith('END'):
-    #             break
-    #         sline = line.split(';')
-    #         t.append(t[-1] + delta_t)
-    #         # empty DSS data is missing from txt file, deal with it
-    #         try:
-    #             v.append(float(sline[1]))
-    #         except:
-    #             v.append(np.nan)
-    # return np.array(t), np.array(v)
-
-
 def clean_missing(indata):
     indata[indata == -901.] = np.nan
     return indata
@@ -295,7 +250,6 @@ def clean_missing(indata):
 def clean_computed(indata):
     indata[indata == -9999.] = np.nan
     return indata
-
 
 def calc_computed_dosat(vtemp, vdo):
     v = np.zeros_like(vtemp)
@@ -306,8 +260,7 @@ def calc_computed_dosat(vtemp, vdo):
             v[j] = do_saturation(vtemp[j], vdo[j])
     return v
 
-
-def calc_observed_dosat(ttemp, vtemp, tdo, vdo):
+def calc_observed_dosat(ttemp, vtemp, vdo):
     v = np.zeros_like(vtemp)
     for j in range(len(v)):
         if np.isnan(vtemp[j]) or np.isnan(vdo[j]):
@@ -317,13 +270,13 @@ def calc_observed_dosat(ttemp, vtemp, tdo, vdo):
     return ttemp, v
 
 
-def read_observed_ts_data(obs_ts_data_path, simulation_dir, station_name, metric):
+def read_observed_ts_data(obs_ts_data_path, station_name, metric):
     if metric.lower() == 'do_sat':
         tt, vt = observed_ts_txt_file(obs_ts_data_path, station_name, 'Temperature')
         vt = clean_missing(vt)
         tdo, vdo = observed_ts_txt_file(obs_ts_data_path, station_name, 'DO')
         vdo = clean_missing(vdo)
-        t, v = calc_observed_dosat(tt, vt, tdo, vdo)
+        t, v = calc_observed_dosat(tt, vt, vdo)
     else:
         primary_csv_name = os.path.join(study_dir, 'reports', 'CSV', '{0}_{1}.csv'.format(station_name.replace(' ', '_'),metric))
         if os.path.exists(primary_csv_name):
@@ -342,7 +295,6 @@ def read_observed_ts_data(obs_ts_data_path, simulation_dir, station_name, metric
 def find_rptrgn(simulation_name, studyfolder):
     #find the rpt file go up a dir, reports, .rptrgn
     rptrgn_file = os.path.join(studyfolder, 'reports', '{0}.rptrgn'.format(simulation_name.replace(' ', '_')))
-    # rptrgn_file = os.path.join('..', '{0}.rptrgn'.format(simulation_name.replace(' ', '_')))
     print('Looking for rptrgn file at:', rptrgn_file)
     if not os.path.exists(rptrgn_file):
         print('ERROR: no RPTRGN file for simulation:', simulation_name)
@@ -358,9 +310,6 @@ def find_rptrgn(simulation_name, studyfolder):
             reg_info[model_alt_name] = {'plugin': plugin,
                                         'regions': regions}
     return reg_info
-
-
-
 
 def read_observed(observed_data_filename):
     f = open(observed_data_filename)
@@ -396,8 +345,8 @@ def read_observed(observed_data_filename):
             wt_profile.append(float(sline[1]))
             d_profile.append(float(sline[2]))
         hold_dt = dt_tmp
-    return t, wt, d
 
+    return t, wt, d
 
 def nse(simulations, evaluation):
     """Nash-Sutcliffe Efficiency (NSE) as per `Nash and Sutcliffe, 1970
@@ -422,6 +371,12 @@ def nse(simulations, evaluation):
 
     return nse_
 
+def depths_to_elevations(depths):
+    elevations = []
+    for d_array in depths:
+        e = [max(d_array) - n for n in d_array]
+        elevations.append(np.asarray(e))
+    return elevations
 
 def series_stats(t_comp, v_comp, t_obs, v_obs, start_limit=None, end_limit=None, time_series=False,
                  means_only=False, v_obs_min=5):
@@ -469,18 +424,6 @@ def series_stats(t_comp, v_comp, t_obs, v_obs, start_limit=None, end_limit=None,
             count = len(v_comp_stats)
             mean_diff = np.sum(diff) / count
             rmse = np.sqrt(np.sum(diff ** 2) / count)
-
-            # for j in range(len(tstamp_obs)):
-            #     t = tstamp_obs[j]
-            #     vo = v_obs[j]
-            #     if not np.isnan(vo):
-            #         vc = f_computed(t)
-            #         if not np.isnan(vc):
-            #             mean_diff += vc - vo
-            #             sq_error += (vc - vo)**2
-            #             count += 1
-            # mean_diff = mean_diff / count
-            # rmse = np.sqrt(sq_error / count)
 
             nash = nse(v_comp_stats, v_obs_stats)
             try:
@@ -549,7 +492,6 @@ class W2ModelResults(ModelResults):
     # 'ELEV' seems to be the same for all layers/depths
     def __init__(self, simulation_path, alternative, study_dir, region_name):
         self.region_name = region_name
-        output_path = "."
         self.csv_results_dir = os.path.join(study_dir, 'reports', 'CSV')
         self.build_depths()
         self.load_time()
@@ -559,11 +501,9 @@ class W2ModelResults(ModelResults):
         increment = 2
         end = 160
         depths = range(start, end, increment)
-        self.segment_depths = np.array(list(depths), dtype=np.int)
+        self.segment_depths = np.array(list(depths), dtype=np.int64)
 
     def load_time(self):
-        depth = 0
-        i = 0
         print('Reading times..')
         for i ,depth in enumerate(self.segment_depths):
             ts_data_file = '{0}_tempprofile_Depth{1}_Idx{2}_Temperature.csv'.format(self.region_name.lower(), depth, i+1)
@@ -575,8 +515,6 @@ class W2ModelResults(ModelResults):
                 return
             except:
                 print('Unable to set start and end time.')
-
-
 
     def load_time_array(self, t_in):
         t = []
@@ -604,29 +542,46 @@ class W2ModelResults(ModelResults):
 
     def get_profiles(self,times, metric, resname=None, return_depth=False):
         unique_times = [n[0] for n in times]
-        vals = np.full((len(unique_times), len(self.segment_depths)), np.NaN, dtype=np.float64)
-        elevations = np.full((len(unique_times), len(self.segment_depths)), np.NaN, dtype=np.float64)
+        values = np.full((len(unique_times), len(self.segment_depths)), np.NaN, dtype=np.float64)
+        # elevations = np.full((len(unique_times), len(self.segment_depths)), np.NaN, dtype=np.float64)
+        elevations = []
+        # values = []
+        depths = []
         for i, depth in enumerate(self.segment_depths):
             ts_data_file = '{0}_tempprofile_Depth{1}_Idx{2}_Temperature.csv'.format(self.region_name, depth, i+1)
             t, v = observed_ts_txt_file_read(os.path.join(self.csv_results_dir, ts_data_file))
-            if i == 68:
-                print('stop')
+            # vals = []
             if len(t) > 0:
                 for j, time in enumerate(unique_times):
                     self.load_time_array(t)
                     timestep = self.get_idx_for_time(time)
                     if timestep > -1:
                         try:
-                            vals[j][i] = v[timestep]
+                            values[j][i] = v[timestep]
+                            # vals.append(v[timestep])
                         except:
                             print('No Data at idx {0} Depth {1} at time {2}'.format(i, depth, timestep))
-        for j, time in enumerate(unique_times):
-            elevations[j,:] = self.segment_depths * 3.28
-        return elevations, vals
+            # values.append(np.asarray(vals))
 
+
+
+        ts_elev_data =self.region_name + '_WaterSurfaceElev_Elev.csv'
+        t, elev = observed_ts_txt_file_read(os.path.join(self.csv_results_dir, ts_elev_data))
+        for j, time in enumerate(unique_times):
+            e = []
+            self.load_time_array(t)
+            timestep = self.get_idx_for_time(time)
+            if timestep > -1:
+                WSE = elev[timestep] #Meters
+                for depth in self.segment_depths:
+                    e.append((WSE - depth) * 3.28) #conv to feet
+            # e.reverse()
+            elevations.append(np.asarray(e))
+            depths.append(self.segment_depths * 3.28)
+
+        return elevations, values, depths
 
     def get_idx_for_time(self, t_in):
-        #TODO: merge this with other get_idx_for_time method?
         ttmp = t_in.toordinal() + float(t_in.hour) / 24. + float(t_in.minute) / (24. * 60.)
         min_diff = np.min(np.abs(self.t - ttmp))
         tol = 1. / (24. * 60.)  # 1 minute tolerance
@@ -647,9 +602,8 @@ class W2ModelResults(ModelResults):
 
         return t, v
 
-
 # Hi Scott.  You are awesome.
-
+# thank Ben, you too.
 
 class ResSimModelResults(ModelResults):
 
@@ -674,6 +628,7 @@ class ResSimModelResults(ModelResults):
         self.load_subdomains()
 
     def get_profile(self, time_in, WQ_metric, xy=None, name=None, return_depth=False):
+        '''depreciated class. Now we grab all profiles at once, see get_profiles()'''
         self.load_elevation(alt_subdomain_name=name)
         self.load_results(time_in, WQ_metric, alt_subdomain_name=name)
         timestep = self.get_idx_for_time(time_in)
@@ -683,48 +638,49 @@ class ResSimModelResults(ModelResults):
         if return_depth:
             return np.max(el) - el[:], v
         else:
+            print(el)
             return el, v
 
     def get_profiles(self, times, metric, resname=None, return_depth=False):
         self.load_elevation(alt_subdomain_name=resname)
         unique_times = [n[0] for n in times]
-        vals = np.full((len(unique_times), len(self.elev)), np.nan, dtype=np.float64)
-        elevations = np.full((len(unique_times), len(self.elev)), np.nan, dtype=np.float64)
+        # vals = np.full((len(unique_times), len(self.elev)), np.nan, dtype=np.float64)
+        # elevations = np.full((len(unique_times), len(self.elev)), np.nan, dtype=np.float64)
+        # depths = np.full((len(unique_times), len(self.elev)), np.nan, dtype=np.float64)
+        vals = []
+        elevations = []
+        depths = []
         for j, time_in in enumerate(unique_times):
             timestep = self.get_idx_for_time(time_in)
             self.load_results(time_in, metric, alt_subdomain_name=resname)
             ktop = self.get_top_layer(timestep)
             v_el = self.vals[:ktop + 1]
             el = self.elev[:ktop + 1]
+            d_step = []
+            e_step = []
+            v_step = []
             for ei, e in enumerate(el):
-                if return_depth:
-                    elevations[j][ei] = np.max(el) - e
-                else:
-                    elevations[j][ei] = el
-            for vi, v in enumerate(v_el):
-                vals[j][vi] = v
-        return elevations, vals
+                d_step.append(np.max(el) - e)
+                e_step.append(e)
+                v_step.append(v_el[ei])
 
+                # depths[j][ei] = np.max(el) - e
+                # elevations[j][ei] = e
 
+                # if return_depth:
+                #     # elevations[j][ei] = np.max(el) - e
+                #     depths[j][ei] = np.max(el) - e
+                # else:
+                #     elevations[j][ei] = e
 
+            # for vi, v in enumerate(v_el):
+            #     vals[j][vi] = v
 
+            depths.append(np.asarray(d_step))
+            elevations.append(np.asarray(e_step))
+            vals.append(np.asarray(v_step))
 
-
-
-
-        # vals = np.full((len(unique_times), len(self.segment_depths)), np.nan, dtype=np.float64)
-        # for i, depth in enumerate(self.segment_depths):
-        #     ts_data_file = '{0}_tempprofile_Depth{1}_Idx{2}_Temperature.csv'.format(self.region_name, depth, i+1)
-        #     t, v = observed_ts_txt_file_read(os.path.join(self.csv_results_dir, ts_data_file))
-        #     if len(t) > 0:
-        #         for j, time in enumerate(unique_times):
-        #             self.load_time_array(t)
-        #             timestep = self.get_idx_for_time(time)
-        #             try:
-        #                 vals[j][i] = v[timestep]
-        #             except:
-        #                 print('No Data at idx {0} Depth {1} at time {2}'.format(i, depth, timestep))
-        # return self.segment_depths * 3.28, vals
+        return elevations, vals, depths
 
     def load_subdomains(self):
         self.subdomains = {}
@@ -1016,7 +972,7 @@ class ResSimModelResults(ModelResults):
 
     def calc_error_stats(self, current_year):
         rmse = self.rmse()
-        print('RMSE', rmse)
+        # print('RMSE', rmse)
         if self.hold_year != current_year:
             self.profile_rmse = rmse
         else:
@@ -1038,7 +994,7 @@ class ResSimModelResults(ModelResults):
 
     def output_error_stats(self, year, n_profiles):
         avg_rmse = self.profile_rmse / n_profiles
-        print(year, 'Average RMSE', avg_rmse)
+        # print(year, 'Average RMSE', avg_rmse)
         self.error_file.write('{0},{1}\n'.format(year, avg_rmse))
 
     def close_error_stats(self):
@@ -1127,90 +1083,86 @@ def plot_temp_profile_comparison(simulation_drct, trial_name, metric, obs_file_s
     mresults.close_error_stats()
 
 
-def read_observed_data(obs_data_filepath, metric='temperature', dss_path_list=None):
-    if obs_data_filepath.lower().endswith('dss'):
-        # dss paths should match the compare_var!
-        return read_observed_DSS(obs_data_filepath, dss_path_list)
-    else:
-        return read_observed(obs_data_filepath)
+# def read_observed_data(obs_data_filepath, metric='temperature', dss_path_list=None):
+#     if obs_data_filepath.lower().endswith('dss'):
+#         # dss paths should match the compare_var!
+#         return read_observed_DSS(obs_data_filepath, dss_path_list)
+#     else:
+#         return read_observed(obs_data_filepath)
 
 
-# def plot_time_series(location_name,):
+# def plot_multiple_alternatives(h5_alts, obs_data_filepath, metric='temperature', dss_path_list=None,
+#                                title=None, rmse=True, save_filepath=None):
+#     """
+#     :param h5_alternatives:
+#     :param obs_data_filepath:
+#     :param metric:
+#     :param dss_path_list:
+#     :param title:
+#     :return:
+#     """
+#     obs_times, obs_temps, obs_depths = read_observed_data(obs_data_filepath, metric, dss_path_list)
+#     nof_profiles = len(obs_times)
+#
+#     fig = plt.figure(figsize=(12, 8))
+#     subplot_rows, subplot_cols = get_subplot_config(nof_profiles)
+#
+#     alts = {h5a['alt_label']: ResSimModelResults(h5a['sim_path'], h5a['alt_name'], h5a['reservoir_name'],
+#                                                  h5a['h5_filepath']) for h5a in h5_alts}
+#
+#     names_labels = ['Observed', ]
+#
+#     for j in range(nof_profiles):
+#         pax = fig.add_subplot(subplot_rows, subplot_cols, j + 1)
+#         to = obs_times[j]
+#         wto = obs_temps[j]
+#         depo = obs_depths[j]
+#
+#         rmse_labels = ['Obs']
+#         for k, (alabel, mr) in enumerate(alts.items()):
+#             if j == 0:
+#                 names_labels.append(alabel)
+#             if k == 0:
+#                 mr.plot_obs_data(pax, wto, depo)
+#             else:
+#                 mr.load_obs_data(wto, depo)
+#             mr.load_results(to[0], metric)
+#             lflag, xflag, yflag = get_plot_label_masks(j, nof_profiles, subplot_rows, subplot_cols)
+#             mr.plot_modeled_data(pax, to[0], metric, show_legend=False,
+#                                  show_xlabel=xflag, show_ylabel=yflag)
+#             rmse_labels.append('{:.2f}'.format(mr.rmse()))
+#
+#         if j == 0:
+#             leg = pax.legend(names_labels, bbox_to_anchor=(0.0, 1.02), loc='lower left', fontsize='small')
+#
+#         if rmse:
+#             pax.legend(rmse_labels, loc='lower right')
+#             if j == 0:
+#                 pax.add_artist(leg)  # re-add name legend after matplotlib deletes
+#
+#     if title is not None:
+#         plt.suptitle(title)
+#     if save_filepath is not None:
+#         plt.savefig(save_filepath, dpi=600, bbox_inches='tight')
+#     else:
+#         plt.show()
 
 
-def plot_multiple_alternatives(h5_alts, obs_data_filepath, metric='temperature', dss_path_list=None,
-                               title=None, rmse=True, save_filepath=None):
-    """
-    :param h5_alternatives:
-    :param obs_data_filepath:
-    :param metric:
-    :param dss_path_list:
-    :param title:
-    :return:
-    """
-    obs_times, obs_temps, obs_depths = read_observed_data(obs_data_filepath, metric, dss_path_list)
-    nof_profiles = len(obs_times)
-
-    fig = plt.figure(figsize=(12, 8))
-    subplot_rows, subplot_cols = get_subplot_config(nof_profiles)
-
-    alts = {h5a['alt_label']: ResSimModelResults(h5a['sim_path'], h5a['alt_name'], h5a['reservoir_name'],
-                                                 h5a['h5_filepath']) for h5a in h5_alts}
-
-    names_labels = ['Observed', ]
-
-    for j in range(nof_profiles):
-        pax = fig.add_subplot(subplot_rows, subplot_cols, j + 1)
-        to = obs_times[j]
-        wto = obs_temps[j]
-        depo = obs_depths[j]
-
-        rmse_labels = ['Obs']
-        for k, (alabel, mr) in enumerate(alts.items()):
-            if j == 0:
-                names_labels.append(alabel)
-            if k == 0:
-                mr.plot_obs_data(pax, wto, depo)
-            else:
-                mr.load_obs_data(wto, depo)
-            mr.load_results(to[0], metric)
-            lflag, xflag, yflag = get_plot_label_masks(j, nof_profiles, subplot_rows, subplot_cols)
-            mr.plot_modeled_data(pax, to[0], metric, show_legend=False,
-                                 show_xlabel=xflag, show_ylabel=yflag)
-            rmse_labels.append('{:.2f}'.format(mr.rmse()))
-
-        if j == 0:
-            leg = pax.legend(names_labels, bbox_to_anchor=(0.0, 1.02), loc='lower left', fontsize='small')
-
-        if rmse:
-            pax.legend(rmse_labels, loc='lower right')
-            if j == 0:
-                pax.add_artist(leg)  # re-add name legend after matplotlib deletes
-
-    if title is not None:
-        plt.suptitle(title)
-    if save_filepath is not None:
-        plt.savefig(save_filepath, dpi=600, bbox_inches='tight')
-    else:
-        plt.show()
-
-
-def batch_plot_temp_profile_comparison():
-    simulation_directory = r'J:\ResSim_watersheds\ResSim-dev\base\RussianRiver\rss\2020.09.22-1300'
-    # start_run = 414  # for redoing some of them
-    # end_run = 415
-    run_count = 1024
-    for irun in range(run_count):
-        # for irun in range(start_run, end_run):
-        print('Processing run {0} of {1}'.format(irun + 1, run_count))
-        trial_name = 'run{0}'.format(irun)
-        plot_temp_profile_comparison(simulation_directory, trial_name, temperature_only=True)
+# def batch_plot_temp_profile_comparison():
+#     simulation_directory = r'J:\ResSim_watersheds\ResSim-dev\base\RussianRiver\rss\2020.09.22-1300'
+#     # start_run = 414  # for redoing some of them
+#     # end_run = 415
+#     run_count = 1024
+#     for irun in range(run_count):
+#         # for irun in range(start_run, end_run):
+#         print('Processing run {0} of {1}'.format(irun + 1, run_count))
+#         trial_name = 'run{0}'.format(irun)
+#         plot_temp_profile_comparison(simulation_directory, trial_name, temperature_only=True)
 
 
 def obs_model_profile_plot(ax, obs_elev, obs_value, model_elev, model_value, metric, dt_profile,
-                           show_legend=False, show_xlabel=False, show_ylabel=False):
+                           show_legend=False, show_xlabel=False, show_ylabel=False, use_depth=False):
     # deal with depths vs. elevations?
-
     # observed
     # ax.plot(obs_value, obs_elev, '-.',zorder=4, label='Observed')
     # if len(obs_value) <= 30:
@@ -1218,7 +1170,8 @@ def obs_model_profile_plot(ax, obs_elev, obs_value, model_elev, model_value, met
     # else:
     ax.plot(obs_value, obs_elev, zorder=4, label='Observed')
     ax.grid(zorder=0)
-    ax.invert_yaxis()
+    if use_depth:
+        ax.invert_yaxis()
 
     # modeled
     # ax.plot(model_value, model_elev, '-.', marker='o', zorder=4, label='Modeled')
@@ -1237,7 +1190,10 @@ def obs_model_profile_plot(ax, obs_elev, obs_value, model_elev, model_value, met
     if show_xlabel:
         ax.set_xlabel(xlab)
     if show_ylabel:
-        ax.set_ylabel('Depth (ft)')
+        if use_depth:
+            ax.set_ylabel('Depth (ft)')
+        else:
+            ax.set_ylabel('Elevation (ft)')
     ttl_str = dt.datetime.strftime(dt_profile, '%d %b %Y')
     xbufr = 0.05
     ybufr = 0.05
@@ -1267,10 +1223,14 @@ def plot_profiles(mr, metric, observed_data_drct, reservoir, out_path, use_depth
         observed_data_file_name = " ".join(['Profile', reservoir, metric.lower()]) + '_{0}.txt'.format(yr)
         observed_data_file_name = os.path.join(observed_data_drct, observed_data_file_name)
         if os.path.exists(observed_data_file_name):
-            obs_times, obs_values, obs_depths = read_observed(observed_data_file_name) #todo: read model like this
+            obs_times, obs_values, obs_depths = read_observed(observed_data_file_name)
             nof_profiles = len(obs_times)
             n_pages = math.ceil(nof_profiles / n_profiles_per_page)
-            model_elevs, model_values = mr.get_profiles(obs_times, metric, resname=reservoir, return_depth=use_depth)
+            model_elev, model_values, model_depths = mr.get_profiles(obs_times, metric, resname=reservoir, return_depth=use_depth)
+
+            if not use_depth:
+                obs_elev = convert_obs_depths(obs_depths, model_elev)
+
 
             # break profile indices into page groups
             prof_indices = list(range(nof_profiles))
@@ -1293,7 +1253,14 @@ def plot_profiles(mr, metric, observed_data_drct, reservoir, out_path, use_depth
                     # observation
                     dt_profile = obs_times[j]
                     obs_val = obs_values[j]
-                    obs_elev = obs_depths[j]
+                    model_val = model_values[j]
+
+                    if use_depth:
+                        obs_levels = obs_depths[j]
+                        model_levels = model_depths[j]
+                    else:
+                        obs_levels = obs_elev[j]
+                        model_levels = model_elev[j]
 
                     # modeled/computed
                     # model_elev, model_val = mr.get_profile(dt_profile[j], metric, name=reservoir, return_depth=use_depth)
@@ -1304,15 +1271,13 @@ def plot_profiles(mr, metric, observed_data_drct, reservoir, out_path, use_depth
                     # model_elev, model_val = mr.get_profile(dt_profile[0], metric, name=reservoir,
                     #                                        return_depth=use_depth)
 
-                    model_val = model_values[j]
-                    model_elev = model_elevs[j]
 
                     lflag, xflag, yflag = get_plot_label_masks(i, len(pgi), subplot_rows, subplot_cols)
-                    obs_model_profile_plot(pax, obs_elev, obs_val, model_elev, model_val, metric, dt_profile[0],
-                                           show_legend=lflag, show_xlabel=xflag, show_ylabel=yflag)
+                    obs_model_profile_plot(pax, obs_levels, obs_val, model_levels, model_val, metric, dt_profile[0],
+                                           show_legend=lflag, show_xlabel=xflag, show_ylabel=yflag, use_depth=use_depth)
 
                     # why do stats here? because it may be time consuming to pull observations and model data a second time
-                    stats.append(series_stats(model_elev, model_val, obs_elev, obs_val,
+                    stats.append(series_stats(model_levels, model_val, obs_levels, obs_val,
                                               start_limit=None, end_limit=None, time_series=False))
 
                 plt.tight_layout()
@@ -1324,6 +1289,19 @@ def plot_profiles(mr, metric, observed_data_drct, reservoir, out_path, use_depth
         else:
             print('No %s profile observations for year %i' % (reservoir, yr))
     return profile_results
+
+def convert_obs_depths(obs_depths, model_elevs):
+    obs_elev = []
+    for i, d in enumerate(obs_depths):
+        e = []
+        topwater_elev = max(model_elevs[i])
+        for depth in d:
+            e.append(topwater_elev - depth)
+        obs_elev.append(np.asarray(e))
+    return obs_elev
+
+
+
 
 
 mo_str_3 = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
@@ -1345,10 +1323,11 @@ def plot_time_series(mr, observed_data_meta_file, fig_path_stub, rss_sim_name, r
         y = data['northing']
         metric = data['metric']
         region = data['region'].lower()
+        longname = data['longname']
         if region != region_name.lower():
             continue
         if not temperature_only or metric.lower() == 'temperature':
-            obs_dates, obs_vals = read_observed_ts_data(ts_data_path, rss_sim_name, station, metric)
+            obs_dates, obs_vals = read_observed_ts_data(ts_data_path, station, metric)
             # print('Getting computed data')
             if model.lower() == 'ressim':
                 comp_dates, comp_vals = mr.get_time_series(None, None, metric, xy=[x, y])
@@ -1408,7 +1387,7 @@ def plot_time_series(mr, observed_data_meta_file, fig_path_stub, rss_sim_name, r
                 stdate = dt.datetime(yr, 1, 1)
                 enddate = dt.datetime(yr + 1, 1, 1)
                 # at some point should add metric to key, which is used as label
-                print(station, metric, yr)
+                # print(station, metric, yr)
                 stats_yr = series_stats(comp_dates, comp_vals, obs_dates, obs_vals,
                                         start_limit=stdate, end_limit=enddate, time_series=True)
                 if stats_yr is not None:
@@ -1427,82 +1406,77 @@ def plot_time_series(mr, observed_data_meta_file, fig_path_stub, rss_sim_name, r
                             stats_months[str(yr) + ' Obs. Mean'][mo_str_3[mo - 1]] = mo_stat['Obs. Mean']
                             stats_months[str(yr) + ' Comp. Mean'][mo_str_3[mo - 1]] = mo_stat['Comp. Mean']
 
-            station_results.append([station, x, y, metric, fig_name, stats, stats_months])
+            station_results.append([station, x, y, metric, longname, fig_name, stats, stats_months])
 
     return station_results
 
 
-def get_XML_template():
-    XML_template = {}
-    XML_template['start'] = """<?xml version="1.0" encoding="UTF-8"?>
-    <USBR_Automated_Report Date="$$REPORT_DATE$$" SimulationName="$$SIMULATION_NAME$$">
-       <!--This section contains the required text and image paths for the cover page.-->
-       <Cover_Page>
-          <Title>DRAFT Temperature Validation Summary Report</Title>
-          <Title>Shasta / Keswick</Title>
-          <Contact_Info>TODO: Contact Info - May need more layers</Contact_Info>
-          <Pictures>TODO: Path to any pictures</Pictures>
-       </Cover_Page>
-    """
-    XML_template['reservoir'] = """   <Report_Element Order="$$ORDER$$" Element="Reservoir_Profile">
-          <Reservoir_Profiles Reservoir="$$RESERVOIR_NAME$$">
-    $$RESERVOIR_FIGS$$
-          </Reservoir_Profiles>
-       </Report_Element>
-    """
-    XML_template['reservoir_fig'] = """         <Profile_Image FigureNumber="$$FIG_NUM$$" FigureDescription="$$FIG_DESCRIPTION$$">$$FIG_FILENAME$$</Profile_Image>
-    """
-
-    XML_template['time_series'] = """   <Report_Element Order="$$ORDER$$" Element="Output">
-          <Output_Temp_Flow Location="$$TS_NAME$$">
-    $$TS_FIGURE$$
-    $$TS_TABLE$$
-          </Output_Temp_Flow>
-       </Report_Element>
-    """
-
-    XML_template['time_series_fig'] = """         <Output_Image FigureNumber="$$FIG_NUM$$" FigureDescription="$$FIG_DESCRIPTION$$">$$FIG_FILENAME$$</Output_Image>
-    """
-
-    XML_template['time_series_table'] = """         <Output_Table TableNumber="$$TABLE_NUM$$" TableDescription="$$TABLE_DESCRIPTION$$" TableType="statistics">
-    $$TABLE_ELEMENTS$$
-             </Output_Table>
-    """
-    XML_template['time_series_table_col'] = """            <Column Column_Name="$$TABLE_COL_NAME$$">
-    $$TABLE_ROWS$$
-                </Column>
-    """
-    XML_template['end'] = """</USBR_Automated_Report>
-    """
-
-    return XML_template
+# def get_XML_template():
+#     XML_template = {}
+#     XML_template['start'] = """<?xml version="1.0" encoding="UTF-8"?>
+#     <USBR_Automated_Report Date="$$REPORT_DATE$$" SimulationName="$$SIMULATION_NAME$$">
+#        <!--This section contains the required text and image paths for the cover page.-->
+#        <Cover_Page>
+#           <Title>DRAFT Temperature Validation Summary Report</Title>
+#           <Title>Shasta / Keswick</Title>
+#           <Contact_Info>TODO: Contact Info - May need more layers</Contact_Info>
+#           <Pictures>TODO: Path to any pictures</Pictures>
+#        </Cover_Page>
+#     """
+#     XML_template['reservoir'] = """   <Report_Element Order="$$ORDER$$" Element="Reservoir_Profile">
+#           <Reservoir_Profiles Reservoir="$$RESERVOIR_NAME$$">
+#     $$RESERVOIR_FIGS$$
+#           </Reservoir_Profiles>
+#        </Report_Element>
+#     """
+#     XML_template['reservoir_fig'] = """         <Profile_Image FigureNumber="$$FIG_NUM$$" FigureDescription="$$FIG_DESCRIPTION$$">$$FIG_FILENAME$$</Profile_Image>
+#     """
+#
+#     XML_template['time_series'] = """   <Report_Element Order="$$ORDER$$" Element="Output">
+#           <Output_Temp_Flow Location="$$TS_NAME$$">
+#     $$TS_FIGURE$$
+#     $$TS_TABLE$$
+#           </Output_Temp_Flow>
+#        </Report_Element>
+#     """
+#
+#     XML_template['time_series_fig'] = """         <Output_Image FigureNumber="$$FIG_NUM$$" FigureDescription="$$FIG_DESCRIPTION$$">$$FIG_FILENAME$$</Output_Image>
+#     """
+#
+#     XML_template['time_series_table'] = """         <Output_Table TableNumber="$$TABLE_NUM$$" TableDescription="$$TABLE_DESCRIPTION$$" TableType="statistics">
+#     $$TABLE_ELEMENTS$$
+#              </Output_Table>
+#     """
+#     XML_template['time_series_table_col'] = """            <Column Column_Name="$$TABLE_COL_NAME$$">
+#     $$TABLE_ROWS$$
+#                 </Column>
+#     """
+#     XML_template['end'] = """</USBR_Automated_Report>
+#     """
+#
+#     return XML_template
 
 
 def get_reservoir_description(region):
-    if region.lower() == 'shasta':
-        return "Shasta Reservoir Temperature Profiles Near Dam"
-    elif region.lower() == 'keswick':
-        return "Keswick Reservoir Temperature Profiles Near Dam"
-    elif region.lower() == 'uppersac':
-        return "Sacramento River Above Clear Creek"
+    return "{0} Reservoir Temperature Profiles Near Dam".format(region.capitalize())
 
-def get_ts_description(region):
-    if region.lower() == 'shasta':
-        return "Shasta Reservoir Outflow and Outflow Temperature"
-    elif region.lower() == 'keswick':
-        return "Keswick Reservoir Outflow and Outflow Temperature"
-    elif region.lower() == 'uppersac':
-        return "Sacramento River Above Clear Creek"
+# def get_ts_description(station):
+#     if station.lower() == 'shasta outflow':
+#         return "Shasta Reservoir Outflow Temperature"
+#     elif station.lower() == 'kwk':
+#         return "Keswick Reservoir Outflow Temperature"
+#     elif station.lower() == 'bnd':
+#         return "Sac River at Bend Bridge Temperature"
+#     elif station.lower() == 'rdb':
+#         return "Sac River below Red Bluff Div Dam Temperature"
 
 
-def XML_reservior(profile_stats, XML_class, region_name, n_element=0, n_fig=0, n_table=0):
+def XML_reservior(profile_stats, XML_class, region_name):
     # only writing one reservoir XLM section here
-
     XML = ''
 
     #res name, year, list of pngs, stats dictionary
     for subdomain_name, figure_sets in profile_stats.items():
-        # XML += XML_class.make_Reservoir_Group_header(subdomain_name) #TODO CHANGE GROUP ORDER
         if len(figure_sets) > 0:
             for ps in figure_sets:
                 reservoir, yr, fig_names, stats = ps
@@ -1510,35 +1484,11 @@ def XML_reservior(profile_stats, XML_class, region_name, n_element=0, n_fig=0, n
                 subgroup_desc = get_reservoir_description(region_name)
                 XML += XML_class.make_ReservoirSubgroup_lines(reservoir,fig_names, subgroup_desc, yr)
 
-    return XML, n_element, n_fig, n_table #TODO these are all extra, do we need them?
-
-    # XML = ""
-    # for subdomain_name, figure_sets in profile_stats.items():
-    #     if len(figure_sets) > 0:
-    #         XML_figs = ""
-    #         for ps in figure_sets:
-    #             reservoir, yr, fig_names, stats = ps
-    #             for i, fn in enumerate(fig_names):
-    #                 XML_f = copy.copy(get_XML_template()['reservoir_fig'])
-    #                 XML_f = XML_f.replace("$$FIG_NUM$$", str(n_fig))
-    #                 n_fig += 1
-    #                 XML_f = XML_f.replace("$$FIG_DESCRIPTION$$", reservoir + ' %i: %i of %i' % (yr, i, len(fig_names)))
-    #                 XML_f = XML_f.replace("$$FIG_FILENAME$$", os.path.join('..', 'Images', fn))
-    #                 XML_figs = XML_figs + XML_f
-    #
-    #         XML_r = copy.copy(get_XML_template()['reservoir'])
-    #         XML_r = XML_r.replace("$$ORDER$$", str(n_element))
-    #         n_element += 1
-    #         XML_r = XML_r.replace("$$RESERVOIR_NAME$$", reservoir)
-    #         XML_r = XML_r.replace("$$RESERVOIR_FIGS$$", XML_figs)
-    #     else:
-    #         XML_r = ""  # reservoir plots requested, but no observation data found
-    #     XML = XML + XML_r
-    #
-    # return XML, n_element, n_fig, n_table
+    return XML
 
 
-def XML_time_series(ts_results, XML_class, region_name, n_element=0, n_fig=0, n_table=0):
+
+def XML_time_series(ts_results, XML_class):
     stats_labels = {
         'Mean Bias': r'Mean Bias (&lt;sup&gt;O&lt;/sup&gt;C)',
         'MAE': r'MAE (&lt;sup&gt;O&lt;/sup&gt;C)',
@@ -1550,132 +1500,95 @@ def XML_time_series(ts_results, XML_class, region_name, n_element=0, n_fig=0, n_
 
     XML = ""
     for ts in ts_results:
-        station, x, y, metric, fig_name, stats, stats_mo = ts
+        station, x, y, metric, desc, fig_name, stats, stats_mo = ts
         # fig_name = os.path.join('..','Images', fig_name)
-        subgroup_desc = get_ts_description(region_name)
-        XML += XML_class.make_TS_Subgroup_lines(station, fig_name, subgroup_desc)
+        # subgroup_desc = get_ts_description(station)
+        XML += XML_class.make_TS_Subgroup_lines(station, fig_name, desc)
         XML += XML_class.make_TS_Tables_lines(station, stats, stats_mo, stats_ordered, stats_labels)
         XML += '        </Report_Subgroup>\n'
-        # XML += '     </Report_Group>\n'
 
-    # for ts in ts_results:
-    #     station, x, y, metric, fig_name, stats, stats_mo = ts
-    #
-    #     XML_f = copy.copy(get_XML_template()['time_series_fig'])
-    #     XML_f = XML_f.replace("$$FIG_NUM$$", str(n_fig))
-    #     n_fig += 1
-    #     XML_f = XML_f.replace("$$FIG_DESCRIPTION$$", station)
-    #     XML_f = XML_f.replace("$$FIG_FILENAME$$", os.path.join('..', 'Images', fig_name))
-    #
-    #     # error stats table by year-column
-    #     n_table, XML_t_error = XML_error_stats_table(n_table, station, stats, stats_ordered, stats_labels)
-    #     n_table, XML_t_month_means = XML_mean_monthly_stats_table(n_table, station, stats_mo)
-    #
-    #     XML_ts = copy.copy(get_XML_template()['time_series'])
-    #     XML_ts = XML_ts.replace("$$ORDER$$", str(n_element))
-    #     n_element += 1
-    #     XML_ts = XML_ts.replace("$$TS_NAME$$", station)
-    #     XML_ts = XML_ts.replace("$$TS_FIGURE$$", XML_f)
-    #     XML_ts = XML_ts.replace("$$TS_TABLE$$", XML_t_error + XML_t_month_means)
-    #
-    #     XML += XML_ts
-
-    return XML, n_element, n_fig, n_table
+    return XML
 
 
-def XML_error_stats_table(n_table, station, stats, stats_ordered, stats_labels):
-    XML_t = copy.copy(get_XML_template()['time_series_table'])
-    XML_t = XML_t.replace("$$TABLE_NUM$$", str(n_table))
-    n_table += 1
-    XML_t = XML_t.replace("$$TABLE_DESCRIPTION$$", station)
-
-    XML_cols = ""
-    for j, colname in enumerate(stats.keys()):
-
-        XML_rows = ""
-        for i, st in enumerate(stats_ordered):
-            row = r"""               <Row Row_Order="$$ORDER$$" Row_name="$$STATS_LABEL$$">$$STAT_NUM$$</Row>
-"""
-            row = row.replace("$$ORDER$$", str(i))
-            if st == 'COUNT':
-                row = row.replace("$$STAT_NUM$$", '%i' % stats[colname][st])
-            else:
-                row = row.replace("$$STAT_NUM$$", '%2f' % stats[colname][st])
-            row = row.replace("$$STATS_LABEL$$", stats_labels[st])
-            XML_rows += row
-
-        col = copy.copy(get_XML_template()['time_series_table_col'])
-        col = col.replace("$$TABLE_COL_NAME$$", colname)
-        col = col.replace("$$TABLE_ROWS$$", XML_rows)
-
-        XML_cols += col
-
-    XML_t = XML_t.replace("$$TABLE_ELEMENTS$$", XML_cols)
-    return n_table, XML_t
-
-
-def XML_mean_monthly_stats_table(n_table, station, stats_mo):
-    XML_t = copy.copy(get_XML_template()['time_series_table'])
-    XML_t = XML_t.replace("$$TABLE_NUM$$", str(n_table))
-    n_table += 1
-    XML_t = XML_t.replace("$$TABLE_DESCRIPTION$$", station)
-
-    XML_cols = ""
-
-    col_names = list(stats_mo.keys())
-
-    for j, colname in enumerate(sorted(col_names)):
-        stats_col = stats_mo[colname]
-        XML_rows = ""
-        for mo in range(1, 13):
-            row = r"""               <Row Row_Order="$$ORDER$$" Row_name="$$STATS_LABEL$$">$$STAT_NUM$$</Row>
-"""
-            row = row.replace("$$ORDER$$", str(mo))
-            row = row.replace("$$STATS_LABEL$$", mo_str_3[mo - 1])
-            if stats_col[mo_str_3[mo - 1]] is None:
-                row = row.replace("$$STAT_NUM$$", 'nan')
-            else:
-                row = row.replace("$$STAT_NUM$$", '%2f' % stats_col[mo_str_3[mo - 1]])
-            XML_rows += row
-
-        col = copy.copy(get_XML_template()['time_series_table_col'])
-        col = col.replace("$$TABLE_COL_NAME$$", colname)
-        col = col.replace("$$TABLE_ROWS$$", XML_rows)
-        XML_cols += col
-
-    XML_t = XML_t.replace("$$TABLE_ELEMENTS$$", XML_cols)
-    return n_table, XML_t
+# def XML_error_stats_table(n_table, station, stats, stats_ordered, stats_labels):
+#     XML_t = copy.copy(get_XML_template()['time_series_table'])
+#     XML_t = XML_t.replace("$$TABLE_NUM$$", str(n_table))
+#     n_table += 1
+#     XML_t = XML_t.replace("$$TABLE_DESCRIPTION$$", station)
+#
+#     XML_cols = ""
+#     for j, colname in enumerate(stats.keys()):
+#
+#         XML_rows = ""
+#         for i, st in enumerate(stats_ordered):
+#             row = r"""               <Row Row_Order="$$ORDER$$" Row_name="$$STATS_LABEL$$">$$STAT_NUM$$</Row>
+# """
+#             row = row.replace("$$ORDER$$", str(i))
+#             if st == 'COUNT':
+#                 row = row.replace("$$STAT_NUM$$", '%i' % stats[colname][st])
+#             else:
+#                 row = row.replace("$$STAT_NUM$$", '%2f' % stats[colname][st])
+#             row = row.replace("$$STATS_LABEL$$", stats_labels[st])
+#             XML_rows += row
+#
+#         col = copy.copy(get_XML_template()['time_series_table_col'])
+#         col = col.replace("$$TABLE_COL_NAME$$", colname)
+#         col = col.replace("$$TABLE_ROWS$$", XML_rows)
+#
+#         XML_cols += col
+#
+#     XML_t = XML_t.replace("$$TABLE_ELEMENTS$$", XML_cols)
+#     return n_table, XML_t
 
 
-def XML_write(output_path, profile_stats, ts_results, report_name, region_name):
+# def XML_mean_monthly_stats_table(n_table, station, stats_mo):
+#     XML_t = copy.copy(get_XML_template()['time_series_table'])
+#     XML_t = XML_t.replace("$$TABLE_NUM$$", str(n_table))
+#     n_table += 1
+#     XML_t = XML_t.replace("$$TABLE_DESCRIPTION$$", station)
+#
+#     XML_cols = ""
+#
+#     col_names = list(stats_mo.keys())
+#
+#     for j, colname in enumerate(sorted(col_names)):
+#         stats_col = stats_mo[colname]
+#         XML_rows = ""
+#         for mo in range(1, 13):
+#             row = r"""               <Row Row_Order="$$ORDER$$" Row_name="$$STATS_LABEL$$">$$STAT_NUM$$</Row>"""
+#             row = row.replace("$$ORDER$$", str(mo))
+#             row = row.replace("$$STATS_LABEL$$", mo_str_3[mo - 1])
+#             if stats_col[mo_str_3[mo - 1]] is None:
+#                 row = row.replace("$$STAT_NUM$$", 'nan')
+#             else:
+#                 row = row.replace("$$STAT_NUM$$", '%2f' % stats_col[mo_str_3[mo - 1]])
+#             XML_rows += row
+#
+#         col = copy.copy(get_XML_template()['time_series_table_col'])
+#         col = col.replace("$$TABLE_COL_NAME$$", colname)
+#         col = col.replace("$$TABLE_ROWS$$", XML_rows)
+#         XML_cols += col
+#
+#     XML_t = XML_t.replace("$$TABLE_ELEMENTS$$", XML_cols)
+#     return n_table, XML_t
+
+
+def XML_write(profile_stats, ts_results, region_name):
 
     XML = XMLReport.makeXMLReport("USBRAutomatedReportOutput.xml")
 
-    n_element = 1
-    n_fig = 1
-    n_table = 1
     XML_res = ""
     XML_ts = ""
     XML_Groupheader = XML.make_Reservoir_Group_header(region_name) #TODO CHANGE GROUP ORDER
 
     if len(profile_stats) > 0:
-        XML_res, n_element, n_fig, n_table = XML_reservior(profile_stats, XML, region_name, n_element, n_fig, n_table)
+        XML_res = XML_reservior(profile_stats, XML, region_name)
     if len(ts_results) > 0:
-        XML_ts, n_element, n_fig, n_table = XML_time_series(ts_results,XML, region_name,  n_element, n_fig, n_table)
+        XML_ts = XML_time_series(ts_results,XML)
     if len(ts_results) + len(profile_stats) > 0:
         XML.write_Reservoir(region_name, plugin_name, XML_Groupheader, XML_res, XML_ts)
     else:
         print('No Results found for Region', region_name)
-
-
-    # XML_start = copy.copy(get_XML_template()['start'])
-    # XML_start = XML_start.replace("$$SIMULATION_NAME$$", report_name)
-    # XML_start = XML_start.replace("$$REPORT_DATE$$", dt.datetime.now().strftime('%Y-%m-%d %H:%M'))
-    # XML_end = copy.copy(get_XML_template()['end'])
-
-    # XML = XML_start + XML_res + XML_ts + XML_end
-    # with open(os.path.join(output_path, XML_fname), 'w') as fp:
-    #     fp.write(XML)
 
 
 XML_fname = 'USBRAutomatedReportOutput.xml'
@@ -1687,41 +1600,6 @@ def clean_output_dir(dir_name):
     for file in filtered_files:
         path_to_file = os.path.join(dir_name, file)
         os.remove(path_to_file)
-    # xml_file = os.path.join(dir_name, XML_fname)
-    # if os.path.exists(xml_file):
-    #     os.remove(xml_file)
-
-
-# def generate_report_plots_ResSim(simulation_path, alternative, observed_data_directory, temperature_only=False,
-#                                  use_depth=False, clean_out_dir=True):
-#     output_path = r"Z:\USBR\test"  # WAT will start path where we need to write
-#     # output_path = "."  # WAT will start path where we need to write
-#
-#     if clean_out_dir:
-#         clean_output_dir(output_path)
-#
-#     profile_meta_file = os.path.join(observed_data_directory, "Profile_stations.txt")
-#     ts_meta_file = os.path.join(observed_data_directory, "TS_stations.txt")
-#
-#     # we should only need to generate a single instance of ResSimModelResults; while we need to pass in a
-#     # subdomain/reservoir for legacy purposes at this point, and subdomain/reservoir can be passed to through
-#     # to the get_profile command
-#     profile_subdomains, _ = read_obs_profile_meta_file(profile_meta_file)
-#     mr = ResSimModelResults(simulation_path, alternative)
-#
-#     profile_stats = {}
-#     for subdomain, meta in profile_subdomains.items():
-#         if meta['metric'].lower() == 'temperature' or not temperature_only:
-#             profile_stats[subdomain] = plot_profiles(mr, meta['metric'], observed_data_directory, subdomain,
-#                                                      output_path,
-#                                                      use_depth=use_depth)
-#
-#     ts_results = plot_time_series(mr, ts_meta_file, output_path, simulation_path, alternative,
-#                                   temperature_only=temperature_only)
-#
-#     _, sim_name = os.path.split(simulation_path)
-#     report_name = " : ".join([sim_name, alternative])
-#     XML_write(output_path, profile_stats, ts_results, report_name)
 
 def generate_region_plots_ResSim(simulation_path, alternative, observed_data_directory, region_name, study_dir,
                                  temperature_only=False, use_depth=False):
@@ -1740,7 +1618,7 @@ def generate_region_plots_ResSim(simulation_path, alternative, observed_data_dir
     # we should only need to generate a single instance of ResSimModelResults; while we need to pass in a
     # subdomain/reservoir for legacy purposes at this point, and subdomain/reservoir can be passed to through
     # to the get_profile command
-    profile_subdomains, _ = read_obs_profile_meta_file(profile_meta_file)
+    profile_subdomains = read_obs_profile_meta_file(profile_meta_file)
     mr = ResSimModelResults(simulation_path, alternative, study_dir)
 
     profile_stats = {}
@@ -1753,19 +1631,18 @@ def generate_region_plots_ResSim(simulation_path, alternative, observed_data_dir
 
     ts_results = plot_time_series(mr, ts_meta_file, images_path, simulation_path, alternative, region_name,
                                   'ressim', temperature_only=temperature_only)
-
     _, sim_name = os.path.split(simulation_path)
     report_name = " : ".join([sim_name, alternative])
-    XML_write(output_path, profile_stats, ts_results, report_name, region_name)
+    XML_write(profile_stats, ts_results, region_name)
 
 def generate_region_plots_W2(simulation_path, alternative, observed_data_directory, region_name, study_dir,
                                 temperature_only=False, use_depth=False):
     # output_path = r"Z:\USBR\test"  # WAT will start path where we need to write
-    output_path = "."  # WAT will start path where we need to write
-    images_path = os.path.join(output_path, '..', "Images")
-    # images_path = os.path.join(study_dir, 'reports', 'Images')
+    # output_path = "."  # WAT will start path where we need to write
+    # images_path = os.path.join(output_path, '..', "Images")
+    # output_path = os.path.join(study_dir, 'reports')
+    images_path = os.path.join(study_dir, 'reports', 'Images')
     output_path = os.path.join(study_dir, 'reports')
-
 
     profile_meta_file = os.path.join(observed_data_directory, "Profile_stations.txt")
     ts_meta_file = os.path.join(observed_data_directory, "TS_stations.txt")
@@ -1774,7 +1651,7 @@ def generate_region_plots_W2(simulation_path, alternative, observed_data_directo
     # we should only need to generate a single instance of ResSimModelResults; while we need to pass in a
     # subdomain/reservoir for legacy purposes at this point, and subdomain/reservoir can be passed to through
     # to the get_profile command
-    profile_subdomains, _ = read_obs_profile_meta_file(profile_meta_file)
+    profile_subdomains = read_obs_profile_meta_file(profile_meta_file)
     mr = W2ModelResults(simulation_path, alternative, study_dir, region_name)
 
     profile_stats = {}
@@ -1787,21 +1664,14 @@ def generate_region_plots_W2(simulation_path, alternative, observed_data_directo
 
     ts_results = plot_time_series(mr, ts_meta_file, images_path, simulation_path, alternative, region_name, 'CeQualW2',
                                   temperature_only=temperature_only)
-    # ts_results = []
 
     _, sim_name = os.path.split(simulation_path)
     report_name = " : ".join([sim_name, alternative])
-    XML_write(output_path, profile_stats, ts_results, report_name, region_name)
+    XML_write(profile_stats, ts_results, region_name)
 
 
 
 if __name__ == '__main__':
-
-    # mr = W2ModelResults(r'C:\Users\benjamin\Downloads\Short_2014_Shasta.dss',None)
-
-    # exit()
-
-
     # rem %1 studyDir,
     # rem %2 simDir,
     # rem %3 program name ( ResSim, RAS etc)
@@ -1822,27 +1692,26 @@ if __name__ == '__main__':
     reg_info = find_rptrgn(simulation_name, study_dir)
     print('SYSARG', sys.argv)
     print('REGINFO', reg_info)
+
+    use_depth = False
+
     try:
-        print(reg_info[model_alt_name.replace(' ', '_')]['plugin'], plugin_name)
+        # print(reg_info[model_alt_name.replace(' ', '_')]['plugin'], plugin_name)
         region_names = reg_info[model_alt_name.replace(' ', '_')]['regions']
     except Exception:
         print('Error finding region')
         exit()
+
     for region_name in region_names:
 
         if plugin_name == 'ResSim':
 
-            # ben/scott test values
-            # generate_region_plots_ResSim(r'D:\Work2021\USBR\UpperSacTemperature-demo.2021.06.07.jfd\UpperSacTemperature-demo\rss\test02_longModel-2015', 'test02_LM-0',
-            #                              r'D:\Work2021\USBR\observed_data_Shasta', 'Keswick',
-            #                              temperature_only=True, use_depth=True)
-            # exit()
-
             generate_region_plots_ResSim(simulation_directory, alternative_name, obs_data_path, region_name, study_dir,
-                                         temperature_only=True, use_depth=True)
+                                         temperature_only=True, use_depth=use_depth)
         elif plugin_name == 'CeQualW2':
+
             generate_region_plots_W2(simulation_directory, alternative_name, obs_data_path, region_name, study_dir,
-                                     temperature_only=True, use_depth=True)
+                                     temperature_only=True, use_depth=use_depth)
         else:
-            print('WAT model "%s" not understood!' % sys.argv[0])
+            print('model "%s" not understood!' % sys.argv[0])
     exit()

@@ -5,9 +5,6 @@ Created on 6/8/2021
 @contact: scott@rmanet.com
 @note:
 '''
-import copy
-import os
-import numpy as np
 
 class makeXMLReport(object):
 
@@ -66,13 +63,14 @@ class makeXMLReport(object):
                     self.current_reportelem_num = ReportElem_num
 
     def get_Table_nums(self):
-        self.current_table_num = 1
+        self.current_table_num = 0
         for line in self.XMLFile:
             if "TableNumber" in line:
                 sline = line.split(' ')
                 Table_num = [int(s.split('=')[1].replace('"','')) for s in sline if 'TableNumber' in s][0]
-                if Table_num > self.current_table_num:
+                if Table_num >= self.current_table_num:
                     self.current_table_num = Table_num
+
 
     def writeCover(self, report_date):
         cover_keys = {"$$REPORT_DATE$$": report_date}
@@ -237,7 +235,7 @@ class makeXMLReport(object):
 
     def make_TS_error_stats_table(self, station, stats, stats_ordered, stats_labels):
         error_table_keys = {"$$TABLENUM$$": self.current_table_num,
-                            "$$TABLE_DESC$$": station}
+                            "$$TABLE_DESC$$": "{0} Error Statistics".format(station)}
         error_table_lines = ['                  <Output_Table TableNumber="$$TABLENUM$$" TableDescription="$$TABLE_DESC$$" TableType="Statistics">']
 
         out = ''
@@ -245,15 +243,11 @@ class makeXMLReport(object):
         for line in error_table_lines:
             for key in error_table_keys:
                 if key == '$$TABLENUM$$' and key in line:
-                    line = line.replace(key, str(error_table_keys[key]))
+                    line = line.replace(key, str(error_table_keys[key]+1))
                     self.current_table_num += 1
                 else:
                     line = line.replace(key, str(error_table_keys[key]))
             out += line+'\n'
-
-        # colname = ''
-        # column_keys = {'$$COL_ORDER$$': self.column_order,
-        #                '$$COL_NAME$$': colname}
 
         for j, colname in enumerate(stats.keys()):
             column_keys = {'$$COL_ORDER$$': j,
@@ -284,7 +278,7 @@ class makeXMLReport(object):
 
     def make_TS_mean_monthly_stats_table(self, station, stats_mo):
         month_table_keys = {"$$TABLENUM$$": self.current_table_num,
-                            "$$TABLE_DESC$$": station}
+                            "$$TABLE_DESC$$": "{0} Mean Monthly Statistics".format(station)}
         month_table_lines = ['                  <Output_Table TableNumber="$$TABLENUM$$" TableDescription="$$TABLE_DESC$$" TableType="Month">']
 
         out = ''
@@ -292,16 +286,13 @@ class makeXMLReport(object):
         for line in month_table_lines:
             for key in month_table_keys:
                 if key == '$$TABLENUM$$' and key in line:
-                    line = line.replace(key, str(month_table_keys[key]))
+                    line = line.replace(key, str(month_table_keys[key]+1))
                     self.current_table_num += 1
                 else:
                     line = line.replace(key, str(month_table_keys[key]))
             out += line+'\n'
 
         col_names = list(stats_mo.keys())
-        # colname = ''
-        # column_keys = {'$$COL_ORDER$$': self.column_order,
-        #                '$$COL_NAME$$': colname}
 
         for j, colname in enumerate(sorted(col_names)):
             column_keys = {'$$COL_ORDER$$': j,
