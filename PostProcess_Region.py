@@ -288,6 +288,7 @@ print('alternativeFpart', alternativeFpart)
 print('alternativeName', alternativeName)
 print('baseSimulationName', baseSimulationName)
 print('dssFile', dssFile)
+print('obs data', obsDataFolder)
 
 rgp = reportPreprocess(studyFolder, simulationFolder,modelName,
                        alternativeName, obsDataFolder, alternativeFpart,

@@ -1018,11 +1018,13 @@ def get_plot_label_masks(idx, nprofiles, rows, cols):
 
 
 def get_subplot_config(n_profiles):
-    factor = n_profiles / 4.
+    # factor = n_profiles / 4.
+    factor = n_profiles / 3.
     if factor < 1:
         return 1, n_profiles
     else:
-        return math.ceil(factor), 4
+        # return math.ceil(factor), 4
+        return math.ceil(factor), 3
 
 
 def plot_temp_profile_comparison(simulation_drct, trial_name, metric, obs_file_stub=None, reservoir_name=None,
@@ -1211,7 +1213,8 @@ def plot_profiles(mr, metric, observed_data_drct, reservoir, out_path, use_depth
 
     """
     # hard_coded for now
-    n_profiles_per_page = 12
+    # n_profiles_per_page = 12
+    n_profiles_per_page = 9
 
     syear = mr.stime.year
     eyear = mr.etime.year
