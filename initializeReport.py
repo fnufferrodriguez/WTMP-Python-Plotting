@@ -4,9 +4,9 @@ Created on 6/9/2021
 @organization: Resource Management Associates
 @contact: scott@rmanet.com
 @note:
-rem %1 the watershed folder
-
-
+Initial script to set up environments to make automated reports.
+Script functions include copying the template XML, and clearing out directories from previous reports.
+Also writes the cover page based on the date.
 '''
 
 import shutil
@@ -24,18 +24,8 @@ def clean_output_dir(dir_name, filetype):
         os.remove(path_to_file)
 
 
-##### TESTING ######
-# sim_folder = r'Z:\USBR\test'
-# alt_name = 'Test_init'
-# _, sim_name = os.path.split(sim_folder)
-
-
-
 xml_template = 'report_template.xml'
-#copy xml template
-# new_xml = os.path.join(sim_folder, xml_template.replace('template', '{0}_{1}'.format(sim_name, alt_name)))
-# new_xml = xml_template.replace('template', '{0}_{1}'.format(sim_name, alt_name))
-new_xml = 'USBRAutomatedReportOutput.xml'
+new_xml = 'USBRAutomatedReportOutput.xml' #required name for file
 shutil.copyfile(xml_template, new_xml)
 
 report_date = dt.datetime.now().strftime('%Y-%m-%d %H:%M')

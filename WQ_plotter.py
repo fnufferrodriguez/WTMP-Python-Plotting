@@ -4,21 +4,18 @@ Created on 7/1/2020
 @author: Stephen Andrews, Ben Saenz, Scott Burdick
 @organization: Resource Management Associates
 @contact: steve@rmanet.com
-@note: 
+@note:
+Script to organize and plot data, then procedurally build XML file for Jasper
 """
 __updated__ = '11-21-2019 13:14'
 
 import datetime as dt
 import math
 import os
-import pickle
 import sys
-
 import h5py
 import matplotlib.pyplot as plt
 import numpy as np
-import pandas as pd
-from matplotlib.dates import date2num
 from scipy import interpolate
 from scipy.constants import convert_temperature
 from sklearn.metrics import mean_absolute_error
@@ -35,95 +32,28 @@ sat_data_temp = [0., 1., 2., 3., 4., 5., 6., 7., 8., 9., 10., 11., 12., 13., 14.
 f_interp = interpolate.interp1d(sat_data_temp, sat_data_do,
                                 fill_value=(sat_data_do[0], sat_data_do[-1]), bounds_error=False)
 
-def do_saturation(temp, diss_ox):
-    do_sat = f_interp(temp)
-    return diss_ox / do_sat * 100.
-
-def calc_computed_dosat(vtemp, vdo):
-    v = np.zeros_like(vtemp)
-    for j in range(len(v)):
-        if np.isnan(vtemp[j]) or np.isnan(vdo[j]):
-            v[j] = np.nan
-        else:
-            v[j] = do_saturation(vtemp[j], vdo[j])
-    return v
-
-def read_DSS_txt_header(fp):
-    """Example headr:
-    /TEMPPROFILE/SHASTA/PROFILE/TEMPF/01DEC2009/TEMPERATURE (F)/
-    PD  Ver:  1   Prog:DssVue  LW:17MAY21  22:33:10   Tag:Tag        Prec:-1
-    1 Curve(s), 132 Ordinates.  IHORIZ: 1
-    First Var. Units: DegF   Type: unt Second Var. Units: feet   Type: unt
-    Label 1: TempF
-    """
-    hdr = {}
-    hdr['DSS_record'] = fp.readline()
-    if not hdr['DSS_record'] or 'END FILE' in hdr['DSS_record']:
-        return None
-    tokens = hdr['DSS_record'].split('/')
-    hdr['Location'] = tokens[2]
-    hdr['Datetime'] = dt.datetime.strptime(tokens[5], '%d%b%Y')
-    hdr['Timestamp'] = pd.to_datetime(hdr['Datetime'])
-    l1 = fp.readline()
-    l2 = fp.readline()
-    l2_tokens = l2.split(' ')
-    hdr['n'] = int(l2_tokens[2])
-    l3 = fp.readline()
-    l3_tokens = l3.split(' ')
-    hdr['units'] = l3_tokens[3]
-    fp.readline()  # burn last of 5 total lines
-    return hdr
-
-
-def read_DSS_txt_profile(fp, n):
-    values = np.array([float(fp.readline()) for i in range(n)])
-    values = convert_temperature(values, 'F', 'C')
-    elevation = np.array([float(fp.readline()) for i in range(n)])
-    elevation = -1 * (elevation - elevation[0])
-    order = np.flip(np.argsort(elevation))
-    elevation = elevation[order]
-    values = values[order]
-    fp.readline()  # burn 'End Data' line
-    return values, elevation
-
-
-def write_profiles_to_AnnualFile(profiles, yr, file_name_stub):
-    with open(file_name_stub + '%i.txt' % yr, 'w') as fp:
-        fp.write('date,temp,elev\n')
-        for p in profiles:
-            if p['Datetime'].year == yr:
-                dstr = p['Datetime'].strftime('%Y-%m-%d %H:%M:%S')
-                for i in range(p['n']):
-                    fp.write(dstr + ',%f,%f\n' % (p['values'][i], p['elevation'][i]))
-
-
-def DSS_profile_txt_to_other_stuff(DSS_profile_txt, years, file_name_stub):
-    """Utility to write out annual profile text files from a DSS text export of lots of paired profile data.
-    """
-    with open(DSS_profile_txt) as fp:
-        p = []
-        maxprofiles = 10000
-        for i in range(maxprofiles):
-            print('Reading profile:', i)
-            profile = read_DSS_txt_header(fp)
-            if profile is None:
-                break
-            profile['values'], profile['elevation'] = read_DSS_txt_profile(fp, profile['n'])
-            p.append(profile)
-    # sort by date
-    p.sort(key=profile_dn)
-
-    for y in years:
-        write_profiles_to_AnnualFile(p, y, file_name_stub)
-    with open(file_name_stub + '.pickle', 'wb') as fp:
-        pickle.dump(p, fp)
-
-
-def profile_dn(profile):
-    return date2num(profile['Datetime'])
 
 
 def read_obs_ts_meta_file(obs_ts_meta_file):
+    '''
+    Read in stations file and return dictionary containing station information
+    station files follow format of "Start Station", then information seperated by '=', and end with "End station".
+    ex:
+    start station
+    name=Shasta Outflow
+    longname=Shasta Reservoir Outflow Temperature
+    metric=Temperature
+    easting=660908
+    northing=14788945
+    w2_path=/W2:TWO_77.OPT/SEG 77 WITHDRAWAL/TEMP-TWO//1HOUR/$$FPART$$/
+    dss_path=/SHASTA DAM-CORR/FLOW_WT/TEMP_G2//1DAY/TEMPERATURE (F)/
+    dss_fn=Historic-UpperSac.dss
+    region=Shasta
+    end station
+
+    :param obs_ts_meta_file: full path to stations file
+    :return: dictionary object with station information
+    '''
     stations = {}
     with open(obs_ts_meta_file) as osf:
         for line in osf:
@@ -164,6 +94,11 @@ def read_obs_ts_meta_file(obs_ts_meta_file):
 
 
 def read_obs_profile_meta_file(obs_profile_meta_file):
+    '''
+    reads the profile_stations.txt file and gets relavent info
+    :param obs_profile_meta_file:
+    :return: dictionary of stations
+    '''
     stations = {}
     with open(obs_profile_meta_file) as osf:
         for line in osf:
@@ -172,8 +107,6 @@ def read_obs_profile_meta_file(obs_profile_meta_file):
                 name = ''
                 metric = ''
                 region = ''
-                easting = 0
-                northing = 0
             elif line.startswith('name'):
                 name = line.split('=')[1]
             elif line.startswith('metric'):
@@ -185,10 +118,22 @@ def read_obs_profile_meta_file(obs_profile_meta_file):
     return stations
 
 def observed_ts_txt_file(ts_data_path, station_name, metric):
+    '''
+    Build file name and read data
+    :param ts_data_path: path to where observed data is
+    :param station_name: name of station to be read
+    :param metric: metric of data
+    :return: arrays of times and values of observed data
+    '''
     dss_util_fname = os.path.join(ts_data_path, '{0} {1}.txt'.format(metric, station_name))
     return observed_ts_txt_file_read(dss_util_fname)
 
 def observed_ts_txt_file_read(file_name):
+    '''
+    reads observed text files from PostProcess_Region.py
+    :param file_name: full path to the text file
+    :return: array of times and values
+    '''
     dss_util_fname = file_name
     t = []
     v = []
@@ -218,9 +163,8 @@ def observed_ts_txt_file_read(file_name):
                 print('Error in File. Skipping line:', line)
     time_difference = [ti - t[i] for i, ti in enumerate(t[1:])]
     td_counter = Counter(time_difference) #get the time deltas
-    if len(td_counter) == 1:
-        return np.array(t), np.array(v)
-    elif len(td_counter) == 0:
+    #if the amount of time intervals is a single interval, then return. Else, fix data to be the same interval
+    if len(td_counter) in [0, 1]:
         return np.array(t), np.array(v)
     else:
         most_common = max(td_counter.values())
@@ -243,15 +187,41 @@ def observed_ts_txt_file_read(file_name):
         return np.array(new_t), np.array(new_v)
 
 def clean_missing(indata):
+    '''
+    removes data with -901. flags
+    :param indata: array of data to be cleaned
+    :return: cleaned data array
+    '''
     indata[indata == -901.] = np.nan
     return indata
 
 
 def clean_computed(indata):
+    '''
+    removes data with -9999 flags
+    :param indata: array of data to be cleaned
+    :return: cleaned data array
+    '''
     indata[indata == -9999.] = np.nan
     return indata
 
+def do_saturation(temp, diss_ox):
+    '''
+    calulates dissolved oxygen saturation. uses a series of pre computed DO values interpolated
+    :param temp: temperature value
+    :param diss_ox: dissolved oxygen
+    :return: dissolved oxygen value
+    '''
+    do_sat = f_interp(temp)
+    return diss_ox / do_sat * 100.
+
 def calc_computed_dosat(vtemp, vdo):
+    '''
+    calculates the computed dissolved saturated oxygen
+    :param vtemp: temperature values
+    :param vdo: values for dissovled oxy
+    :return: DOSat values
+    '''
     v = np.zeros_like(vtemp)
     for j in range(len(v)):
         if np.isnan(vtemp[j]) or np.isnan(vdo[j]):
@@ -261,6 +231,13 @@ def calc_computed_dosat(vtemp, vdo):
     return v
 
 def calc_observed_dosat(ttemp, vtemp, vdo):
+    '''
+     calc dissolved saturated oxygen for observed data
+    :param ttemp: times for data
+    :param vtemp: temperature values
+    :param vdo: values for dissovled oxy
+    :return: time and DOSat values
+    '''
     v = np.zeros_like(vtemp)
     for j in range(len(v)):
         if np.isnan(vtemp[j]) or np.isnan(vdo[j]):
@@ -271,6 +248,13 @@ def calc_observed_dosat(ttemp, vtemp, vdo):
 
 
 def read_observed_ts_data(obs_ts_data_path, station_name, metric):
+    '''
+    reads in observed data time series data
+    :param obs_ts_data_path: full path to observed data text file
+    :param station_name: name of station for data
+    :param metric: data metric type
+    :return: arrays of time and values
+    '''
     if metric.lower() == 'do_sat':
         tt, vt = observed_ts_txt_file(obs_ts_data_path, station_name, 'Temperature')
         vt = clean_missing(vt)
@@ -293,6 +277,13 @@ def read_observed_ts_data(obs_ts_data_path, station_name, metric):
     return t, v
 
 def find_rptrgn(simulation_name, studyfolder):
+    '''
+       Read the right rptrgn file, and determine what region you are working with.
+       RPTRGN files are named after the simulation, and consist of plugin, model alter name, and then region(s)
+       :param simulation_name: name of simulation to find file
+       :param studyfolder: full path to study folder
+       :returns: dictionary containing information from file
+    '''
     #find the rpt file go up a dir, reports, .rptrgn
     rptrgn_file = os.path.join(studyfolder, 'reports', '{0}.rptrgn'.format(simulation_name.replace(' ', '_')))
     print('Looking for rptrgn file at:', rptrgn_file)
@@ -312,6 +303,12 @@ def find_rptrgn(simulation_name, studyfolder):
     return reg_info
 
 def read_observed(observed_data_filename):
+    '''
+    reads in observed data files and returns values for Temperature Profiles
+    TODO: change to not just read 10k lines.. make smarter
+    :param observed_data_filename: file name
+    :return: returns values, depths and times
+    '''
     f = open(observed_data_filename)
     f.readline()  # header
     max_lines = 10000
@@ -329,8 +326,7 @@ def read_observed(observed_data_filename):
         sline = line.split(',')
         dt_str = sline[0]
         dt_tmp = dt.datetime.strptime(dt_str, '%Y-%m-%d %H:%M:%S')
-        # if not stime <= dt_tmp <= etime:
-        #     continue
+
         if (dt_tmp.year != hold_dt.year or dt_tmp.month != hold_dt.month or dt_tmp.day != hold_dt.day) and j != 0:
             # new profile
             if len(t_profile) != 0 and len(wt_profile) != 0 and len(d_profile) != 0:
@@ -371,15 +367,22 @@ def nse(simulations, evaluation):
 
     return nse_
 
-def depths_to_elevations(depths):
-    elevations = []
-    for d_array in depths:
-        e = [max(d_array) - n for n in d_array]
-        elevations.append(np.asarray(e))
-    return elevations
 
 def series_stats(t_comp, v_comp, t_obs, v_obs, start_limit=None, end_limit=None, time_series=False,
                  means_only=False, v_obs_min=5):
+    '''
+    Takes in obs and modeled data and calculates statistics based on match
+    :param t_comp: times for computed
+    :param v_comp: values for computed
+    :param t_obs: times for observed data
+    :param v_obs: values for observed data
+    :param start_limit: start time to do stats. Allows for subset of data to be calc
+    :param end_limit: end time to do stats
+    :param time_series: flag to get times from time arrays
+    :param means_only: flag to only grab means
+    :param v_obs_min: min number of observed values
+    :return: stats Mean Bias, MAE, RMSE, NSE, COUNT
+    '''
     # will this fail if t_comp is not ascending?
     stime = t_comp[0] if start_limit is None else start_limit
     etime = t_comp[-1] if end_limit is None else end_limit
@@ -437,12 +440,6 @@ def series_stats(t_comp, v_comp, t_obs, v_obs, start_limit=None, end_limit=None,
         return None
 
 
-def dss_get(dss, path, startDateStr=None, endDateStr=None):
-    df, _, _ = dss.read_rts(path, startDateStr, endDateStr)
-    dt = pd.to_datetime(df.index).to_pydatetime()
-    val = df[df.columns[0]].values
-    return dt, val
-
 
 class ModelResults(object):
     """
@@ -489,14 +486,29 @@ class ModelResults(object):
 
 
 class W2ModelResults(ModelResults):
-    # 'ELEV' seems to be the same for all layers/depths
-    def __init__(self, simulation_path, alternative, study_dir, region_name):
+    '''
+    Class to organize ResSim results for plotting
+    '''
+
+    def __init__(self, study_dir, region_name):
+        '''
+        initialized function for W2 class
+        :param study_dir: study directory full path
+        :param region_name: name of region
+        '''
         self.region_name = region_name
         self.csv_results_dir = os.path.join(study_dir, 'reports', 'CSV')
-        self.build_depths()
-        self.load_time()
+        self.build_depths() #make output depths
+        self.load_time() #load time values
 
     def build_depths(self):
+        '''
+        Depth values for pulling out W2. W2 is output at conistant intervals and converted to text files. There
+        may not be values at every single depth, but those are represented with a no data flag.
+        TODO: Currently hardcoded. Should be potentially changed to read in all output files in dir and build depths
+        from that
+        :return: list of depths for profiles
+        '''
         start = 0
         increment = 2
         end = 160
@@ -504,6 +516,11 @@ class W2ModelResults(ModelResults):
         self.segment_depths = np.array(list(depths), dtype=np.int64)
 
     def load_time(self):
+        '''
+        Load times by reading temp profile files and finding time values. Keep trying files until one works.
+        TODO: too hardcoded, search for files in results dir and use those.
+        :return: start time and end time class objects
+        '''
         print('Reading times..')
         for i ,depth in enumerate(self.segment_depths):
             ts_data_file = '{0}_tempprofile_Depth{1}_Idx{2}_Temperature.csv'.format(self.region_name.lower(), depth, i+1)
@@ -517,6 +534,13 @@ class W2ModelResults(ModelResults):
                 print('Unable to set start and end time.')
 
     def load_time_array(self, t_in):
+        '''
+        turns a list of datetime objects to ordinal values
+        TODO: this should return the list instead of setting class object.
+        TODO: this should also be a generalized function
+        :param t_in: list of datetime objects
+        :return: class list object of ordinal times
+        '''
         t = []
         for tt in t_in:
             ttmp = tt.toordinal() + float(tt.hour) / 24. + float(tt.minute) / (24. * 60.)
@@ -524,6 +548,14 @@ class W2ModelResults(ModelResults):
         self.t = np.array(t)
 
     def get_profile(self, time_in, WQ_metric, name=None, return_depth=False):
+        '''
+        depreciated function, now we cal get_profiles() to grab all at once..
+        :param time_in:
+        :param WQ_metric:
+        :param name:
+        :param return_depth:
+        :return:
+        '''
         vals = np.zeros(len(self.segment_depths), dtype=np.float64)
         for i, depth in enumerate(self.segment_depths):
             ts_data_file = '{0}_tempprofile_Depth{1}_Idx{2}_Temperature.csv'.format(self.region_name, depth, i+1)
@@ -540,7 +572,17 @@ class W2ModelResults(ModelResults):
             vals[i] = v[timestep]
         return self.segment_depths*3.28, vals #TODO: convert better.
 
-    def get_profiles(self,times, metric, resname=None, return_depth=False):
+    def get_profiles(self,times, metric, resname=None):
+        '''
+        load through values to extract values, depths and values
+        In order to get elevations, a WaterSurfaceElev csv file needs to be read in
+        :param times: array of time values to be retrieved. does not have to be in order or in a row
+        :param metric: (NOT NEEDED) metric for data to be grabbed.
+                        Should be pulled out of the function in the future for new metrics
+                        Only here for consistancy with Ressim function
+        :param resname: name of reservoir for H5 pathing, not needed for this but makes it easier to call
+        :return: list of arrays of values, elevations and depths
+        '''
         unique_times = [n[0] for n in times]
         values = np.full((len(unique_times), len(self.segment_depths)), np.NaN, dtype=np.float64)
         # elevations = np.full((len(unique_times), len(self.segment_depths)), np.NaN, dtype=np.float64)
@@ -563,8 +605,6 @@ class W2ModelResults(ModelResults):
                             print('No Data at idx {0} Depth {1} at time {2}'.format(i, depth, timestep))
             # values.append(np.asarray(vals))
 
-
-
         ts_elev_data =self.region_name + '_WaterSurfaceElev_Elev.csv'
         t, elev = observed_ts_txt_file_read(os.path.join(self.csv_results_dir, ts_elev_data))
         for j, time in enumerate(unique_times):
@@ -579,9 +619,15 @@ class W2ModelResults(ModelResults):
             elevations.append(np.asarray(e))
             depths.append(self.segment_depths * 3.28)
 
-        return elevations, values, depths
+        return values, elevations, depths
 
     def get_idx_for_time(self, t_in):
+        '''
+        finds timestep for date
+        TODO: generalize
+        :param t_in: time step
+        :return: timestep index
+        '''
         ttmp = t_in.toordinal() + float(t_in.hour) / 24. + float(t_in.minute) / (24. * 60.)
         min_diff = np.min(np.abs(self.t - ttmp))
         tol = 1. / (24. * 60.)  # 1 minute tolerance
@@ -591,8 +637,15 @@ class W2ModelResults(ModelResults):
             return -1
         return timestep
 
-    def get_time_series(self, time_start, time_end, metric, xy=None, dss_data=None, station=None):
-        w2_name = dss_data['w2_path']
+    def get_time_series(self, metric, station):
+        '''
+        reads csv files of converted time series (see PostProcess_Region.py)
+        sets stime and etime
+        TODO: is stime and etime needed?
+        :param metric: metric to grab for file
+        :param station: location of data
+        :return: arrays of time and values
+        '''
         csv_name = '{0}_Fromw2_{1}.csv'.format(station.replace(' ', '_'), metric) #ex: Shasta_Outflow_Fromw2_Temperature
         csv_path = os.path.join(self.csv_results_dir, csv_name)
         t, v = observed_ts_txt_file_read(csv_path)
@@ -603,9 +656,12 @@ class W2ModelResults(ModelResults):
         return t, v
 
 # Hi Scott.  You are awesome.
-# thank Ben, you too.
+# thanks Ben, you too.
 
 class ResSimModelResults(ModelResults):
+    '''
+    Class to organize ResSim results for plotting
+    '''
 
     def __init__(self, sim_drct, trl_name, study_dir, subdomain=None, h5_filepath=None):
         if h5_filepath is not None:
@@ -620,11 +676,11 @@ class ResSimModelResults(ModelResults):
         self.simulation_name = os.path.basename(sim_drct)
         self.trial_name = trl_name
         self.subdomain_name = subdomain
-        self.load_time()
+        self.load_time() #load time vars from h5
         self.csv_results_dir = os.path.join(study_dir, 'reports', 'CSV')
         self.output_dir = os.path.join(study_dir, 'reports', 'Images')
 
-        self.hold_year = -1
+        self.hold_year = -1 #placeholder
         self.load_subdomains()
 
     def get_profile(self, time_in, WQ_metric, xy=None, name=None, return_depth=False):
@@ -641,19 +697,24 @@ class ResSimModelResults(ModelResults):
             print(el)
             return el, v
 
-    def get_profiles(self, times, metric, resname=None, return_depth=False):
+    def get_profiles(self, times, metric, resname=None):
+        '''
+        load through values to extract values, depths and values
+        :param times: array of time values to be retrieved. does not have to be in order or in a row
+        :param metric: metric for data to be grabbed. Should be pulled out of the function in the future for new metrics
+        :param resname: name of reservoir for H5 pathing
+        :return: list of arrays of values, elevations and depths
+        '''
         self.load_elevation(alt_subdomain_name=resname)
         unique_times = [n[0] for n in times]
-        # vals = np.full((len(unique_times), len(self.elev)), np.nan, dtype=np.float64)
-        # elevations = np.full((len(unique_times), len(self.elev)), np.nan, dtype=np.float64)
-        # depths = np.full((len(unique_times), len(self.elev)), np.nan, dtype=np.float64)
+
         vals = []
         elevations = []
         depths = []
         for j, time_in in enumerate(unique_times):
             timestep = self.get_idx_for_time(time_in)
             self.load_results(time_in, metric, alt_subdomain_name=resname)
-            ktop = self.get_top_layer(timestep)
+            ktop = self.get_top_layer(timestep) #get waterlevel top layer to know where to grab data from
             v_el = self.vals[:ktop + 1]
             el = self.elev[:ktop + 1]
             d_step = []
@@ -664,25 +725,17 @@ class ResSimModelResults(ModelResults):
                 e_step.append(e)
                 v_step.append(v_el[ei])
 
-                # depths[j][ei] = np.max(el) - e
-                # elevations[j][ei] = e
-
-                # if return_depth:
-                #     # elevations[j][ei] = np.max(el) - e
-                #     depths[j][ei] = np.max(el) - e
-                # else:
-                #     elevations[j][ei] = e
-
-            # for vi, v in enumerate(v_el):
-            #     vals[j][vi] = v
-
             depths.append(np.asarray(d_step))
             elevations.append(np.asarray(e_step))
             vals.append(np.asarray(v_step))
 
-        return elevations, vals, depths
+        return vals, elevations, depths
 
     def load_subdomains(self):
+        '''
+        creates a dictionary of all subdomains in the H5 file and grabes their XY coordinates for later reference
+        :return: dictionary class object of subdomain XY coords
+        '''
         self.subdomains = {}
         group = self.h['Geometry/Subdomains']
         for subdomain in group:
@@ -693,6 +746,12 @@ class ResSimModelResults(ModelResults):
             self.subdomains[subdomain] = {'x': x, 'y': y}
 
     def find_computed_station_cell(self, xy):
+        '''
+        finds subdomains that are closest to observed station coordinates
+        TODO: add some kind of tolerance or max distance?
+        :param xy: XY coordinates for observed station
+        :return: cell index and subdomain information closest to observed data
+        '''
         easting = xy[0]
         northing = xy[1]
         nearest_dist = 1e6
@@ -709,6 +768,15 @@ class ResSimModelResults(ModelResults):
         return data_index, data_subdomain
 
     def load_computed_time(self):
+        '''
+        loads computed time values, replacing 24 hr date values with 0000 the next day
+        grabs all values instead of user defined, if none are defined
+        TODO: is this still needed? require user input.
+        :return: sets list class object with times
+                self.t_computed - list of times used in computation
+                self.stime - start time of run
+                self.etime - end time of run
+        '''
         tstr = self.h['Results/Subdomains/Time Date Stamp']
         tstr0 = (tstr[0]).decode("utf-8")
         tstr1 = (tstr[1]).decode("utf-8")
@@ -736,48 +804,54 @@ class ResSimModelResults(ModelResults):
             self.stime = self.t_computed[0]
             self.etime = self.t_computed[-1]
 
-    def get_time_series(self, time_start, time_end, metric, xy=None, dss_path=None, dss_fn=None):
+    def get_time_series(self, time_start, time_end, metric, xy=None):
+        '''
+        Gets Time series values from Ressim H5 files.
+        :param time_start: start time to grab time series data
+        :param time_end: end time to grab time series data
+        :param metric: metric of data
+        :param xy: XY coordinates of the observed data to be passed into self.find_computed_station_cell(xy) to find
+                    location of modeled data
 
-        if dss_path is not None:
-            pass
-            #get and read the correct CSV file..
+        :return: times and values arrays for selected metric and time window
+        '''
+
+        if xy is None:
+            raise ValueError('xy must be set for ResSimModelResults')
         else:
-            if xy is None:
-                raise ValueError('xy or dss_path must be set for ResSimModelResults')
-            else:
-                i, subdomain_name = self.find_computed_station_cell(xy)
+            i, subdomain_name = self.find_computed_station_cell(xy)
 
-                if metric.lower() == 'flow':
-                    dataset_name = 'Cell flow'
-                    dataset = self.h['Results/Subdomains/{0}/{1}'.format(subdomain_name, dataset_name)]
-                    v = np.array(dataset[:, i])
-                    v = self.clean_computed(v)
-                elif metric.lower() == 'elevation':
-                    dataset_name = 'Water Surface Elevation'
-                    dataset = self.h['Results/Subdomains/{0}/{1}'.format(subdomain_name, dataset_name)]
-                    v = np.array(dataset[:])
-                    v = self.clean_computed(v)
-                elif metric.lower() == 'temperature':
-                    dataset_name = 'Water Temperature'
-                    dataset = self.h['Results/Subdomains/{0}/{1}'.format(subdomain_name, dataset_name)]
-                    print('Results/Subdomains/{0}/{1}'.format(subdomain_name, dataset_name))
-                    v = np.array(dataset[:, i])
-                    v = self.clean_computed(v)
-                elif metric.lower() == 'do':
-                    dataset_name = 'Dissolved Oxygen'
-                    dataset = self.h['Results/Subdomains/{0}/{1}'.format(subdomain_name, dataset_name)]
-                    v = np.array(dataset[:, i])
-                    v = self.clean_computed(v)
-                elif metric.lower() == 'do_sat':
-                    dataset_name = 'Water Temperature'
-                    dataset = self.h['Results/Subdomains/{0}/{1}'.format(subdomain_name, dataset_name)]
-                    vt = np.array(dataset[:, i])
-                    dataset_name = 'Dissolved Oxygen'
-                    dataset = self.h['Results/Subdomains/{0}/{1}'.format(subdomain_name, dataset_name)]
-                    vdo = np.array(dataset[:, i])
-                    vt = self.clean_computed(vt)
-                    vdo = self.clean_computed(vdo)
-                    v = self.calc_computed_dosat(vt, vdo)
+            if metric.lower() == 'flow':
+                dataset_name = 'Cell flow'
+                dataset = self.h['Results/Subdomains/{0}/{1}'.format(subdomain_name, dataset_name)]
+                v = np.array(dataset[:, i])
+                v = clean_computed(v)
+            elif metric.lower() == 'elevation':
+                dataset_name = 'Water Surface Elevation'
+                dataset = self.h['Results/Subdomains/{0}/{1}'.format(subdomain_name, dataset_name)]
+                v = np.array(dataset[:])
+                v = clean_computed(v)
+            elif metric.lower() == 'temperature':
+                dataset_name = 'Water Temperature'
+                dataset = self.h['Results/Subdomains/{0}/{1}'.format(subdomain_name, dataset_name)]
+                print('Results/Subdomains/{0}/{1}'.format(subdomain_name, dataset_name))
+                v = np.array(dataset[:, i])
+                v = clean_computed(v)
+            elif metric.lower() == 'do':
+                dataset_name = 'Dissolved Oxygen'
+                dataset = self.h['Results/Subdomains/{0}/{1}'.format(subdomain_name, dataset_name)]
+                v = np.array(dataset[:, i])
+                v = clean_computed(v)
+            elif metric.lower() == 'do_sat':
+                dataset_name = 'Water Temperature'
+                dataset = self.h['Results/Subdomains/{0}/{1}'.format(subdomain_name, dataset_name)]
+                vt = np.array(dataset[:, i])
+                dataset_name = 'Dissolved Oxygen'
+                dataset = self.h['Results/Subdomains/{0}/{1}'.format(subdomain_name, dataset_name)]
+                vdo = np.array(dataset[:, i])
+                vt = clean_computed(vt)
+                vdo = clean_computed(vdo)
+                v = calc_computed_dosat(vt, vdo)
 
         if not hasattr(self, 't_computed'):
             self.load_computed_time()
@@ -795,37 +869,20 @@ class ResSimModelResults(ModelResults):
         self.etime = self.t_computed[-1]
         return self.t_computed[istart:iend], v[istart:iend]
 
-    @staticmethod
-    def clean_missing(indata):
-        indata[indata == -901.] = np.nan
-        return indata
 
-    @staticmethod
-    def clean_computed(indata):
-        indata[indata == -9999.] = np.nan
-        return indata
-
-    @staticmethod
-    def calc_computed_dosat(vtemp, vdo):
-        v = np.zeros_like(vtemp)
-        for j in range(len(v)):
-            if np.isnan(vtemp[j]) or np.isnan(vdo[j]):
-                v[j] = np.nan
-            else:
-                v[j] = do_saturation(vtemp[j], vdo[j])
-        return v
-
-    @staticmethod
-    def calc_observed_dosat(ttemp, vtemp, tdo, vdo):
-        v = np.zeros_like(vtemp)
-        for j in range(len(v)):
-            if np.isnan(vtemp[j]) or np.isnan(vdo[j]):
-                v[j] = np.nan
-            else:
-                v[j] = do_saturation(vtemp[j], vdo[j])
-        return ttemp, v
 
     def load_time(self):
+        '''
+        Loads times from H5 file
+        TODO: do we need this, or the load computed times?
+        :return: list class object of time values
+                self.tstr - time string
+                self.t - times list
+                self.nt - num times
+                self.t_offset - time offset
+                self.stime - start time
+                self.etime - end time
+        '''
         self.tstr = self.h['Results/Subdomains/Time Date Stamp']
         tstr0 = (self.tstr[0]).decode("utf-8")
         ttmp = self.h['Results/Subdomains/Time']
@@ -850,6 +907,15 @@ class ResSimModelResults(ModelResults):
         self.etime = ttmp
 
     def load_elevation(self, alt_subdomain_name=None):
+        '''
+        loads elevations from the H5 file
+        :param alt_subdomain_name: alternate field if the domain is not class defined subdomain name
+        :return: assign elevations to class
+                self.ncells - number of cells
+                self.elev - elevation time series for profile
+                self.elev_ts - elevation time series
+
+        '''
         this_subdomain = self.subdomain_name if alt_subdomain_name is None else alt_subdomain_name
         cell_center_xy = self.h['Geometry/Subdomains/' + this_subdomain + '/Cell Center Coordinate']
         self.ncells = (np.shape(cell_center_xy))[0]
@@ -857,9 +923,14 @@ class ResSimModelResults(ModelResults):
         elev_ts = self.h['Results/Subdomains/' + this_subdomain + '/Water Surface Elevation']
         self.elev_ts = np.array([elev_ts[i] for i in range(self.nt)])
 
-    def get_top_layer(self, timestep):
-        elev = self.elev_ts[timestep]
-        for k in range(len(self.elev) - 1):
+    def get_top_layer(self, timestep_index):
+        '''
+        grabs the top active layer of water for a given timestep
+        :param timestep: timestep index to grab data at
+        :return: returns index for top layer of water column
+        '''
+        elev = self.elev_ts[timestep_index] #elevations at a timestep
+        for k in range(len(self.elev) - 1): #for each cell..
             cell_z = self.elev[k]  # layer midpoint
             cell_z1 = self.elev[k + 1]  # layer above midpoint
             top_of_cell_z = 0.5 * (cell_z + cell_z1)
@@ -868,9 +939,18 @@ class ResSimModelResults(ModelResults):
         return k
 
     def load_results(self, t_in, metrc, alt_subdomain_name=None):
+        '''
+        loads results for a specific time step from h5 file
+        :param t_in: time in datetime object
+        :param metrc: metric to get data from
+        :param alt_subdomain_name: alt field if data is grabbed from a different location than the default
+        :return: assign values to class object
+                self.t_data - timestep
+                self.vals - array of values
+        '''
         this_subdomain = self.subdomain_name if alt_subdomain_name is None else alt_subdomain_name
 
-        timestep = self.get_idx_for_time(t_in)
+        timestep = self.get_idx_for_time(t_in) #get timestep index for current date
         print(t_in, (self.tstr[timestep]).decode("utf-8"))
         self.t_data = t_in
         if metrc.lower() == 'temperature':
@@ -894,112 +974,23 @@ class ResSimModelResults(ModelResults):
             metric_name = 'Dissolved Oxygen'
             vtmp = self.h['Results/Subdomains/' + this_subdomain + '/' + metric_name]
             vdo = np.array([vtmp[timestep][i] for i in range(self.ncells)])
-            vals = self.calc_computed_dosat(vt, vdo)
+            vals = calc_computed_dosat(vt, vdo)
         self.vals = vals
 
     def get_idx_for_time(self, t_in):
+        '''
+        Returns closest index to timestep datetime object from H5 file times
+        :param t_in: datetime object
+        :return: index closest to time step
+        '''
         ttmp = t_in.toordinal() + float(t_in.hour) / 24. + float(t_in.minute) / (24. * 60.) - self.t_offset
         min_diff = np.min(np.abs(self.t - ttmp))
         tol = 1. / (24. * 60.)  # 1 minute tolerance
         timestep = np.where((np.abs(self.t - ttmp) - min_diff) < tol)[0][0]
         if min_diff > 1.:
             print('Error: nearest time step > 1 day away')
+            print(t_in, timestep)
         return timestep
-
-    def make_output_dir(self):
-        base_name = self.simulation_name.lower()
-        if not os.path.exists(base_name):
-            os.mkdir(base_name)
-        self.output_dir = os.path.join(base_name, self.trial_name)
-        if not os.path.exists(self.output_dir):
-            os.mkdir(self.output_dir)
-
-    def plot_obs_data(self, ax, vobs, dep):
-        self.obs_data = vobs
-        self.obs_depth = dep
-        ax.plot(vobs, dep, '-.', zorder=4, label='Observed')
-        ax.grid(zorder=0)
-        ax.invert_yaxis()
-
-    def load_obs_data(self, vobs, dep):
-        self.obs_data = vobs
-        self.obs_depth = dep
-
-    def plot_modeled_data(self, ax, t_in, metrc, show_legend=True, show_xlabel=True, show_ylabel=True):
-        timestep = self.get_idx_for_time(t_in)
-        ktop = self.get_top_layer(timestep)
-        v = self.vals[:ktop + 1]
-        el = self.elev[:ktop + 1]
-        dep = np.max(el) - el[:]
-        self.comp_data = v
-        self.comp_depth = dep
-        ax.plot(v, dep, '-.', zorder=4, label='Modeled')
-        if metrc == 'temperature':
-            ax.set_xlim([0, 30])
-            xlab = r'Temperature ($^\circ$C)'
-        elif metrc == 'diss_oxy':
-            ax.set_xlim([0, 14])
-            xlab = 'Dissolved oxygen (mg/L)'
-        elif metrc == 'do_sat':
-            ax.set_xlim([0, 130])
-            xlab = 'Dissolved oxygen saturation (%)'
-        if show_legend:
-            plt.legend(loc='lower right')
-        if show_xlabel:
-            ax.set_xlabel(xlab)
-        if show_ylabel:
-            ax.set_ylabel('Depth (ft)')
-        ttl_str = dt.datetime.strftime(self.t_data, '%d %b %Y')
-        xbufr = 0.05
-        ybufr = 0.05
-        xl = ax.get_xlim()
-        yl = ax.get_ylim()
-        xtext = xl[0] + xbufr * (xl[1] - xl[0])
-        ytext = yl[1] - ybufr * (yl[1] - yl[0])
-        ax.text(xtext, ytext, ttl_str, ha='left', va='top', size=10, bbox=dict(boxstyle='round', facecolor='w',
-                                                                               alpha=0.35), zorder=10)
-
-    def save_fig(self, year, metrc):
-        fig_name = 'profiles_{0}_{1}_{2}.png'.format(metrc, year, self.subdomain_name.replace(' ', '_'))
-        plt.savefig(os.path.join(self.output_dir, fig_name), bbox_inches='tight')
-        print('saved:', os.path.join(self.output_dir, fig_name))
-
-    def open_error_stats(self, metrc):
-        output_fname = 'profile_error_stats_{0}_{1}.txt'.format(metrc, self.subdomain_name.replace(' ', '_'))
-        error_stats_fname = os.path.join(self.output_dir, output_fname)
-        self.error_file = open(error_stats_fname, 'w')
-        self.error_file.write('Year,RMSE\n')
-
-    def calc_error_stats(self, current_year):
-        rmse = self.rmse()
-        # print('RMSE', rmse)
-        if self.hold_year != current_year:
-            self.profile_rmse = rmse
-        else:
-            self.profile_rmse += rmse
-        self.hold_year = current_year
-
-    def rmse(self):
-        """To be called after plot_obs_data and plot_ so that """
-        interp_fnct = interpolate.interp1d(self.comp_depth, self.comp_data,
-                                           fill_value=(self.comp_data[0], self.comp_data[-1]), bounds_error=False)
-        sq_error = 0.
-        n = len(self.obs_depth)
-        for j in range(n):
-            d = self.obs_depth[j]
-            vo = self.obs_data[j]
-            vc = interp_fnct(d)
-            sq_error += (vc - vo) ** 2
-        return np.sqrt(sq_error / n)
-
-    def output_error_stats(self, year, n_profiles):
-        avg_rmse = self.profile_rmse / n_profiles
-        # print(year, 'Average RMSE', avg_rmse)
-        self.error_file.write('{0},{1}\n'.format(year, avg_rmse))
-
-    def close_error_stats(self):
-        self.error_file.close()
-
 
 def get_plot_label_masks(idx, nprofiles, rows, cols):
     if idx == cols - 1:
@@ -1027,149 +1018,9 @@ def get_subplot_config(n_profiles):
         return math.ceil(factor), 3
 
 
-def plot_temp_profile_comparison(simulation_drct, trial_name, metric, obs_file_stub=None, reservoir_name=None,
-                                 output_path=''):
-    """
-
-    :param simulation_drct:
-    :param trial_name:
-    :param metric: one of ['temperature', 'diss_oxy', 'do_sat']
-    :param obs_file_stub:
-    :param reservoir_name:
-    :param output_path:
-    :return:
-    """
-
-    observed_data_drct = 'profile_data'
-    res_name = 'Lake Mendocino' if reservoir_name is None else reservoir_name  # reservoir name
-
-    mresults = ResSimModelResults(simulation_drct, trial_name, res_name)
-
-    syear = mresults.stime.year
-    eyear = mresults.etime.year
-    if mresults.etime.month == 1:
-        eyear -= 1
-
-    mresults.open_error_stats(metric)
-    for yr in range(syear, eyear + 1):
-        if obs_file_stub is None:
-            if metric == 'temperature':
-                observed_data_file_name = 'wt_data_{0}.txt'.format(yr)
-            elif metric == 'diss_oxy':
-                observed_data_file_name = 'do_data_{0}.txt'.format(yr)
-            elif metric == 'do_sat':
-                observed_data_file_name = 'dosat_data_{0}.txt'.format(yr)
-        else:
-            observed_data_file_name = obs_file_stub + '{0}.txt'.format(yr)
-
-        obs_times, obs_temps, obs_depths = read_observed(os.path.join(observed_data_drct, observed_data_file_name))
-        nof_profiles = len(obs_times)
-
-        fig = plt.figure(figsize=(12, 8))
-        subplot_rows, subplot_cols = get_subplot_config(nof_profiles)
-
-        for j in range(nof_profiles):
-            pax = fig.add_subplot(subplot_rows, subplot_cols, j + 1)
-            to = obs_times[j]
-            wto = obs_temps[j]
-            depo = obs_depths[j]
-            mresults.plot_obs_data(pax, wto, depo)
-            mresults.load_results(to[0], metric)
-            lflag, xflag, yflag = get_plot_label_masks(j, nof_profiles, subplot_rows, subplot_cols)
-            mresults.plot_modeled_data(pax, to[0], metric, show_legend=lflag,
-                                       show_xlabel=xflag, show_ylabel=yflag)
-            mresults.calc_error_stats(yr)
-        mresults.save_fig(yr, metric)
-        plt.close('all')
-        mresults.output_error_stats(yr, nof_profiles)
-    mresults.close_error_stats()
-
-
-# def read_observed_data(obs_data_filepath, metric='temperature', dss_path_list=None):
-#     if obs_data_filepath.lower().endswith('dss'):
-#         # dss paths should match the compare_var!
-#         return read_observed_DSS(obs_data_filepath, dss_path_list)
-#     else:
-#         return read_observed(obs_data_filepath)
-
-
-# def plot_multiple_alternatives(h5_alts, obs_data_filepath, metric='temperature', dss_path_list=None,
-#                                title=None, rmse=True, save_filepath=None):
-#     """
-#     :param h5_alternatives:
-#     :param obs_data_filepath:
-#     :param metric:
-#     :param dss_path_list:
-#     :param title:
-#     :return:
-#     """
-#     obs_times, obs_temps, obs_depths = read_observed_data(obs_data_filepath, metric, dss_path_list)
-#     nof_profiles = len(obs_times)
-#
-#     fig = plt.figure(figsize=(12, 8))
-#     subplot_rows, subplot_cols = get_subplot_config(nof_profiles)
-#
-#     alts = {h5a['alt_label']: ResSimModelResults(h5a['sim_path'], h5a['alt_name'], h5a['reservoir_name'],
-#                                                  h5a['h5_filepath']) for h5a in h5_alts}
-#
-#     names_labels = ['Observed', ]
-#
-#     for j in range(nof_profiles):
-#         pax = fig.add_subplot(subplot_rows, subplot_cols, j + 1)
-#         to = obs_times[j]
-#         wto = obs_temps[j]
-#         depo = obs_depths[j]
-#
-#         rmse_labels = ['Obs']
-#         for k, (alabel, mr) in enumerate(alts.items()):
-#             if j == 0:
-#                 names_labels.append(alabel)
-#             if k == 0:
-#                 mr.plot_obs_data(pax, wto, depo)
-#             else:
-#                 mr.load_obs_data(wto, depo)
-#             mr.load_results(to[0], metric)
-#             lflag, xflag, yflag = get_plot_label_masks(j, nof_profiles, subplot_rows, subplot_cols)
-#             mr.plot_modeled_data(pax, to[0], metric, show_legend=False,
-#                                  show_xlabel=xflag, show_ylabel=yflag)
-#             rmse_labels.append('{:.2f}'.format(mr.rmse()))
-#
-#         if j == 0:
-#             leg = pax.legend(names_labels, bbox_to_anchor=(0.0, 1.02), loc='lower left', fontsize='small')
-#
-#         if rmse:
-#             pax.legend(rmse_labels, loc='lower right')
-#             if j == 0:
-#                 pax.add_artist(leg)  # re-add name legend after matplotlib deletes
-#
-#     if title is not None:
-#         plt.suptitle(title)
-#     if save_filepath is not None:
-#         plt.savefig(save_filepath, dpi=600, bbox_inches='tight')
-#     else:
-#         plt.show()
-
-
-# def batch_plot_temp_profile_comparison():
-#     simulation_directory = r'J:\ResSim_watersheds\ResSim-dev\base\RussianRiver\rss\2020.09.22-1300'
-#     # start_run = 414  # for redoing some of them
-#     # end_run = 415
-#     run_count = 1024
-#     for irun in range(run_count):
-#         # for irun in range(start_run, end_run):
-#         print('Processing run {0} of {1}'.format(irun + 1, run_count))
-#         trial_name = 'run{0}'.format(irun)
-#         plot_temp_profile_comparison(simulation_directory, trial_name, temperature_only=True)
-
-
 def obs_model_profile_plot(ax, obs_elev, obs_value, model_elev, model_value, metric, dt_profile,
                            show_legend=False, show_xlabel=False, show_ylabel=False, use_depth=False):
-    # deal with depths vs. elevations?
-    # observed
-    # ax.plot(obs_value, obs_elev, '-.',zorder=4, label='Observed')
-    # if len(obs_value) <= 30:
-    #     ax.plot(obs_value, obs_elev, marker='o', zorder=4, label='Observed')
-    # else:
+
     ax.plot(obs_value, obs_elev, zorder=4, label='Observed')
     ax.grid(zorder=0)
     if use_depth:
@@ -1229,7 +1080,7 @@ def plot_profiles(mr, metric, observed_data_drct, reservoir, out_path, use_depth
             obs_times, obs_values, obs_depths = read_observed(observed_data_file_name)
             nof_profiles = len(obs_times)
             n_pages = math.ceil(nof_profiles / n_profiles_per_page)
-            model_elev, model_values, model_depths = mr.get_profiles(obs_times, metric, resname=reservoir, return_depth=use_depth)
+            model_values, model_elev,  model_depths = mr.get_profiles(obs_times, metric, resname=reservoir)
 
             if not use_depth:
                 obs_elev = convert_obs_depths(obs_depths, model_elev)
@@ -1242,7 +1093,6 @@ def plot_profiles(mr, metric, observed_data_drct, reservoir, out_path, use_depth
 
             fig_names = []
             stats = []
-            prof_start = 0
             for page_i, pgi in enumerate(page_indices):
 
                 subplot_rows, subplot_cols = get_subplot_config(len(pgi))
@@ -1264,16 +1114,6 @@ def plot_profiles(mr, metric, observed_data_drct, reservoir, out_path, use_depth
                     else:
                         obs_levels = obs_elev[j]
                         model_levels = model_elev[j]
-
-                    # modeled/computed
-                    # model_elev, model_val = mr.get_profile(dt_profile[j], metric, name=reservoir, return_depth=use_depth)
-                    # lflag, xflag, yflag = get_plot_label_masks(i, len(pgi), subplot_rows, subplot_cols)
-                    # obs_model_profile_plot(pax, obs_elev, obs_val, model_elev, model_val, metric, dt_profile[j],
-                    #                        show_legend=lflag, show_xlabel=xflag, show_ylabel=yflag)
-
-                    # model_elev, model_val = mr.get_profile(dt_profile[0], metric, name=reservoir,
-                    #                                        return_depth=use_depth)
-
 
                     lflag, xflag, yflag = get_plot_label_masks(i, len(pgi), subplot_rows, subplot_cols)
                     obs_model_profile_plot(pax, obs_levels, obs_val, model_levels, model_val, metric, dt_profile[0],
@@ -1335,7 +1175,7 @@ def plot_time_series(mr, observed_data_meta_file, fig_path_stub, rss_sim_name, r
             if model.lower() == 'ressim':
                 comp_dates, comp_vals = mr.get_time_series(None, None, metric, xy=[x, y])
             else:
-                comp_dates, comp_vals = mr.get_time_series(None, None, metric, dss_data=data, station=station)
+                comp_dates, comp_vals = mr.get_time_series(metric, station)
             # print('Making plot')
 
             if len(comp_dates) > 0:
@@ -1413,65 +1253,8 @@ def plot_time_series(mr, observed_data_meta_file, fig_path_stub, rss_sim_name, r
 
     return station_results
 
-
-# def get_XML_template():
-#     XML_template = {}
-#     XML_template['start'] = """<?xml version="1.0" encoding="UTF-8"?>
-#     <USBR_Automated_Report Date="$$REPORT_DATE$$" SimulationName="$$SIMULATION_NAME$$">
-#        <!--This section contains the required text and image paths for the cover page.-->
-#        <Cover_Page>
-#           <Title>DRAFT Temperature Validation Summary Report</Title>
-#           <Title>Shasta / Keswick</Title>
-#           <Contact_Info>TODO: Contact Info - May need more layers</Contact_Info>
-#           <Pictures>TODO: Path to any pictures</Pictures>
-#        </Cover_Page>
-#     """
-#     XML_template['reservoir'] = """   <Report_Element Order="$$ORDER$$" Element="Reservoir_Profile">
-#           <Reservoir_Profiles Reservoir="$$RESERVOIR_NAME$$">
-#     $$RESERVOIR_FIGS$$
-#           </Reservoir_Profiles>
-#        </Report_Element>
-#     """
-#     XML_template['reservoir_fig'] = """         <Profile_Image FigureNumber="$$FIG_NUM$$" FigureDescription="$$FIG_DESCRIPTION$$">$$FIG_FILENAME$$</Profile_Image>
-#     """
-#
-#     XML_template['time_series'] = """   <Report_Element Order="$$ORDER$$" Element="Output">
-#           <Output_Temp_Flow Location="$$TS_NAME$$">
-#     $$TS_FIGURE$$
-#     $$TS_TABLE$$
-#           </Output_Temp_Flow>
-#        </Report_Element>
-#     """
-#
-#     XML_template['time_series_fig'] = """         <Output_Image FigureNumber="$$FIG_NUM$$" FigureDescription="$$FIG_DESCRIPTION$$">$$FIG_FILENAME$$</Output_Image>
-#     """
-#
-#     XML_template['time_series_table'] = """         <Output_Table TableNumber="$$TABLE_NUM$$" TableDescription="$$TABLE_DESCRIPTION$$" TableType="statistics">
-#     $$TABLE_ELEMENTS$$
-#              </Output_Table>
-#     """
-#     XML_template['time_series_table_col'] = """            <Column Column_Name="$$TABLE_COL_NAME$$">
-#     $$TABLE_ROWS$$
-#                 </Column>
-#     """
-#     XML_template['end'] = """</USBR_Automated_Report>
-#     """
-#
-#     return XML_template
-
-
 def get_reservoir_description(region):
     return "{0} Reservoir Temperature Profiles Near Dam".format(region.capitalize())
-
-# def get_ts_description(station):
-#     if station.lower() == 'shasta outflow':
-#         return "Shasta Reservoir Outflow Temperature"
-#     elif station.lower() == 'kwk':
-#         return "Keswick Reservoir Outflow Temperature"
-#     elif station.lower() == 'bnd':
-#         return "Sac River at Bend Bridge Temperature"
-#     elif station.lower() == 'rdb':
-#         return "Sac River below Red Bluff Div Dam Temperature"
 
 
 def XML_reservior(profile_stats, XML_class, region_name):
@@ -1512,70 +1295,6 @@ def XML_time_series(ts_results, XML_class):
 
     return XML
 
-
-# def XML_error_stats_table(n_table, station, stats, stats_ordered, stats_labels):
-#     XML_t = copy.copy(get_XML_template()['time_series_table'])
-#     XML_t = XML_t.replace("$$TABLE_NUM$$", str(n_table))
-#     n_table += 1
-#     XML_t = XML_t.replace("$$TABLE_DESCRIPTION$$", station)
-#
-#     XML_cols = ""
-#     for j, colname in enumerate(stats.keys()):
-#
-#         XML_rows = ""
-#         for i, st in enumerate(stats_ordered):
-#             row = r"""               <Row Row_Order="$$ORDER$$" Row_name="$$STATS_LABEL$$">$$STAT_NUM$$</Row>
-# """
-#             row = row.replace("$$ORDER$$", str(i))
-#             if st == 'COUNT':
-#                 row = row.replace("$$STAT_NUM$$", '%i' % stats[colname][st])
-#             else:
-#                 row = row.replace("$$STAT_NUM$$", '%2f' % stats[colname][st])
-#             row = row.replace("$$STATS_LABEL$$", stats_labels[st])
-#             XML_rows += row
-#
-#         col = copy.copy(get_XML_template()['time_series_table_col'])
-#         col = col.replace("$$TABLE_COL_NAME$$", colname)
-#         col = col.replace("$$TABLE_ROWS$$", XML_rows)
-#
-#         XML_cols += col
-#
-#     XML_t = XML_t.replace("$$TABLE_ELEMENTS$$", XML_cols)
-#     return n_table, XML_t
-
-
-# def XML_mean_monthly_stats_table(n_table, station, stats_mo):
-#     XML_t = copy.copy(get_XML_template()['time_series_table'])
-#     XML_t = XML_t.replace("$$TABLE_NUM$$", str(n_table))
-#     n_table += 1
-#     XML_t = XML_t.replace("$$TABLE_DESCRIPTION$$", station)
-#
-#     XML_cols = ""
-#
-#     col_names = list(stats_mo.keys())
-#
-#     for j, colname in enumerate(sorted(col_names)):
-#         stats_col = stats_mo[colname]
-#         XML_rows = ""
-#         for mo in range(1, 13):
-#             row = r"""               <Row Row_Order="$$ORDER$$" Row_name="$$STATS_LABEL$$">$$STAT_NUM$$</Row>"""
-#             row = row.replace("$$ORDER$$", str(mo))
-#             row = row.replace("$$STATS_LABEL$$", mo_str_3[mo - 1])
-#             if stats_col[mo_str_3[mo - 1]] is None:
-#                 row = row.replace("$$STAT_NUM$$", 'nan')
-#             else:
-#                 row = row.replace("$$STAT_NUM$$", '%2f' % stats_col[mo_str_3[mo - 1]])
-#             XML_rows += row
-#
-#         col = copy.copy(get_XML_template()['time_series_table_col'])
-#         col = col.replace("$$TABLE_COL_NAME$$", colname)
-#         col = col.replace("$$TABLE_ROWS$$", XML_rows)
-#         XML_cols += col
-#
-#     XML_t = XML_t.replace("$$TABLE_ELEMENTS$$", XML_cols)
-#     return n_table, XML_t
-
-
 def XML_write(profile_stats, ts_results, region_name):
 
     XML = XMLReport.makeXMLReport("USBRAutomatedReportOutput.xml")
@@ -1606,23 +1325,30 @@ def clean_output_dir(dir_name):
 
 def generate_region_plots_ResSim(simulation_path, alternative, observed_data_directory, region_name, study_dir,
                                  temperature_only=False, use_depth=False):
-    # output_path = r"Z:\USBR\test"  # WAT will start path where we need to write
-    # output_path = "."  # WAT will start path where we need to write
-    # images_path = os.path.join(output_path, '..', "Images")
+    '''
+    Function making regional XML section for ResSim models.
+    :param simulation_path: full path to the simulation dir
+    :param alternative: alternative name
+    :param observed_data_directory: full path to observed data dir
+    :param region_name: name of current region (Shasta, Keswick, etc)
+    :param study_dir: full path to the study directory
+    :param temperature_only: flag for using only temp. This is a bit older carry over code and should be reworked.
+    :param use_depth: Make plots use depth if True, elevation if False
+    :return:
+    '''
+
+    #find path to output images
     images_path = os.path.join(study_dir, 'reports', 'Images')
-    output_path = os.path.join(study_dir, 'reports')
 
-
-
+    #build path to station files
     profile_meta_file = os.path.join(observed_data_directory, "Profile_stations.txt")
     ts_meta_file = os.path.join(observed_data_directory, "TS_stations.txt")
-
 
     # we should only need to generate a single instance of ResSimModelResults; while we need to pass in a
     # subdomain/reservoir for legacy purposes at this point, and subdomain/reservoir can be passed to through
     # to the get_profile command
-    profile_subdomains = read_obs_profile_meta_file(profile_meta_file)
-    mr = ResSimModelResults(simulation_path, alternative, study_dir)
+    profile_subdomains = read_obs_profile_meta_file(profile_meta_file) #read profiles
+    mr = ResSimModelResults(simulation_path, alternative, study_dir) #create class instance for ressim class
 
     profile_stats = {}
     for subdomain, meta in profile_subdomains.items():
@@ -1634,8 +1360,7 @@ def generate_region_plots_ResSim(simulation_path, alternative, observed_data_dir
 
     ts_results = plot_time_series(mr, ts_meta_file, images_path, simulation_path, alternative, region_name,
                                   'ressim', temperature_only=temperature_only)
-    _, sim_name = os.path.split(simulation_path)
-    report_name = " : ".join([sim_name, alternative])
+
     XML_write(profile_stats, ts_results, region_name)
 
 def generate_region_plots_W2(simulation_path, alternative, observed_data_directory, region_name, study_dir,
@@ -1655,7 +1380,7 @@ def generate_region_plots_W2(simulation_path, alternative, observed_data_directo
     # subdomain/reservoir for legacy purposes at this point, and subdomain/reservoir can be passed to through
     # to the get_profile command
     profile_subdomains = read_obs_profile_meta_file(profile_meta_file)
-    mr = W2ModelResults(simulation_path, alternative, study_dir, region_name)
+    mr = W2ModelResults(study_dir, region_name)
 
     profile_stats = {}
     for subdomain, meta in profile_subdomains.items():
@@ -1668,8 +1393,6 @@ def generate_region_plots_W2(simulation_path, alternative, observed_data_directo
     ts_results = plot_time_series(mr, ts_meta_file, images_path, simulation_path, alternative, region_name, 'CeQualW2',
                                   temperature_only=temperature_only)
 
-    _, sim_name = os.path.split(simulation_path)
-    report_name = " : ".join([sim_name, alternative])
     XML_write(profile_stats, ts_results, region_name)
 
 
@@ -1696,15 +1419,18 @@ if __name__ == '__main__':
     print('SYSARG', sys.argv)
     print('REGINFO', reg_info)
 
+    #Flag for temperature profile plots. Determines if plots are shown as depth values (0 -> down) or as
+    #elevations (Real WSE -> down).
     use_depth = False
 
     try:
-        # print(reg_info[model_alt_name.replace(' ', '_')]['plugin'], plugin_name)
+        #find region info. Potentially returns multiple regions
         region_names = reg_info[model_alt_name.replace(' ', '_')]['regions']
     except Exception:
         print('Error finding region')
         exit()
 
+    #for each region found, generate a region section in the XML file
     for region_name in region_names:
 
         if plugin_name == 'ResSim':
@@ -1716,5 +1442,6 @@ if __name__ == '__main__':
             generate_region_plots_W2(simulation_directory, alternative_name, obs_data_path, region_name, study_dir,
                                      temperature_only=True, use_depth=use_depth)
         else:
+            #somehow got a region not taken account for. Only Ressim and W2 right now.
             print('model "%s" not understood!' % sys.argv[0])
     exit()
