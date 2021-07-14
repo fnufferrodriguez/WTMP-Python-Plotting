@@ -10,6 +10,7 @@ Script to organize and plot data, then procedurally build XML file for Jasper
 __updated__ = '11-21-2019 13:14'
 
 import datetime as dt
+import dateutil.parser
 import math
 import os
 import sys
@@ -186,6 +187,49 @@ def observed_ts_txt_file_read(file_name):
             current_t += mc_interval
         return np.array(new_t), np.array(new_v)
 
+def observed_ts_txt_file_read2(file_name):
+    '''
+    prep function to read in text files from HECDSS. Data is date-val format. If units are found to be fahrenheit,
+    convert to Celsius
+    CURRENTLY values are read from DSS and converted to CSV in jython. This funciton is set up in preparation into
+    reading from text and never calling jython
+    :param file_name: full path to the file name
+    :return: np array of datetimes and values
+    '''
+    t = []
+    v = []
+    read_data = False
+    convert_to_C = False
+    with open(file_name, 'r') as fn:
+        for line in fn:
+            sline = line.strip()
+            if not read_data:
+                if sline.startswith('Units'):
+                    read_data = True
+                    #example line: Units: C    Type: INST-VAL
+                    units_str = sline.split('Type')[0].split(':')[1].strip()
+                    if units_str.lower() in ['def f', 'f', 'fahrenheit']:
+                        convert_to_C = True
+            else:
+                if sline == 'END DATA':
+                    break
+                else:
+                    sline_splt = sline.split(';')
+                    date_str = sline_splt[0].strip()
+                    vals = float(sline_splt[1].strip())
+                    #dates could have different formats...
+                    date = dateutil.parser.parse(date_str)
+                    t.append(date)
+                    if convert_to_C:
+                        vals = convert_temperature(vals, 'F', 'C')
+                    v.append(vals)
+
+    return (np.asarray(t), np.asarray(v))
+
+
+
+
+
 def clean_missing(indata):
     '''
     removes data with -901. flags
@@ -302,45 +346,43 @@ def find_rptrgn(simulation_name, studyfolder):
                                         'regions': regions}
     return reg_info
 
-def read_observed(observed_data_filename):
+def read_observed_profiles(observed_data_filename):
     '''
     reads in observed data files and returns values for Temperature Profiles
-    TODO: change to not just read 10k lines.. make smarter
     :param observed_data_filename: file name
     :return: returns values, depths and times
     '''
-    f = open(observed_data_filename)
-    f.readline()  # header
-    max_lines = 10000
+
     t = []
     wt = []
     d = []
     t_profile = []
     wt_profile = []
     d_profile = []
-    hold_dt = dt.datetime(1933, 10, 15)
-    for j in range(max_lines):
-        line = f.readline()
-        if not line:
-            break
-        sline = line.split(',')
-        dt_str = sline[0]
-        dt_tmp = dt.datetime.strptime(dt_str, '%Y-%m-%d %H:%M:%S')
+    hold_dt = dt.datetime(1933, 10, 15) #https://www.onthisday.com/date/1933/october/15 sorry Steve
+    with open(observed_data_filename, 'r') as odf:
+        for j, line in enumerate(odf):
+            if j == 0:
+                continue
+            sline = line.split(',')
+            dt_str = sline[0]
+            # dt_tmp = dt.datetime.strptime(dt_str, '%Y-%m-%d %H:%M:%S')
+            dt_tmp = dateutil.parser.parse(dt_str) #trying this to see if it will work
 
-        if (dt_tmp.year != hold_dt.year or dt_tmp.month != hold_dt.month or dt_tmp.day != hold_dt.day) and j != 0:
-            # new profile
-            if len(t_profile) != 0 and len(wt_profile) != 0 and len(d_profile) != 0:
-                t.append(np.array(t_profile))
-                wt.append(np.array(wt_profile))
-                d.append(np.array(d_profile))
-            t_profile = []
-            wt_profile = []
-            d_profile = []
-        else:
-            t_profile.append(dt_tmp)
-            wt_profile.append(float(sline[1]))
-            d_profile.append(float(sline[2]))
-        hold_dt = dt_tmp
+            if (dt_tmp.year != hold_dt.year or dt_tmp.month != hold_dt.month or dt_tmp.day != hold_dt.day):
+                # new profile
+                if len(t_profile) != 0 and len(wt_profile) != 0 and len(d_profile) != 0:
+                    t.append(np.array(t_profile))
+                    wt.append(np.array(wt_profile))
+                    d.append(np.array(d_profile))
+                t_profile = []
+                wt_profile = []
+                d_profile = []
+            else:
+                t_profile.append(dt_tmp)
+                wt_profile.append(float(sline[1]))
+                d_profile.append(float(sline[2]))
+            hold_dt = dt_tmp
 
     return t, wt, d
 
@@ -439,6 +481,32 @@ def series_stats(t_comp, v_comp, t_obs, v_obs, start_limit=None, end_limit=None,
     else:
         return None
 
+def load_time_array(t_in):
+    '''
+    turns a list of datetime objects to ordinal values
+    :param t_in: list of datetime objects
+    :return: class list object of ordinal times
+    '''
+    t = []
+    for tt in t_in:
+        ttmp = tt.toordinal() + float(tt.hour) / 24. + float(tt.minute) / (24. * 60.)
+        t.append(ttmp)
+    return np.array(t)
+
+def get_idx_for_time(time_Array, t_in, offset):
+    '''
+    finds timestep for date
+    :param t_in: time step
+    :return: timestep index
+    '''
+    ttmp = t_in.toordinal() + float(t_in.hour) / 24. + float(t_in.minute) / (24. * 60.) - offset
+    min_diff = np.min(np.abs(time_Array - ttmp))
+    tol = 1. / (24. * 60.)  # 1 minute tolerance
+    timestep = np.where((np.abs(time_Array - ttmp) - min_diff) < tol)[0][0]
+    if min_diff > 1.:
+        print('nearest time step > 1 day away')
+        return -1
+    return timestep
 
 
 class ModelResults(object):
@@ -504,24 +572,35 @@ class W2ModelResults(ModelResults):
     def build_depths(self):
         '''
         Depth values for pulling out W2. W2 is output at conistant intervals and converted to text files. There
-        may not be values at every single depth, but those are represented with a no data flag.
-        TODO: Currently hardcoded. Should be potentially changed to read in all output files in dir and build depths
-        from that
+        may not be values at every single depth, but those are represented with a no data flag. Values are grabbed
+        using the files that exist
         :return: list of depths for profiles
         '''
-        start = 0
-        increment = 2
-        end = 160
-        depths = range(start, end, increment)
-        self.segment_depths = np.array(list(depths), dtype=np.int64)
+        seg_depths = []
+        import glob
+        depth_files = glob.glob(os.path.join(os.path.join(self.csv_results_dir, '{0}_tempprofile_Depth*_Idx*_Temperature.csv'.format(self.region_name))))
+        for df in depth_files:
+            fn = os.path.split(df)[1]
+            fn_splt = fn.split('_')
+            depth = fn_splt[2].split('Depth')[1]
+            seg_depths.append(int(depth))
+        self.segment_depths = seg_depths
+        self.segment_depths.sort()
+        self.segment_depths = np.asarray(self.segment_depths)
+
+        # start = 0
+        # increment = 2
+        # end = 160
+        # depths = range(start, end, increment)
+        # self.segment_depths = np.array(list(depths), dtype=np.int64)
 
     def load_time(self):
         '''
         Load times by reading temp profile files and finding time values. Keep trying files until one works.
-        TODO: too hardcoded, search for files in results dir and use those.
         :return: start time and end time class objects
         '''
         print('Reading times..')
+        self.t_offset = 0
         for i ,depth in enumerate(self.segment_depths):
             ts_data_file = '{0}_tempprofile_Depth{1}_Idx{2}_Temperature.csv'.format(self.region_name.lower(), depth, i+1)
             t, v = observed_ts_txt_file_read(os.path.join(self.csv_results_dir, ts_data_file))
@@ -533,19 +612,6 @@ class W2ModelResults(ModelResults):
             except:
                 print('Unable to set start and end time.')
 
-    def load_time_array(self, t_in):
-        '''
-        turns a list of datetime objects to ordinal values
-        TODO: this should return the list instead of setting class object.
-        TODO: this should also be a generalized function
-        :param t_in: list of datetime objects
-        :return: class list object of ordinal times
-        '''
-        t = []
-        for tt in t_in:
-            ttmp = tt.toordinal() + float(tt.hour) / 24. + float(tt.minute) / (24. * 60.)
-            t.append(ttmp)
-        self.t = np.array(t)
 
     def get_profile(self, time_in, WQ_metric, name=None, return_depth=False):
         '''
@@ -564,8 +630,8 @@ class W2ModelResults(ModelResults):
                 vals[i:] = np.NaN
                 break
             #if i == 0:  # find index on first entry
-            self.load_time_array(t)
-            timestep = self.get_idx_for_time(time_in)
+            self.t = load_time_array(t)
+            timestep = get_idx_for_time(self.t, time_in, self.t_offset)
             if timestep == -1:
                 vals[i:] = np.NaN
                 break
@@ -595,13 +661,14 @@ class W2ModelResults(ModelResults):
             # vals = []
             if len(t) > 0:
                 for j, time in enumerate(unique_times):
-                    self.load_time_array(t)
-                    timestep = self.get_idx_for_time(time)
+                    self.t = load_time_array(t)
+                    timestep = get_idx_for_time(self.t, time, self.t_offset)
                     if timestep > -1:
                         try:
                             values[j][i] = v[timestep]
                             # vals.append(v[timestep])
                         except:
+                            values[j][i] = np.nan
                             print('No Data at idx {0} Depth {1} at time {2}'.format(i, depth, timestep))
             # values.append(np.asarray(vals))
 
@@ -609,8 +676,9 @@ class W2ModelResults(ModelResults):
         t, elev = observed_ts_txt_file_read(os.path.join(self.csv_results_dir, ts_elev_data))
         for j, time in enumerate(unique_times):
             e = []
-            self.load_time_array(t)
-            timestep = self.get_idx_for_time(time)
+            self.t = load_time_array(t)
+            timestep = get_idx_for_time(self.t, time, self.t_offset)
+            print('TS', timestep)
             if timestep > -1:
                 WSE = elev[timestep] #Meters
                 for depth in self.segment_depths:
@@ -621,27 +689,12 @@ class W2ModelResults(ModelResults):
 
         return values, elevations, depths
 
-    def get_idx_for_time(self, t_in):
-        '''
-        finds timestep for date
-        TODO: generalize
-        :param t_in: time step
-        :return: timestep index
-        '''
-        ttmp = t_in.toordinal() + float(t_in.hour) / 24. + float(t_in.minute) / (24. * 60.)
-        min_diff = np.min(np.abs(self.t - ttmp))
-        tol = 1. / (24. * 60.)  # 1 minute tolerance
-        timestep = np.where((np.abs(self.t - ttmp) - min_diff) < tol)[0][0]
-        if min_diff > 1.:
-            print('Error: nearest time step > 1 day away')
-            return -1
-        return timestep
+
 
     def get_time_series(self, metric, station):
         '''
         reads csv files of converted time series (see PostProcess_Region.py)
         sets stime and etime
-        TODO: is stime and etime needed?
         :param metric: metric to grab for file
         :param station: location of data
         :return: arrays of time and values
@@ -649,9 +702,6 @@ class W2ModelResults(ModelResults):
         csv_name = '{0}_Fromw2_{1}.csv'.format(station.replace(' ', '_'), metric) #ex: Shasta_Outflow_Fromw2_Temperature
         csv_path = os.path.join(self.csv_results_dir, csv_name)
         t, v = observed_ts_txt_file_read(csv_path)
-        if len(t) > 0:
-            self.stime = t[0]
-            self.etime = t[-1]
 
         return t, v
 
@@ -683,20 +733,6 @@ class ResSimModelResults(ModelResults):
         self.hold_year = -1 #placeholder
         self.load_subdomains()
 
-    def get_profile(self, time_in, WQ_metric, xy=None, name=None, return_depth=False):
-        '''depreciated class. Now we grab all profiles at once, see get_profiles()'''
-        self.load_elevation(alt_subdomain_name=name)
-        self.load_results(time_in, WQ_metric, alt_subdomain_name=name)
-        timestep = self.get_idx_for_time(time_in)
-        ktop = self.get_top_layer(timestep)
-        v = self.vals[:ktop + 1]
-        el = self.elev[:ktop + 1]
-        if return_depth:
-            return np.max(el) - el[:], v
-        else:
-            print(el)
-            return el, v
-
     def get_profiles(self, times, metric, resname=None):
         '''
         load through values to extract values, depths and values
@@ -712,7 +748,10 @@ class ResSimModelResults(ModelResults):
         elevations = []
         depths = []
         for j, time_in in enumerate(unique_times):
-            timestep = self.get_idx_for_time(time_in)
+            timestep = get_idx_for_time(self.t, time_in, self.t_offset)
+            print(timestep)
+            if timestep == -1:
+                continue
             self.load_results(time_in, metric, alt_subdomain_name=resname)
             ktop = self.get_top_layer(timestep) #get waterlevel top layer to know where to grab data from
             v_el = self.vals[:ktop + 1]
@@ -728,7 +767,6 @@ class ResSimModelResults(ModelResults):
             depths.append(np.asarray(d_step))
             elevations.append(np.asarray(e_step))
             vals.append(np.asarray(v_step))
-
         return vals, elevations, depths
 
     def load_subdomains(self):
@@ -950,7 +988,9 @@ class ResSimModelResults(ModelResults):
         '''
         this_subdomain = self.subdomain_name if alt_subdomain_name is None else alt_subdomain_name
 
-        timestep = self.get_idx_for_time(t_in) #get timestep index for current date
+        timestep = get_idx_for_time(self.t, t_in, self.t_offset) #get timestep index for current date
+        if timestep == -1:
+            print('should never be here..')
         print(t_in, (self.tstr[timestep]).decode("utf-8"))
         self.t_data = t_in
         if metrc.lower() == 'temperature':
@@ -977,20 +1017,20 @@ class ResSimModelResults(ModelResults):
             vals = calc_computed_dosat(vt, vdo)
         self.vals = vals
 
-    def get_idx_for_time(self, t_in):
-        '''
-        Returns closest index to timestep datetime object from H5 file times
-        :param t_in: datetime object
-        :return: index closest to time step
-        '''
-        ttmp = t_in.toordinal() + float(t_in.hour) / 24. + float(t_in.minute) / (24. * 60.) - self.t_offset
-        min_diff = np.min(np.abs(self.t - ttmp))
-        tol = 1. / (24. * 60.)  # 1 minute tolerance
-        timestep = np.where((np.abs(self.t - ttmp) - min_diff) < tol)[0][0]
-        if min_diff > 1.:
-            print('Error: nearest time step > 1 day away')
-            print(t_in, timestep)
-        return timestep
+    # def get_idx_for_time(self, t_in):
+    #     '''
+    #     Returns closest index to timestep datetime object from H5 file times
+    #     :param t_in: datetime object
+    #     :return: index closest to time step
+    #     '''
+    #     ttmp = t_in.toordinal() + float(t_in.hour) / 24. + float(t_in.minute) / (24. * 60.) - self.t_offset
+    #     min_diff = np.min(np.abs(self.t - ttmp))
+    #     tol = 1. / (24. * 60.)  # 1 minute tolerance
+    #     timestep = np.where((np.abs(self.t - ttmp) - min_diff) < tol)[0][0]
+    #     if min_diff > 1.:
+    #         print('Error: nearest time step > 1 day away')
+    #         print(t_in, timestep)
+    #     return timestep
 
 def get_plot_label_masks(idx, nprofiles, rows, cols):
     if idx == cols - 1:
@@ -1077,10 +1117,11 @@ def plot_profiles(mr, metric, observed_data_drct, reservoir, out_path, use_depth
         observed_data_file_name = " ".join(['Profile', reservoir, metric.lower()]) + '_{0}.txt'.format(yr)
         observed_data_file_name = os.path.join(observed_data_drct, observed_data_file_name)
         if os.path.exists(observed_data_file_name):
-            obs_times, obs_values, obs_depths = read_observed(observed_data_file_name)
+            obs_times, obs_values, obs_depths = read_observed_profiles(observed_data_file_name)
             nof_profiles = len(obs_times)
             n_pages = math.ceil(nof_profiles / n_profiles_per_page)
             model_values, model_elev,  model_depths = mr.get_profiles(obs_times, metric, resname=reservoir)
+
 
             if not use_depth:
                 obs_elev = convert_obs_depths(obs_depths, model_elev)
@@ -1108,12 +1149,16 @@ def plot_profiles(mr, metric, observed_data_drct, reservoir, out_path, use_depth
                     obs_val = obs_values[j]
                     model_val = model_values[j]
 
+                    model_msk = np.where(~np.isnan(model_val))
+                    model_val = model_val[model_msk]
+
+
                     if use_depth:
                         obs_levels = obs_depths[j]
-                        model_levels = model_depths[j]
+                        model_levels = model_depths[j][model_msk]
                     else:
                         obs_levels = obs_elev[j]
-                        model_levels = model_elev[j]
+                        model_levels = model_elev[j][model_msk]
 
                     lflag, xflag, yflag = get_plot_label_masks(i, len(pgi), subplot_rows, subplot_cols)
                     obs_model_profile_plot(pax, obs_levels, obs_val, model_levels, model_val, metric, dt_profile[0],
