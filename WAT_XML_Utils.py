@@ -1,28 +1,26 @@
 '''
-Created on 6/8/2021
+Created on 7/15/2021
 @author: scott
 @organization: Resource Management Associates
 @contact: scott@rmanet.com
 @note:
-Writes the XML file, and reads existing one.
-Reads existing XML file to get figure table and group numbers
-Work flow includes calling WQ_Plotter multiple times, and then reading an XML file that is opened/closed,
-and adding to it
 '''
 
-class makeXMLReport(object):
+
+class XMLReport(object):
 
     def __init__(self, XML_fn):
         self.XML_fn = XML_fn
-        self.read_XML() #open XML
-        self.get_XML_status()
-        self.current_subgroup = 0 #everytime we open this, reset this, as we will be writing a new group when its called
-        self.column_order = 0 #see above..
+        self.ReadXML()
+        self.PrimeCounters()
 
-        self.mo_str_3 = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+#########################################################################################
+                            #Main functions#
+#########################################################################################
 
-    def read_XML(self):
+    def ReadXML(self):
         '''
+        Probably dont need if we dont open every time...
         read XML file and assign XML lines to object
         :return: class object list of lines
         '''
@@ -30,101 +28,12 @@ class makeXMLReport(object):
         self.XMLFile = XML_read.readlines()
         XML_read.close()
 
-    def get_XML_status(self):
-        '''
-        get current status of XML file. Will read any existing features so we get a current
-        number of figures/tables/etc
-        :return: sets class counters for figures, model numbers, report groups, report elements, and table numbers.
-        '''
-        self.get_figure_nums() #read figure numbers
-        self.get_model_nums() #read model numbers
-        self.get_ReportGroup_nums() #read report groups
-        self.get_ReportElement_nums() #read report Elements
-        self.get_Table_nums() #read table numbers
-
-
-    def get_figure_nums(self):
-        '''
-        read through XML file, find 'FigureNumber=*' flag, and use that to find the last figure number
-        :return: set class object self.current_fig_num
-        '''
-        figures = []
-        for line in self.XMLFile:
-            if "FigureNumber" in line:
-                sline = line.split(' ')
-                fig_num = [int(s.split('=')[1].replace('"','')) for s in sline if 'FigureNumber' in s][0]
-                figures.append(fig_num)
-        if len(figures) > 0:
-            self.current_fig_num = max(figures) + 1
-        else:
-            self.current_fig_num = 1
-
-    def get_model_nums(self):
-        '''
-        read through XML file, find 'ModelOrder=*' flag, and use that to find the last model number
-        :return: set class object self.current_model_num
-        '''
-        models = []
-        for line in self.XMLFile:
-            if "ModelOrder" in line:
-                sline = line.split(' ')
-                model_num = [int(s.split('=')[1].replace('"','')) for s in sline if 'ModelOrder' in s][0]
-                models.append(model_num)
-        if len(models) > 0:
-            self.current_model_num = max(models) + 1
-        else:
-            self.current_model_num = 0
-
-
-    def get_ReportGroup_nums(self):
-        '''
-        read through XML file, find 'ReportGroupOrder=*' flag, and use that to find the last group order number
-        :return: set class object self.current_reportgroup_num
-        '''
-        groups = []
-        for line in self.XMLFile:
-            if "ReportGroupOrder" in line:
-                print(line)
-                sline = line.split(' ')
-                ReportGroup_num = [int(s.split('=')[1].replace('"','')) for s in sline if 'ReportGroupOrder' in s][0]
-                groups.append(ReportGroup_num)
-        if len(groups) > 0:
-            self.current_reportgroup_num = max(groups) + 1
-        else:
-            self.current_reportgroup_num = 0
-
-    def get_ReportElement_nums(self):
-        '''
-        read through XML file, find 'ReportElementOrder=*' flag, and use that to find the last element order number
-        :return: set class object self.current_reportelem_num
-        '''
-
-        elements = []
-        for line in self.XMLFile:
-            if "ReportElementOrder" in line:
-                sline = line.split(' ')
-                ReportElem_num = [int(s.split('=')[1].replace('"','')) for s in sline if 'ReportElementOrder' in s][0]
-                elements.append(ReportElem_num)
-        if len(elements) > 0:
-            self.current_reportelem_num = max(elements) + 1
-        else:
-            self.current_reportelem_num = 1
-
-    def get_Table_nums(self):
-        '''
-        read through XML file, find 'TableNumber=*' flag, and use that to find the last table number
-        :return: set class object self.current_table_num
-        '''
-        tables = []
-        for line in self.XMLFile:
-            if "TableNumber" in line:
-                sline = line.split(' ')
-                Table_num = [int(s.split('=')[1].replace('"','')) for s in sline if 'TableNumber' in s][0]
-                tables.append(Table_num)
-        if len(tables) > 0:
-            self.current_table_num = max(tables) + 1
-        else:
-            self.current_table_num = 1
+    def PrimeCounters(self):
+        self.current_fig_num = 1
+        self.current_table_num = 1
+        self.current_reportelem_num = 1
+        self.current_model_num = 0
+        self.current_reportgroup_num = 1
 
     def writeCover(self, report_date):
         '''
@@ -137,11 +46,10 @@ class makeXMLReport(object):
                     line = line.replace(key, cover_keys[key])
                 xmlf.write(line)
 
-    def write_Reservoir(self, region, model_name, GroupHeader_Text, Res_Text, TS_Text):
+    def write_Reservoir(self, model_name, GroupHeader_Text, Res_Text, TS_Text):
         '''
         Reads through template file and finds the flags to be replaces, and adds in the right value. Then sets up
         entire section for reservoir, adding in subsections for temp profile plots, ts plots and stat tables
-        :param region: name of the region
         :param model_name: name of model
         :param GroupHeader_Text: XML header for reservoir
         :param Res_Text: Water Temperature profile XML lines
@@ -152,40 +60,49 @@ class makeXMLReport(object):
                 sline = line.strip()
                 if sline.startswith('<!--$$ModelInfo$$-->'):
                     self.write_Model_Name(XML, model_name) #writes model info
-                elif sline.startswith("<!--$${0}$$-->".format(region)):
+                elif sline.startswith("<!--$$REGION$$-->"):
                     '''if order ever changes or is customizable, do it here!'''
                     XML.write(GroupHeader_Text)
                     XML.write(Res_Text)
                     XML.write(TS_Text)
                     XML.write('     </Report_Group>\n')
+                    XML.write('     <!--$$REGION$$-->\n')
                 else:
                     XML.write(line)
 
+        self.ReadXML() #re-read the file to get the current text
 
-    def make_Reservoir_Group_header(self, group_name):
+    def write_Model_Name(self, XML, model_name):
         '''
-        Builds the text for the reservoir group header. Iterates through predetermined line(s) and replaces specific
-        flags with inputs.
-        :param group_name: region name
-        :return: XML lines to be added to XML report
+        Writes model info
+        :param XML: XML object to write to
+        :param model_name: name of model
         '''
-        self.current_subgroup = 1 #reset as it will always start at 0 if this is being called..
+        XML.write('	        <Model ModelOrder="{0}" >{1}</Model>\n'.format(self.current_model_num, model_name))
+        XML.write('         <!--$$ModelInfo$$-->\n')
+        self.current_model_num += 1
 
-        res_group_keys = {"$$GROUPORDER$$": self.current_reportgroup_num,
-                          "$$GROUPNAME$$": group_name}
+#########################################################################################
+                         #Reservoir functions#
+#########################################################################################
 
-        res_lines = ['    <Report_Group ReportGroupOrder="$$GROUPORDER$$" ReportGroupName="$$GROUPNAME$$">']
+    def XML_reservior(self, profile_stats, region_name):
+        # only writing one reservoir XLM section here
+        XML = ''
 
-        out = ''
-        for i, line in enumerate(res_lines):
-            for key in res_group_keys.keys():
-                if key == '$$GROUPORDER$$' and key in line:
-                    line = line.replace(key, str(res_group_keys[key])) #when the default was 0..
-                    self.current_reportgroup_num += 1
-                else:
-                    line = line.replace(key, str(res_group_keys[key]))
-            out += line+'\n'
-        return out
+        #res name, year, list of pngs, stats dictionary
+        for subdomain_name, figure_sets in profile_stats.items():
+            if len(figure_sets) > 0:
+                for ps in figure_sets:
+                    reservoir, yr, fig_names, stats = ps
+                    # fig_names = [os.path.join('..','Images', n) for n in fig_names]
+                    subgroup_desc = self.get_reservoir_description(region_name)
+                    XML += self.make_ReservoirSubgroup_lines(reservoir,fig_names, subgroup_desc, yr)
+
+        return XML
+
+    def get_reservoir_description(self, region):
+        return "{0} Reservoir Temperature Profiles Near Dam".format(region.capitalize())
 
     def make_ReservoirSubgroup_lines(self, res_name, res_figs, subgroupdesc, yr):
         '''
@@ -239,6 +156,31 @@ class makeXMLReport(object):
 
         return out
 
+    def make_Reservoir_Group_header(self, group_name):
+        '''
+        Builds the text for the reservoir group header. Iterates through predetermined line(s) and replaces specific
+        flags with inputs.
+        :param group_name: region name
+        :return: XML lines to be added to XML report
+        '''
+        self.current_subgroup = 1 #reset as it will always start at 0 if this is being called..
+
+        res_group_keys = {"$$GROUPORDER$$": self.current_reportgroup_num,
+                          "$$GROUPNAME$$": group_name}
+
+        res_lines = ['    <Report_Group ReportGroupOrder="$$GROUPORDER$$" ReportGroupName="$$GROUPNAME$$">']
+
+        out = ''
+        for i, line in enumerate(res_lines):
+            for key in res_group_keys.keys():
+                if key == '$$GROUPORDER$$' and key in line:
+                    line = line.replace(key, str(res_group_keys[key])) #when the default was 0..
+                    self.current_reportgroup_num += 1
+                else:
+                    line = line.replace(key, str(res_group_keys[key]))
+            out += line+'\n'
+        return out
+
     def make_ReservoirFig_lines(self, fig_filename, fig_description):
         '''
         Writes XML lines to include a figure in the reservoir subgroup for Profile plots
@@ -264,7 +206,32 @@ class makeXMLReport(object):
             out += line
         return out
 
-    def make_TS_Subgroup_lines(self,  ts_name, ts_fig, subgroupdesc):
+#########################################################################################
+                            #Timeseries functions#
+#########################################################################################
+
+    def XML_time_series(self, ts_results, mo_str_3):
+        stats_labels = {
+            'Mean Bias': r'Mean Bias (&lt;sup&gt;O&lt;/sup&gt;C)',
+            'MAE': r'MAE (&lt;sup&gt;O&lt;/sup&gt;C)',
+            'RMSE': r'RMSE (&lt;sup&gt;O&lt;/sup&gt;C)',
+            'NSE': r'Nash-Sutcliffe (NSE)',
+            'COUNT': r'COUNT',
+        }
+        stats_ordered = ['Mean Bias', 'MAE', 'RMSE', 'NSE', 'COUNT']
+        self.mo_str_3 = mo_str_3
+        XML = ""
+        for ts in ts_results:
+            station, metric, desc, fig_name, stats, stats_mo = ts
+            # fig_name = os.path.join('..','Images', fig_name)
+            # subgroup_desc = get_ts_description(station)
+            XML += self.make_TS_Subgroup_lines(station, fig_name, desc)
+            XML += self.make_TS_Tables_lines(station, stats, stats_mo, stats_ordered, stats_labels)
+            XML += '        </Report_Subgroup>\n'
+
+        return XML
+
+    def make_TS_Subgroup_lines(self, ts_name, ts_fig, subgroupdesc):
         '''
         Writes XML lines to include a subgroup in the reservoir subgroup for Time series plots
         :param ts_name: name of time series figure
@@ -364,7 +331,6 @@ class makeXMLReport(object):
 
 
         return out
-
 
     def make_TS_error_stats_table(self, station, stats, stats_ordered, stats_labels):
         '''
@@ -468,13 +434,3 @@ class makeXMLReport(object):
         out += '                    </Output_Table>\n'
 
         return out
-
-    def write_Model_Name(self, XML, model_name):
-        '''
-        Writes model info
-        :param XML: XML object to write to
-        :param model_name: name of model
-        '''
-        XML.write('	        <Model ModelOrder="{0}" >{1}</Model>\n'.format(self.current_model_num, model_name))
-        XML.write('         <!--$$ModelInfo$$-->\n')
-
