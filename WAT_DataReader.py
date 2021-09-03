@@ -13,11 +13,16 @@ import h5py
 from scipy.interpolate import interp1d
 import dateutil.parser
 from collections import Counter
-from pydsstools.heclib.dss import HecDss
+try:
+    from pydsstools.heclib.dss import HecDss
+except:
+    print('Failed to load HecDss')
+import xml.etree.ElementTree as ET
 import WAT_Functions as WF
+import linecache
 
 
-def find_rptrgn(simulation_name, studyfolder):
+def ReadSimulationFile(simulation_name, studyfolder):
     '''
        Read the right rptrgn file, and determine what region you are working with.
        RPTRGN files are named after the simulation, and consist of plugin, model alter name, and then region(s)
@@ -26,24 +31,39 @@ def find_rptrgn(simulation_name, studyfolder):
        :returns: dictionary containing information from file
     '''
     #find the rpt file go up a dir, reports, .rptrgn
-    rptrgn_file = os.path.join(studyfolder, 'reports', '{0}.rptrgn'.format(simulation_name.replace(' ', '_')))
-    print('Looking for rptrgn file at:', rptrgn_file)
-    if not os.path.exists(rptrgn_file):
+    simulation_file = os.path.join(studyfolder, 'reports', '{0}.csv'.format(simulation_name.replace(' ', '_')))
+    if not os.path.exists(simulation_file):
         print('ERROR: no RPTRGN file for simulation:', simulation_name)
         exit()
-    reg_info = {}
-    with open(rptrgn_file, 'r') as rf:
-        for i, line in enumerate(rf):
+    sim_info = {}
+    with open(simulation_file, 'r') as sf:
+        for i, line in enumerate(sf):
             sline = line.strip().split(',')
             plugin = sline[0].strip()
             modelAltName = sline[1].strip()
-            region = sline[2]
-            reg_info[i] = {'plugin': plugin,
-                           'region': region,
-                           'modelAltName': modelAltName}
-    return reg_info
+            defFile = sline[2].strip()
+            sim_info[i] = {'plugin': plugin,
+                           'modelaltname': modelAltName,
+                           'deffile': defFile}
+    return sim_info
 
-def readObservedProfiles(observed_data_filename):
+def getTextProfileDates(observed_data_filename, starttime, endtime):
+    t = []
+    if not os.path.exists(observed_data_filename):
+        return t
+    with open(observed_data_filename, 'r') as odf:
+        for j, line in enumerate(odf):
+            if j == 0:
+                continue
+            sline = line.split(',')
+            dt_str = sline[0]
+            dt_tmp = dateutil.parser.parse(dt_str) #trying this to see if it will work
+            if starttime <= dt_tmp <= endtime: #get time window
+                if dt_tmp not in t:
+                    t.append(dt_tmp)
+    return t
+
+def readTextProfile(observed_data_filename, timestamps):
     '''
     reads in observed data files and returns values for Temperature Profiles
     :param observed_data_filename: file name
@@ -57,13 +77,15 @@ def readObservedProfiles(observed_data_filename):
     wt_profile = []
     d_profile = []
     hold_dt = dt.datetime(1933, 10, 15) #https://www.onthisday.com/date/1933/october/15 sorry Steve
+    if not os.path.exists(observed_data_filename):
+        return [], []
     with open(observed_data_filename, 'r') as odf:
         for j, line in enumerate(odf):
             if j == 0:
                 continue
             sline = line.split(',')
             dt_str = sline[0]
-            dt_tmp = dateutil.parser.parse(dt_str) #trying this to see if it will work
+            dt_tmp = dateutil.parser.parse(dt_str)
             if (dt_tmp.year != hold_dt.year or dt_tmp.month != hold_dt.month or dt_tmp.day != hold_dt.day):
                 if len(t_profile) != 0 and len(wt_profile) != 0 and len(d_profile) != 0:
                     t.append(np.array(t_profile))
@@ -78,7 +100,32 @@ def readObservedProfiles(observed_data_filename):
                 d_profile.append(float(sline[2]))
             hold_dt = dt_tmp
 
-    return t, wt, d
+    cti = getClosestTime(timestamps, [n[0] for n in t])
+    wtn = []
+    dn = []
+    for i in cti:
+        if i != None:
+            wtn.append(wt[i])
+            dn.append(d[i])
+        else:
+            wtn.append([])
+            dn.append([])
+
+    return wtn, dn
+
+def getClosestTime(timestamps, dates):
+    cdi = [] #closest date index
+    for timestamp in timestamps:
+        closestDateidx = None
+        closestDateDist = 9999999999999999999999 #seconds, so this needs to be sorta big.
+        for i, date in enumerate(dates):
+            timedelt = abs((timestamp-date).total_seconds())
+            if timedelt < closestDateDist:
+                closestDateidx = i
+                closestDateDist = timedelt
+
+        cdi.append(closestDateidx)
+    return cdi
 
 def ReadObservedTimeSeriesData(data, observedDir, metric, starttime, endtime):
     '''
@@ -93,12 +140,10 @@ def ReadObservedTimeSeriesData(data, observedDir, metric, starttime, endtime):
 
     DSS_file = os.path.join(observedDir, data['dss_fn'])
     DSS_path = data['dss_path']
-    print('READING {0} FROM {1}'.format(DSS_path, DSS_file))
     t, v, units = readDSSData(DSS_file, DSS_path, starttime, endtime)
     v = WF.clean_missing(v)
     if metric.lower() == 'temperature':
         if units.lower() in ['f', 'faren', 'degf', 'fahrenheit', 'fahren']: #if temps, convert to C
-            print('Converting F to C...')
             v = WF.convert_temperature(v, 'F', 'C')
     return t, v
 
@@ -120,8 +165,10 @@ def readDSSData(dss_file, pathname, startdate, enddate):
 
     startDate = startdate.strftime('%d%b%Y %H:%M:%S')
     endDate = enddate.strftime('%d%b%Y %H:%M:%S')
-    print('startdate', startDate)
-    print('enddate', endDate)
+
+    if not os.path.exists(dss_file):
+        print('DSS file not found!', dss_file)
+        return [], [], None
 
     fid = HecDss.Open(dss_file)
     ts = fid.read_ts(pathname,window=(startDate,endDate),regular=True,trim_missing=True)
@@ -132,9 +179,136 @@ def readDSSData(dss_file, pathname, startdate, enddate):
 
     return times, values, units
 
+def readW2ResultsFile(output_file_name, jd_dates, run_path, targetfieldidx=1):
+
+    out_vals = np.full(len(jd_dates), np.nan)
+
+    ofn_path = os.path.join(run_path, output_file_name)
+    dates = []
+    values = []
+    skiplines = 3 #not sure if this is always true?
+    with open(ofn_path, 'r') as o:
+        for i, line in enumerate(o):
+            if i >= skiplines:
+                sline = line.split(',')
+                dates.append(float(sline[0].strip()))
+                values.append(float(sline[targetfieldidx].strip()))
+
+    if len(dates) > 1:
+        val_interp = interp1d(dates, values)
+    for j, jd in enumerate(jd_dates):
+        try:
+            out_vals[j] = val_interp(jd)
+        except ValueError:
+            continue
+
+    return out_vals
+
+def read_GraphicsDefaults(GD_file):
+
+    tree = ET.parse(GD_file)
+    root = tree.getroot()
+    gd_reportObjects = root.findall('ReportObject')
+    reportObjects = iterateGraphicsDefaults(gd_reportObjects, 'Type')
+
+    return reportObjects
+
+def read_DefaultLineStyle(linefile):
+    tree = ET.parse(linefile)
+    root = tree.getroot()
+    def_lineTypes = root.findall('LineType')
+    lineTypes = iterateGraphicsDefaults(def_lineTypes, 'Name')
+    return lineTypes
+
+def iterateGraphicsDefaults(root, main_key):
+    out = {}
+    for cr in root:
+        key = cr.find(main_key).text.lower()
+        out[key.lower()] = {}
+        for child in cr:
+            if child.tag == main_key:
+                continue
+            else:
+                out[key.lower()][child.tag.lower()] = get_children(child, returnkeyless=True)
+    return out
+
+def get_children(root, returnkeyless=False):
+    children = {}
+    if len(root) == 0:
+        try:
+            if len(root.text.strip()) == 0:
+                children[root.tag.lower()] = None
+            else:
+                children[root.tag.lower()] = root.text.strip()
+        except:
+            children[root.tag.lower()] = root.text
+    else:
+        children[root.tag.lower()] = []
+        for subroot in root: #figure out if we have a list or dict..
+            if Counter([n.tag for n in root])[subroot.tag] != 1:
+                break
+            if len(subroot.text.strip()) != 0: #empty meaning another def, aka "line" in "Lines"
+                children[root.tag.lower()] = {}
+                break
+        for subroot in root:
+            if isinstance(children[root.tag.lower()], list):
+                children[root.tag.lower()].append(get_children(subroot, returnkeyless=True))
+            elif isinstance(children[root.tag.lower()], dict):
+                children[root.tag.lower()].update(get_children(subroot))
+
+    if returnkeyless:
+        children = children[root.tag.lower()]
+    return children
+
+def iterateChapterDefintions(root):
+    out = []
+    for cr in root:
+        keylist = {}
+        for child in cr:
+            keylist[child.tag.lower()] = get_children(child, returnkeyless=True)
+        out.append(keylist)
+    return out
+
+def read_ChapterDefFile(CD_file):
+    Chapters = []
+
+    tree = ET.parse(CD_file)
+    root = tree.getroot()
+    for chapter in root:
+        check = DefinedVarCheck(chapter, ['Name', 'Region', 'Sections'])
+        if check:
+            ChapterDef = {}
+            chap_name = chapter.find('Name').text
+            chap_region = chapter.find('Region').text
+            ChapterDef['name'] = chap_name
+            ChapterDef['region'] = chap_region
+            ChapterDef['sections'] = []
+            cd_sections = chapter.findall('Sections/Section')
+            for section in cd_sections:
+                section_objects = {}
+                try:
+                    section_objects['header'] = section.find('Header').text
+                except:
+                    section_objects['header'] = ''
+                section_objects['objects'] = []
+                sec_objects = section.findall('Object')
+                objects = iterateChapterDefintions(sec_objects)
+                section_objects['objects'] = (objects)
+                ChapterDef['sections'].append(section_objects)
+        Chapters.append(ChapterDef)
+
+    return Chapters
+
+def DefinedVarCheck(Block, flags):
+    tags = [n.tag for n in list(Block)]
+    for flag in flags:
+        if flag not in tags:
+            return False
+    return True
+
 class W2_Results(object):
 
-    def __init__(self, W2_path, region, alt_name, starttime, endtime, interval_min=60):
+    def __init__(self, W2_path, alt_name, alt_Dir, starttime, endtime, interval_min=60):
         '''
         Class Builder init.
         :param W2_path: path to W2 run
@@ -143,21 +317,16 @@ class W2_Results(object):
         :param interval_min: output time series interval in minutes (60 = 1HOUR, 15 = 4 outputs an hour)
         '''
 
-        print('W2Path', W2_path)
-        print('region', region)
-        print('alt_name', alt_name)
-
         self.W2_path = W2_path
-        self.region = region
         self.alt_name = alt_name #confirm this terminology
+        self.run_path = alt_Dir
         self.starttime = starttime
         self.endtime = endtime
         self.interval_min = interval_min #output time series
-        self.run_path = os.path.join(self.W2_path, 'CeQual-W2', region.capitalize(), alt_name)
         self.control_file = os.path.join(self.run_path, 'w2_con.npt') #this should always be the same
         self.read_control_file()
         # dates are output irregular, so we need to build a regular time series to interpolate to
-        self.jd_dates, self.dt_dates = self.build_times(self.starttime, self.endtime, self.interval_min)
+        self.jd_dates, self.dt_dates, self.t_offset = self.build_times(self.starttime, self.endtime, self.interval_min)
 
     def read_control_file(self):
         '''
@@ -168,7 +337,6 @@ class W2_Results(object):
                     self.line_sections
         '''
 
-        print('CONTROL', self.control_file)
         self.cf_lines = self.get_control_file_lines(self.control_file)
         self.line_sections = self.format_cf_lines(self.cf_lines)
 
@@ -291,16 +459,16 @@ class W2_Results(object):
 
         #Get the offset
         year = start_day.year
-        self.t_offset = WF.dt_to_ord(dt.datetime(year,1,1,0,0))
+        t_offset = WF.dt_to_ord(dt.datetime(year,1,1,0,0))
         interval_perc_day = interval_min / (60 * 24)
-        start_jdate = (WF.dt_to_ord(start_day) - self.t_offset) + 1
-        end_jdate = (WF.dt_to_ord(end_day) - self.t_offset) + 1
+        start_jdate = (WF.dt_to_ord(start_day) -t_offset) + 1
+        end_jdate = (WF.dt_to_ord(end_day) - t_offset) + 1
         jd_dates = np.arange(start_jdate, end_jdate, interval_perc_day)
         dt_dates = [start_day+dt.timedelta(days=n-1) for n in jd_dates]
 
-        return np.asarray(jd_dates), np.asarray(dt_dates)
+        return np.asarray(jd_dates), np.asarray(dt_dates), t_offset
 
-    def getWaterTemperatureProfiles(self, times, resname=None):
+    def readProfileData(self, seg, timesteps):
         '''
         Gets the temperature profile values from the output files.
         organizes results into np arrays. Arrays are full of Nan values by default for all possible values, then filled
@@ -314,13 +482,7 @@ class W2_Results(object):
         :return: array of water temperatures, elevations and depths
         '''
 
-        #not sure where this is defined for W2.. for future get this from control file?
-        if self.region.lower() == 'shasta':
-            seg = 77
-        elif self.region.lower() == 'keswick':
-            seg = 32
-
-        unique_times = [n[0] for n in times]
+        unique_times = timesteps
 
         self.get_tempprofile_layers() #get the output layers. out at 2m depths
         self.get_outputfile_name() #get the W2 sanctioned output file name convention
@@ -329,16 +491,18 @@ class W2_Results(object):
         WS_Elev = np.full((len(self.jd_dates), len(self.layers)), np.nan)
 
         for i in range(1,len(self.layers)+1):
-            print('{0} out of {1}'.format(i, len(self.layers)))
             ofn = '{0}_{1}_seg{2}.{3}'.format(self.output_file_name.split('.')[0],
                                               i,
                                               seg,
                                               self.output_file_name.split('.')[1])
             ofn_path = os.path.join(self.run_path, ofn)
+            if not os.path.exists(ofn_path):
+                continue
             op_file = pd.read_csv(ofn_path, header=0)
-            if len(op_file['JDAY']) > 1:
-                WT_interp = interp1d(op_file['JDAY'], op_file['T2(C)'])
-                Elev_interp = interp1d(op_file['JDAY'], op_file['ELWS(m)'])
+            op_file.columns = op_file.columns.str.lower()
+            if len(op_file['jday']) > 1:
+                WT_interp = interp1d(op_file['jday'], op_file['t2(c)'])
+                Elev_interp = interp1d(op_file['jday'], op_file['elws(m)'])
                 for j, jd in enumerate(self.jd_dates):
                     try:
                         wt[j][i] = WT_interp(jd)
@@ -354,16 +518,90 @@ class W2_Results(object):
             timestep = WF.get_idx_for_time(self.jd_dates, time, self.t_offset)
             if timestep > -1:
                 WSE = WS_Elev[timestep] #Meters
+                if not WF.check_data(WSE):
+                    continue
                 WSE = WSE[np.where(~np.isnan(WSE))][0]
                 for depth in self.layers:
                     e.append((WSE - depth) * 3.28) #conv to feet
                 select_wt[t] = wt[timestep][:]
             elevations.append(np.asarray(e))
             depths.append(self.layers * 3.28)
-
+        select_wt, elevations, depths = self.matchProfileLengths(select_wt, elevations, depths)
         return select_wt, elevations, depths
 
-    def get_Timeseries(self, output_file_name, targetfieldidx=1):
+    def readStructuredTimeSeries(self, output_file_name, structure_nums, skiprows=2):
+        """
+        output files usually have header with several repeat headers for each structure
+         Branch:           1  # of structures:          23  outlet temperatures
+        JDAY      T(C)      T(C)      T(C)      T(C)      T(C)      T(C)      T(C)      T(C)      T(C)      T(C)      T(C)      T(C)      T(C)      T(C)      T(C)      T(C)      T(C)      T(C)      T(C)      T(C)      T(C)      T(C)      T(C)   Q(m3/s)   Q(m3/s)   Q(m3/s)   Q(m3/s)   Q(m3/s)   Q(m3/s)   Q(m3/s)   Q(m3/s)   Q(m3/s)   Q(m3/s)   Q(m3/s)   Q(m3/s)   Q(m3/s)   Q(m3/s)   Q(m3/s)   Q(m3/s)   Q(m3/s)   Q(m3/s)   Q(m3/s)   Q(m3/s)   Q(m3/s)   Q(m3/s)   Q(m3/s)    ELEVCL    ELEVCL    ELEVCL    ELEVCL    ELEVCL    ELEVCL    ELEVCL    ELEVCL    ELEVCL    ELEVCL    ELEVCL    ELEVCL    ELEVCL    ELEVCL    ELEVCL    ELEVCL    ELEVCL    ELEVCL    ELEVCL    ELEVCL    ELEVCL    ELEVCL    ELEVCL
+        structures are determined by number of each header
+        :param output_file_name:
+        :param structure_nums:
+        :param skiprows:
+        :return:
+        """
+        ofn_path = os.path.join(self.run_path, output_file_name)
+        if not os.path.exists(ofn_path):
+            print('Data File not found!', ofn_path)
+            return [], []
+        if isinstance(structure_nums, dict):
+            structure_nums = [structure_nums['structurenumber']]
+        elif isinstance(structure_nums, str):
+            structure_nums = [structure_nums]
+        structure_nums = [int(n) for n in structure_nums]
+        values = {}
+
+        with open(ofn_path, 'r') as o:
+            for i, line in enumerate(o):
+                if i == skiprows-1:
+                    headers = line.strip().lower().replace(',','').split()[1:] #skipjdate..
+        header_count = Counter(headers)
+        headers = list(set(headers))
+
+        stsf = pd.read_csv(ofn_path, header=skiprows-1, delim_whitespace=True)
+        stsf.columns = stsf.columns.str.lower()
+        stsf.columns = [n.replace(',','') for n in stsf.columns]
+        for structure_num in structure_nums:
+            if structure_num < 0:
+                structure_num = min(header_count.values()) + structure_num+1 #reverse index the fun way, use min len incase doesnt match for some reason
+            if structure_num not in values.keys():
+                values[structure_num] = {}
+            for header in headers:
+                if structure_num == 1:
+                    hname = header
+                else:
+                    hname = header+'.{0}'.format(structure_num-1)
+                vals = [float(n.replace(',','')) for n in stsf[hname].tolist()]
+                values[structure_num][header.lower()] = vals
+
+        dates = stsf['jday'].tolist()
+        dates = [float(n.replace(',', '')) for n in dates]
+
+        return dates, values
+
+    def filterByParameter(self, values, Line_info):
+        headerparam = {'flow':'q(m3/s)',
+                       'temperature':'t(c)',
+                       'waterlevel':'elevcl'}
+        if 'parameter' not in Line_info.keys():
+            print('Parameter not specified.')
+            print('Line Info:', Line_info)
+            return values, ''
+        new_values = {}
+        target_header = headerparam[Line_info['parameter']]
+        for key in values.keys():
+            new_values[key] = values[key][target_header]
+        return new_values, Line_info['parameter']
+
+    def matchProfileLengths(self, select_wt, elevations, depths):
+        '''Matches lengths for values and elevs. Sometimes values not output at certain elevs'''
+        len_val = len(select_wt)
+        len_elev = len(elevations)
+        len_depth = len(depths)
+        min_len = min((len_val, len_elev, len_depth))
+        return select_wt[:min_len], elevations[:min_len], depths[:min_len]
+
+    def readTimeSeries(self, output_file_name, column=1, skiprows=3, **args):
         '''
         get the output time series for W2 at a specified location. Like the temperature profiles, output freq is
         variable so we'll interpolate over a regular time series
@@ -374,16 +612,32 @@ class W2_Results(object):
 
         out_vals = np.full(len(self.jd_dates), np.nan)
 
+        try:
+            column = int(column)
+        except ValueError:
+            pass #keep as string
+
         ofn_path = os.path.join(self.run_path, output_file_name)
+
+        if not os.path.exists(ofn_path):
+            print('Data File not found!', ofn_path)
+            return [], []
+
         dates = []
         values = []
-        skiplines = 3 #not sure if this is always true?
         with open(ofn_path, 'r') as o:
             for i, line in enumerate(o):
-                if i >= skiplines:
+                if i >= int(skiprows):
                     sline = line.split(',')
+                    if len(sline) == 1: #not csv TODO: figure out this but better..
+                        sline = line.split()
                     dates.append(float(sline[0].strip()))
-                    values.append(float(sline[targetfieldidx].strip()))
+                    if isinstance(column, int):
+                        values.append(float(sline[column].strip()))
+                    elif isinstance(column, str):
+                        header = linecache.getline(ofn_path, int(skiprows)-1).strip().lower().split()
+                        cidx = np.where(np.asarray(header) == column.lower())[0]
+                        values.append(float(sline[cidx].strip()))
 
         if len(dates) > 1:
             val_interp = interp1d(dates, values)
@@ -406,7 +660,6 @@ class W2_Results(object):
         file_name = os.path.join(self.run_path, data['w2_path'])
         dates, vals = self.get_Timeseries(file_name)
         return dates, vals
-
 
 class ResSim_Results(object):
 
@@ -449,15 +702,21 @@ class ResSim_Results(object):
         self.tstr = self.h['Results/Subdomains/Time Date Stamp']
         tstr0 = (self.tstr[0]).decode("utf-8")
         ttmp = self.h['Results/Subdomains/Time']
-        self.t = ttmp[:]
-        self.nt = len(self.t)
+        jd_dates = ttmp[:]
         try:
             ttmp = dt.datetime.strptime(tstr0, '%Y-%m-%d, %H:%M')
         except ValueError:
             tstrtmp = tstr0.replace('24:00', '23:00')
             ttmp = dt.datetime.strptime(tstrtmp, '%Y-%m-%d, %H:%M')
             ttmp += dt.timedelta(hours=1)
+        dt_dates = []
         t_offset = ttmp.toordinal() + float(ttmp.hour) / 24. + float(ttmp.minute) / (24. * 60.)
+        for t in jd_dates:
+            dt_dates.append(ttmp + dt.timedelta(days=t))
+        self.nt = len(dt_dates)
+
+        self.dt_dates = np.asarray(dt_dates)
+        self.jd_dates = np.asarray(jd_dates)
         self.t_offset = t_offset
 
     def load_subdomains(self):
@@ -476,26 +735,18 @@ class ResSim_Results(object):
             y = np.array([dataset[i][1] for i in range(ncells)])
             self.subdomains[subdomain] = {'x': x, 'y': y}
 
-    def getWaterTemperatureProfiles(self, times, resname=None):
-        '''
-        load through values to extract values, depths and values
-        :param times: array of time values to be retrieved. does not have to be in order or in a row
-        :param resname: name of reservoir for H5 pathing
-        :return: list of arrays of values, elevations and depths
-        '''
-
+    def readProfileData(self, resname, metric, times):
         self.load_elevation(alt_subdomain_name=resname)
-        unique_times = [n[0] for n in times]
+        unique_times = [n for n in times]
 
         vals = []
         elevations = []
         depths = []
         for j, time_in in enumerate(unique_times):
-            timestep = WF.get_idx_for_time(self.t, time_in, self.t_offset)
-            print(timestep)
+            timestep = WF.get_idx_for_time(self.jd_dates, time_in, self.t_offset)
             if timestep == -1:
                 continue
-            self.load_results(time_in, 'temperature', alt_subdomain_name=resname)
+            self.load_results(time_in, metric.lower(), alt_subdomain_name=resname)
             ktop = self.get_top_layer(timestep) #get waterlevel top layer to know where to grab data from
             v_el = self.vals[:ktop + 1]
             el = self.elev[:ktop + 1]
@@ -506,7 +757,6 @@ class ResSim_Results(object):
                 d_step.append(np.max(el) - e)
                 e_step.append(e)
                 v_step.append(v_el[ei])
-
             depths.append(np.asarray(d_step))
             elevations.append(np.asarray(e_step))
             vals.append(np.asarray(v_step))
@@ -559,10 +809,9 @@ class ResSim_Results(object):
 
         this_subdomain = self.subdomain_name if alt_subdomain_name is None else alt_subdomain_name
 
-        timestep = WF.get_idx_for_time(self.t, t_in, self.t_offset) #get timestep index for current date
+        timestep = WF.get_idx_for_time(self.jd_dates, t_in, self.t_offset) #get timestep index for current date
         if timestep == -1:
             print('should never be here..')
-        print(t_in, (self.tstr[timestep]).decode("utf-8"))
         self.t_data = t_in
         if metrc.lower() == 'temperature':
             metric_name = 'Water Temperature'
@@ -588,7 +837,7 @@ class ResSim_Results(object):
             vals = WF.calc_computed_dosat(vt, vdo)
         self.vals = vals
 
-    def get_Timeseries(self, metric, xy=None):
+    def readTimeseries(self, metric, xy):
         '''
         Gets Time series values from Ressim H5 files.
         :param metric: metric of data
@@ -597,42 +846,38 @@ class ResSim_Results(object):
         :return: times and values arrays for selected metric and time window
         '''
 
-        if xy is None:
-            raise ValueError('xy must be set for ResSimModelResults')
-        else:
-            i, subdomain_name = self.find_computed_station_cell(xy)
+        i, subdomain_name = self.find_computed_station_cell(xy)
 
-            if metric.lower() == 'flow':
-                dataset_name = 'Cell flow'
-                dataset = self.h['Results/Subdomains/{0}/{1}'.format(subdomain_name, dataset_name)]
-                v = np.array(dataset[:, i])
-                v = WF.clean_computed(v)
-            elif metric.lower() == 'elevation':
-                dataset_name = 'Water Surface Elevation'
-                dataset = self.h['Results/Subdomains/{0}/{1}'.format(subdomain_name, dataset_name)]
-                v = np.array(dataset[:])
-                v = WF.clean_computed(v)
-            elif metric.lower() == 'temperature':
-                dataset_name = 'Water Temperature'
-                dataset = self.h['Results/Subdomains/{0}/{1}'.format(subdomain_name, dataset_name)]
-                print('Results/Subdomains/{0}/{1}'.format(subdomain_name, dataset_name))
-                v = np.array(dataset[:, i])
-                v = WF.clean_computed(v)
-            elif metric.lower() == 'do':
-                dataset_name = 'Dissolved Oxygen'
-                dataset = self.h['Results/Subdomains/{0}/{1}'.format(subdomain_name, dataset_name)]
-                v = np.array(dataset[:, i])
-                v = WF.clean_computed(v)
-            elif metric.lower() == 'do_sat':
-                dataset_name = 'Water Temperature'
-                dataset = self.h['Results/Subdomains/{0}/{1}'.format(subdomain_name, dataset_name)]
-                vt = np.array(dataset[:, i])
-                dataset_name = 'Dissolved Oxygen'
-                dataset = self.h['Results/Subdomains/{0}/{1}'.format(subdomain_name, dataset_name)]
-                vdo = np.array(dataset[:, i])
-                vt = WF.clean_computed(vt)
-                vdo = WF.clean_computed(vdo)
-                v = WF.calc_computed_dosat(vt, vdo)
+        if metric.lower() == 'flow':
+            dataset_name = 'Cell flow'
+            dataset = self.h['Results/Subdomains/{0}/{1}'.format(subdomain_name, dataset_name)]
+            v = np.array(dataset[:, i])
+            v = WF.clean_computed(v)
+        elif metric.lower() == 'elevation':
+            dataset_name = 'Water Surface Elevation'
+            dataset = self.h['Results/Subdomains/{0}/{1}'.format(subdomain_name, dataset_name)]
+            v = np.array(dataset[:])
+            v = WF.clean_computed(v)
+        elif metric.lower() == 'temperature':
+            dataset_name = 'Water Temperature'
+            dataset = self.h['Results/Subdomains/{0}/{1}'.format(subdomain_name, dataset_name)]
+            v = np.array(dataset[:, i])
+            v = WF.clean_computed(v)
+        elif metric.lower() == 'do':
+            dataset_name = 'Dissolved Oxygen'
+            dataset = self.h['Results/Subdomains/{0}/{1}'.format(subdomain_name, dataset_name)]
+            v = np.array(dataset[:, i])
+            v = WF.clean_computed(v)
+        elif metric.lower() == 'do_sat':
+            dataset_name = 'Water Temperature'
+            dataset = self.h['Results/Subdomains/{0}/{1}'.format(subdomain_name, dataset_name)]
+            vt = np.array(dataset[:, i])
+            dataset_name = 'Dissolved Oxygen'
+            dataset = self.h['Results/Subdomains/{0}/{1}'.format(subdomain_name, dataset_name)]
+            vdo = np.array(dataset[:, i])
+            vt = WF.clean_computed(vt)
+            vdo = WF.clean_computed(vdo)
+            v = WF.calc_computed_dosat(vt, vdo)
 
         if not hasattr(self, 't_computed'):
             self.load_computed_time()
@@ -724,3 +969,15 @@ class ResSim_Results(object):
         # if not hasattr(self, 'starttime'):
         #     self.starttime = self.t_computed[0]
         #     self.endtime = self.t_computed[-1]
+
+
+if __name__ == '__main__':
+    #TODO: for debugging, remove.
+
+    # graphicsDefaultfile = r"D:\Work2021\USBR\RessimXMLTest\Shasta_W2_BUZZ.xml"
+    # results = read_ChapterDefFile(graphicsDefaultfile)
+    # for n in results:
+    #     print(n)
+    graphicsDefaultfile = r"D:\Work2021\USBR\RessimXMLTest\Graphics_Defaults_Beta_v5.xml"
+    results = read_GraphicsDefaults(graphicsDefaultfile)
+    print(results)

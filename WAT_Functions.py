@@ -24,6 +24,7 @@ sat_data_temp = [0., 1., 2., 3., 4., 5., 6., 7., 8., 9., 10., 11., 12., 13., 14.
 f_interp = interpolate.interp1d(sat_data_temp, sat_data_do,
                                 fill_value=(sat_data_do[0], sat_data_do[-1]), bounds_error=False)
 
+
 def dt_to_ord(indate):
     '''
     converts datetime objects to ordinal values
@@ -99,7 +100,7 @@ def calc_observed_dosat(ttemp, vtemp, vdo):
             v[j] = do_saturation(vtemp[j], vdo[j])
     return ttemp, v
 
-def convert_obs_depths(obs_depths, model_elevs):
+def convert_2_depths(obs_depths, model_elevs):
     '''
     calculate observed elevations based on model elevations and obs depths
     :param obs_depths: array of depths for observed data at timestep
@@ -171,76 +172,110 @@ def nse(simulations, evaluation):
 
     return nse_
 
-def series_stats(t_comp, v_comp, t_obs, v_obs, start_limit=None, end_limit=None, time_series=False,
-                 means_only=False, v_obs_min=5):
-    '''
-    Takes in obs and modeled data and calculates statistics based on match
-    :param t_comp: times for computed
-    :param v_comp: values for computed
-    :param t_obs: times for observed data
-    :param v_obs: values for observed data
-    :param start_limit: start time to do stats. Allows for subset of data to be calc
-    :param end_limit: end time to do stats
-    :param time_series: flag to get times from time arrays
-    :param means_only: flag to only grab means
-    :param v_obs_min: min number of observed values
-    :return: stats Mean Bias, MAE, RMSE, NSE, COUNT
-    '''
-    # will this fail if t_comp is not ascending?
-    stime = t_comp[0] if start_limit is None else start_limit
-    etime = t_comp[-1] if end_limit is None else end_limit
+def matchData(data1, data2):
+    v_1 = data1['values']
+    t_1 = [n.timestamp() for n in data1['dates']]
+    v_2 = data2['values']
+    t_2 = [n.timestamp() for n in data2['dates']]
+    if len(v_1) == len(v_2):
+        return data1, data2
+    elif len(v_1) > len(v_2):
+        f_interp = interpolate.interp1d(t_2, v_2, bounds_error=False, fill_value=np.nan)
+        v2_interp = f_interp(t_1)
+        msk = np.isfinite(v2_interp)
+        v_1_msk = v_1[msk]
+        v_2_msk = v2_interp[msk]
+        data1['values'] = v_1_msk
+        data2['values'] = v_2_msk
+        data2['dates'] = data1['dates']
+        return data1, data2
+    elif len(v_2) > len(v_1):
+        f_interp = interpolate.interp1d(t_1, v_1, bounds_error=False, fill_value=np.nan)
+        v1_interp = f_interp(t_2)
+        msk = np.isfinite(v1_interp)
+        v_1_msk = v1_interp[msk]
+        v_2_msk = v_2[msk]
+        data1['values'] = v_1_msk
+        data1['dates'] = data2['dates']
+        data2['values'] = v_2_msk
+        return data1, data2
 
-    if not time_series and stime > etime:
-        tmp = etime
-        etime = stime
-        stime = tmp
-
-    msk = (t_comp >= stime) & (t_comp <= etime)
-    t_comp = t_comp[msk]
-    v_comp = v_comp[msk]
-    msk = (t_obs >= stime) & (t_obs <= etime) & np.isfinite(v_obs)
-    t_obs = t_obs[msk]
-    v_obs = v_obs[msk]
-
-    mean_diff = 0.
-    sq_error = 0.
-    count = 0
-    if len(v_obs) > v_obs_min and len(v_comp) > v_obs_min:
-
-        if time_series:
-            tstamp_comp = np.array([t_comp[j].timestamp() for j in range(len(t_comp))])
-            tstamp_obs = np.array([t_obs[j].timestamp() for j in range(len(t_obs))])
+def check_data(dataset, flag='values'):
+    if isinstance(dataset, dict):
+        if flag not in dataset.keys():
+            return False
+        elif len(dataset[flag]) == 0:
+            return False
+        elif checkAllNaNs(dataset[flag]):
+            return False
         else:
-            tstamp_comp = t_comp
-            tstamp_obs = t_obs
-        f_computed = interpolate.interp1d(tstamp_comp, v_comp, bounds_error=False, fill_value=np.nan)
-
-        comp_matched_to_obs = f_computed(tstamp_obs)
-        obs_comp_match_mask = np.isfinite(comp_matched_to_obs)
-
-        v_obs_stats = v_obs[obs_comp_match_mask]
-        v_comp_stats = comp_matched_to_obs[obs_comp_match_mask]
-
-        if means_only:
-            return {'Obs. Mean': np.mean(v_obs_stats),
-                    'Comp. Mean': np.mean(v_comp_stats)}
+            return True
+    elif isinstance(dataset, list) or isinstance(dataset, np.ndarray):
+        if len(dataset) == 0:
+            return False
+        elif checkAllNaNs(dataset):
+            return False
         else:
-
-            diff = v_comp_stats - v_obs_stats
-            count = len(v_comp_stats)
-            mean_diff = np.sum(diff) / count
-            rmse = np.sqrt(np.sum(diff ** 2) / count)
-
-            nash = nse(v_comp_stats, v_obs_stats)
-            try:
-                mae = mean_absolute_error(v_obs_stats, v_comp_stats)
-            except:
-                print('Failed to calculate MAE!')
-                mae = np.nan
-            return {'Mean Bias': mean_diff, 'MAE': mae, 'RMSE': rmse, 'NSE': nash, 'COUNT': count}
-            # return mean_diff,mae,rmse,nash,len(v_obs)
+            return True
     else:
-        return None
+        return True
+
+def checkAllNaNs(values):
+    if np.all(np.isnan(values)):
+        return True
+    else:
+        return False
+
+def MAE(data1, data2):
+    data1, data2 = matchData(data1, data2)
+    dcheck1 = check_data(data1, flag='values')
+    dcheck2 = check_data(data2, flag='values')
+    if not dcheck1 or not dcheck2:
+        return np.nan
+    return mean_absolute_error(data2['values'], data1['values'])
+
+def meanbias(data1, data2):
+    data1, data2 = matchData(data1, data2)
+    dcheck1 = check_data(data1, flag='values')
+    dcheck2 = check_data(data2, flag='values')
+    if not dcheck1 or not dcheck2:
+        return np.nan
+    diff = data1['values'] - data2['values']
+    count = len(data1['values'])
+    mean_diff = np.sum(diff) / count
+    return mean_diff
+
+def RMSE(data1, data2):
+    data1, data2 = matchData(data1, data2)
+    dcheck1 = check_data(data1, flag='values')
+    dcheck2 = check_data(data2, flag='values')
+    if not dcheck1 or not dcheck2:
+        return np.nan
+    diff = data1['values'] - data2['values']
+    count = len(data1['values'])
+    rmse = np.sqrt(np.sum(diff ** 2) / count)
+    return rmse
+
+def NSE(data1, data2):
+    data1, data2 = matchData(data1, data2)
+    dcheck1 = check_data(data1, flag='values')
+    dcheck2 = check_data(data2, flag='values')
+    if not dcheck1 or not dcheck2:
+        return np.nan
+    nash = nse(data1['values'], data2['values'])
+    return nash
+
+def COUNT(data1):
+    dcheck1 = check_data(data1, flag='values')
+    if not dcheck1:
+        return np.nan
+    return len(data1['values'])
+
+def MEAN(data1):
+    dcheck1 = check_data(data1, flag='values')
+    if not dcheck1:
+        return np.nan
+    return(np.nanmean(data1['values']))
 
 def clean_output_dir(dir_name, filetype):
     '''
@@ -259,3 +294,34 @@ def clean_output_dir(dir_name, filetype):
         except:
             print('Failed to delete', path_to_file)
             print('Continuing..')
+
+
+def convert_obs_depths(obs_depths, model_elevs):
+    '''
+    calculate observed elevations based on model elevations and obs depths
+    :param obs_depths: array of depths for observed data at timestep
+    :param model_elevs: array of model elevations at timestep
+    :return: array of observed elevations
+    '''
+
+    obs_elev = []
+    for i, d in enumerate(obs_depths):
+        e = []
+        topwater_elev = max(model_elevs[i])
+        for depth in d:
+            e.append(topwater_elev - depth)
+        obs_elev.append(np.asarray(e))
+    return obs_elev
+
+def convertTempUnits(values, units):
+    if units.lower() in ['f', 'faren', 'degf', 'fahrenheit', 'fahren', 'deg f']:
+        print('Converting F to C...')
+        values = convert_temperature(values, 'F', 'C')
+        return values
+    elif units.lower() in ['c', 'cel', 'celsius', 'def c', 'degc']:
+        print('Converting C to F...')
+        values = convert_temperature(values, 'C', 'F')
+        return values
+    else:
+        print('Undefined temp units:', units)
+        return values

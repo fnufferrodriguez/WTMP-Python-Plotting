@@ -11,40 +11,146 @@ class XMLReport(object):
 
     def __init__(self, XML_fn):
         self.XML_fn = XML_fn
-        self.ReadXML()
+        # self.ReadXML()
+        self.MakeXML()
         self.PrimeCounters()
 
 #########################################################################################
                             #Main functions#
 #########################################################################################
 
-    def ReadXML(self):
-        '''
-        Probably dont need if we dont open every time...
-        read XML file and assign XML lines to object
-        :return: class object list of lines
-        '''
-        XML_read = open(self.XML_fn, 'r')
-        self.XMLFile = XML_read.readlines()
-        XML_read.close()
+    # def ReadXML(self):
+    #     '''
+    #     Probably dont need if we dont open every time...
+    #     read XML file and assign XML lines to object
+    #     :return: class object list of lines
+    #     '''
+    #     XML_read = open(self.XML_fn, 'r')
+    #     self.XMLFile = XML_read.readlines()
+    #     XML_read.close()
+
+    def MakeXML(self):
+        with open(self.XML_fn, 'w') as XML:
+            XML.write('<?xml version="1.0" encoding="UTF-8"?>\n')
+            XML.write('<USBR_Automated_Report>\n')
+
 
     def PrimeCounters(self):
         self.current_fig_num = 1
         self.current_table_num = 1
-        self.current_reportelem_num = 1
+        self.current_reportelem_num = 0
         self.current_model_num = 0
-        self.current_reportgroup_num = 1
+        self.current_reportgroup_num = 0
 
-    def writeCover(self, report_date):
+    def writeCover(self, title):
         '''
-        writes the cover for the report. Replaces the date string with current date
+        writes the cover for the report.
         '''
-        cover_keys = {"$$REPORT_DATE$$": report_date}
-        with open(self.XML_fn, 'w') as xmlf:
-            for line in self.XMLFile:
-                for key in cover_keys.keys():
-                    line = line.replace(key, cover_keys[key])
-                xmlf.write(line)
+        with open(self.XML_fn, 'a') as XML:
+            XML.write('<Cover_Page><Title>{0}</Title></Cover_Page>\n'.format(title))
+
+    def writeIntroStart(self):
+        with open(self.XML_fn, 'a') as XML:
+            XML.write('<Report_Group ReportGroupOrder="{0}" ReportGroupName="Introduction">\n'.format(self.current_reportgroup_num))
+            XML.write('<Report_Subgroup ReportSubgroupOrder="0">\n')
+            XML.write('<Report_Element ReportElementOrder="{0}" Element="Introduction">\n'.format(self.current_reportelem_num))
+
+        self.current_reportgroup_num += 1
+        self.current_reportelem_num += 1
+
+    def writeIntroLine(self, Plugin):
+        with open(self.XML_fn, 'a') as XML:
+            XML.write('<Model ModelOrder="0" >{1}</Model>\n'.format(self.current_model_num, Plugin))
+        self.current_model_num += 1
+
+    def writeIntroEnd(self):
+        with open(self.XML_fn, 'a') as XML:
+            XML.write('</Report_Element>\n')
+            XML.write('</Report_Subgroup>\n')
+            XML.write('</Report_Group>\n')
+
+    def writeChapterStart(self, ChapterName):
+        self.current_reportsubgroup_num = 0
+        with open(self.XML_fn, 'a') as XML:
+            XML.write('<Report_Group ReportGroupOrder="{0}" ReportGroupName="{1}">\n'.format(self.current_reportgroup_num, ChapterName))
+        self.current_reportgroup_num += 1
+
+    def writeChapterEnd(self):
+        with open(self.XML_fn, 'a') as XML:
+            XML.write('</Report_Group>\n')
+
+    def writeReportEnd(self):
+        with open(self.XML_fn, 'a') as XML:
+            XML.write('</USBR_Automated_Report>\n')
+
+    def writeSectionHeader(self, section_header):
+        with open(self.XML_fn, 'a') as XML:
+            XML.write('<Report_Subgroup ReportSubgroupOrder="{0}" ReportSubgroupDescription="{1}">\n'.format(self.current_reportsubgroup_num, section_header))
+        self.current_reportsubgroup_num += 1
+
+    def writeSectionHeaderEnd(self):
+        with open(self.XML_fn, 'a') as XML:
+            XML.write('</Report_Subgroup>\n')
+
+    def writeTimeSeriesPlot(self, figname, figdesc):
+        with open(self.XML_fn, 'a') as XML:
+            XML.write('<Report_Element ReportElementOrder="{0}" Element="Control_Point_Plots">\n'.format(self.current_reportelem_num))
+            XML.write('<Output_Temp_Flow Location="{0}">\n'.format(figdesc))
+            XML.write('<Output_Image FigureNumber="{0}" FigureDescription="{1}">{2}</Output_Image>\n'.format(self.current_fig_num ,figdesc, figname))
+            XML.write('</Output_Temp_Flow>\n')
+            XML.write('</Report_Element>\n')
+
+        self.current_reportelem_num += 1
+        self.current_fig_num += 1
+
+    def writeProfilePlotStart(self, reservoir):
+        with open(self.XML_fn, 'a') as XML:
+            XML.write('<Report_Element ReportElementOrder="{0}" Element="Reservoir_Profile">\n'.format(self.current_reportelem_num))
+            XML.write('<Reservoir_Profiles Reservoir="{0}">\n'.format(reservoir))
+
+        self.current_reportelem_num += 1
+
+    def writeProfilePlotFigure(self, figname, figdesc):
+        with open(self.XML_fn, 'a') as XML:
+            XML.write('<Profile_Image FigureNumber="{0}" FigureDescription="{1}">{2}</Profile_Image>\n'.format(self.current_fig_num, figdesc, figname))
+        self.current_fig_num += 1
+
+    def writeProfilePlotEnd(self):
+        with open(self.XML_fn, 'a') as XML:
+            XML.write('</Reservoir_Profiles>\n')
+            XML.write('</Report_Element>\n')
+
+
+    def writeTableStart(self,desc,type):
+        with open(self.XML_fn, 'a') as XML:
+            XML.write('<Report_Element ReportElementOrder="{0}" Element="Control_Point_Tables">\n'.format(self.current_reportelem_num))
+            XML.write('<Output_Temp_Flow Location="{0}">\n'.format(desc))
+            XML.write('<Output_Table TableNumber="{0}" TableDescription="{1}" TableType="{2}">\n'.format(self.current_table_num, desc, type))
+
+        self.current_reportelem_num += 1
+        self.current_table_num += 1
+        self.column_order = 0
+
+    def writeTableColumn(self, header, rows):
+        with open(self.XML_fn, 'a') as XML:
+            XML.write('<Column Column_Order="{0}" Column_Name="{1}">\n'.format(self.column_order, header))
+            for i, row in enumerate(rows):
+                s_row = row.split('|')
+                rowname = s_row[0]
+                rowval = s_row[1]
+                XML.write('<Row Row_Order="{0}" Row_name="{1}">{2}</Row>\n'.format(i, rowname, rowval))
+            XML.write('</Column>\n')
+        self.column_order += 1
+
+    def writeTableEnd(self):
+        with open(self.XML_fn, 'a') as XML:
+            XML.write('</Output_Table>\n')
+            XML.write('</Output_Temp_Flow>\n')
+            XML.write('</Report_Element>\n')
+
+
+
+
 
     def write_Reservoir(self, model_name, GroupHeader_Text, Res_Text, TS_Text):
         '''
