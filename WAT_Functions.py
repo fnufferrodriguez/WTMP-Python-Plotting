@@ -177,6 +177,8 @@ def matchData(data1, data2):
     t_1 = [n.timestamp() for n in data1['dates']]
     v_2 = data2['values']
     t_2 = [n.timestamp() for n in data2['dates']]
+    if len(v_1) == 0 or len(v_2) == 0:
+        return data1, data2
     if len(v_1) == len(v_2):
         return data1, data2
     elif len(v_1) > len(v_2):
@@ -194,7 +196,7 @@ def matchData(data1, data2):
         v1_interp = f_interp(t_2)
         msk = np.isfinite(v1_interp)
         v_1_msk = v1_interp[msk]
-        v_2_msk = v_2[msk]
+        v_2_msk = np.asarray(v_2)[msk]
         data1['values'] = v_1_msk
         data1['dates'] = data2['dates']
         data2['values'] = v_2_msk
@@ -226,8 +228,35 @@ def checkAllNaNs(values):
     else:
         return False
 
+def removeNaNs(data1, data2, flag='values'):
+
+    if isinstance(data1, dict):
+        d1_msk = np.where(~np.isnan(data1[flag]))
+    elif isinstance(data1, list) or isinstance(data1, np.ndarray):
+        d1_msk = np.where(~np.isnan(data1))
+
+    if isinstance(data2, dict):
+        d2_msk = np.where(~np.isnan(data2[flag]))
+    elif isinstance(data2, list) or isinstance(data2, np.ndarray):
+        d2_msk = np.where(~np.isnan(data2))
+
+    msk = np.intersect1d(d1_msk, d2_msk)
+
+    if isinstance(data1, dict):
+        data1[flag] = np.asarray(data1[flag])[msk]
+    elif isinstance(data1, list) or isinstance(data1, np.ndarray):
+        data1 = np.asarray(data1)[msk]
+
+    if isinstance(data2, dict):
+        data2[flag] = np.asarray(data2[flag])[msk]
+    elif isinstance(data2, list) or isinstance(data2, np.ndarray):
+        data2 = np.asarray(data2)[msk]
+
+    return data1, data2
+
 def MAE(data1, data2):
     data1, data2 = matchData(data1, data2)
+    data1, data2 = removeNaNs(data1, data2, flag='values')
     dcheck1 = check_data(data1, flag='values')
     dcheck2 = check_data(data2, flag='values')
     if not dcheck1 or not dcheck2:
@@ -236,6 +265,7 @@ def MAE(data1, data2):
 
 def meanbias(data1, data2):
     data1, data2 = matchData(data1, data2)
+    data1, data2 = removeNaNs(data1, data2, flag='values')
     dcheck1 = check_data(data1, flag='values')
     dcheck2 = check_data(data2, flag='values')
     if not dcheck1 or not dcheck2:
@@ -247,6 +277,7 @@ def meanbias(data1, data2):
 
 def RMSE(data1, data2):
     data1, data2 = matchData(data1, data2)
+    data1, data2 = removeNaNs(data1, data2, flag='values')
     dcheck1 = check_data(data1, flag='values')
     dcheck2 = check_data(data2, flag='values')
     if not dcheck1 or not dcheck2:
@@ -258,6 +289,7 @@ def RMSE(data1, data2):
 
 def NSE(data1, data2):
     data1, data2 = matchData(data1, data2)
+    data1, data2 = removeNaNs(data1, data2, flag='values')
     dcheck1 = check_data(data1, flag='values')
     dcheck2 = check_data(data2, flag='values')
     if not dcheck1 or not dcheck2:

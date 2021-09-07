@@ -277,11 +277,11 @@ class MakeAutomatedReport(object):
         self.defFile = simlist['deffile']
 
     def ReadGraphicsDefaultFile(self):
-        graphicsDefaultfile = os.path.join(self.studyDir, 'reports', 'Graphics_Defaults_Beta_v6.xml') #TODO: finalize the path here, should it live in study?
+        graphicsDefaultfile = os.path.join(self.studyDir, 'reports', 'Graphics_Defaults.xml') #TODO: finalize the path here, should it live in study?
         self.graphicsDefault = WDR.read_GraphicsDefaults(graphicsDefaultfile)
 
     def ReadLinesstylesDefaultFile(self):
-        defaultLinesFile = os.path.join(self.studyDir, 'reports', 'defaultLineStyles_Beta.xml')
+        defaultLinesFile = os.path.join(self.studyDir, 'reports', 'defaultLineStyles.xml')
         self.defaultLineStyles = WDR.read_DefaultLineStyle(defaultLinesFile)
 
     def ReadDefinitionsFile(self, order):
@@ -1821,7 +1821,8 @@ class MakeAutomatedReport(object):
 
         if 'filename' in Line_info.keys(): #Get data from Observed
             # times, values, depths = WDR.readTextProfile(os.path.join(self.observedDir, Line_info['FileName']), self.StartTime, self.EndTime)
-            filename = os.path.join(self.observedDir, Line_info['filename'])
+            # filename = os.path.join(self.observedDir, Line_info['filename'])
+            filename = Line_info['filename']
             values, depths = WDR.readTextProfile(filename, timesteps)
             return values, [], depths, Line_info['flag']
 
@@ -1840,7 +1841,7 @@ class MakeAutomatedReport(object):
 
     def getProfileDates(self, Line_info):
         if 'filename' in Line_info.keys(): #Get data from Observed
-            times = WDR.getTextProfileDates(os.path.join(self.observedDir, Line_info['filename']), self.StartTime, self.EndTime) #TODO: set up for not observed data??
+            times = WDR.getTextProfileDates(Line_info['filename'], self.StartTime, self.EndTime) #TODO: set up for not observed data??
             return times
 
         print('Illegal Dates selection. ')
