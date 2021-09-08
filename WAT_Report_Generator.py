@@ -1172,6 +1172,32 @@ class MakeAutomatedReport(object):
                     print('Invalid Scalar. {0}'.format(line['scalar']))
                     continue
 
+            if 'filterbylimits' not in line_settings.keys():
+                line_settings['filterbylimits'] = 'true' #set default
+
+            if line_settings['filterbylimits'].lower() == 'true':
+                if _usetwinx:
+                    if 'xaxis' in line.keys():
+                        if line['xaxis'].lower() == 'left':
+                            xaxis = 'left'
+                        else:
+                            xaxis = 'right'
+                    else:
+                        xaxis = 'left'
+                else:
+                    xaxis = 'left'
+
+                if xaxis == 'left':
+                    if 'xlims' in object_settings.keys():
+                        dates, values = self.limitXdata(dates, values, object_settings['xlims'])
+                    if 'ylims' in object_settings.keys():
+                        dates, values = self.limitYdata(dates, values, object_settings['ylims'])
+                else:
+                    if 'xlims2' in object_settings.keys():
+                        dates, values = self.limitXdata(dates, values, object_settings['xlims'])
+                    if 'ylims' in object_settings.keys():
+                        dates, values = self.limitYdata(dates, values, object_settings['ylims2'])
+
             if 'linetype' in line.keys():
                 if line['linetype'].lower() == 'stacked': #stacked plots need to be added at the end..
                     if _usetwinx:
@@ -1890,14 +1916,20 @@ class MakeAutomatedReport(object):
         return timesteps
 
     def limitXdata(self, dates, values, xlims):
+        if isinstance(dates[0], int) or isinstance(dates[0], float):
+            print('WERE DOING JDATES')
+            wantedformat = 'jdate'
+        elif isinstance(dates[0], dt.datetime):
+            print('DT IT IS')
+            wantedformat = 'datetime'
         if 'min' in xlims.keys():
             #ensure we have dt, dss dates should be... #TODO: make sure values are DT
-            min = self.translateDateFormat(xlims['min'], 'datetime', self.StartTime)
+            min = self.translateDateFormat(xlims['min'], wantedformat, self.StartTime)
             for i, d in enumerate(dates):
                 if min > d:
                     values[i] = np.nan #exclude
         if 'max' in xlims.keys():
-            max = self.translateDateFormat(xlims['max'], 'datetime', self.EndTime)
+            max = self.translateDateFormat(xlims['max'], wantedformat, self.EndTime)
             for i, d in enumerate(dates):
                 if max < d:
                     values[i] = np.nan #exclude
