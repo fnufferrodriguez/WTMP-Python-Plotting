@@ -15,6 +15,7 @@ import xml.etree.ElementTree as ET
 import copy
 import calendar
 import dateutil.parser
+import re
 from collections import Counter
 from dateutil.relativedelta import relativedelta
 
@@ -545,9 +546,9 @@ class MakeAutomatedReport(object):
                           '$$startyear$$': str(self.StartTime.year),
                           '$$endyear$$': str(self.EndTime.year)
                           }
-
         for fv in flagged_values.keys():
-            value = value.replace(fv, flagged_values[fv])
+            pattern = re.compile(re.escape(fv), re.IGNORECASE)
+            value = pattern.sub(repr(flagged_values[fv])[1:-1], value) #this seems weird with [1:-1] but paths wont work otherwise
         return value
 
 
@@ -1631,7 +1632,9 @@ class MakeAutomatedReport(object):
             return settings
 
         elif isinstance(settings, str):
-            settings = settings.replace(flaggedvalue, replacevalue)
+            pattern = re.compile(re.escape(flaggedvalue), re.IGNORECASE)
+            settings = pattern.sub(repr(replacevalue)[1:-1], settings) #this seems weird with [1:-1] but paths wont work otherwise
+
             return settings
 
         else:
