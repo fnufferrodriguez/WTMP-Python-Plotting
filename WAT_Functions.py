@@ -301,7 +301,8 @@ def COUNT(data1):
     dcheck1 = check_data(data1, flag='values')
     if not dcheck1:
         return np.nan
-    return len(data1['values'])
+    # return len(data1['values'])
+    return len(np.where(~np.isnan(data1['values']))[0])
 
 def MEAN(data1):
     dcheck1 = check_data(data1, flag='values')

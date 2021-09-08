@@ -543,8 +543,8 @@ class MakeAutomatedReport(object):
                           '$$endtime$$': self.EndTimeStr,
                           '$$LastComputed$$': self.LastComputed,
                           '$$observedDir$$': self.observedDir,
-                          '$$startyear$$': str(self.StartTime.year),
-                          '$$endyear$$': str(self.EndTime.year)
+                          '$$startyear$$': str(self.startYear),
+                          '$$endyear$$': str(self.endYear)
                           }
         for fv in flagged_values.keys():
             pattern = re.compile(re.escape(fv), re.IGNORECASE)
@@ -592,6 +592,16 @@ class MakeAutomatedReport(object):
 
             if 'label' not in line_settings.keys():
                 line_settings['label'] = ''
+
+            if 'filterbylimits' not in line_settings.keys():
+                line_settings['filterbylimits'] = 'true' #set default
+
+            if line_settings['filterbylimits'].lower() == 'true':
+                if 'xlims' in object_settings.keys():
+                    dates, values = self.limitXdata(dates, values, object_settings['xlims'])
+                if 'ylims' in object_settings.keys():
+                    dates, values = self.limitYdata(dates, values, object_settings['ylims'])
+
 
             if line_settings['drawline'].lower() == 'true' and line_settings['drawpoints'].lower() == 'true':
                 ax.plot(dates, values, label=line_settings['label'], c=line_settings['linecolor'],
@@ -955,11 +965,21 @@ class MakeAutomatedReport(object):
         data = {}
         for dp in datapaths:
             dates, values, units = self.getTimeSeries(dp)
+
             if units == None:
                 if 'parameter' in dp.keys():
                     if dp['parameter'].lower() in self.units.keys():
                         units = self.units[dp['parameter'].lower()]
                         object_settings = self.updateFlaggedValues(object_settings, '$$units$$', units)
+
+            if 'filterbylimits' not in dp.keys():
+                dp['filterbylimits'] = 'true' #set default
+
+            if dp['filterbylimits'].lower() == 'true':
+                if 'xlims' in object_settings.keys():
+                    dates, values = self.limitXdata(dates, values, object_settings['xlims'])
+                if 'ylims' in object_settings.keys():
+                    dates, values = self.limitYdata(dates, values, object_settings['ylims'])
 
             data[dp['flag']] = {'dates':dates,
                                 'values': values,
@@ -1023,6 +1043,15 @@ class MakeAutomatedReport(object):
                 if 'parameter' in dp.keys():
                     if dp['parameter'].lower() in self.units.keys():
                         units = self.units[dp['parameter'].lower()]
+
+            if 'filterbylimits' not in dp.keys():
+                dp['filterbylimits'] = 'true' #set default
+
+            if dp['filterbylimits'].lower() == 'true':
+                if 'xlims' in object_settings.keys():
+                    dates, values = self.limitXdata(dates, values, object_settings['xlims'])
+                if 'ylims' in object_settings.keys():
+                    dates, values = self.limitYdata(dates, values, object_settings['ylims'])
 
             data[dp['flag']] = {'dates':dates,
                                 'values': values,
@@ -1362,6 +1391,7 @@ class MakeAutomatedReport(object):
             max = self.translateDateFormat(max, dateformat, self.EndTime)
 
             curax.set_xlim(left=min, right=max)
+            print('set Xlims at', min, max)
 
         else:
             print('No Xlims flag set for {0}'.format(xlims_flag))
@@ -1858,6 +1888,34 @@ class MakeAutomatedReport(object):
             timesteps.append(cur_date)
             cur_date += dt.timedelta(days=days)
         return timesteps
+
+    def limitXdata(self, dates, values, xlims):
+        if 'min' in xlims.keys():
+            #ensure we have dt, dss dates should be... #TODO: make sure values are DT
+            min = self.translateDateFormat(xlims['min'], 'datetime', self.StartTime)
+            for i, d in enumerate(dates):
+                if min > d:
+                    values[i] = np.nan #exclude
+        if 'max' in xlims.keys():
+            max = self.translateDateFormat(xlims['max'], 'datetime', self.EndTime)
+            for i, d in enumerate(dates):
+                if max < d:
+                    values[i] = np.nan #exclude
+
+        return dates, values
+
+    def limitYdata(self, dates, values, ylims):
+        if 'min' in ylims.keys():
+            for i, v in enumerate(values):
+                if float(ylims['min']) > v:
+                    values[i] = np.nan #exclude
+        if 'max' in ylims.keys():
+            for i, v in enumerate(values):
+                if float(ylims['max']) < v:
+                    values[i] = np.nan #exclude
+
+        return dates, values
+
 
 if __name__ == '__main__':
     simInfoFile = sys.argv[1]
