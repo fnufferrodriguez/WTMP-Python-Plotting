@@ -132,7 +132,8 @@ class MakeAutomatedReport(object):
         :return: sets class variables
                     self.XML
         '''
-        new_xml = 'USBRAutomatedReportOutput.xml' #required name for file
+        # new_xml = 'USBRAutomatedReportOutput.xml' #required name for file
+        new_xml = os.path.join(self.studyDir, 'reports', 'Datasources', 'USBRAutomatedReportOutput.xml') #required name for file
         self.XML = XML_Utils.XMLReport(new_xml)
         self.XML.writeCover('DRAFT Temperature Validation Summary Report')
 
@@ -240,13 +241,10 @@ class MakeAutomatedReport(object):
         defines run specific paths
         :return: set class variables
                     self.images_path
-                    self.ProfileStations_meta_file
-                    self.TimeSeries_Stations_meta_file
         '''
 
         self.images_path = os.path.join(self.studyDir, 'reports', 'Images')
-        self.ProfileStations_meta_file = os.path.join(self.studyDir, 'reports', "Profile_stations.txt")
-        self.TimeSeries_Stations_meta_file = os.path.join(self.studyDir, 'reports', "TS_stations.txt")
+
 
     def setSimulationDateTimes(self):
         if '24:00' in self.StartTimeStr:
@@ -1232,10 +1230,12 @@ class MakeAutomatedReport(object):
                             marker=line_settings['symboltype'], markerfacecolor=line_settings['pointfillcolor'],
                             markeredgecolor=line_settings['pointlinecolor'], markersize=float(line_settings['symbolsize']),
                             markevery=int(line_settings['numptsskip']), zorder=int(line_settings['zorder']))
+
                 elif line_settings['drawline'].lower() == 'true':
                     curax.plot(dates, values, label=line_settings['label'], c=line_settings['linecolor'],
                             lw=line_settings['linewidth'], ls=line_settings['linestylepattern'],
                             zorder=int(line_settings['zorder']))
+
                 elif line_settings['drawpoints'].lower() == 'true':
                     curax.scatter(dates[::int(line_settings['numptsskip'])], values[::int(line_settings['numptsskip'])],
                                marker=line_settings['symboltype'], facecolor=line_settings['pointfillcolor'],
