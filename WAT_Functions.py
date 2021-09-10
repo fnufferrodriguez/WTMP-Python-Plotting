@@ -135,19 +135,21 @@ def get_idx_for_time(time_Array, t_in, offset):
         return -1
     return timestep
 
-def get_subplot_config(n_profiles):
+def get_subplot_config(n_profiles, plots_per_row):
     '''
     get subplot configs to figure out numb plots per page and num pages.
     :param n_profiles: number of total plots
+    :param plots_per_row: number of plots per row
     :return: subplot rows, subplot columns
     '''
-    plot_per_page = 3.
+
+    # plot_per_page = 3.
     # plot_per_page = 4.
-    factor = n_profiles / plot_per_page
+    factor = n_profiles / plots_per_row
     if factor < 1:
         return 1, n_profiles
     else:
-        return math.ceil(factor), plot_per_page
+        return math.ceil(factor), plots_per_row
 
 def nse(simulations, evaluation):
     """Nash-Sutcliffe Efficiency (NSE) as per `Nash and Sutcliffe, 1970
@@ -165,6 +167,7 @@ def nse(simulations, evaluation):
         source: https://pypi.org/project/hydroeval
 
     """
+
     nse_ = 1 - (
             np.sum((evaluation - simulations) ** 2, axis=0, dtype=np.float64)
             / np.sum((evaluation - np.mean(evaluation)) ** 2, dtype=np.float64)
@@ -173,6 +176,14 @@ def nse(simulations, evaluation):
     return nse_
 
 def matchData(data1, data2):
+    '''
+    matches two sets of data to have the same length
+    if one is shorter than the other, the short one is interpolated
+    :param data1: dictionary containing dates and values flags
+    :param data2: dictionary containing dates and values flags
+    :return: Two dictionaries containing dates and values flags (data1 and data2)
+    '''
+
     v_1 = data1['values']
     t_1 = [n.timestamp() for n in data1['dates']]
     v_2 = data2['values']
@@ -203,6 +214,14 @@ def matchData(data1, data2):
         return data1, data2
 
 def check_data(dataset, flag='values'):
+    '''
+    checks datasets to ensure that they are valid for representation. Checks for a given flag, any length and
+    that its not all NaNs
+    :param dataset: input dataset list, array or dict
+    :param flag: flag to get data from dataset if dict
+    :return: boolean value on data viability
+    '''
+
     if isinstance(dataset, dict):
         if flag not in dataset.keys():
             return False
@@ -220,15 +239,29 @@ def check_data(dataset, flag='values'):
         else:
             return True
     else:
-        return True
+        return False
 
 def checkAllNaNs(values):
+    '''
+    checks value sets for all nan values. Some NaN is okay, all is not.
+    :param values: list or array of values
+    :return:
+    '''
+
     if np.all(np.isnan(values)):
         return True
     else:
         return False
 
 def removeNaNs(data1, data2, flag='values'):
+    '''
+    removes data points from both datasets where either ones are nans. This way, the nans dont throw off any stat
+    analysis
+    :param data1: input dataset list, array or dict
+    :param data2: input dataset list, array or dict
+    :param flag: flag to get data from dataset if dict
+    :return:
+    '''
 
     if isinstance(data1, dict):
         d1_msk = np.where(~np.isnan(data1[flag]))
@@ -255,6 +288,13 @@ def removeNaNs(data1, data2, flag='values'):
     return data1, data2
 
 def MAE(data1, data2):
+    '''
+    calculates the mean absolute error for two datasets
+    :param data1: dataset, list array or dict
+    :param data2: dataset, list array or dict
+    :return: MAE value
+    '''
+
     data1, data2 = matchData(data1, data2)
     data1, data2 = removeNaNs(data1, data2, flag='values')
     dcheck1 = check_data(data1, flag='values')
@@ -264,6 +304,13 @@ def MAE(data1, data2):
     return mean_absolute_error(data2['values'], data1['values'])
 
 def meanbias(data1, data2):
+    '''
+    calculates the mean bias for two datasets
+    :param data1: dataset, list array or dict
+    :param data2: dataset, list array or dict
+    :return: Meanbias value
+    '''
+
     data1, data2 = matchData(data1, data2)
     data1, data2 = removeNaNs(data1, data2, flag='values')
     dcheck1 = check_data(data1, flag='values')
@@ -276,6 +323,13 @@ def meanbias(data1, data2):
     return mean_diff
 
 def RMSE(data1, data2):
+    '''
+    calculates the root mean square error for two datasets
+    :param data1: dataset, list array or dict
+    :param data2: dataset, list array or dict
+    :return: RMSE value
+    '''
+
     data1, data2 = matchData(data1, data2)
     data1, data2 = removeNaNs(data1, data2, flag='values')
     dcheck1 = check_data(data1, flag='values')
@@ -288,6 +342,13 @@ def RMSE(data1, data2):
     return rmse
 
 def NSE(data1, data2):
+    '''
+    calculates the NSE for two datasets
+    :param data1: dataset, list array or dict
+    :param data2: dataset, list array or dict
+    :return: NSE value
+    '''
+
     data1, data2 = matchData(data1, data2)
     data1, data2 = removeNaNs(data1, data2, flag='values')
     dcheck1 = check_data(data1, flag='values')
@@ -298,6 +359,12 @@ def NSE(data1, data2):
     return nash
 
 def COUNT(data1):
+    '''
+    calculates the length of datasets
+    :param data1: dataset, list array or dict
+    :return: count value
+    '''
+
     dcheck1 = check_data(data1, flag='values')
     if not dcheck1:
         return np.nan
@@ -305,6 +372,12 @@ def COUNT(data1):
     return len(np.where(~np.isnan(data1['values']))[0])
 
 def MEAN(data1):
+    '''
+    calculates the mean of datasets
+    :param data1: dataset, list array or dict
+    :return: mean value
+    '''
+
     dcheck1 = check_data(data1, flag='values')
     if not dcheck1:
         return np.nan
@@ -347,6 +420,13 @@ def convert_obs_depths(obs_depths, model_elevs):
     return obs_elev
 
 def convertTempUnits(values, units):
+    '''
+    convert temperature units between c and f
+    :param values: temp values
+    :param units: units string
+    :return: converted units
+    '''
+
     if units.lower() in ['f', 'faren', 'degf', 'fahrenheit', 'fahren', 'deg f']:
         print('Converting F to C...')
         values = convert_temperature(values, 'F', 'C')

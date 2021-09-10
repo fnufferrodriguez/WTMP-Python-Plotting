@@ -55,27 +55,22 @@ class MakeAutomatedReport(object):
                 self.writeXMLIntroduction()
                 for simorder in self.SimulationCSV.keys():
                     self.SetSimulationCSVVars(self.SimulationCSV[simorder])
-                    self.ReadDefinitionsFile(simorder)
+                    self.ReadDefinitionsFile(self.SimulationCSV[simorder])
                     self.LoadModelAlt(self.SimulationCSV[simorder])
                     self.WriteChapter()
                 self.XML.writeReportEnd()
 
     def ReadSimulationInfo(self, simulationInfoFile):
         '''
-        reads in the simulation information XML file from WAT and organizes data into two dictionaries
-        One for model alternatives, using the simulation name as the main key
-        Another for overall simulation information, using a simlation name as the main key
-        Other universal vars for the entire WAT project and intended report type
+        reads sim info XML file and organizes paths and variables into a list for iteration
         :param simulationInfoFile: full path to simulation information XML file from WAT
         :return: class variables:
-                    self.modelAlternatives
-                    self.simulationInfo
+                    self.Simulations
                     self.reportType
                     self.studyDir
                     self.observedData
         '''
 
-        # self.modelAlternatives = {}
         self.Simulations = []
         tree = ET.parse(simulationInfoFile)
         root = tree.getroot()
@@ -117,6 +112,15 @@ class MakeAutomatedReport(object):
         WF.clean_output_dir(self.images_path, '.png')
 
     def LoadModelAlt(self, simCSVAlt):
+        '''
+        Loads info for specified model alts. Loads correct model plugin class from WDR
+        :param simCSVAlt: simulation alt dict object from self.simulation class
+        :return: class variables
+                self.alternativeFpart
+                self.alternativeDirectory
+                self.ModelAlt - WDR class that is plugin specific
+        '''
+
         for modelalt in self.ModelAlternatives:
             if modelalt['name'] == simCSVAlt['modelaltname'] and modelalt['program'] == simCSVAlt['plugin']:
                 self.alternativeFpart = modelalt['fpart']
@@ -128,63 +132,53 @@ class MakeAutomatedReport(object):
 
     def initializeXML(self):
         '''
-        copys a new version of the template XML file, initiates the XML class and writes the cover page
+        creates a new version of the template XML file, initiates the XML class and writes the cover page
         :return: sets class variables
                     self.XML
         '''
+
         # new_xml = 'USBRAutomatedReportOutput.xml' #required name for file
         new_xml = os.path.join(self.studyDir, 'reports', 'Datasources', 'USBRAutomatedReportOutput.xml') #required name for file
         self.XML = XML_Utils.XMLReport(new_xml)
         self.XML.writeCover('DRAFT Temperature Validation Summary Report')
 
     def writeXMLIntroduction(self):
+        '''
+        writes the intro section for XML file. Creates a line in the intro for each model used
+        '''
+
         self.XML.writeIntroStart()
         for model in self.SimulationCSV.keys():
             self.XML.writeIntroLine(self.SimulationCSV[model]['plugin'])
         self.XML.writeIntroEnd()
 
-    def getModelAltForRegion(self, order):
-        '''
-        Reads the region information to find and define new parameters. If the model alt and plugin does not
-        exist in the WAM simulated, skip that model alt
-        :param order: number of region in region information file
-        :return: sets class variables:
-                    self.modelAltName
-                    self.region
-                    self.plugin
-                 Boolean value of model identification status
-        '''
-
-        self.modelAltName = self.regInfo[order]['modelaltname'].strip()
-        self.region = self.regInfo[order]['region'].strip()
-        self.plugin = self.regInfo[order]['plugin'].strip()
-        _model_alt_set = False
-        for model_alt in self.modelAlternatives[self.simulationName].keys():
-            cur_MA_name = model_alt
-            cur_MA_plugin = self.modelAlternatives[self.simulationName][model_alt]['program']
-            if cur_MA_name == self.modelAltName and cur_MA_plugin == self.plugin:
-                self.alternativeFpart = self.modelAlternatives[self.simulationName][model_alt]['fpart']
-                _model_alt_set = True
-                break
-
-        if _model_alt_set:
-            print('Model Alternative Found:', self.modelAltName)
-            return True
-        else:
-            print('Model Alternative NOT found:', self.modelAltName, self.region, self.plugin)
-            return False
-
     def DefineMonths(self):
         '''
-        defines month 3 letter codes for table labels
-        :return: sets class variables
+        defines month 3 letter codes for table labels, and reference dicts for months and numbers (aka Jan: 1)
+        :return: class variables
+                    self.month2num
+                    self.num2month
                     self.mo_str_3
         '''
+
         self.month2num = {month.lower(): index for index, month in enumerate(calendar.month_abbr) if month}
         self.num2month = {index: month.lower() for index, month in enumerate(calendar.month_abbr) if month}
         self.mo_str_3 = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
     def DefineStartEndYears(self):
+        '''
+        defines start and end years for the simulation so they can be replaced by flagged values.
+        end dates that end on the first of the year with no min seconds (aka Dec 31 @ 24:00) have their end
+        years set to be the year prior, as its not fair to really call them that next year
+        self.years is a list of all years used
+        self.years_str is a string representation of the years, either as a single year, or range, aka 2003-2005
+        :return: class variables
+                    self.startYear
+                    self.endYear
+                    self.years
+                    self.years_str
+        '''
+
         tw_start = self.StartTime
         tw_end = self.EndTime
         if tw_end == dt.datetime(tw_end.year, 1, 1, 0, 0):
@@ -200,6 +194,13 @@ class MakeAutomatedReport(object):
             self.years_str = "{0}-{1}".format(self.startYear, self.endYear)
 
     def DefineTimeIntervals(self):
+        '''
+        sets up a dictionary for DSS intervals and their associated timedelta amount for setting up regular
+        interval time series arrays
+        :return: class variable
+                    self.time_intervals
+        '''
+
         self.time_intervals = {'1MIN': dt.timedelta(minutes=1),
                                '2MIN': dt.timedelta(minutes=2),
                                '5MIN': dt.timedelta(minutes=5),
@@ -221,32 +222,53 @@ class MakeAutomatedReport(object):
                                '1YEAR': relativedelta(years=1)}
 
     def DefineDefaultColors(self):
+        '''
+        sets up a list of default colors to use in the event that colors are not set up in the graphics default file
+        for a line
+        :return: class variable
+                    self.def_colors
+        '''
         self.def_colors = ['darkgreen', 'red', 'blue', 'orange', 'darkcyan', 'darkmagenta', 'gray', 'black']
 
     def DefineUnits(self):
         '''
         creates dictionary with units for vars for labels
+        #TODO: expand this
         :return: set class variable
                     self.units
         '''
 
-        WQ_metrics = ['temperature', 'do', 'do_sat']
-        WQ_units = ['C', 'mg/L', '%']
-        metrics = ['flow', ] + WQ_metrics
-        metric_units = ['m3/s', ] + WQ_units
-        self.units = dict(zip(metrics, metric_units))
+        # WQ_metrics = ['temperature', 'do', 'do_sat']
+        # WQ_units = ['C', 'mg/L', '%']
+        # metrics = ['flow', ] + WQ_metrics
+        # metric_units = ['m3/s', ] + WQ_units
+        # self.units = dict(zip(metrics, metric_units))
+
+        self.units = {'temperature': 'C',
+                      'do': 'mg/L',
+                      'do_sat': '%',
+                      'flow': 'm3/s'}
 
     def DefinePaths(self):
         '''
         defines run specific paths
+        used to contain more paths, but not needed. Consider moving.
+        #TODO: remove function merge with clear dir
         :return: set class variables
                     self.images_path
         '''
 
         self.images_path = os.path.join(self.studyDir, 'reports', 'Images')
 
-
     def setSimulationDateTimes(self):
+        '''
+        sets the simulation start time and dates from string format. If timestamp says 24:00, converts it to be correct
+        Datetime format of the next day at 00:00
+        :return: class varables
+                    self.StartTime
+                    self.EndTime
+        '''
+
         if '24:00' in self.StartTimeStr:
             tstrtmp = (self.StartTimeStr).replace('24:00', '23:00')
             self.StartTime = dt.datetime.strptime(tstrtmp, '%d %B %Y, %H:%M')
@@ -261,33 +283,75 @@ class MakeAutomatedReport(object):
         else:
             self.EndTime = dt.datetime.strptime(self.EndTimeStr, '%d %B %Y, %H:%M')
 
-
     def ReadSimulationsCSV(self):
         '''
-        finds the correct Simulation file and gets the region info
-        :return: sets class variable
-                    self.SimInfo
+        reads the Simulation file and gets the region info
+        :return: class variable
+                    self.SimulationCSV
         '''
         self.SimulationCSV = WDR.ReadSimulationFile(self.baseSimulationName, self.studyDir)
 
     def SetSimulationCSVVars(self, simlist):
+        '''
+        set variables pertaining to a specified simulation
+        :param simlist: dictionary of specified simulation
+        :return: class variables
+                    self.plugin
+                    self.modelAltName
+                    self.defFile
+        '''
+
         self.plugin = simlist['plugin']
         self.modelAltName = simlist['modelaltname']
         self.defFile = simlist['deffile']
 
     def ReadGraphicsDefaultFile(self):
-        graphicsDefaultfile = os.path.join(self.studyDir, 'reports', 'Graphics_Defaults.xml') #TODO: finalize the path here, should it live in study?
+        '''
+        sets up path for graphics default file in study and reads the xml
+        :return: class variable
+                    self.graphicsDefault
+        '''
+
+        graphicsDefaultfile = os.path.join(self.studyDir, 'reports', 'Graphics_Defaults.xml')
         self.graphicsDefault = WDR.read_GraphicsDefaults(graphicsDefaultfile)
 
     def ReadLinesstylesDefaultFile(self):
+        '''
+        sets up path for default line styles file and reads the xml
+        :return: class variable
+                    self.defaultLineStyles
+        '''
+
         defaultLinesFile = os.path.join(self.studyDir, 'reports', 'defaultLineStyles.xml')
         self.defaultLineStyles = WDR.read_DefaultLineStyle(defaultLinesFile)
 
-    def ReadDefinitionsFile(self, order):
-        ChapterDefinitionsFile = os.path.join(self.studyDir, 'reports', self.SimulationCSV[order]['deffile'])
+    def ReadDefinitionsFile(self, simorder):
+        '''
+        reads the chapter definitions file defined in the plugin csv file for a specified simulation
+        :param simorder: simulation dictionary object
+        :return: class variable
+                    self.ChapterDefinitions
+        '''
+
+        ChapterDefinitionsFile = os.path.join(self.studyDir, 'reports', simorder['deffile'])
         self.ChapterDefinitions = WDR.read_ChapterDefFile(ChapterDefinitionsFile)
 
     def setSimulationVariables(self, simulation):
+        '''
+        sets various class variables for selected variable
+        sets simulation dates and times
+        :param simulation: simulation dictionary object for specified simulation
+        :return: class variables
+                    self.SimulationName
+                    self.baseSimulationName
+                    self.simulationDir
+                    self.DSSFile
+                    self.StartTimeStr
+                    self.EndTimeStr
+                    self.LastComputed
+                    self.ModelAlternatives
+        '''
+
         self.SimulationName = simulation['name']
         self.baseSimulationName = simulation['basename']
         self.simulationDir = simulation['directory']
@@ -299,6 +363,13 @@ class MakeAutomatedReport(object):
         self.setSimulationDateTimes()
 
     def WriteChapter(self):
+        '''
+        writes each chapter defined in the simulation CSV file to the XML file. Generates plots and figures
+        :return: class variables
+                    self.ChapterName
+                    self.ChapterRegion
+        '''
+
         for Chapter in self.ChapterDefinitions:
             self.ChapterName = Chapter['name']
             self.ChapterRegion = Chapter['region']
@@ -323,12 +394,28 @@ class MakeAutomatedReport(object):
                 self.XML.writeSectionHeaderEnd()
             self.XML.writeChapterEnd()
 
-
     def load_defaultPlotObject(self, plotobject):
+        '''
+        loads the graphic default options. Uses deepcopy so residual settings are not carried over
+        :param plotobject: string specifying the default graphics object
+        :return:
+            plot_info: dict of object settings
+        '''
+
         plot_info = copy.deepcopy(self.graphicsDefault[plotobject])
         return plot_info
 
     def getLineDefaultSettings(self, LineSettings, param, i):
+        '''
+        gets line settings and adds missing needed settings with defaults. Then translates java style inputs to
+        python commands. Gets colors and styles.
+        :param LineSettings: dictionary object containing settings and flags for lines/points
+        :param param: parameter of data in order to grab default
+        :param i: number of line on the plot in order to get the right sequential color
+        :return:
+            LineSettings: dictionary containing keys describing how the line/points are drawn
+        '''
+
         if param != None:
             param = param.lower()
         LineSettings = self.getDrawFlags(LineSettings)
@@ -375,6 +462,14 @@ class MakeAutomatedReport(object):
         return LineSettings
 
     def getDrawFlags(self, LineSettings):
+        '''
+        reads line settings dictionary to look for defined settings of lines or points to determine if either or both
+        should be drawn. If nothing is explicitly stated, then draw lines with default settings.
+        :param LineSettings: dictionary object containing settings and flags for lines/points
+        :return:
+            LineSettings: dictionary containing keys describing how the line/points are drawn
+        '''
+
         #unless explicitly stated, look for key identifiers to draw lines or not
         LineVars = ['linecolor', 'linestylepattern', 'linewidth']
         PointVars = ['pointfillcolor', 'pointlinecolor', 'symboltype', 'symbolsize', 'numptsskip']
@@ -401,10 +496,17 @@ class MakeAutomatedReport(object):
         return LineSettings
 
     def translateLineStylePatterns(self, LineSettings):
+        '''
+        translates java line style patterns to python friendly commands.
+        :param LineSettings: dictionary containing keys describing how the line/points are drawn
+        :return:
+            LineSettings: dictionary containing keys describing how the line/points are drawn
+        '''
+
         #java|python
         linestylesdict = {'dash': 'dashed',
                           'dash dot': 'dashdot',
-                          'dash dot-dot': (0, (3, 5, 1, 5, 1, 5)),
+                          'dash dot-dot': (0, (3, 5, 1, 5, 1, 5)), #this one doesnt get a string name?
                           'dot': 'dotted',
                           'solid': 'solid'}
 
@@ -425,6 +527,13 @@ class MakeAutomatedReport(object):
         return LineSettings
 
     def translatePointStylePatterns(self, LineSettings):
+        '''
+        translates java point style patterns to python friendly commands.
+        :param LineSettings: dictionary containing keys describing how the line/points are drawn
+        :return:
+            LineSettings: dictionary containing keys describing how the line/points are drawn
+        '''
+
         #java|python
         #https://matplotlib.org/stable/api/markers_api.html#module-matplotlib.markers
         pointstylesdict = {1: 's', #square
@@ -453,19 +562,40 @@ class MakeAutomatedReport(object):
         return LineSettings
 
     def get_DefaultDefaultLineStyles(self, i):
+        '''
+        creates a default line style based off of the number line and default colors
+        used if param is undefined or not in defaults file
+        :param i: count of line on the plot
+        :return: dictionary with line settings
+        '''
+
         if i >= len(self.def_colors):
             i = i - len(self.def_colors)
         return {'linewidth': 2, 'linecolor': self.def_colors[i], 'linestyle': 'solid'}
 
     def get_DefaultDefaultPointStyles(self, i):
+        '''
+        creates a default point style based off of the number points and default colors
+        used if param is undefined or not in defaults file
+        :param i: count of points on the plot
+        :return: dictionary with point settings
+        '''
+
         if i >= len(self.def_colors):
             i = i - len(self.def_colors)
         return {'pointfillcolor': self.def_colors[i], 'pointlinecolor': self.def_colors[i], 'symboltype': 1,
                 'symbolsize': 5, 'numptsskip': 0}
 
     def replaceDefaults(self, default_settings, object_settings):
-        #replace flagged values
-        #replace defaults
+        '''
+        makes deep copies of default and defined settings so no settings are accidentally carried over
+        replaces flagged values ($$) with easily identified variables
+        iterates through settings and replaces all default settings with defined settings
+        :param default_settings: default object settings dictionary
+        :param object_settings: user defined settings dictionary
+        :return:
+            default_settings: dictionary of user and default settings
+        '''
 
         default_settings = copy.deepcopy(self.replaceflaggedValues(default_settings))
         object_settings = copy.deepcopy(self.replaceflaggedValues(object_settings))
@@ -503,6 +633,13 @@ class MakeAutomatedReport(object):
         return default_settings
 
     def replaceflaggedValues(self, settings):
+        '''
+        recursive function to replace flagged values in settings
+        :param settings: dict, list or string containing settings, potentially with flags
+        :return:
+            settings: dict, list or string with flags replaced
+        '''
+
         if isinstance(settings, str):
             if '$$' in settings:
                 newval = self.replaceFlaggedValue(settings)
@@ -530,6 +667,14 @@ class MakeAutomatedReport(object):
         return settings
 
     def replaceFlaggedValue(self, value):
+        '''
+        replaces strings with flagged values with known paths
+        flags are now case insensitive with more intelligent matching. yay.
+        needs to use '[1:-1]' for paths, otherwise things like /t in a path C:/trains will be taken literal
+        :param value: string potentially containing flagged value
+        :return:
+            value: string with potential flags replaced
+        '''
         flagged_values = {'$$ModelDSS$$': self.DSSFile,
                           '$$region$$': self.ChapterRegion,
                           '$$Fpart$$': self.alternativeFpart,
@@ -549,8 +694,14 @@ class MakeAutomatedReport(object):
             value = pattern.sub(repr(flagged_values[fv])[1:-1], value) #this seems weird with [1:-1] but paths wont work otherwise
         return value
 
-
     def MakeTimeSeriesPlot(self, object_settings):
+        '''
+        takes in object settings to build time series plot and write to XML
+        #TODO: pull common settings out into their own funcitons so we dont have to look at them
+        :param object_settings: currently selected object settings dictionary
+        :return: creates png in images dir and writes to XML file
+        '''
+
         default_settings = self.load_defaultPlotObject('timeseriesplot') #get default TS plot items
         object_settings = self.replaceDefaults(default_settings, object_settings) #overwrite the defaults with chapter file
 
@@ -607,10 +758,12 @@ class MakeAutomatedReport(object):
                         marker=line_settings['symboltype'], markerfacecolor=line_settings['pointfillcolor'],
                         markeredgecolor=line_settings['pointlinecolor'], markersize=float(line_settings['symbolsize']),
                         markevery=int(line_settings['numptsskip']), zorder=float(line_settings['zorder']))
+
             elif line_settings['drawline'].lower() == 'true':
                 ax.plot(dates, values, label=line_settings['label'], c=line_settings['linecolor'],
                         lw=line_settings['linewidth'], ls=line_settings['linestylepattern'],
                         zorder=float(line_settings['zorder']))
+
             elif line_settings['drawpoints'].lower() == 'true':
                 ax.scatter(dates[::int(line_settings['numptsskip'])], values[::int(line_settings['numptsskip'])],
                            marker=line_settings['symboltype'], facecolor=line_settings['pointfillcolor'],
@@ -699,12 +852,12 @@ class MakeAutomatedReport(object):
 
     def MakeProfilePlot(self, object_settings):
         '''
-        These plots need to go through the following steps:
-        get the times for plots - either from available obs data, or defined dates from the chapter XML, or just a set
-                                  interval in the start and end dates
-        determine the plot parameter - get consensus from inputs?
-        split plots up
+        takes in object settings to build profile plot and write to XML
+        #TODO: pull common settings out into their own funcitons so we dont have to look at them
+        :param object_settings: currently selected object settings dictionary
+        :return: creates png in images dir and writes to XML file
         '''
+
         self.XML.writeProfilePlotStart(object_settings['description'])
         default_settings = self.load_defaultPlotObject('profileplot')
         object_settings = self.replaceDefaults(default_settings, object_settings)
@@ -731,7 +884,6 @@ class MakeAutomatedReport(object):
                     timestamps.append(dfrmt)
                 else:
                     print('Invalid Timestamp', d)
-
 
         if len(timestamps) == 0:
             #if something fails, or not implemented, or theres just no dates in the window, make some up
@@ -761,8 +913,8 @@ class MakeAutomatedReport(object):
         for line in object_settings['lines']:
             vals, elevations, depths, flag = self.getProfileData(line, timestamps) #Test this speed for grabbing all profiles and then choosing
 
-            linedata[flag] = {'values':vals,
-                              'elevations':elevations,
+            linedata[flag] = {'values': vals,
+                              'elevations': elevations,
                               'depths': depths}
 
         ################ convert Elevs ################
@@ -801,7 +953,7 @@ class MakeAutomatedReport(object):
 
             for page_i, pgi in enumerate(page_indices):
 
-                subplot_rows, subplot_cols = WF.get_subplot_config(len(pgi))
+                subplot_rows, subplot_cols = WF.get_subplot_config(len(pgi), int(object_settings['profilesperrow']))
                 n_nrow_active = np.ceil(len(pgi) / subplot_cols)
                 fig = plt.figure(figsize=(7, 1 + 3 * n_nrow_active))
 
@@ -836,9 +988,11 @@ class MakeAutomatedReport(object):
                                     marker=current_ls['symboltype'], markerfacecolor=current_ls['pointfillcolor'],
                                     markeredgecolor=current_ls['pointlinecolor'], markersize=float(current_ls['symbolsize']),
                                     markevery=int(current_ls['numptsskip']))
+
                         elif current_ls['drawline'].lower() == 'true':
                             ax.plot(values, levels, label=current_ls['label'], c=current_ls['linecolor'],
                                     lw=current_ls['linewidth'], ls=current_ls['linestylepattern'])
+
                         elif current_ls['drawpoints'].lower() == 'true':
                             ax.scatter(values[::int(current_ls['numptsskip'])], levels[::int(current_ls['numptsskip'])],
                                        marker=current_ls['symboltype'], facecolor=current_ls['pointfillcolor'],
@@ -934,9 +1088,15 @@ class MakeAutomatedReport(object):
 
         self.XML.writeProfilePlotEnd()
 
-    def MakeErrorStatisticsTable(self, section_settings):
+    def MakeErrorStatisticsTable(self, object_settings):
+        '''
+        takes in object settings to build error stats table and write to XML
+        :param object_settings: currently selected object settings dictionary
+        :return: writes to XML file
+        '''
+
         default_settings = self.load_defaultPlotObject('errorstatisticstable')
-        object_settings = self.replaceDefaults(default_settings, section_settings)
+        object_settings = self.replaceDefaults(default_settings, object_settings)
         datapaths = object_settings['datapaths']
 
         if 'parameter' in object_settings.keys():
@@ -1004,9 +1164,15 @@ class MakeAutomatedReport(object):
             self.XML.writeTableColumn(header, frmt_rows)
         self.XML.writeTableEnd()
 
-    def MakeMonthlyStatisticsTable(self, section_settings):
+    def MakeMonthlyStatisticsTable(self, object_settings):
+        '''
+        takes in object settings to build monthly stats table and write to XML
+        :param object_settings: currently selected object settings dictionary
+        :return: writes to XML file
+        '''
+
         default_settings = self.load_defaultPlotObject('monthlystatisticstable')
-        object_settings = self.replaceDefaults(default_settings, section_settings)
+        object_settings = self.replaceDefaults(default_settings, object_settings)
         datapaths = object_settings['datapaths']
 
         if 'parameter' in object_settings.keys():
@@ -1071,9 +1237,15 @@ class MakeAutomatedReport(object):
             self.XML.writeTableColumn(header, frmt_rows)
         self.XML.writeTableEnd()
 
-    def MakeBuzzPlot(self, section_settings):
+    def MakeBuzzPlot(self, object_settings):
+        '''
+        takes in object settings to build buzzplots and write to XML
+        :param object_settings: currently selected object settings dictionary
+        :return: creates png in images dir and writes to XML file
+        '''
+
         default_settings = self.load_defaultPlotObject('buzzplot')
-        object_settings = self.replaceDefaults(default_settings, section_settings)
+        object_settings = self.replaceDefaults(default_settings, object_settings)
         fig = plt.figure(figsize=(12, 6))
         ax = fig.add_subplot()
 
@@ -1371,6 +1543,14 @@ class MakeAutomatedReport(object):
         self.XML.writeTimeSeriesPlot(os.path.basename(figname), object_settings['description'])
 
     def formatDateXAxis(self, curax, object_settings, twin=False):
+        '''
+        formats the xaxis to be jdate or datetime and sets up xlimits. also sets up secondary xaxis
+        :param curax: current plot axis
+        :param object_settings: dictionary of settings
+        :param twin: if true, will configure top axis
+        :return: sets xlimits for axis
+        '''
+
         if twin:
             if 'xlims2' in object_settings.keys():
                 xlims_flag = 'xlims2'
@@ -1424,6 +1604,16 @@ class MakeAutomatedReport(object):
             print('Not setting Xlims.')
 
     def translateDateFormat(self, lim, dateformat, fallback):
+        '''
+        translates date formats between datetime and jdate, as desired
+        :param lim: limit value, either int or datetime
+        :param dateformat: desired date format, either 'datetime' or 'jdate'
+        :param fallback: if setting translation fails, use backup, usually starttime or endtime
+        :return:
+            lim: original limit, if translate fails
+            lim_fmrt: translated limit
+        '''
+
         if dateformat.lower() == 'datetime': #if want datetime
             if not isinstance(lim, dt.datetime):
                 try:
@@ -1472,6 +1662,15 @@ class MakeAutomatedReport(object):
         return lim
 
     def DatetimeToJDate(self, dates):
+        '''
+        converts datetime dates to jdate values
+        :param dates: list of datetime dates
+        :return:
+            jdates: list of dates
+            jdate: single date
+            dates: original date if unable to convert
+        '''
+
         if isinstance(dates, list) or isinstance(dates, np.ndarray):
             jdates = [(WF.dt_to_ord(n) - self.ModelAlt.t_offset) + 1 for n in dates]
             return jdates
@@ -1483,6 +1682,14 @@ class MakeAutomatedReport(object):
             return dates
 
     def JDateToDatetime(self, dates):
+        '''
+        converts jdate dates to datetime values
+        :param dates: list of jdate dates
+        :return:
+            dtimes: list of dates
+            dtime: single date
+            dates: original date if unable to convert
+        '''
         first_year_Date = dt.datetime(self.ModelAlt.dt_dates[0].year, 1, 1, 0, 0)
         if isinstance(dates, list) or isinstance(dates, np.ndarray):
             dtimes = [first_year_Date + dt.timedelta(days=n) for n in dates]
@@ -1495,9 +1702,19 @@ class MakeAutomatedReport(object):
             return dates
 
     def pickByParameter(self, values, line):
+        '''
+        some data (W2) has multiple parameters coming from a single results file, we can't know which one we want at
+        the moment. This grabs the right parameter based on input
+        :param values: dictionary of values
+        :param line: dictionary of line settings
+        :return:
+            values: list of values
+        '''
+
         w2_param_dict = {'temperature': 't(c)',
                          'elevation': 'elevcl',
                          'flow': 'q(m3/s)'}
+
         if 'parameter' not in line.keys():
             print("Parameter not set for line.")
             print("using the first set of values, {0}".format(list(values.keys())[0]))
@@ -1512,8 +1729,14 @@ class MakeAutomatedReport(object):
                 param_key = w2_param_dict[p]
                 return values[param_key]
 
-
     def BuzzTargetSum(self, dates, values, target):
+        '''
+        finds buzzplot targets defined and returns the flow sums
+        :param dates: list of dates
+        :param values: list of dicts of values @ structures
+        :param target: target value
+        :return:
+        '''
         sum_vals = []
         for i, d in enumerate(dates):
             sum = 0
@@ -1524,6 +1747,17 @@ class MakeAutomatedReport(object):
         return sum_vals
 
     def convertUnitSystem(self, values, units, target_unitsystem):
+        '''
+        converts unit systems if defined english/metric
+        :param values: list of values
+        :param units: units of select values
+        :param target_unitsystem: unit system to convert to
+        :return:
+            values: either converted units if successful, or original values if unsuccessful
+            units: original units if unsuccessful
+            new_units: new converted units if successful
+        '''
+
         english_units = {'m3/s':'cfs',
                          'm': 'ft',
                          'm3': 'af',
@@ -1573,6 +1807,15 @@ class MakeAutomatedReport(object):
         return values, new_units
 
     def buildRowsByYear(self, object_settings, years):
+        '''
+        if split by year is selected, and a header has $$year$$ flag, iterate through and create a new row object for
+        each year and header
+        #TODO: make sure this lines up incase the user selects year and not year headers, merge with buildheaders?
+        :param object_settings: dictionary of settings
+        :param years: list of years
+        :return:
+            rows: list of newly built rows
+        '''
         rows = []
         if 'rows' in object_settings.keys():
             if isinstance(object_settings['rows'], dict): #single row
@@ -1581,13 +1824,21 @@ class MakeAutomatedReport(object):
                 for row in object_settings['rows']:
                     srow = row.split('|')
                     r = [srow[0]] #make list, add the row name
-                    for sr in srow[1:]:
-                        for year in years:
+                    for year in years:
+                        for sr in srow[1:]:
                             r.append(sr)
                     rows.append('|'.join(r))
         return rows
 
     def buildHeadersByYear(self, object_settings, years, split_by_year):
+        '''
+        if split by year is selected, and a header has $$year$$ flag, iterate through and create a new header for
+        each year and header
+        :param object_settings: dictionary of settings
+        :param years: list of years
+        :param split_by_year: boolean if splitting up by year or not
+        :return:
+        '''
         headings = []
         header_by_year = []
         for i, header in enumerate(object_settings['headers']):
@@ -1612,11 +1863,26 @@ class MakeAutomatedReport(object):
         return headings
 
     def filterTimestepByYear(self, timestamps, year):
+        '''
+        returns only timestamps from the given year. Otherwise, just return all timestamps
+        :param timestamps: list of dates
+        :param year: target year
+        :return:
+            timestamps: original date values
+            list of selected timestamps
+        '''
         if year == 'ALLYEARS':
             return timestamps
         return [n for n in timestamps if n.year == year]
 
     def formatStatsLine(self, row, data_dict, year='ALL'):
+        '''
+        takes rows for tables and replaces flags with the correct data, computing stat analysis if needed
+        :param row: row section string
+        :param data_dict: dictionary of data that could be used
+        :param year: selected year, or 'ALL'
+        :return: new row value
+        '''
         data = copy.deepcopy(data_dict)
         rrow = row.replace('$$', '')
         s_row = rrow.split('.')
@@ -1670,11 +1936,25 @@ class MakeAutomatedReport(object):
             return row
 
     def getLineSettings(self, LineSettings, Flag):
+        '''
+        gets the correct line settings for the selected flag
+        :param LineSettings: dictionary of settings
+        :param Flag: selected flag to match line
+        :return: deep copy of line
+        '''
         for line in LineSettings:
             if Flag == line['flag']:
                 return copy.deepcopy(line)
 
     def updateFlaggedValues(self, settings, flaggedvalue, replacevalue):
+        '''
+        iterates and updates specific flagged values with a replacement value
+        :param settings: dictionary, list or str settings
+        :param flaggedvalue: flagged value to look for and replace
+        :param replacevalue: value to replace flagged value with
+        :return: updated settings
+        '''
+
         if isinstance(settings, list):
             new_list = []
             for item in settings:
@@ -1690,7 +1970,6 @@ class MakeAutomatedReport(object):
         elif isinstance(settings, str):
             pattern = re.compile(re.escape(flaggedvalue), re.IGNORECASE)
             settings = pattern.sub(repr(replacevalue)[1:-1], settings) #this seems weird with [1:-1] but paths wont work otherwise
-
             return settings
 
         else:
@@ -1705,6 +1984,7 @@ class MakeAutomatedReport(object):
         :param cols: number of columns
         :return: boolean fields for plotting
         '''
+
         if idx == cols - 1:
             add_legend = True
         else:
@@ -1720,6 +2000,12 @@ class MakeAutomatedReport(object):
         return add_legend, add_xlabel, add_ylabel
 
     def getTimeSeries(self, Line_info):
+        '''
+        gets time series data from defined sources
+        :param Line_info: dictionary of line setttings containing datasources
+        :return: dates, values, units
+        '''
+
         if 'dss_path' in Line_info.keys(): #Get data from DSS record
             if 'dss_filename' not in Line_info.keys():
                 print('DSS_Filename not set for Line: {0}'.format(Line_info))
@@ -1762,6 +2048,14 @@ class MakeAutomatedReport(object):
             return times, values, units
 
     def changeTimeSeriesInterval(self, times, values, Line_info):
+        '''
+        changes time series of time series data. If type is defined, use that to average data. default is INST-VAL
+        :param times: list of times
+        :param values: list of values
+        :param Line_info: settings dictionary for line
+        :return: new times and values
+        '''
+
         # INST-CUM, INST-VAL, PER-AVER, PER-CUM)
         if 'type' in Line_info:
             type = Line_info['type'].upper()
@@ -1837,12 +2131,27 @@ class MakeAutomatedReport(object):
             return new_times, new_values
 
     def buildTimeSeries(self, startTime, endTime, interval):
+        '''
+        builds a regular time series using the start and end time and a given interval
+        #TODO: if start time isnt on the hour, but the interval is, change start time to be hourly?
+        :param startTime: datetime object
+        :param endTime: datetime object
+        :param interval: DSS interval
+        :return: list of time series dates
+        '''
+
         interval = self.time_intervals[interval]
         ts = np.arange(startTime, endTime, interval)
         ts = [t.astype(dt.datetime) for t in ts]
         return ts
 
     def getTimeIntervalSeconds(self, interval):
+        '''
+        converts a given time interval into seconds
+        :param interval: DSS interval (ex: 6MIN)
+        :return: time interval in seconds
+        '''
+
         interval = interval.lower()
         if 'min' in interval:
             timeint = int(interval.replace('min','')) * 60 #convert to sec
@@ -1864,6 +2173,11 @@ class MakeAutomatedReport(object):
             return 0
 
     def getTimeInterval(self, times):
+        '''
+        attempts to find out the time interval of the time series by finding the most common time interval
+        :param times: list of times
+        :return:
+        '''
         t_ints = []
         for i, t in enumerate(times):
             if i == 0: #skip 1
@@ -1877,6 +2191,13 @@ class MakeAutomatedReport(object):
 
 
     def getProfileData(self, Line_info, timesteps):
+        '''
+        reads in profile data from various sources for profile plots at given timesteps
+        attempts to get elevations if possible
+        :param Line_info: dictionary containing settings for line
+        :param timesteps: given list of timesteps to extract data at
+        :return: values, elevations, depths, flag
+        '''
 
         if 'filename' in Line_info.keys(): #Get data from Observed
             # times, values, depths = WDR.readTextProfile(os.path.join(self.observedDir, Line_info['FileName']), self.StartTime, self.EndTime)
@@ -1899,6 +2220,12 @@ class MakeAutomatedReport(object):
         return [], [], [], None
 
     def getProfileDates(self, Line_info):
+        '''
+        gets dates from observed text profiles
+        :param Line_info: dictionary containing line information, must include filename
+        :return: list of times
+        '''
+
         if 'filename' in Line_info.keys(): #Get data from Observed
             times = WDR.getTextProfileDates(Line_info['filename'], self.StartTime, self.EndTime) #TODO: set up for not observed data??
             return times
@@ -1907,6 +2234,11 @@ class MakeAutomatedReport(object):
         return []
 
     def makeRegularTimesteps(self, days=15):
+        '''
+        makes regular time series for profile plots if there are no times defined
+        :param days: day interval
+        :return: timestep list
+        '''
         timesteps = []
         print('No Timesteps found. Setting to Regular interval')
         cur_date = self.StartTime
@@ -1916,11 +2248,17 @@ class MakeAutomatedReport(object):
         return timesteps
 
     def limitXdata(self, dates, values, xlims):
+        '''
+        if the filterbylimits flag is true, filters out values outside of the xlimits
+        :param dates: list of dates
+        :param values: list of values
+        :param xlims: dictionary of xlims, containing potentially min and/or max
+        :return: filtered dates and values
+        '''
+
         if isinstance(dates[0], int) or isinstance(dates[0], float):
-            print('WERE DOING JDATES')
             wantedformat = 'jdate'
         elif isinstance(dates[0], dt.datetime):
-            print('DT IT IS')
             wantedformat = 'datetime'
         if 'min' in xlims.keys():
             #ensure we have dt, dss dates should be... #TODO: make sure values are DT
@@ -1937,6 +2275,14 @@ class MakeAutomatedReport(object):
         return dates, values
 
     def limitYdata(self, dates, values, ylims):
+        '''
+        if the filterbylimits flag is true, filters out values outside of the ylimits
+        :param dates: list of dates
+        :param values: list of values
+        :param ylims: dictionary of ylims, containing potentially min and/or max
+        :return: filtered dates and values
+        '''
+
         if 'min' in ylims.keys():
             for i, v in enumerate(values):
                 if float(ylims['min']) > v:
@@ -1947,7 +2293,6 @@ class MakeAutomatedReport(object):
                     values[i] = np.nan #exclude
 
         return dates, values
-
 
 if __name__ == '__main__':
     simInfoFile = sys.argv[1]

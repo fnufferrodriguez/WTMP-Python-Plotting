@@ -5,7 +5,7 @@ Created on 7/15/2021
 @contact: scott@rmanet.com
 @note:
 '''
-import os
+import os, sys
 import numpy as np
 import pandas as pd
 import datetime as dt
@@ -24,17 +24,17 @@ import linecache
 
 def ReadSimulationFile(simulation_name, studyfolder):
     '''
-       Read the right rptrgn file, and determine what region you are working with.
-       RPTRGN files are named after the simulation, and consist of plugin, model alter name, and then region(s)
+       Read the right csv file, and determine what region you are working with.
+       Simulation CSV files are named after the simulation, and consist of plugin, model alter name, and then region(s)
        :param simulation_name: name of simulation to find file
        :param studyfolder: full path to study folder
        :returns: dictionary containing information from file
     '''
-    #find the rpt file go up a dir, reports, .rptrgn
+
     simulation_file = os.path.join(studyfolder, 'reports', '{0}.csv'.format(simulation_name.replace(' ', '_')))
     if not os.path.exists(simulation_file):
-        print('ERROR: no RPTRGN file for simulation:', simulation_name)
-        exit()
+        print('ERROR: no Simulation CSV file for simulation:', simulation_name)
+        sys.exit()
     sim_info = {}
     with open(simulation_file, 'r') as sf:
         for i, line in enumerate(sf):
@@ -48,6 +48,14 @@ def ReadSimulationFile(simulation_name, studyfolder):
     return sim_info
 
 def getTextProfileDates(observed_data_filename, starttime, endtime):
+    '''
+    reads profile text files and extracts dates
+    :param observed_data_filename: filename of obs data
+    :param starttime: start time for data
+    :param endtime: end time for data
+    :return: list of dates between start and end dates
+    '''
+
     t = []
     if not os.path.exists(observed_data_filename):
         return t
@@ -67,6 +75,7 @@ def readTextProfile(observed_data_filename, timestamps):
     '''
     reads in observed data files and returns values for Temperature Profiles
     :param observed_data_filename: file name
+    :param timestamps: list of selected timestamps
     :return: returns values, depths and times
     '''
 
@@ -114,6 +123,13 @@ def readTextProfile(observed_data_filename, timestamps):
     return wtn, dn
 
 def getClosestTime(timestamps, dates):
+    '''
+    gets timestamp closest to given timestamps for profile plots
+    #TODO: set some limit?
+    :param timestamps: list of target timestamps
+    :param dates: dates in file
+    :return:
+    '''
     cdi = [] #closest date index
     for timestamp in timestamps:
         closestDateidx = None
@@ -180,9 +196,16 @@ def readDSSData(dss_file, pathname, startdate, enddate):
     return times, values, units
 
 def readW2ResultsFile(output_file_name, jd_dates, run_path, targetfieldidx=1):
+    '''
+    reads W2 output text files. files are a bit specialized so the targetfieldidx is variable and allows input
+    :param output_file_name: name of file
+    :param jd_dates: list of jdates. W2 output is in the form of jdates
+    :param run_path: path of W2 run
+    :param targetfieldidx: index of which row in CSV to grab
+    :return: list of list of arrays
+    '''
 
     out_vals = np.full(len(jd_dates), np.nan)
-
     ofn_path = os.path.join(run_path, output_file_name)
     dates = []
     values = []
@@ -205,6 +228,11 @@ def readW2ResultsFile(output_file_name, jd_dates, run_path, targetfieldidx=1):
     return out_vals
 
 def read_GraphicsDefaults(GD_file):
+    '''
+    reads graphics default file and iterates through to form dictionary
+    :param GD_file: graphics default file path
+    :return: dictionary with settings
+    '''
 
     tree = ET.parse(GD_file)
     root = tree.getroot()
@@ -214,64 +242,26 @@ def read_GraphicsDefaults(GD_file):
     return reportObjects
 
 def read_DefaultLineStyle(linefile):
+    '''
+    reads default linestyle file and iterates through to form dictionary
+    :param linefile: linestyle default file path
+    :return: dictionary with settings
+    '''
+
     tree = ET.parse(linefile)
     root = tree.getroot()
     def_lineTypes = root.findall('LineType')
     lineTypes = iterateGraphicsDefaults(def_lineTypes, 'Name')
     return lineTypes
 
-def iterateGraphicsDefaults(root, main_key):
-    out = {}
-    for cr in root:
-        key = cr.find(main_key).text.lower()
-        out[key.lower()] = {}
-        for child in cr:
-            if child.tag == main_key:
-                continue
-            else:
-                out[key.lower()][child.tag.lower()] = get_children(child, returnkeyless=True)
-    return out
-
-def get_children(root, returnkeyless=False):
-    children = {}
-    if len(root) == 0:
-        try:
-            if len(root.text.strip()) == 0:
-                children[root.tag.lower()] = None
-            else:
-                children[root.tag.lower()] = root.text.strip()
-        except:
-            children[root.tag.lower()] = root.text
-    else:
-        children[root.tag.lower()] = []
-        for subroot in root: #figure out if we have a list or dict..
-            if Counter([n.tag for n in root])[subroot.tag] != 1:
-                break
-            if len(subroot.text.strip()) != 0: #empty meaning another def, aka "line" in "Lines"
-                children[root.tag.lower()] = {}
-                break
-        for subroot in root:
-            if isinstance(children[root.tag.lower()], list):
-                children[root.tag.lower()].append(get_children(subroot, returnkeyless=True))
-            elif isinstance(children[root.tag.lower()], dict):
-                children[root.tag.lower()].update(get_children(subroot))
-
-    if returnkeyless:
-        children = children[root.tag.lower()]
-    return children
-
-def iterateChapterDefintions(root):
-    out = []
-    for cr in root:
-        keylist = {}
-        for child in cr:
-            keylist[child.tag.lower()] = get_children(child, returnkeyless=True)
-        out.append(keylist)
-    return out
-
 def read_ChapterDefFile(CD_file):
-    Chapters = []
+    '''
+    reads chapter definitions file
+    :param CD_file: xml of read chapter definitions file
+    :return:
+    '''
 
+    Chapters = []
     tree = ET.parse(CD_file)
     root = tree.getroot()
     for chapter in root:
@@ -299,7 +289,84 @@ def read_ChapterDefFile(CD_file):
 
     return Chapters
 
+def iterateGraphicsDefaults(root, main_key):
+    '''
+    iterates through the graphics default file to get settings
+    :param root: section of XML to be read
+    :param main_key: Name of main id for xml
+    :return: dictionary with settings
+    '''
+
+    out = {}
+    for cr in root:
+        key = cr.find(main_key).text.lower()
+        out[key.lower()] = {}
+        for child in cr:
+            if child.tag == main_key:
+                continue
+            else:
+                out[key.lower()][child.tag.lower()] = get_children(child, returnkeyless=True)
+    return out
+
+def iterateChapterDefintions(root):
+    '''
+    iterates through chapter definition file
+    :param root: section of xml to be read
+    :return: list of settings
+    '''
+
+    out = []
+    for cr in root:
+        keylist = {}
+        for child in cr:
+            keylist[child.tag.lower()] = get_children(child, returnkeyless=True)
+        out.append(keylist)
+    return out
+
+def get_children(root, returnkeyless=False):
+    '''
+    recursive function that will read through settings and break down into smaller components. Forms dict relationships
+    if simple value- label. Forms lists of several of the same flag within a flag.
+    :param root: section of XML to be read and config
+    :param returnkeyless: returns dict if false, list if true
+    :return: dictionary processed values
+    '''
+
+    children = {}
+    if len(root) == 0:
+        try:
+            if len(root.text.strip()) == 0:
+                children[root.tag.lower()] = None
+            else:
+                children[root.tag.lower()] = root.text.strip()
+        except:
+            children[root.tag.lower()] = root.text
+    else:
+        children[root.tag.lower()] = []
+        for subroot in root: #figure out if we have a list or dict..
+            if Counter([n.tag for n in root])[subroot.tag] != 1:
+                break
+            if len(subroot.text.strip()) != 0: #empty meaning another def, aka "line" in "Lines"
+                children[root.tag.lower()] = {}
+                break
+        for subroot in root:
+            if isinstance(children[root.tag.lower()], list):
+                children[root.tag.lower()].append(get_children(subroot, returnkeyless=True))
+            elif isinstance(children[root.tag.lower()], dict):
+                children[root.tag.lower()].update(get_children(subroot))
+
+    if returnkeyless:
+        children = children[root.tag.lower()]
+    return children
+
 def DefinedVarCheck(Block, flags):
+    '''
+    confirms that all flags are contained in the given block, aka check for headers in XML
+    :param Block: xml with flags
+    :param flags: flags that we need for it to be valid
+    :return: True if contains headers, False if not
+    '''
+
     tags = [n.tag for n in list(Block)]
     for flag in flags:
         if flag not in tags:
@@ -312,8 +379,10 @@ class W2_Results(object):
         '''
         Class Builder init.
         :param W2_path: path to W2 run
-        :param region: name of region. determines the output segment and path, ex: 'shasta'
         :param alt_name: name of run alternative for pathing, ex: 'Shasta from DSS 14'
+        :param alt_Dir: directory of the alternative
+        :param starttime: starttime of simulation
+        :param endtime: endtime of simulation
         :param interval_min: output time series interval in minutes (60 = 1HOUR, 15 = 4 outputs an hour)
         '''
 
@@ -535,11 +604,12 @@ class W2_Results(object):
          Branch:           1  # of structures:          23  outlet temperatures
         JDAY      T(C)      T(C)      T(C)      T(C)      T(C)      T(C)      T(C)      T(C)      T(C)      T(C)      T(C)      T(C)      T(C)      T(C)      T(C)      T(C)      T(C)      T(C)      T(C)      T(C)      T(C)      T(C)      T(C)   Q(m3/s)   Q(m3/s)   Q(m3/s)   Q(m3/s)   Q(m3/s)   Q(m3/s)   Q(m3/s)   Q(m3/s)   Q(m3/s)   Q(m3/s)   Q(m3/s)   Q(m3/s)   Q(m3/s)   Q(m3/s)   Q(m3/s)   Q(m3/s)   Q(m3/s)   Q(m3/s)   Q(m3/s)   Q(m3/s)   Q(m3/s)   Q(m3/s)   Q(m3/s)    ELEVCL    ELEVCL    ELEVCL    ELEVCL    ELEVCL    ELEVCL    ELEVCL    ELEVCL    ELEVCL    ELEVCL    ELEVCL    ELEVCL    ELEVCL    ELEVCL    ELEVCL    ELEVCL    ELEVCL    ELEVCL    ELEVCL    ELEVCL    ELEVCL    ELEVCL    ELEVCL
         structures are determined by number of each header
-        :param output_file_name:
-        :param structure_nums:
-        :param skiprows:
-        :return:
+        :param output_file_name: name of output file in run path
+        :param structure_nums: number values of structures we want to output
+        :param skiprows: how many header rows to skip
+        :return: dates, values
         """
+
         ofn_path = os.path.join(self.run_path, output_file_name)
         if not os.path.exists(ofn_path):
             print('Data File not found!', ofn_path)
@@ -580,9 +650,18 @@ class W2_Results(object):
         return dates, values
 
     def filterByParameter(self, values, Line_info):
-        headerparam = {'flow':'q(m3/s)',
-                       'temperature':'t(c)',
-                       'waterlevel':'elevcl'}
+        '''
+        W2 results files have multiple parameters in a single file, so we can return many parameters
+        this grabs the parameter defined in the line
+        :param values: dictionary of lists of values
+        :param Line_info: line settings dictionary containing values
+        :return: values list, parameter from line settings
+        '''
+
+        headerparam = {'flow': 'q(m3/s)',
+                       'temperature': 't(c)',
+                       'waterlevel': 'elevcl'}
+
         if 'parameter' not in Line_info.keys():
             print('Parameter not specified.')
             print('Line Info:', Line_info)
@@ -649,18 +728,6 @@ class W2_Results(object):
 
         return self.dt_dates, out_vals
 
-    def readModelTimeseriesData(self, data, metric):
-        '''
-        function to wrangle data and be universably 'callable' from main script
-        :param data: dictionary containing information about data records
-        :param metric: not needed for W2, but still passed in for Ressim results so a single function can be called
-        :return: arrays of dates and values
-        '''
-
-        file_name = os.path.join(self.run_path, data['w2_path'])
-        dates, vals = self.get_Timeseries(file_name)
-        return dates, vals
-
 class ResSim_Results(object):
 
     def __init__(self, simulationPath, alternativeName, starttime, endtime):
@@ -684,8 +751,10 @@ class ResSim_Results(object):
     def GetH5File(self):
         '''
         build h5 file name and open file
-        :return:
+        :return: class variable
+                    self.h
         '''
+
         h5fname = os.path.join(self.simulationPath, 'rss', self.alternativeName + '.h5')
         self.h = h5py.File(h5fname, 'r')
 
@@ -736,6 +805,14 @@ class ResSim_Results(object):
             self.subdomains[subdomain] = {'x': x, 'y': y}
 
     def readProfileData(self, resname, metric, times):
+        '''
+        reads Ressim profile data from model
+        :param resname: name of reservoir in h5 file
+        :param metric: metric of data to be extracted
+        :param times: timesteps to grab
+        :return: vals, elevations, depths
+        '''
+
         self.load_elevation(alt_subdomain_name=resname)
         unique_times = [n for n in times]
 
@@ -765,7 +842,7 @@ class ResSim_Results(object):
     def get_top_layer(self, timestep_index):
         '''
         grabs the top active layer of water for a given timestep
-        :param timestep: timestep index to grab data at
+        :param timestep_index: timestep index to grab data at
         :return: returns index for top layer of water column
         '''
 
@@ -883,19 +960,7 @@ class ResSim_Results(object):
             self.load_computed_time()
         istart = 0
         iend = -1
-        #TODO: if change to grab a subset, do it here
 
-        # if time_start is not None:
-        # print('START TIME', self.starttime)
-        # istart = np.argmin(self.t_computed, self.starttime)[0]
-        # if self.t_computed[istart] < self.starttime:
-        #     istart += 1
-        # # if self.endtime is not None:
-        # iend = np.argmin(self.t_computed, self.endtime)[0]
-        # if self.t_computed[iend] > self.endtime:
-        #     iend -= 1
-        # self.starttime = self.t_computed[0]
-        # self.endtime = self.t_computed[-1]
         return self.t_computed[istart:iend], v[istart:iend]
 
     def readModelTimeseriesData(self, data, metric):
@@ -941,8 +1006,8 @@ class ResSim_Results(object):
         TODO: is this still needed? require user input.
         :return: sets class variables
                     self.t_computed - list of times used in computation
-
         '''
+
         tstr = self.h['Results/Subdomains/Time Date Stamp']
         tstr0 = (tstr[0]).decode("utf-8")
         tstr1 = (tstr[1]).decode("utf-8")
@@ -965,10 +1030,6 @@ class ResSim_Results(object):
         for j in range(nt):
             self.t_computed.append(ttmp0 + j * delta_t)
         self.t_computed = np.array(self.t_computed)
-
-        # if not hasattr(self, 'starttime'):
-        #     self.starttime = self.t_computed[0]
-        #     self.endtime = self.t_computed[-1]
 
 
 if __name__ == '__main__':
