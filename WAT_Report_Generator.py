@@ -1118,7 +1118,7 @@ class MakeAutomatedReport(object):
             years = [self.years_str]
 
         headings = self.buildHeadersByYear(object_settings, years, split_by_year)
-        rows = self.buildRowsByYear(object_settings, years)
+        rows = self.buildRowsByYear(object_settings, years, split_by_year)
 
         data = {}
         for dp in datapaths:
@@ -1198,7 +1198,7 @@ class MakeAutomatedReport(object):
                 years = ['{0}-{1}'.format(years[0], years[-1])]
 
         headings = self.buildHeadersByYear(object_settings, years, split_by_year)
-        rows = self.buildRowsByYear(object_settings, years)
+        rows = self.buildRowsByYear(object_settings, years, split_by_year)
 
         data = {}
         for dp in datapaths:
@@ -1806,29 +1806,51 @@ class MakeAutomatedReport(object):
 
         return values, new_units
 
-    def buildRowsByYear(self, object_settings, years):
+    def buildRowsByYear(self, object_settings, years, split_by_year):
         '''
         if split by year is selected, and a header has $$year$$ flag, iterate through and create a new row object for
         each year and header
-        #TODO: make sure this lines up incase the user selects year and not year headers, merge with buildheaders?
         :param object_settings: dictionary of settings
         :param years: list of years
+        :param split_by_year: boolean if splitting up by year or not
         :return:
             rows: list of newly built rows
         '''
+
         rows = []
-        if 'rows' in object_settings.keys():
-            if isinstance(object_settings['rows'], dict): #single row
-                object_settings['rows'] = [object_settings['rows']['row']]
-            if isinstance(object_settings['rows'], list):
-                for row in object_settings['rows']:
-                    srow = row.split('|')
-                    r = [srow[0]] #make list, add the row name
-                    for year in years:
-                        for sr in srow[1:]:
-                            r.append(sr)
-                    rows.append('|'.join(r))
+        rows_by_year = []
+        for i, row in enumerate(object_settings['rows']):
+            if isinstance(object_settings['rows'], dict):
+                row = object_settings['rows']['row'] #single headers come as dict objs TODO fix this eventually...
+            srow = row.split('|')
+            r = [srow[0]] #<Row>Jan|$$MEAN.Computed.MONTH=JAN$$|$$MEAN.Observed.MONTH=JAN$$</Row>
+            for si, sr in enumerate(srow[1:]):
+                if isinstance(object_settings['headers'][si], dict):
+                    header = object_settings['headers'][si]['header'] #single headers come as dict objs TODO fix this eventually...
+                else:
+                    header = object_settings['headers'][si]
+                if '$$year$$' in header:
+                    if split_by_year:
+                        rows_by_year.append(sr)
+                    else:
+                        r.append(sr)
+                else:
+                    if len(rows_by_year) > 0:
+                        for year in years:
+                            for yrrow in rows_by_year:
+                                r.append(yrrow)
+                        rows_by_year = []
+                    r.append(sr)
+            if len(rows_by_year) > 0:
+                for year in years:
+                    for yrrow in rows_by_year:
+                        r.append(yrrow)
+                rows_by_year = []
+            rows.append('|'.join(r))
+            # r = []
         return rows
+
+
 
     def buildHeadersByYear(self, object_settings, years, split_by_year):
         '''
