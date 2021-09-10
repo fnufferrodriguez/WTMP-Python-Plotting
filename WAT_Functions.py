@@ -247,7 +247,6 @@ def checkAllNaNs(values):
     :param values: list or array of values
     :return:
     '''
-
     if np.all(np.isnan(values)):
         return True
     else:

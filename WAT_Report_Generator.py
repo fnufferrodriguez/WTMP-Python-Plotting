@@ -11,6 +11,7 @@ import os
 import sys
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 import xml.etree.ElementTree as ET
 import copy
 import calendar
@@ -201,25 +202,25 @@ class MakeAutomatedReport(object):
                     self.time_intervals
         '''
 
-        self.time_intervals = {'1MIN': dt.timedelta(minutes=1),
-                               '2MIN': dt.timedelta(minutes=2),
-                               '5MIN': dt.timedelta(minutes=5),
-                               '6MIN': dt.timedelta(minutes=6),
-                               '10MIN': dt.timedelta(minutes=10),
-                               '12MIN': dt.timedelta(minutes=12),
-                               '15MIN': dt.timedelta(minutes=15),
-                               '30MIN': dt.timedelta(minutes=30),
-                               '1HOUR': dt.timedelta(hours=1),
-                               '2HOUR': dt.timedelta(hours=2),
-                               '3HOUR': dt.timedelta(hours=3),
-                               '4HOUR': dt.timedelta(hours=4),
-                               '5HOUR': dt.timedelta(hours=5),
-                               '6HOUR': dt.timedelta(hours=6),
-                               '1DAY': dt.timedelta(days=1),
-                               '1MON': relativedelta(months=1),
-                               '2MON': relativedelta(months=2),
-                               '6MON': relativedelta(months=6),
-                               '1YEAR': relativedelta(years=1)}
+        self.time_intervals = {'1MIN': [dt.timedelta(minutes=1),'np'],
+                               '2MIN': [dt.timedelta(minutes=2),'np'],
+                               '5MIN': [dt.timedelta(minutes=5),'np'],
+                               '6MIN': [dt.timedelta(minutes=6),'np'],
+                               '10MIN': [dt.timedelta(minutes=10),'np'],
+                               '12MIN': [dt.timedelta(minutes=12),'np'],
+                               '15MIN': [dt.timedelta(minutes=15),'np'],
+                               '30MIN': [dt.timedelta(minutes=30),'np'],
+                               '1HOUR': [dt.timedelta(hours=1),'np'],
+                               '2HOUR': [dt.timedelta(hours=2),'np'],
+                               '3HOUR': [dt.timedelta(hours=3),'np'],
+                               '4HOUR': [dt.timedelta(hours=4),'np'],
+                               '5HOUR': [dt.timedelta(hours=5),'np'],
+                               '6HOUR': [dt.timedelta(hours=6),'np'],
+                               '1DAY': [dt.timedelta(days=1),'np'],
+                               '1MON': ['1M', 'pd'],
+                               '2MON': ['2M', 'pd'],
+                               '6MON': ['6M', 'pd'],
+                               '1YEAR': ['1Y', 'pd']}
 
     def DefineDefaultColors(self):
         '''
@@ -237,12 +238,6 @@ class MakeAutomatedReport(object):
         :return: set class variable
                     self.units
         '''
-
-        # WQ_metrics = ['temperature', 'do', 'do_sat']
-        # WQ_units = ['C', 'mg/L', '%']
-        # metrics = ['flow', ] + WQ_metrics
-        # metric_units = ['m3/s', ] + WQ_units
-        # self.units = dict(zip(metrics, metric_units))
 
         self.units = {'temperature': 'C',
                       'do': 'mg/L',
@@ -2078,6 +2073,11 @@ class MakeAutomatedReport(object):
         :return: new times and values
         '''
 
+        print("HERE", Line_info)
+
+        if 'type' not in Line_info.keys() and 'interval' in Line_info.keys():
+            return times, values
+
         # INST-CUM, INST-VAL, PER-AVER, PER-CUM)
         if 'type' in Line_info:
             type = Line_info['type'].upper()
@@ -2091,30 +2091,35 @@ class MakeAutomatedReport(object):
 
         input_interval = self.getTimeInterval(times)
 
+        new_times = self.buildTimeSeries(times[0], times[-1], interval)
+        new_times_interval = self.getTimeInterval(new_times)
+
+        if new_times_interval < input_interval:
+            print('New interval is smaller than the old interval.')
+            print('Currently not supporting this.')
+            return times, values
+
+        if new_times_interval == input_interval: #no change..
+            return times, values
+
         if type == 'INST-VAL':
             #at the point in time, find intervals and use values
-            if interval == input_interval: #no change..
-                return times, values
-            # TODO: What if time interval is lower than existing ts?
-            new_times = self.buildTimeSeries(times[0], times[-1], interval)
             new_values = []
             for t in new_times:
                 ti = np.where(np.asarray(times)==t)[0]
                 if len(ti) == 1:
-                    new_values.append(values[ti])
+                    new_values.append(values[ti][0])
                 elif len(ti) == 0:
                     #missing date, could be missing data or irreg?
-                    new_values.append(None)
+                    new_values.append(np.NaN)
                 else:
                     print('Multiple date idx found??')
-                    new_values.append(None)
+                    new_values.append(np.NaN)
                     continue
             return new_times, new_values
 
         elif type == 'INST-CUM':
-            if interval != input_interval:
-                new_times = self.buildTimeSeries(times[0], times[-1], interval)
-            else:
+            if interval == input_interval:
                 new_times = copy.deepcopy(times)
             new_values = []
             for t in new_times:
@@ -2126,10 +2131,6 @@ class MakeAutomatedReport(object):
 
         elif type == 'PER-AVER':
             #average over the period
-            if interval == input_interval: #no change..
-                return times, values
-            # TODO: What if time interval is lower than existing ts?
-            new_times = self.buildTimeSeries(times[0], times[-1], interval)
             new_values = []
             interval = self.getTimeIntervalSeconds(interval)
             for t in new_times:
@@ -2140,10 +2141,6 @@ class MakeAutomatedReport(object):
 
         elif type == 'PER-CUM':
             #cum over the perio
-            if interval == input_interval: #no change..
-                return times, values
-                # TODO: What if time interval is lower than existing ts?
-            new_times = self.buildTimeSeries(times[0], times[-1], interval)
             new_values = []
             interval = self.getTimeIntervalSeconds(interval)
             for t in new_times:
@@ -2162,9 +2159,19 @@ class MakeAutomatedReport(object):
         :return: list of time series dates
         '''
 
-        interval = self.time_intervals[interval]
-        ts = np.arange(startTime, endTime, interval)
-        ts = [t.astype(dt.datetime) for t in ts]
+        try:
+            intervalinfo = self.time_intervals[interval]
+            interval = intervalinfo[0]
+            interval_info = intervalinfo[1]
+        except KeyError:
+            interval_info = 'np'
+
+        if interval_info == 'np':
+            ts = np.arange(startTime, endTime, interval)
+            ts = [t.astype(dt.datetime) for t in ts]
+        elif interval_info == 'pd':
+            ts = pd.date_range(startTime, endTime, freq=interval, closed=None)
+            ts = [t.to_pydatetime() for t in ts]
         return ts
 
     def getTimeIntervalSeconds(self, interval):
