@@ -2073,9 +2073,8 @@ class MakeAutomatedReport(object):
         :return: new times and values
         '''
 
-        print("HERE", Line_info)
-
-        if 'type' not in Line_info.keys() and 'interval' in Line_info.keys():
+        if 'type' in Line_info.keys() and 'interval' not in Line_info.keys():
+            print('Defined Type but no interval..')
             return times, values
 
         # INST-CUM, INST-VAL, PER-AVER, PER-CUM)
@@ -2094,12 +2093,13 @@ class MakeAutomatedReport(object):
         new_times = self.buildTimeSeries(times[0], times[-1], interval)
         new_times_interval = self.getTimeInterval(new_times)
 
-        if new_times_interval < input_interval:
+        if new_times_interval.total_seconds() < input_interval.total_seconds():
             print('New interval is smaller than the old interval.')
             print('Currently not supporting this.')
             return times, values
 
-        if new_times_interval == input_interval: #no change..
+        if new_times_interval.total_seconds() == input_interval.total_seconds(): #no change..
+            print('Input interval matches data interval.')
             return times, values
 
         if type == 'INST-VAL':
