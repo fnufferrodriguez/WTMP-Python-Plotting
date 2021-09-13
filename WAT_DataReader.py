@@ -143,26 +143,6 @@ def getClosestTime(timestamps, dates):
         cdi.append(closestDateidx)
     return cdi
 
-def ReadObservedTimeSeriesData(data, observedDir, metric, starttime, endtime):
-    '''
-    Reads observed DSS time series. uses units to try and tell if needed to be converted or not
-    :param data: dictionary containing information about dss record filename and path
-    :param observedDir: directory for observed data (where to find dss record)
-    :param metric: name of current metric
-    :param starttime: start time datetime object
-    :param endtime: end time datetime object
-    :return: np array for times and values
-    '''
-
-    DSS_file = os.path.join(observedDir, data['dss_fn'])
-    DSS_path = data['dss_path']
-    t, v, units = readDSSData(DSS_file, DSS_path, starttime, endtime)
-    v = WF.clean_missing(v)
-    if metric.lower() == 'temperature':
-        if units.lower() in ['f', 'faren', 'degf', 'fahrenheit', 'fahren']: #if temps, convert to C
-            v = WF.convert_temperature(v, 'F', 'C')
-    return t, v
-
 def readDSSData(dss_file, pathname, startdate, enddate):
     '''
     calls pydsstools from https://github.com/gyanz/pydsstools to read dss data

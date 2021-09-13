@@ -714,7 +714,11 @@ class MakeAutomatedReport(object):
             else:
                 param_count[param] += 1
             i = param_count[param]
+
             dates, values, units = self.getTimeSeries(line)
+
+            if 'unitsystem' in object_settings.keys():
+                values, units = self.convertUnitSystem(values, units, object_settings['unitsystem'])
 
             chkvals = WF.check_data(values)
             if not chkvals:
@@ -1119,6 +1123,9 @@ class MakeAutomatedReport(object):
         for dp in datapaths:
             dates, values, units = self.getTimeSeries(dp)
 
+            if 'unitsystem' in object_settings.keys():
+                values, units = self.convertUnitSystem(values, units, object_settings['unitsystem'])
+
             if units == None:
                 if 'parameter' in dp.keys():
                     if dp['parameter'].lower() in self.units.keys():
@@ -1174,7 +1181,6 @@ class MakeAutomatedReport(object):
             if object_settings['parameter'].lower() in self.units.keys():
                 units = self.units[object_settings['parameter'].lower()]
                 object_settings = self.updateFlaggedValues(object_settings, '$$units$$', units)
-                print('units', units)
             else:
                 print('param not in units', object_settings['parameter'], self.units.keys())
         else:
@@ -1198,6 +1204,10 @@ class MakeAutomatedReport(object):
         data = {}
         for dp in datapaths:
             dates, values, units = self.getTimeSeries(dp)
+
+            if 'unitsystem' in object_settings.keys():
+                values, units = self.convertUnitSystem(values, units, object_settings['unitsystem'])
+
             if units == None:
                 if 'parameter' in dp.keys():
                     if dp['parameter'].lower() in self.units.keys():
@@ -1560,7 +1570,7 @@ class MakeAutomatedReport(object):
         if dateformat_flag in object_settings.keys():
             dateformat = object_settings[dateformat_flag].lower()
         else:
-            print('Dateformat flag not set. Defualting to datetime..')
+            print('Dateformat flag not set. Defaulting to datetime..')
             dateformat = 'datetime'
 
         if xlims_flag in object_settings.keys():
@@ -1759,6 +1769,8 @@ class MakeAutomatedReport(object):
                          'c': 'f'}
         metric_units = {v: k for k, v in english_units.items()}
 
+        units = self.translateUnits(units)
+
         #Following is the SOURCE units, then the conversion to units listed above
         conversion = {'m3/s': 35.314666213,
                       'cfs': 0.0283168469997284,
@@ -1800,6 +1812,25 @@ class MakeAutomatedReport(object):
             return values, units
 
         return values, new_units
+
+    def translateUnits(self, units):
+        units_conversion = {'f': ['f', 'faren', 'degf', 'fahrenheit', 'fahren', 'deg f'],
+                            'c': ['c', 'cel', 'celsius', 'deg c', 'degc'],
+                            'm3/s': ['m3/s', 'm3s', 'metercubedpersecond'],
+                            'cfs': ['cfs', 'cubicftpersecond', 'f3/s', 'f3s'],
+                            'm': ['m', 'meters', 'mtrs'],
+                            'ft': ['ft', 'feet'],
+                            'm3': ['m3', 'meters cubed', 'meters3', 'meterscubed', 'meters-cubed'],
+                            'af': ['af', 'acrefeet', 'acre-feet', 'acfeet', 'acft', 'ac-ft', 'ac/ft'],
+                            'm/s': ['mps', 'm/s', 'meterspersecond', 'm/second'],
+                            'ft/s': ['ft/s', 'fps', 'feetpersecond', 'feet/s']}
+
+        for key in units_conversion.keys():
+            if units.lower() in units_conversion[key]:
+                return key
+
+        print('Units Undefined:', units)
+        return units
 
     def buildRowsByYear(self, object_settings, years, split_by_year):
         '''
@@ -2036,7 +2067,7 @@ class MakeAutomatedReport(object):
                 elif len(values) == 0:
                     return [], [], None
 
-                values = WF.convertTempUnits(values, units)
+                # values = WF.convertTempUnits(values, units)
 
         elif 'w2_file' in Line_info.keys():
             if 'structurenumbers' in Line_info.keys():
@@ -2079,9 +2110,9 @@ class MakeAutomatedReport(object):
 
         # INST-CUM, INST-VAL, PER-AVER, PER-CUM)
         if 'type' in Line_info:
-            type = Line_info['type'].upper()
+            avgtype = Line_info['type'].upper()
         else:
-            type = 'INST-VAL'
+            avgtype = 'INST-VAL'
 
         if 'interval' in Line_info:
             interval = Line_info['interval'].upper()
@@ -2093,16 +2124,25 @@ class MakeAutomatedReport(object):
         new_times = self.buildTimeSeries(times[0], times[-1], interval)
         new_times_interval = self.getTimeInterval(new_times)
 
-        if new_times_interval.total_seconds() < input_interval.total_seconds():
-            print('New interval is smaller than the old interval.')
-            print('Currently not supporting this.')
+        if isinstance(new_times_interval, (int, float)):
+            if new_times_interval < input_interval:
+                print('New interval is smaller than the old interval.')
+                print('Currently not supporting this.')
+                return times, values
+        elif isinstance(new_times_interval, dt.timedelta):
+            if new_times_interval.total_seconds() < input_interval.total_seconds():
+                print('New interval is smaller than the old interval.')
+                print('Currently not supporting this.')
+                return times, values
+        else:
+            print('Error defining new interval types')
             return times, values
 
-        if new_times_interval.total_seconds() == input_interval.total_seconds(): #no change..
+        if new_times_interval == input_interval: #no change..
             print('Input interval matches data interval.')
             return times, values
 
-        if type == 'INST-VAL':
+        if avgtype == 'INST-VAL':
             #at the point in time, find intervals and use values
             new_values = []
             for t in new_times:
@@ -2118,7 +2158,7 @@ class MakeAutomatedReport(object):
                     continue
             return new_times, new_values
 
-        elif type == 'INST-CUM':
+        elif avgtype == 'INST-CUM':
             if interval == input_interval:
                 new_times = copy.deepcopy(times)
             new_values = []
@@ -2129,7 +2169,7 @@ class MakeAutomatedReport(object):
 
             return new_times, new_values
 
-        elif type == 'PER-AVER':
+        elif avgtype == 'PER-AVER':
             #average over the period
             new_values = []
             interval = self.getTimeIntervalSeconds(interval)
@@ -2139,7 +2179,7 @@ class MakeAutomatedReport(object):
                 new_values.append(np.mean(values[date_idx]))
             return new_times, new_values
 
-        elif type == 'PER-CUM':
+        elif avgtype == 'PER-CUM':
             #cum over the perio
             new_values = []
             interval = self.getTimeIntervalSeconds(interval)

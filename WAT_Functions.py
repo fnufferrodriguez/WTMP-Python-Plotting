@@ -12,7 +12,6 @@ import os
 from scipy import interpolate
 from scipy.constants import convert_temperature
 from sklearn.metrics import mean_absolute_error
-import datetime as dt
 
 sat_data_do = [14.60, 14.19, 13.81, 13.44, 13.09, 12.75, 12.43, 12.12, 11.83, 11.55, 11.27, 11.01, 10.76, 10.52, 10.29,
                10.07, 9.85, 9.65, 9.45, 9.26, 9.07, 8.90, 8.72, 8.56, 8.40, 8.24, 8.09, 7.95, 7.81, 7.67, 7.54, 7.41,
@@ -430,7 +429,7 @@ def convertTempUnits(values, units):
         print('Converting F to C...')
         values = convert_temperature(values, 'F', 'C')
         return values
-    elif units.lower() in ['c', 'cel', 'celsius', 'def c', 'degc']:
+    elif units.lower() in ['c', 'cel', 'celsius', 'deg c', 'degc']:
         print('Converting C to F...')
         values = convert_temperature(values, 'C', 'F')
         return values
