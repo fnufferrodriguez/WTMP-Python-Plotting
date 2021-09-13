@@ -621,11 +621,13 @@ class W2_Results(object):
                     hname = header
                 else:
                     hname = header+'.{0}'.format(structure_num-1)
-                vals = [float(n.replace(',','')) for n in stsf[hname].tolist()]
+                vals = [float(str(n).replace(',','')) for n in stsf[hname].tolist()]
+                # vals = [float(n) for n in stsf[hname].tolist()]
                 values[structure_num][header.lower()] = vals
 
         dates = stsf['jday'].tolist()
-        dates = [float(n.replace(',', '')) for n in dates]
+        dates = [float(str(n).replace(',', '')) for n in dates]
+        # dates = [float(n) for n in dates]
 
         return dates, values
 

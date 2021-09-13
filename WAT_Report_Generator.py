@@ -239,10 +239,10 @@ class MakeAutomatedReport(object):
                     self.units
         '''
 
-        self.units = {'temperature': 'C',
-                      'do': 'mg/L',
+        self.units = {'temperature': {'metric':'c', 'english':'f'},
                       'do_sat': '%',
-                      'flow': 'm3/s'}
+                      'flow': {'metric': 'm3/s', 'english': 'cfs'},
+                      'storage': {'metric': 'm3', 'english': 'af'}}
 
     def DefinePaths(self):
         '''
@@ -703,7 +703,7 @@ class MakeAutomatedReport(object):
         fig = plt.figure(figsize=(12, 6))
         ax = fig.add_subplot()
         param_count = {}
-
+        unitslist = []
         for line in object_settings['lines']:
             if 'parameter' in line.keys():
                 param = line['parameter']
@@ -716,6 +716,12 @@ class MakeAutomatedReport(object):
             i = param_count[param]
 
             dates, values, units = self.getTimeSeries(line)
+
+            if isinstance(units, dict):
+                if 'unitsystem' in object_settings.keys():
+                    units = units[object_settings['unitsystem'].lower()]
+                else:
+                    units = ''
 
             if 'unitsystem' in object_settings.keys():
                 values, units = self.convertUnitSystem(values, units, object_settings['unitsystem'])
@@ -732,6 +738,9 @@ class MakeAutomatedReport(object):
                 elif object_settings['dateformat'].lower() == 'datetime':
                     if isinstance(dates[0], float) or isinstance(dates[0], int):
                         dates = self.JDateToDatetime(dates)
+
+            if units != '':
+                unitslist.append(units)
 
             line_settings = self.getLineDefaultSettings(line, param, i)
 
@@ -768,6 +777,9 @@ class MakeAutomatedReport(object):
                            marker=line_settings['symboltype'], facecolor=line_settings['pointfillcolor'],
                            edgecolor=line_settings['pointlinecolor'], s=float(line_settings['symbolsize']),
                            label=line_settings['label'], zorder=float(line_settings['zorder']))
+
+        plotunits = self.getPlotUnits(unitslist, object_settings)
+        object_settings = self.updateFlaggedValues(object_settings, '$$units$$', plotunits)
 
         if 'title' in object_settings.keys():
             if 'titlesize' in object_settings.keys():
@@ -833,6 +845,7 @@ class MakeAutomatedReport(object):
             yticksize = 10
         ax.tick_params(axis='y', labelsize=yticksize)
 
+
         basefigname = os.path.join(self.images_path, 'TimeSeriesPlot' + '_' + self.ChapterRegion.replace(' ','_'))
         exists = True
         tempnum = 1
@@ -853,6 +866,8 @@ class MakeAutomatedReport(object):
         '''
         takes in object settings to build profile plot and write to XML
         #TODO: pull common settings out into their own funcitons so we dont have to look at them
+        #TODO: figure out way to change or control units on the axis?
+        #TODO: figure out way to convert profiles that are essentially unitless
         :param object_settings: currently selected object settings dictionary
         :return: creates png in images dir and writes to XML file
         '''
@@ -901,11 +916,20 @@ class MakeAutomatedReport(object):
                 plot_parameter = params[0]
             else:
                 plot_parameter = None
-        if plot_parameter.lower() in self.units.keys():
-            units = self.units[plot_parameter.lower()]
+
+        if 'units' in object_settings.keys():
+            plot_units = object_settings['units'].lower()
+        elif plot_parameter != None:
+            plot_units = self.units[plot_parameter.lower()]
+            if isinstance(plot_units, dict):
+                    if 'unitsystem' in object_settings.keys():
+                        plot_units = plot_units[object_settings['unitsystem'].lower()]
+                    else:
+                        plot_units = ''
         else:
-            units = None
-        object_settings = self.updateFlaggedValues(object_settings, '$$units$$', units)
+            plot_units = ''
+        object_settings = self.updateFlaggedValues(object_settings, '$$units$$', plot_units)
+
 
         ################# Get data #################
         #do now incase no elevs, so we can convert
@@ -1098,15 +1122,6 @@ class MakeAutomatedReport(object):
         object_settings = self.replaceDefaults(default_settings, object_settings)
         datapaths = object_settings['datapaths']
 
-        if 'parameter' in object_settings.keys():
-            if object_settings['parameter'].lower() in self.units.keys():
-                units = self.units[object_settings['parameter'].lower()]
-                object_settings = self.updateFlaggedValues(object_settings, '$$units$$', units)
-            else:
-                print('param not in units', object_settings['parameter'], self.units.keys())
-        else:
-            print('no param')
-
         years = self.years
 
         split_by_year = False
@@ -1116,21 +1131,19 @@ class MakeAutomatedReport(object):
         if not split_by_year:
             years = [self.years_str]
 
-        headings = self.buildHeadersByYear(object_settings, years, split_by_year)
-        rows = self.buildRowsByYear(object_settings, years, split_by_year)
-
         data = {}
+        unitslist = []
         for dp in datapaths:
             dates, values, units = self.getTimeSeries(dp)
 
+            if isinstance(units, dict):
+                if 'unitsystem' in object_settings.keys():
+                    units = units[object_settings['unitsystem'].lower()]
+                else:
+                    units = ''
+            print('units', units)
             if 'unitsystem' in object_settings.keys():
                 values, units = self.convertUnitSystem(values, units, object_settings['unitsystem'])
-
-            if units == None:
-                if 'parameter' in dp.keys():
-                    if dp['parameter'].lower() in self.units.keys():
-                        units = self.units[dp['parameter'].lower()]
-                        object_settings = self.updateFlaggedValues(object_settings, '$$units$$', units)
 
             if 'filterbylimits' not in dp.keys():
                 dp['filterbylimits'] = 'true' #set default
@@ -1141,9 +1154,19 @@ class MakeAutomatedReport(object):
                 if 'ylims' in object_settings.keys():
                     dates, values = self.limitYdata(dates, values, object_settings['ylims'])
 
+            if units != '':
+                unitslist.append(units)
+
             data[dp['flag']] = {'dates':dates,
                                 'values': values,
                                 'units': units}
+
+
+        plotunits = self.getPlotUnits(unitslist, object_settings)
+        object_settings = self.updateFlaggedValues(object_settings, '$$units$$', plotunits)
+
+        headings = self.buildHeadersByYear(object_settings, years, split_by_year)
+        rows = self.buildRowsByYear(object_settings, years, split_by_year)
 
         if 'description' in object_settings.keys():
             desc = object_settings['description']
@@ -1177,15 +1200,6 @@ class MakeAutomatedReport(object):
         object_settings = self.replaceDefaults(default_settings, object_settings)
         datapaths = object_settings['datapaths']
 
-        if 'parameter' in object_settings.keys():
-            if object_settings['parameter'].lower() in self.units.keys():
-                units = self.units[object_settings['parameter'].lower()]
-                object_settings = self.updateFlaggedValues(object_settings, '$$units$$', units)
-            else:
-                print('param not in units', object_settings['parameter'], self.units.keys())
-        else:
-            print('no param')
-
         years = self.years
 
         split_by_year = False
@@ -1202,16 +1216,21 @@ class MakeAutomatedReport(object):
         rows = self.buildRowsByYear(object_settings, years, split_by_year)
 
         data = {}
+        unitslist = []
         for dp in datapaths:
             dates, values, units = self.getTimeSeries(dp)
+
+            if isinstance(units, dict):
+                if 'unitsystem' in object_settings.keys():
+                    units = units[object_settings['unitsystem'].lower()]
+                else:
+                    units = ''
 
             if 'unitsystem' in object_settings.keys():
                 values, units = self.convertUnitSystem(values, units, object_settings['unitsystem'])
 
-            if units == None:
-                if 'parameter' in dp.keys():
-                    if dp['parameter'].lower() in self.units.keys():
-                        units = self.units[dp['parameter'].lower()]
+            if units != '':
+                unitslist.append(units)
 
             if 'filterbylimits' not in dp.keys():
                 dp['filterbylimits'] = 'true' #set default
@@ -1225,6 +1244,9 @@ class MakeAutomatedReport(object):
             data[dp['flag']] = {'dates':dates,
                                 'values': values,
                                 'units': units}
+
+        plotunits = self.getPlotUnits(unitslist, object_settings)
+        object_settings = self.updateFlaggedValues(object_settings, '$$units$$', plotunits)
 
         self.XML.writeTableStart(object_settings['description'], 'Month')
         for i, yearheader in enumerate(headings):
@@ -1797,6 +1819,10 @@ class MakeAutomatedReport(object):
             else:
                 print('Units not found in definitions. Not Converting.')
                 return values, units
+        else:
+            print('Target Unit System undefined.', target_unitsystem)
+            print('Try english or metric')
+            return values, units
 
         if units.lower() in ['c', 'f']:
             values = WF.convertTempUnits(values, units)
@@ -2254,10 +2280,14 @@ class MakeAutomatedReport(object):
             else:
                 t_ints.append(t - last_time)
 
-        occurence_count = Counter(t_ints)
+        # occurence_count = Counter(t_ints)
+        # most_common_interval = occurence_count.most_common(1)[0][0]
+        return self.getMostCommon(t_ints)
+
+    def getMostCommon(self, listvars):
+        occurence_count = Counter(listvars)
         most_common_interval = occurence_count.most_common(1)[0][0]
         return most_common_interval
-
 
     def getProfileData(self, Line_info, timesteps):
         '''
@@ -2301,6 +2331,24 @@ class MakeAutomatedReport(object):
 
         print('Illegal Dates selection. ')
         return []
+
+    def getPlotUnits(self, unitslist, object_settings):
+        if len(unitslist) > 0:
+            plotunits = self.getMostCommon(unitslist)
+        elif 'parameter' in object_settings.keys() and len(unitslist) == 0:
+            try:
+                plotunits = self.units[object_settings['parameter'].lower()]
+                if isinstance(plotunits, dict):
+                    if 'unitsystem' in object_settings.keys():
+                        plotunits = plotunits[object_settings['unitsystem'].lower()]
+                    else:
+                        plotunits = ''
+            except KeyError:
+                plotunits = ''
+        else:
+            print('No units defined.')
+            plotunits = ''
+        return plotunits
 
     def makeRegularTimesteps(self, days=15):
         '''
