@@ -717,11 +717,18 @@ class MakeAutomatedReport(object):
 
             dates, values, units = self.getTimeSeries(line)
 
+            if units == None:
+                if param != None:
+                    try:
+                        units = self.units[param.lower()]
+                    except KeyError:
+                        units = None
+
             if isinstance(units, dict):
                 if 'unitsystem' in object_settings.keys():
                     units = units[object_settings['unitsystem'].lower()]
                 else:
-                    units = ''
+                    units = None
 
             if 'unitsystem' in object_settings.keys():
                 values, units = self.convertUnitSystem(values, units, object_settings['unitsystem'])
@@ -739,7 +746,7 @@ class MakeAutomatedReport(object):
                     if isinstance(dates[0], float) or isinstance(dates[0], int):
                         dates = self.JDateToDatetime(dates)
 
-            if units != '':
+            if units != '' and units != None:
                 unitslist.append(units)
 
             line_settings = self.getLineDefaultSettings(line, param, i)
@@ -1137,12 +1144,19 @@ class MakeAutomatedReport(object):
         for dp in datapaths:
             dates, values, units = self.getTimeSeries(dp)
 
+            if units == None:
+                if 'parameter' in dp.keys():
+                    try:
+                        units = self.units[dp['parameter'].lower()]
+                    except KeyError:
+                        units = None
+
             if isinstance(units, dict):
                 if 'unitsystem' in object_settings.keys():
                     units = units[object_settings['unitsystem'].lower()]
                 else:
-                    units = ''
-            print('units', units)
+                    units = None
+
             if 'unitsystem' in object_settings.keys():
                 values, units = self.convertUnitSystem(values, units, object_settings['unitsystem'])
 
@@ -1155,7 +1169,7 @@ class MakeAutomatedReport(object):
                 if 'ylims' in object_settings.keys():
                     dates, values = self.limitYdata(dates, values, object_settings['ylims'])
 
-            if units != '':
+            if units != None:
                 unitslist.append(units)
 
             data[dp['flag']] = {'dates': dates,
@@ -1220,16 +1234,23 @@ class MakeAutomatedReport(object):
         for dp in datapaths:
             dates, values, units = self.getTimeSeries(dp)
 
+            if units == None:
+                if 'parameter' in dp.keys():
+                    try:
+                        units = self.units[dp['parameter'].lower()]
+                    except KeyError:
+                        units = None
+
             if isinstance(units, dict):
                 if 'unitsystem' in object_settings.keys():
                     units = units[object_settings['unitsystem'].lower()]
                 else:
-                    units = ''
+                    units = None
 
             if 'unitsystem' in object_settings.keys():
                 values, units = self.convertUnitSystem(values, units, object_settings['unitsystem'])
 
-            if units != '':
+            if units != None:
                 unitslist.append(units)
 
             if 'filterbylimits' not in dp.keys():
@@ -1792,6 +1813,9 @@ class MakeAutomatedReport(object):
                          'c': 'f'}
         metric_units = {v: k for k, v in english_units.items()}
 
+        if units == None:
+            return values, units
+
         units = self.translateUnits(units)
 
         #Following is the SOURCE units, then the conversion to units listed above
@@ -1849,7 +1873,7 @@ class MakeAutomatedReport(object):
 
         units_conversion = {'f': ['f', 'faren', 'degf', 'fahrenheit', 'fahren', 'deg f'],
                             'c': ['c', 'cel', 'celsius', 'deg c', 'degc'],
-                            'm3/s': ['m3/s', 'm3s', 'metercubedpersecond'],
+                            'm3/s': ['m3/s', 'm3s', 'metercubedpersecond', 'cms'],
                             'cfs': ['cfs', 'cubicftpersecond', 'f3/s', 'f3s'],
                             'm': ['m', 'meters', 'mtrs'],
                             'ft': ['ft', 'feet'],
