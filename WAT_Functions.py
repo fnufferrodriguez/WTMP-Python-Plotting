@@ -244,8 +244,9 @@ def checkAllNaNs(values):
     '''
     checks value sets for all nan values. Some NaN is okay, all is not.
     :param values: list or array of values
-    :return:
+    :return: boolean
     '''
+
     if np.all(np.isnan(values)):
         return True
     else:

@@ -18,7 +18,6 @@ import calendar
 import dateutil.parser
 import re
 from collections import Counter
-from dateutil.relativedelta import relativedelta
 
 import WAT_DataReader as WDR
 import WAT_Functions as WF
@@ -229,6 +228,7 @@ class MakeAutomatedReport(object):
         :return: class variable
                     self.def_colors
         '''
+
         self.def_colors = ['darkgreen', 'red', 'blue', 'orange', 'darkcyan', 'darkmagenta', 'gray', 'black']
 
     def DefineUnits(self):
@@ -248,7 +248,6 @@ class MakeAutomatedReport(object):
         '''
         defines run specific paths
         used to contain more paths, but not needed. Consider moving.
-        #TODO: remove function merge with clear dir
         :return: set class variables
                     self.images_path
         '''
@@ -670,6 +669,7 @@ class MakeAutomatedReport(object):
         :return:
             value: string with potential flags replaced
         '''
+
         flagged_values = {'$$ModelDSS$$': self.DSSFile,
                           '$$region$$': self.ChapterRegion,
                           '$$Fpart$$': self.alternativeFpart,
@@ -845,7 +845,6 @@ class MakeAutomatedReport(object):
             yticksize = 10
         ax.tick_params(axis='y', labelsize=yticksize)
 
-
         basefigname = os.path.join(self.images_path, 'TimeSeriesPlot' + '_' + self.ChapterRegion.replace(' ','_'))
         exists = True
         tempnum = 1
@@ -930,7 +929,6 @@ class MakeAutomatedReport(object):
             plot_units = ''
         object_settings = self.updateFlaggedValues(object_settings, '$$units$$', plot_units)
 
-
         ################# Get data #################
         #do now incase no elevs, so we can convert
         for line in object_settings['lines']:
@@ -961,6 +959,7 @@ class MakeAutomatedReport(object):
         if 'splitbyyear' in object_settings.keys():
             if object_settings['splitbyyear'].lower() == 'true':
                 split_by_year = True
+                years = self.years
         if not split_by_year:
             yearstr = self.years_str
             years = ['ALLYEARS']
@@ -969,18 +968,20 @@ class MakeAutomatedReport(object):
         for yi, year in enumerate(years):
             if split_by_year:
                 yearstr = str(year)
+
             t_stmps = self.filterTimestepByYear(timestamps, year)
             prof_indices = list(range(len(t_stmps)))
             n = int(object_settings['profilesperrow']) * int(object_settings['rowsperpage']) #Get number of plots on page
             page_indices = [prof_indices[i * n:(i + 1) * n] for i in range((len(prof_indices) + n - 1) // n)]
+            cur_obj_settings = copy.deepcopy(object_settings)
 
             for page_i, pgi in enumerate(page_indices):
 
-                subplot_rows, subplot_cols = WF.get_subplot_config(len(pgi), int(object_settings['profilesperrow']))
+                subplot_rows, subplot_cols = WF.get_subplot_config(len(pgi), int(cur_obj_settings['profilesperrow']))
                 n_nrow_active = np.ceil(len(pgi) / subplot_cols)
                 fig = plt.figure(figsize=(7, 1 + 3 * n_nrow_active))
 
-                current_object_settings = self.updateFlaggedValues(object_settings, '$$year$$', yearstr)
+                current_object_settings = self.updateFlaggedValues(cur_obj_settings, '$$year$$', yearstr)
 
                 for i, j in enumerate(pgi):
                     ax = fig.add_subplot(int(subplot_rows), int(subplot_cols), i + 1)
@@ -1103,10 +1104,10 @@ class MakeAutomatedReport(object):
                 plt.close('all')
 
                 ################################################
-                if split_by_year:
-                    description = '{0} {1}: {2} of {3}'.format(current_object_settings['description'], yearstr, page_i+1, len(page_indices))
-                else:
-                    description = '{0}: {1} of {2}'.format(current_object_settings['description'], page_i+1, len(page_indices))
+                # if not split_by_year:
+                #     description = '{0} {1}: {2} of {3}'.format(current_object_settings['description'], yearstr, page_i+1, len(page_indices))
+                # else:
+                description = '{0}: {1} of {2}'.format(current_object_settings['description'], page_i+1, len(page_indices))
                 self.XML.writeProfilePlotFigure(figname, description)
 
         self.XML.writeProfilePlotEnd()
@@ -1157,10 +1158,9 @@ class MakeAutomatedReport(object):
             if units != '':
                 unitslist.append(units)
 
-            data[dp['flag']] = {'dates':dates,
+            data[dp['flag']] = {'dates': dates,
                                 'values': values,
                                 'units': units}
-
 
         plotunits = self.getPlotUnits(unitslist, object_settings)
         object_settings = self.updateFlaggedValues(object_settings, '$$units$$', plotunits)
@@ -1762,8 +1762,9 @@ class MakeAutomatedReport(object):
         :param dates: list of dates
         :param values: list of dicts of values @ structures
         :param target: target value
-        :return:
+        :return: sum of values
         '''
+
         sum_vals = []
         for i, d in enumerate(dates):
             sum = 0
@@ -1840,6 +1841,12 @@ class MakeAutomatedReport(object):
         return values, new_units
 
     def translateUnits(self, units):
+        '''
+        translates possible units to better known flags for consistancy in the script and conversion purposes
+        :param units: units string
+        :return: units string
+        '''
+
         units_conversion = {'f': ['f', 'faren', 'degf', 'fahrenheit', 'fahren', 'deg f'],
                             'c': ['c', 'cel', 'celsius', 'deg c', 'degc'],
                             'm3/s': ['m3/s', 'm3s', 'metercubedpersecond'],
@@ -1902,8 +1909,6 @@ class MakeAutomatedReport(object):
             # r = []
         return rows
 
-
-
     def buildHeadersByYear(self, object_settings, years, split_by_year):
         '''
         if split by year is selected, and a header has $$year$$ flag, iterate through and create a new header for
@@ -1911,8 +1916,9 @@ class MakeAutomatedReport(object):
         :param object_settings: dictionary of settings
         :param years: list of years
         :param split_by_year: boolean if splitting up by year or not
-        :return:
+        :return: list of headers
         '''
+
         headings = []
         header_by_year = []
         for i, header in enumerate(object_settings['headers']):
@@ -1945,6 +1951,7 @@ class MakeAutomatedReport(object):
             timestamps: original date values
             list of selected timestamps
         '''
+
         if year == 'ALLYEARS':
             return timestamps
         return [n for n in timestamps if n.year == year]
@@ -1957,6 +1964,7 @@ class MakeAutomatedReport(object):
         :param year: selected year, or 'ALL'
         :return: new row value
         '''
+
         data = copy.deepcopy(data_dict)
         rrow = row.replace('$$', '')
         s_row = rrow.split('.')
@@ -2016,6 +2024,7 @@ class MakeAutomatedReport(object):
         :param Flag: selected flag to match line
         :return: deep copy of line
         '''
+
         for line in LineSettings:
             if Flag == line['flag']:
                 return copy.deepcopy(line)
@@ -2093,8 +2102,6 @@ class MakeAutomatedReport(object):
                 elif len(values) == 0:
                     return [], [], None
 
-                # values = WF.convertTempUnits(values, units)
-
         elif 'w2_file' in Line_info.keys():
             if 'structurenumbers' in Line_info.keys():
                 # Ryan Miles: yeah looks like it's str_brX.npt, and X is 1-# of branches (which is defined in the control file)
@@ -2105,7 +2112,8 @@ class MakeAutomatedReport(object):
             if 'units' in Line_info.keys():
                 units = Line_info['units']
             else:
-                units = self.units[Line_info['parameter'].lower()]
+                units = None
+                # units = self.units[Line_info['parameter'].lower()]
 
         elif 'xy' in Line_info.keys():
             times, values = self.ModelAlt.readTimeSeries(Line_info['parameter'], Line_info['xy'])
@@ -2273,6 +2281,7 @@ class MakeAutomatedReport(object):
         :param times: list of times
         :return:
         '''
+
         t_ints = []
         for i, t in enumerate(times):
             if i == 0: #skip 1
@@ -2285,6 +2294,12 @@ class MakeAutomatedReport(object):
         return self.getMostCommon(t_ints)
 
     def getMostCommon(self, listvars):
+        '''
+        gets most common instance of a var in a list
+        :param listvars: list of variables
+        :return: value that is most common in the list
+        '''
+
         occurence_count = Counter(listvars)
         most_common_interval = occurence_count.most_common(1)[0][0]
         return most_common_interval
@@ -2299,8 +2314,6 @@ class MakeAutomatedReport(object):
         '''
 
         if 'filename' in Line_info.keys(): #Get data from Observed
-            # times, values, depths = WDR.readTextProfile(os.path.join(self.observedDir, Line_info['FileName']), self.StartTime, self.EndTime)
-            # filename = os.path.join(self.observedDir, Line_info['filename'])
             filename = Line_info['filename']
             values, depths = WDR.readTextProfile(filename, timesteps)
             return values, [], depths, Line_info['flag']
@@ -2333,6 +2346,14 @@ class MakeAutomatedReport(object):
         return []
 
     def getPlotUnits(self, unitslist, object_settings):
+        '''
+        gets units for the plot. Either looks at data already plotted units, or if there are no defined units
+        in the plotted data, look for a parameter flag
+        :param unitslist: list of units plotted
+        :param object_settings: dictionary with plot settings
+        :return: string units value
+        '''
+
         if len(unitslist) > 0:
             plotunits = self.getMostCommon(unitslist)
         elif 'parameter' in object_settings.keys() and len(unitslist) == 0:
@@ -2356,6 +2377,7 @@ class MakeAutomatedReport(object):
         :param days: day interval
         :return: timestep list
         '''
+
         timesteps = []
         print('No Timesteps found. Setting to Regular interval')
         cur_date = self.StartTime

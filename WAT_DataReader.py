@@ -130,6 +130,7 @@ def getClosestTime(timestamps, dates):
     :param dates: dates in file
     :return:
     '''
+
     cdi = [] #closest date index
     for timestamp in timestamps:
         closestDateidx = None
@@ -654,13 +655,20 @@ class W2_Results(object):
             new_values[key] = values[key][target_header]
         return new_values, Line_info['parameter']
 
-    def matchProfileLengths(self, select_wt, elevations, depths):
-        '''Matches lengths for values and elevs. Sometimes values not output at certain elevs'''
-        len_val = len(select_wt)
+    def matchProfileLengths(self, select_val, elevations, depths):
+        '''
+        Matches lengths for values and elevs. Sometimes values not output at certain elevs
+        :param select_val: selected values
+        :param elevations: selected elevations
+        :param depths: selected depths
+        :return: trimmed values, elevations, depths
+        '''
+
+        len_val = len(select_val)
         len_elev = len(elevations)
         len_depth = len(depths)
         min_len = min((len_val, len_elev, len_depth))
-        return select_wt[:min_len], elevations[:min_len], depths[:min_len]
+        return select_val[:min_len], elevations[:min_len], depths[:min_len]
 
     def readTimeSeries(self, output_file_name, column=1, skiprows=3, **args):
         '''
@@ -1012,7 +1020,6 @@ class ResSim_Results(object):
         for j in range(nt):
             self.t_computed.append(ttmp0 + j * delta_t)
         self.t_computed = np.array(self.t_computed)
-
 
 if __name__ == '__main__':
     #TODO: for debugging, remove.
