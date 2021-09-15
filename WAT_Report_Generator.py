@@ -18,6 +18,7 @@ import calendar
 import dateutil.parser
 import re
 from collections import Counter
+import shutil
 
 import WAT_DataReader as WDR
 import WAT_Functions as WF
@@ -30,13 +31,15 @@ class MakeAutomatedReport(object):
     information file output from WAT and develops the report from there.
     '''
 
-    def __init__(self, simulationInfoFile):
+    def __init__(self, simulationInfoFile, batdir):
         '''
         organizes input data and generates XML report
         :param simulationInfoFile: full path to simulation information XML file output from WAT.
         '''
 
+        self.batdir = batdir
         self.ReadSimulationInfo(simulationInfoFile) #read file output by WAT
+        # self.copyDefaultFiles() #TODO: turn this back on for copying
         self.ReadGraphicsDefaultFile() #read graphical component defaults
         self.ReadLinesstylesDefaultFile()
         self.DefineUnits()
@@ -151,6 +154,27 @@ class MakeAutomatedReport(object):
         for model in self.SimulationCSV.keys():
             self.XML.writeIntroLine(self.SimulationCSV[model]['plugin'])
         self.XML.writeIntroEnd()
+
+    def copyDefaultFiles(self):
+        self.default_copy_dir = os.path.join(os.path.split(self.batdir)[0], 'Default', '_COPY')
+        self.default_dir = os.path.join(os.path.split(self.batdir)[0], 'Default')
+        if not os.path.exists(self.default_copy_dir):
+            print('ERROR finding default files at {0}'.format(self.default_copy_dir))
+            print('No default files copied.')
+            return
+
+        files_in_directory = os.listdir(self.default_copy_dir)
+
+        #going to reports dir
+        filetypes = ['xml', 'csv']
+        for filetype in filetypes:
+            filtered_files = [file for file in files_in_directory if file.endswith(filetype)]
+            for filtfile in filtered_files:
+                old_file_path = os.path.join(self.default_copy_dir, filtfile)
+                new_file_path = os.path.join(self.studyDir, 'reports', filtfile)
+                if not os.path.exists(new_file_path):
+                    shutil.copyfile(old_file_path, new_file_path)
+                    print('Successfully copied to', new_file_path)
 
     def DefineMonths(self):
         '''
@@ -307,6 +331,7 @@ class MakeAutomatedReport(object):
         '''
 
         graphicsDefaultfile = os.path.join(self.studyDir, 'reports', 'Graphics_Defaults.xml')
+        # graphicsDefaultfile = os.path.join(self.default_dir, 'Graphics_Defaults.xml')
         self.graphicsDefault = WDR.read_GraphicsDefaults(graphicsDefaultfile)
 
     def ReadLinesstylesDefaultFile(self):
@@ -317,6 +342,7 @@ class MakeAutomatedReport(object):
         '''
 
         defaultLinesFile = os.path.join(self.studyDir, 'reports', 'defaultLineStyles.xml')
+        # defaultLinesFile = os.path.join(self.default_dir, 'defaultLineStyles.xml')
         self.defaultLineStyles = WDR.read_DefaultLineStyle(defaultLinesFile)
 
     def ReadDefinitionsFile(self, simorder):
@@ -583,7 +609,7 @@ class MakeAutomatedReport(object):
     def replaceDefaults(self, default_settings, object_settings):
         '''
         makes deep copies of default and defined settings so no settings are accidentally carried over
-        replaces flagged values ($$) with easily identified variables
+        replaces flagged values (%%) with easily identified variables
         iterates through settings and replaces all default settings with defined settings
         :param default_settings: default object settings dictionary
         :param object_settings: user defined settings dictionary
@@ -635,7 +661,7 @@ class MakeAutomatedReport(object):
         '''
 
         if isinstance(settings, str):
-            if '$$' in settings:
+            if '%%' in settings:
                 newval = self.replaceFlaggedValue(settings)
                 settings = newval
         elif isinstance(settings, dict):
@@ -650,12 +676,12 @@ class MakeAutomatedReport(object):
                         new_list.append(self.replaceflaggedValues(item))
                     settings[key] = new_list
                 else:
-                    if '$$' in settings[key]:
+                    if '%%' in settings[key]:
                         newval = self.replaceFlaggedValue(settings[key])
                         settings[key] = newval
         elif isinstance(settings, list):
             for i, item in enumerate(settings):
-                if '$$' in item:
+                if '%%' in item:
                     settings[i] = self.replaceFlaggedValue(item)
 
         return settings
@@ -670,19 +696,19 @@ class MakeAutomatedReport(object):
             value: string with potential flags replaced
         '''
 
-        flagged_values = {'$$ModelDSS$$': self.DSSFile,
-                          '$$region$$': self.ChapterRegion,
-                          '$$Fpart$$': self.alternativeFpart,
-                          '$$plugin$$': self.plugin,
-                          '$$modelAltName$$': self.modelAltName,
-                          '$$SimulationName$$': self.SimulationName,
-                          '$$baseSimulationName$$': self.baseSimulationName,
-                          '$$starttime$$': self.StartTimeStr,
-                          '$$endtime$$': self.EndTimeStr,
-                          '$$LastComputed$$': self.LastComputed,
-                          '$$observedDir$$': self.observedDir,
-                          '$$startyear$$': str(self.startYear),
-                          '$$endyear$$': str(self.endYear)
+        flagged_values = {'%%ModelDSS%%': self.DSSFile,
+                          '%%region%%': self.ChapterRegion,
+                          '%%Fpart%%': self.alternativeFpart,
+                          '%%plugin%%': self.plugin,
+                          '%%modelAltName%%': self.modelAltName,
+                          '%%SimulationName%%': self.SimulationName,
+                          '%%baseSimulationName%%': self.baseSimulationName,
+                          '%%starttime%%': self.StartTimeStr,
+                          '%%endtime%%': self.EndTimeStr,
+                          '%%LastComputed%%': self.LastComputed,
+                          '%%observedDir%%': self.observedDir,
+                          '%%startyear%%': str(self.startYear),
+                          '%%endyear%%': str(self.endYear)
                           }
         for fv in flagged_values.keys():
             pattern = re.compile(re.escape(fv), re.IGNORECASE)
@@ -786,7 +812,7 @@ class MakeAutomatedReport(object):
                            label=line_settings['label'], zorder=float(line_settings['zorder']))
 
         plotunits = self.getPlotUnits(unitslist, object_settings)
-        object_settings = self.updateFlaggedValues(object_settings, '$$units$$', plotunits)
+        object_settings = self.updateFlaggedValues(object_settings, '%%units%%', plotunits)
 
         if 'title' in object_settings.keys():
             if 'titlesize' in object_settings.keys():
@@ -878,9 +904,10 @@ class MakeAutomatedReport(object):
         :return: creates png in images dir and writes to XML file
         '''
 
-        self.XML.writeProfilePlotStart(object_settings['description'])
         default_settings = self.load_defaultPlotObject('profileplot')
         object_settings = self.replaceDefaults(default_settings, object_settings)
+        obj_desc = self.updateFlaggedValues(object_settings['description'], '%%year%%', self.years_str)
+        self.XML.writeProfilePlotStart(obj_desc)
 
         linedata = {}
         ################# Get timestamps #################
@@ -934,7 +961,7 @@ class MakeAutomatedReport(object):
                         plot_units = ''
         else:
             plot_units = ''
-        object_settings = self.updateFlaggedValues(object_settings, '$$units$$', plot_units)
+        object_settings = self.updateFlaggedValues(object_settings, '%%units%%', plot_units)
 
         ################# Get data #################
         #do now incase no elevs, so we can convert
@@ -988,7 +1015,7 @@ class MakeAutomatedReport(object):
                 n_nrow_active = np.ceil(len(pgi) / subplot_cols)
                 fig = plt.figure(figsize=(7, 1 + 3 * n_nrow_active))
 
-                current_object_settings = self.updateFlaggedValues(cur_obj_settings, '$$year$$', yearstr)
+                current_object_settings = self.updateFlaggedValues(cur_obj_settings, '%%year%%', yearstr)
 
                 for i, j in enumerate(pgi):
                     ax = fig.add_subplot(int(subplot_rows), int(subplot_cols), i + 1)
@@ -1114,7 +1141,8 @@ class MakeAutomatedReport(object):
                 # if not split_by_year:
                 #     description = '{0} {1}: {2} of {3}'.format(current_object_settings['description'], yearstr, page_i+1, len(page_indices))
                 # else:
-                description = '{0}: {1} of {2}'.format(current_object_settings['description'], page_i+1, len(page_indices))
+                # description = '{0}: {1} of {2}'.format(current_object_settings['description'], page_i+1, len(page_indices))
+                description = '{0}: {1} of {2}'.format(cur_obj_settings['description'], page_i+1, len(page_indices))
                 self.XML.writeProfilePlotFigure(figname, description)
 
         self.XML.writeProfilePlotEnd()
@@ -1177,7 +1205,7 @@ class MakeAutomatedReport(object):
                                 'units': units}
 
         plotunits = self.getPlotUnits(unitslist, object_settings)
-        object_settings = self.updateFlaggedValues(object_settings, '$$units$$', plotunits)
+        object_settings = self.updateFlaggedValues(object_settings, '%%units%%', plotunits)
 
         headings = self.buildHeadersByYear(object_settings, years, split_by_year)
         rows = self.buildRowsByYear(object_settings, years, split_by_year)
@@ -1196,7 +1224,7 @@ class MakeAutomatedReport(object):
                 s_row = row.split('|')
                 rowname = s_row[0]
                 row_val = s_row[i+1]
-                if '$$' in row_val:
+                if '%%' in row_val:
                     row_val = self.formatStatsLine(row_val, data, year=year)
                 header = '' if header == None else header
                 frmt_rows.append('{0}|{1}'.format(rowname, row_val))
@@ -1267,7 +1295,7 @@ class MakeAutomatedReport(object):
                                 'units': units}
 
         plotunits = self.getPlotUnits(unitslist, object_settings)
-        object_settings = self.updateFlaggedValues(object_settings, '$$units$$', plotunits)
+        object_settings = self.updateFlaggedValues(object_settings, '%%units%%', plotunits)
 
         self.XML.writeTableStart(object_settings['description'], 'Month')
         for i, yearheader in enumerate(headings):
@@ -1278,7 +1306,7 @@ class MakeAutomatedReport(object):
                 s_row = row.split('|')
                 rowname = s_row[0]
                 row_val = s_row[i+1]
-                if '$$' in row_val:
+                if '%%' in row_val:
                     row_val = self.formatStatsLine(row_val, data, year=year)
                 header = '' if header == None else header
                 frmt_rows.append('{0}|{1}'.format(rowname, row_val))
@@ -1891,7 +1919,7 @@ class MakeAutomatedReport(object):
 
     def buildRowsByYear(self, object_settings, years, split_by_year):
         '''
-        if split by year is selected, and a header has $$year$$ flag, iterate through and create a new row object for
+        if split by year is selected, and a header has %%year%% flag, iterate through and create a new row object for
         each year and header
         :param object_settings: dictionary of settings
         :param years: list of years
@@ -1906,13 +1934,13 @@ class MakeAutomatedReport(object):
             if isinstance(object_settings['rows'], dict):
                 row = object_settings['rows']['row'] #single headers come as dict objs TODO fix this eventually...
             srow = row.split('|')
-            r = [srow[0]] #<Row>Jan|$$MEAN.Computed.MONTH=JAN$$|$$MEAN.Observed.MONTH=JAN$$</Row>
+            r = [srow[0]] #<Row>Jan|%%MEAN.Computed.MONTH=JAN%%|%%MEAN.Observed.MONTH=JAN%%</Row>
             for si, sr in enumerate(srow[1:]):
                 if isinstance(object_settings['headers'][si], dict):
                     header = object_settings['headers'][si]['header'] #single headers come as dict objs TODO fix this eventually...
                 else:
                     header = object_settings['headers'][si]
-                if '$$year$$' in header:
+                if '%%year%%' in header:
                     if split_by_year:
                         rows_by_year.append(sr)
                     else:
@@ -1935,7 +1963,7 @@ class MakeAutomatedReport(object):
 
     def buildHeadersByYear(self, object_settings, years, split_by_year):
         '''
-        if split by year is selected, and a header has $$year$$ flag, iterate through and create a new header for
+        if split by year is selected, and a header has %%year%% flag, iterate through and create a new header for
         each year and header
         :param object_settings: dictionary of settings
         :param years: list of years
@@ -1948,22 +1976,22 @@ class MakeAutomatedReport(object):
         for i, header in enumerate(object_settings['headers']):
             if isinstance(object_settings['headers'], dict):
                 header = object_settings['headers']['header'] #single headers come as dict objs TODO fix this eventually...
-            if '$$year$$' in header:
+            if '%%year%%' in header:
                 if split_by_year:
                     header_by_year.append(header)
                 else:
-                    headings.append(['ALL', self.updateFlaggedValues(header, '$$year$$', str(years[0]))])
+                    headings.append(['ALL', self.updateFlaggedValues(header, '%%year%%', str(years[0]))])
             else:
                 if len(header_by_year) > 0:
                     for year in years:
                         for yrhd in header_by_year:
-                            headings.append([year, self.updateFlaggedValues(yrhd, '$$year$$', str(year))])
+                            headings.append([year, self.updateFlaggedValues(yrhd, '%%year%%', str(year))])
                     header_by_year = []
                 headings.append(['ALL', header])
         if len(header_by_year) > 0:
             for year in years:
                 for yrhd in header_by_year:
-                    headings.append([year, self.updateFlaggedValues(yrhd, '$$year$$', str(year))])
+                    headings.append([year, self.updateFlaggedValues(yrhd, '%%year%%', str(year))])
         return headings
 
     def filterTimestepByYear(self, timestamps, year):
@@ -1990,7 +2018,7 @@ class MakeAutomatedReport(object):
         '''
 
         data = copy.deepcopy(data_dict)
-        rrow = row.replace('$$', '')
+        rrow = row.replace('%%', '')
         s_row = rrow.split('.')
         flags = []
         for sr in s_row:
@@ -2024,20 +2052,20 @@ class MakeAutomatedReport(object):
                 data[flag]['values'] = np.asarray(data[flag]['values'])[msk]
                 data[flag]['dates'] = np.asarray(data[flag]['dates'])[msk]
 
-        if row.lower().startswith('$$meanbias'):
+        if row.lower().startswith('%%meanbias'):
             return WF.meanbias(data[flags[0]], data[flags[1]])
-        elif row.lower().startswith('$$mae'):
+        elif row.lower().startswith('%%mae'):
             return WF.MAE(data[flags[0]], data[flags[1]])
-        elif row.lower().startswith('$$rmse'):
+        elif row.lower().startswith('%%rmse'):
             return WF.RMSE(data[flags[0]], data[flags[1]])
-        elif row.lower().startswith('$$nse'):
+        elif row.lower().startswith('%%nse'):
             return WF.NSE(data[flags[0]], data[flags[1]])
-        elif row.lower().startswith('$$count'):
+        elif row.lower().startswith('%%count'):
             return WF.COUNT(data[flags[0]])
-        elif row.lower().startswith('$$mean'):
+        elif row.lower().startswith('%%mean'):
             return WF.MEAN(data[flags[0]])
         else:
-            if '$$' in row:
+            if '%%' in row:
                 print('Unable to convert flag in row', row)
             return row
 
@@ -2458,8 +2486,9 @@ class MakeAutomatedReport(object):
         return dates, values
 
 if __name__ == '__main__':
-    simInfoFile = sys.argv[1]
+    batdir = sys.argv[1]
+    simInfoFile = sys.argv[2]
     # simInfoFile = r"\\wattest\C\WAT\USBR_FrameworkTest_r3_singlescript\reports\ResSim-val2013.xml"
 
-    ar = MakeAutomatedReport(simInfoFile)
+    ar = MakeAutomatedReport(simInfoFile, batdir)
 
