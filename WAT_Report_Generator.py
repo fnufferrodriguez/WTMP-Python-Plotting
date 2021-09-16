@@ -39,18 +39,18 @@ class MakeAutomatedReport(object):
 
         self.batdir = batdir
         self.ReadSimulationInfo(simulationInfoFile) #read file output by WAT
-        # self.copyDefaultFiles() #TODO: turn this back on for copying
-        self.ReadGraphicsDefaultFile() #read graphical component defaults
-        self.ReadLinesstylesDefaultFile()
-        self.DefineUnits()
+        # self.EnsureDefaultFiles() #TODO: turn this back on for copying
         self.DefinePaths()
+        self.DefineUnits()
         self.DefineMonths()
         self.DefineTimeIntervals()
         self.DefineDefaultColors()
+        self.ReadGraphicsDefaultFile() #read graphical component defaults
+        self.ReadLinesstylesDefaultFile()
         if self.reportType == 'single': #Eventually be able to do comparison reports, put that here
             for simulation in self.Simulations:
                 # print('SIMULATION:', simulation)
-                self.setSimulationVariables(simulation)
+                self.SetSimulationVariables(simulation)
                 self.DefineStartEndYears()
                 self.ReadSimulationsCSV() #read to determine order/sims/regions in report
                 self.cleanOutputDirs()
@@ -62,119 +62,6 @@ class MakeAutomatedReport(object):
                     self.LoadModelAlt(self.SimulationCSV[simorder])
                     self.WriteChapter()
                 self.XML.writeReportEnd()
-
-    def ReadSimulationInfo(self, simulationInfoFile):
-        '''
-        reads sim info XML file and organizes paths and variables into a list for iteration
-        :param simulationInfoFile: full path to simulation information XML file from WAT
-        :return: class variables:
-                    self.Simulations
-                    self.reportType
-                    self.studyDir
-                    self.observedData
-        '''
-
-        self.Simulations = []
-        tree = ET.parse(simulationInfoFile)
-        root = tree.getroot()
-
-        self.reportType = root.find('ReportType').text
-        self.studyDir = root.find('Study/Directory').text
-        self.observedDir = root.find('Study/ObservedData').text
-
-        SimRoot = root.find('Simulations')
-        for simulation in SimRoot:
-            simulationInfo = {'name': simulation.find('Name').text,
-                              'basename': simulation.find('BaseName').text,
-                              'directory': simulation.find('Directory').text,
-                              'dssfile': simulation.find('DSSFile').text,
-                              'starttime': simulation.find('StartTime').text,
-                              'endtime': simulation.find('EndTime').text,
-                              'lastcomputed': simulation.find('LastComputed').text
-                              }
-
-            modelAlternatives = []
-            for modelAlt in simulation.find('ModelAlternatives'):
-                modelAlternatives.append({'name': modelAlt.find('Name').text,
-                                          'program': modelAlt.find('Program').text,
-                                          'fpart': modelAlt.find('FPart').text,
-                                          'directory': modelAlt.find('Directory').text})
-
-            simulationInfo['modelalternatives'] = modelAlternatives
-            self.Simulations.append(simulationInfo)
-
-    def cleanOutputDirs(self):
-        '''
-        cleans the images output directory, so pngs from old reports aren't mistakenly
-        added to new reports. Creates directory if it doesn't exist.
-        '''
-
-        if not os.path.exists(self.images_path):
-            os.makedirs(self.images_path)
-
-        WF.clean_output_dir(self.images_path, '.png')
-
-    def LoadModelAlt(self, simCSVAlt):
-        '''
-        Loads info for specified model alts. Loads correct model plugin class from WDR
-        :param simCSVAlt: simulation alt dict object from self.simulation class
-        :return: class variables
-                self.alternativeFpart
-                self.alternativeDirectory
-                self.ModelAlt - WDR class that is plugin specific
-        '''
-
-        for modelalt in self.ModelAlternatives:
-            if modelalt['name'] == simCSVAlt['modelaltname'] and modelalt['program'] == simCSVAlt['plugin']:
-                self.alternativeFpart = modelalt['fpart']
-                self.alternativeDirectory = modelalt['directory']
-        if self.plugin.lower() == "ressim":
-            self.ModelAlt = WDR.ResSim_Results(self.simulationDir, self.alternativeFpart, self.StartTime, self.EndTime)
-        elif self.plugin.lower() == 'cequalw2':
-            self.ModelAlt = WDR.W2_Results(self.simulationDir, self.modelAltName, self.alternativeDirectory, self.StartTime, self.EndTime)
-
-    def initializeXML(self):
-        '''
-        creates a new version of the template XML file, initiates the XML class and writes the cover page
-        :return: sets class variables
-                    self.XML
-        '''
-
-        # new_xml = 'USBRAutomatedReportOutput.xml' #required name for file
-        new_xml = os.path.join(self.studyDir, 'reports', 'Datasources', 'USBRAutomatedReportOutput.xml') #required name for file
-        self.XML = XML_Utils.XMLReport(new_xml)
-        self.XML.writeCover('DRAFT Temperature Validation Summary Report')
-
-    def writeXMLIntroduction(self):
-        '''
-        writes the intro section for XML file. Creates a line in the intro for each model used
-        '''
-
-        self.XML.writeIntroStart()
-        for model in self.SimulationCSV.keys():
-            self.XML.writeIntroLine(self.SimulationCSV[model]['plugin'])
-        self.XML.writeIntroEnd()
-
-    def copyDefaultFiles(self):
-        self.default_copy_dir = os.path.join(os.path.split(self.batdir)[0], 'Default', '_COPY')
-        self.default_dir = os.path.join(os.path.split(self.batdir)[0], 'Default')
-        if not os.path.exists(self.default_copy_dir):
-            print('ERROR finding default files at {0}'.format(self.default_copy_dir))
-            print('No default files copied.')
-            return
-
-        files_in_directory = os.listdir(self.default_copy_dir)
-
-        #going to reports dir
-        filetypes = ['xml', 'csv']
-        for filetype in filetypes:
-            filtered_files = [file for file in files_in_directory if file.endswith(filetype)]
-            for filtfile in filtered_files:
-                old_file_path = os.path.join(self.default_copy_dir, filtfile)
-                new_file_path = os.path.join(self.studyDir, 'reports', filtfile)
-                if not os.path.exists(new_file_path):
-                    shutil.copyfile(old_file_path, new_file_path)
-                    print('Successfully copied to', new_file_path)
 
     def DefineMonths(self):
         '''
@@ -277,443 +164,7 @@ class MakeAutomatedReport(object):
         '''
 
         self.images_path = os.path.join(self.studyDir, 'reports', 'Images')
-
-    def setSimulationDateTimes(self):
-        '''
-        sets the simulation start time and dates from string format. If timestamp says 24:00, converts it to be correct
-        Datetime format of the next day at 00:00
-        :return: class varables
-                    self.StartTime
-                    self.EndTime
-        '''
-
-        if '24:00' in self.StartTimeStr:
-            tstrtmp = (self.StartTimeStr).replace('24:00', '23:00')
-            self.StartTime = dt.datetime.strptime(tstrtmp, '%d %B %Y, %H:%M')
-            self.StartTime += dt.timedelta(hours=1)
-        else:
-            self.StartTime = dt.datetime.strptime(self.StartTimeStr, '%d %B %Y, %H:%M')
-
-        if '24:00' in self.EndTimeStr:
-            tstrtmp = (self.EndTimeStr).replace('24:00', '23:00')
-            self.EndTime = dt.datetime.strptime(tstrtmp, '%d %B %Y, %H:%M')
-            self.EndTime += dt.timedelta(hours=1)
-        else:
-            self.EndTime = dt.datetime.strptime(self.EndTimeStr, '%d %B %Y, %H:%M')
-
-    def ReadSimulationsCSV(self):
-        '''
-        reads the Simulation file and gets the region info
-        :return: class variable
-                    self.SimulationCSV
-        '''
-        self.SimulationCSV = WDR.ReadSimulationFile(self.baseSimulationName, self.studyDir)
-
-    def SetSimulationCSVVars(self, simlist):
-        '''
-        set variables pertaining to a specified simulation
-        :param simlist: dictionary of specified simulation
-        :return: class variables
-                    self.plugin
-                    self.modelAltName
-                    self.defFile
-        '''
-
-        self.plugin = simlist['plugin']
-        self.modelAltName = simlist['modelaltname']
-        self.defFile = simlist['deffile']
-
-    def ReadGraphicsDefaultFile(self):
-        '''
-        sets up path for graphics default file in study and reads the xml
-        :return: class variable
-                    self.graphicsDefault
-        '''
-
-        graphicsDefaultfile = os.path.join(self.studyDir, 'reports', 'Graphics_Defaults.xml')
-        # graphicsDefaultfile = os.path.join(self.default_dir, 'Graphics_Defaults.xml')
-        self.graphicsDefault = WDR.read_GraphicsDefaults(graphicsDefaultfile)
-
-    def ReadLinesstylesDefaultFile(self):
-        '''
-        sets up path for default line styles file and reads the xml
-        :return: class variable
-                    self.defaultLineStyles
-        '''
-
-        defaultLinesFile = os.path.join(self.studyDir, 'reports', 'defaultLineStyles.xml')
-        # defaultLinesFile = os.path.join(self.default_dir, 'defaultLineStyles.xml')
-        self.defaultLineStyles = WDR.read_DefaultLineStyle(defaultLinesFile)
-
-    def ReadDefinitionsFile(self, simorder):
-        '''
-        reads the chapter definitions file defined in the plugin csv file for a specified simulation
-        :param simorder: simulation dictionary object
-        :return: class variable
-                    self.ChapterDefinitions
-        '''
-
-        ChapterDefinitionsFile = os.path.join(self.studyDir, 'reports', simorder['deffile'])
-        self.ChapterDefinitions = WDR.read_ChapterDefFile(ChapterDefinitionsFile)
-
-    def setSimulationVariables(self, simulation):
-        '''
-        sets various class variables for selected variable
-        sets simulation dates and times
-        :param simulation: simulation dictionary object for specified simulation
-        :return: class variables
-                    self.SimulationName
-                    self.baseSimulationName
-                    self.simulationDir
-                    self.DSSFile
-                    self.StartTimeStr
-                    self.EndTimeStr
-                    self.LastComputed
-                    self.ModelAlternatives
-        '''
-
-        self.SimulationName = simulation['name']
-        self.baseSimulationName = simulation['basename']
-        self.simulationDir = simulation['directory']
-        self.DSSFile = simulation['dssfile']
-        self.StartTimeStr = simulation['starttime']
-        self.EndTimeStr = simulation['endtime']
-        self.LastComputed = simulation['lastcomputed']
-        self.ModelAlternatives = simulation['modelalternatives']
-        self.setSimulationDateTimes()
-
-    def WriteChapter(self):
-        '''
-        writes each chapter defined in the simulation CSV file to the XML file. Generates plots and figures
-        :return: class variables
-                    self.ChapterName
-                    self.ChapterRegion
-        '''
-
-        for Chapter in self.ChapterDefinitions:
-            self.ChapterName = Chapter['name']
-            self.ChapterRegion = Chapter['region']
-            self.XML.writeChapterStart(self.ChapterName)
-            for section in Chapter['sections']:
-                section_header = section['header']
-                self.XML.writeSectionHeader(section_header)
-                for object in section['objects']:
-                    if object['type'] == 'TimeSeriesPlot':
-                        self.MakeTimeSeriesPlot(object)
-                    elif object['type'] == 'ProfilePlot':
-                        self.MakeProfilePlot(object)
-                    elif object['type'] == 'ErrorStatisticsTable':
-                        self.MakeErrorStatisticsTable(object)
-                    elif object['type'] == 'MonthlyStatisticsTable':
-                        self.MakeMonthlyStatisticsTable(object)
-                    elif object['type'] == 'BuzzPlot':
-                        self.MakeBuzzPlot(object)
-                    else:
-                        print('Section Type {0} not identified.'.format(section['type']))
-                        print('Skipping Section..')
-                self.XML.writeSectionHeaderEnd()
-            self.XML.writeChapterEnd()
-
-    def load_defaultPlotObject(self, plotobject):
-        '''
-        loads the graphic default options. Uses deepcopy so residual settings are not carried over
-        :param plotobject: string specifying the default graphics object
-        :return:
-            plot_info: dict of object settings
-        '''
-
-        plot_info = copy.deepcopy(self.graphicsDefault[plotobject])
-        return plot_info
-
-    def getLineDefaultSettings(self, LineSettings, param, i):
-        '''
-        gets line settings and adds missing needed settings with defaults. Then translates java style inputs to
-        python commands. Gets colors and styles.
-        :param LineSettings: dictionary object containing settings and flags for lines/points
-        :param param: parameter of data in order to grab default
-        :param i: number of line on the plot in order to get the right sequential color
-        :return:
-            LineSettings: dictionary containing keys describing how the line/points are drawn
-        '''
-
-        if param != None:
-            param = param.lower()
-        LineSettings = self.getDrawFlags(LineSettings)
-        if LineSettings['drawline'] == 'true':
-            if param in self.defaultLineStyles.keys():
-                if i >= len(self.defaultLineStyles[param]['lines']):
-                    i = i - len(self.defaultLineStyles[param]['lines'])
-                default_lines = self.defaultLineStyles[param]['lines'][i]
-                for key in default_lines.keys():
-                    if key not in LineSettings.keys():
-                        LineSettings[key] = default_lines[key]
-
-            default_default_lines = self.get_DefaultDefaultLineStyles(i)
-            for key in default_default_lines.keys():
-                if key not in LineSettings.keys():
-                    LineSettings[key] = default_default_lines[key]
-
-            LineSettings = self.translateLineStylePatterns(LineSettings) #TODO: convert colors?
-
-        if LineSettings['drawpoints'] == 'true':
-            if param in self.defaultLineStyles.keys():
-                if i >= len(self.defaultLineStyles[param]['lines']):
-                    i = i - len(self.defaultLineStyles[param]['lines'])
-                default_lines = self.defaultLineStyles[param]['lines'][i]
-                for key in default_lines.keys():
-                    if key not in LineSettings.keys():
-                        LineSettings[key] = default_lines[key]
-
-            default_default_points = self.get_DefaultDefaultPointStyles(i)
-
-            for key in default_default_points.keys():
-                if key not in LineSettings.keys():
-                    LineSettings[key] = default_default_points[key]
-            try:
-                if int(LineSettings['numptsskip']) == 0:
-                    LineSettings['numptsskip'] = 1
-            except ValueError:
-                print('Invalid setting for numptsskip.', LineSettings['numptsskip'])
-                print('defaulting to 25')
-                LineSettings['numptsskip'] = 25
-
-            LineSettings = self.translatePointStylePatterns(LineSettings) #TODO: convert colors?
-
-        return LineSettings
-
-    def getDrawFlags(self, LineSettings):
-        '''
-        reads line settings dictionary to look for defined settings of lines or points to determine if either or both
-        should be drawn. If nothing is explicitly stated, then draw lines with default settings.
-        :param LineSettings: dictionary object containing settings and flags for lines/points
-        :return:
-            LineSettings: dictionary containing keys describing how the line/points are drawn
-        '''
-
-        #unless explicitly stated, look for key identifiers to draw lines or not
-        LineVars = ['linecolor', 'linestylepattern', 'linewidth']
-        PointVars = ['pointfillcolor', 'pointlinecolor', 'symboltype', 'symbolsize', 'numptsskip']
-
-        if 'drawline' not in LineSettings.keys():
-            for var in LineVars:
-                if var in LineSettings.keys():
-                    LineSettings['drawline'] = 'true'
-                    break
-            if 'drawline' not in LineSettings.keys():
-                LineSettings['drawline'] = 'false'
-
-        if 'drawpoints' not in LineSettings.keys():
-            for var in PointVars:
-                if var in LineSettings.keys():
-                    LineSettings['drawpoints'] = 'true'
-                    break
-            if 'drawpoints' not in LineSettings.keys():
-                LineSettings['drawpoints'] = 'false'
-
-        if LineSettings['drawpoints'] == 'false' and LineSettings['drawline'] == 'false':
-            LineSettings['drawline'] = 'true' #gotta do something..
-
-        return LineSettings
-
-    def translateLineStylePatterns(self, LineSettings):
-        '''
-        translates java line style patterns to python friendly commands.
-        :param LineSettings: dictionary containing keys describing how the line/points are drawn
-        :return:
-            LineSettings: dictionary containing keys describing how the line/points are drawn
-        '''
-
-        #java|python
-        linestylesdict = {'dash': 'dashed',
-                          'dash dot': 'dashdot',
-                          'dash dot-dot': (0, (3, 5, 1, 5, 1, 5)), #this one doesnt get a string name?
-                          'dot': 'dotted',
-                          'solid': 'solid'}
-
-        if 'linestylepattern' in LineSettings.keys():
-            if LineSettings['linestylepattern'].lower() in linestylesdict.values(): #existing python values
-                LineSettings['linestylepattern'] = LineSettings['linestylepattern'].lower() #use python but lower it
-            else:
-                try:
-                    LineSettings['linestylepattern'] = linestylesdict[LineSettings['linestylepattern'].lower()]
-                except KeyError:
-                    print('Invalid lineStylePattern:', LineSettings['linestylepattern'])
-                    print('Defaulting to Solid.')
-                    LineSettings['linestylepattern'] = 'solid'
-        else:
-            print('lineStylePattern undefined for line. Using solid')
-            LineSettings['linestylepattern'] = 'solid'
-
-        return LineSettings
-
-    def translatePointStylePatterns(self, LineSettings):
-        '''
-        translates java point style patterns to python friendly commands.
-        :param LineSettings: dictionary containing keys describing how the line/points are drawn
-        :return:
-            LineSettings: dictionary containing keys describing how the line/points are drawn
-        '''
-
-        #java|python
-        #https://matplotlib.org/stable/api/markers_api.html#module-matplotlib.markers
-        pointstylesdict = {1: 's', #square
-                           2: 'o', #circle
-                           3: '^', #triangle up
-                           4: 'v', #triangle down
-                           5: 'D', #diamond
-                           6: '*' #star
-                           }
-
-        if 'symboltype' in LineSettings.keys():
-            if LineSettings['symboltype'] in pointstylesdict.values(): #existing python values
-                LineSettings['symboltype'] = LineSettings['symboltype'] #needs to be case sensitive..
-            else:
-                try:
-                    LineSettings['symboltype'] = pointstylesdict[int(LineSettings['symboltype'])]
-                except:
-                    print('Invalid Symboltype:', LineSettings['symboltype'])
-                    print('Defaulting to Square.')
-                    LineSettings['symboltype'] = 's'
-
-        else:
-            print('Symbol not defined. Defaulting to Square.')
-            LineSettings['symboltype'] = 's'
-
-        return LineSettings
-
-    def get_DefaultDefaultLineStyles(self, i):
-        '''
-        creates a default line style based off of the number line and default colors
-        used if param is undefined or not in defaults file
-        :param i: count of line on the plot
-        :return: dictionary with line settings
-        '''
-
-        if i >= len(self.def_colors):
-            i = i - len(self.def_colors)
-        return {'linewidth': 2, 'linecolor': self.def_colors[i], 'linestyle': 'solid'}
-
-    def get_DefaultDefaultPointStyles(self, i):
-        '''
-        creates a default point style based off of the number points and default colors
-        used if param is undefined or not in defaults file
-        :param i: count of points on the plot
-        :return: dictionary with point settings
-        '''
-
-        if i >= len(self.def_colors):
-            i = i - len(self.def_colors)
-        return {'pointfillcolor': self.def_colors[i], 'pointlinecolor': self.def_colors[i], 'symboltype': 1,
-                'symbolsize': 5, 'numptsskip': 0}
-
-    def replaceDefaults(self, default_settings, object_settings):
-        '''
-        makes deep copies of default and defined settings so no settings are accidentally carried over
-        replaces flagged values (%%) with easily identified variables
-        iterates through settings and replaces all default settings with defined settings
-        :param default_settings: default object settings dictionary
-        :param object_settings: user defined settings dictionary
-        :return:
-            default_settings: dictionary of user and default settings
-        '''
-
-        default_settings = copy.deepcopy(self.replaceflaggedValues(default_settings))
-        object_settings = copy.deepcopy(self.replaceflaggedValues(object_settings))
-
-        for key in object_settings.keys():
-            if key not in default_settings.keys(): #if defaults doesnt have key
-                default_settings[key] = object_settings[key]
-            elif default_settings[key] == None: #if defaults has key, but is none
-                default_settings[key] = object_settings[key]
-            elif isinstance(object_settings[key], list): #if settings is a list, aka rows or lines
-                if key.lower() == 'rows': #if the default has rows defined, just overwrite them.
-                    if key in default_settings.keys():
-                        default_settings[key] = object_settings[key]
-                elif key.lower() not in default_settings.keys():
-                    default_settings[key] = object_settings[key] #if the defaults dont have anything defined, fill it in
-                else:
-                    for item in object_settings[key]:
-                        if isinstance(item, dict):
-                            if 'flag' in item.keys(): #if we flag line
-                                flag_match = False
-                                for defaultitem in default_settings[key]:
-                                    if 'flag' in defaultitem.keys():
-                                        if defaultitem['flag'].lower() == item['flag'].lower(): #matching flags!
-                                            flag_match = True
-                                            for subkey in item.keys(): #for each settings defined, overwrite
-                                                defaultitem[subkey] = item[subkey]
-                                if not flag_match:
-                                    default_settings[key].append(item)
-                        if isinstance(item, str):
-                            default_settings[key] = object_settings[key] #replace string with list, ex datessource
-                            break
-            else:
-                default_settings[key] = object_settings[key]
-
-        return default_settings
-
-    def replaceflaggedValues(self, settings):
-        '''
-        recursive function to replace flagged values in settings
-        :param settings: dict, list or string containing settings, potentially with flags
-        :return:
-            settings: dict, list or string with flags replaced
-        '''
-
-        if isinstance(settings, str):
-            if '%%' in settings:
-                newval = self.replaceFlaggedValue(settings)
-                settings = newval
-        elif isinstance(settings, dict):
-            for key in settings.keys():
-                if settings[key] == None:
-                    continue
-                elif isinstance(settings[key], dict):
-                    settings[key] = self.replaceflaggedValues(settings[key])
-                elif isinstance(settings[key], list):
-                    new_list = []
-                    for item in settings[key]:
-                        new_list.append(self.replaceflaggedValues(item))
-                    settings[key] = new_list
-                else:
-                    if '%%' in settings[key]:
-                        newval = self.replaceFlaggedValue(settings[key])
-                        settings[key] = newval
-        elif isinstance(settings, list):
-            for i, item in enumerate(settings):
-                if '%%' in item:
-                    settings[i] = self.replaceFlaggedValue(item)
-
-        return settings
-
-    def replaceFlaggedValue(self, value):
-        '''
-        replaces strings with flagged values with known paths
-        flags are now case insensitive with more intelligent matching. yay.
-        needs to use '[1:-1]' for paths, otherwise things like /t in a path C:/trains will be taken literal
-        :param value: string potentially containing flagged value
-        :return:
-            value: string with potential flags replaced
-        '''
-
-        flagged_values = {'%%ModelDSS%%': self.DSSFile,
-                          '%%region%%': self.ChapterRegion,
-                          '%%Fpart%%': self.alternativeFpart,
-                          '%%plugin%%': self.plugin,
-                          '%%modelAltName%%': self.modelAltName,
-                          '%%SimulationName%%': self.SimulationName,
-                          '%%baseSimulationName%%': self.baseSimulationName,
-                          '%%starttime%%': self.StartTimeStr,
-                          '%%endtime%%': self.EndTimeStr,
-                          '%%LastComputed%%': self.LastComputed,
-                          '%%observedDir%%': self.observedDir,
-                          '%%startyear%%': str(self.startYear),
-                          '%%endyear%%': str(self.endYear)
-                          }
-        for fv in flagged_values.keys():
-            pattern = re.compile(re.escape(fv), re.IGNORECASE)
-            value = pattern.sub(repr(flagged_values[fv])[1:-1], value) #this seems weird with [1:-1] but paths wont work otherwise
-        return value
+        self.default_dir = os.path.join(os.path.split(self.batdir)[0], 'Default')
 
     def MakeTimeSeriesPlot(self, object_settings):
         '''
@@ -955,10 +406,10 @@ class MakeAutomatedReport(object):
         elif plot_parameter != None:
             plot_units = self.units[plot_parameter.lower()]
             if isinstance(plot_units, dict):
-                    if 'unitsystem' in object_settings.keys():
-                        plot_units = plot_units[object_settings['unitsystem'].lower()]
-                    else:
-                        plot_units = ''
+                if 'unitsystem' in object_settings.keys():
+                    plot_units = plot_units[object_settings['unitsystem'].lower()]
+                else:
+                    plot_units = ''
         else:
             plot_units = ''
         object_settings = self.updateFlaggedValues(object_settings, '%%units%%', plot_units)
@@ -1057,7 +508,7 @@ class MakeAutomatedReport(object):
                                        edgecolor=current_ls['pointlinecolor'], s=float(current_ls['symbolsize']),
                                        label=current_ls['label'])
 
-                    show_legend, show_xlabel, show_ylabel = self.get_plot_label_masks(i, len(pgi), subplot_cols)
+                    show_legend, show_xlabel, show_ylabel = self.getPlotLabelMasks(i, len(pgi), subplot_cols)
 
                     if current_object_settings['gridlines'].lower() == 'true':
                         ax.grid(zorder=0)
@@ -1474,21 +925,21 @@ class MakeAutomatedReport(object):
 
                 if line_settings['drawline'].lower() == 'true' and line_settings['drawpoints'].lower() == 'true':
                     curax.plot(dates, values, label=line_settings['label'], c=line_settings['linecolor'],
-                            lw=line_settings['linewidth'], ls=line_settings['linestylepattern'],
-                            marker=line_settings['symboltype'], markerfacecolor=line_settings['pointfillcolor'],
-                            markeredgecolor=line_settings['pointlinecolor'], markersize=float(line_settings['symbolsize']),
-                            markevery=int(line_settings['numptsskip']), zorder=int(line_settings['zorder']))
+                               lw=line_settings['linewidth'], ls=line_settings['linestylepattern'],
+                               marker=line_settings['symboltype'], markerfacecolor=line_settings['pointfillcolor'],
+                               markeredgecolor=line_settings['pointlinecolor'], markersize=float(line_settings['symbolsize']),
+                               markevery=int(line_settings['numptsskip']), zorder=int(line_settings['zorder']))
 
                 elif line_settings['drawline'].lower() == 'true':
                     curax.plot(dates, values, label=line_settings['label'], c=line_settings['linecolor'],
-                            lw=line_settings['linewidth'], ls=line_settings['linestylepattern'],
-                            zorder=int(line_settings['zorder']))
+                               lw=line_settings['linewidth'], ls=line_settings['linestylepattern'],
+                               zorder=int(line_settings['zorder']))
 
                 elif line_settings['drawpoints'].lower() == 'true':
                     curax.scatter(dates[::int(line_settings['numptsskip'])], values[::int(line_settings['numptsskip'])],
-                               marker=line_settings['symboltype'], facecolor=line_settings['pointfillcolor'],
-                               edgecolor=line_settings['pointlinecolor'], s=float(line_settings['symbolsize']),
-                               label=line_settings['label'], zorder=int(line_settings['zorder']))
+                                  marker=line_settings['symboltype'], facecolor=line_settings['pointfillcolor'],
+                                  edgecolor=line_settings['pointlinecolor'], s=float(line_settings['symbolsize']),
+                                  label=line_settings['label'], zorder=int(line_settings['zorder']))
 
         for stackplot_ax in stackplots.keys():
             if stackplot_ax == 'left':
@@ -1618,6 +1069,728 @@ class MakeAutomatedReport(object):
 
         self.XML.writeTimeSeriesPlot(os.path.basename(figname), object_settings['description'])
 
+    def ReadSimulationInfo(self, simulationInfoFile):
+        '''
+        reads sim info XML file and organizes paths and variables into a list for iteration
+        :param simulationInfoFile: full path to simulation information XML file from WAT
+        :return: class variables:
+                    self.Simulations
+                    self.reportType
+                    self.studyDir
+                    self.observedData
+        '''
+
+        self.Simulations = []
+        tree = ET.parse(simulationInfoFile)
+        root = tree.getroot()
+
+        self.reportType = root.find('ReportType').text
+        self.studyDir = root.find('Study/Directory').text
+        self.observedDir = root.find('Study/ObservedData').text
+
+        SimRoot = root.find('Simulations')
+        for simulation in SimRoot:
+            simulationInfo = {'name': simulation.find('Name').text,
+                              'basename': simulation.find('BaseName').text,
+                              'directory': simulation.find('Directory').text,
+                              'dssfile': simulation.find('DSSFile').text,
+                              'starttime': simulation.find('StartTime').text,
+                              'endtime': simulation.find('EndTime').text,
+                              'lastcomputed': simulation.find('LastComputed').text
+                              }
+
+            modelAlternatives = []
+            for modelAlt in simulation.find('ModelAlternatives'):
+                modelAlternatives.append({'name': modelAlt.find('Name').text,
+                                          'program': modelAlt.find('Program').text,
+                                          'fpart': modelAlt.find('FPart').text,
+                                          'directory': modelAlt.find('Directory').text})
+
+            simulationInfo['modelalternatives'] = modelAlternatives
+            self.Simulations.append(simulationInfo)
+
+    def ReadSimulationsCSV(self):
+        '''
+        reads the Simulation file and gets the region info
+        :return: class variable
+                    self.SimulationCSV
+        '''
+        self.SimulationCSV = WDR.ReadSimulationFile(self.baseSimulationName, self.studyDir)
+
+    def ReadGraphicsDefaultFile(self):
+        '''
+        sets up path for graphics default file in study and reads the xml
+        :return: class variable
+                    self.graphicsDefault
+        '''
+
+        graphicsDefaultfile = os.path.join(self.studyDir, 'reports', 'Graphics_Defaults.xml')
+        # graphicsDefaultfile = os.path.join(self.default_dir, 'Graphics_Defaults.xml') #TODO: implent with build
+        self.graphicsDefault = WDR.ReadGraphicsDefaults(graphicsDefaultfile)
+
+    def ReadLinesstylesDefaultFile(self):
+        '''
+        sets up path for default line styles file and reads the xml
+        :return: class variable
+                    self.defaultLineStyles
+        '''
+
+        defaultLinesFile = os.path.join(self.studyDir, 'reports', 'defaultLineStyles.xml')
+        # defaultLinesFile = os.path.join(self.default_dir, 'defaultLineStyles.xml') #TODO: implent with build
+        self.defaultLineStyles = WDR.ReadDefaultLineStyle(defaultLinesFile)
+
+    def ReadDefinitionsFile(self, simorder):
+        '''
+        reads the chapter definitions file defined in the plugin csv file for a specified simulation
+        :param simorder: simulation dictionary object
+        :return: class variable
+                    self.ChapterDefinitions
+        '''
+
+        ChapterDefinitionsFile = os.path.join(self.studyDir, 'reports', simorder['deffile'])
+        self.ChapterDefinitions = WDR.ReadChapterDefFile(ChapterDefinitionsFile)
+
+    def SetSimulationDateTimes(self):
+        '''
+        sets the simulation start time and dates from string format. If timestamp says 24:00, converts it to be correct
+        Datetime format of the next day at 00:00
+        :return: class varables
+                    self.StartTime
+                    self.EndTime
+        '''
+
+        if '24:00' in self.StartTimeStr:
+            tstrtmp = (self.StartTimeStr).replace('24:00', '23:00')
+            self.StartTime = dt.datetime.strptime(tstrtmp, '%d %B %Y, %H:%M')
+            self.StartTime += dt.timedelta(hours=1)
+        else:
+            self.StartTime = dt.datetime.strptime(self.StartTimeStr, '%d %B %Y, %H:%M')
+
+        if '24:00' in self.EndTimeStr:
+            tstrtmp = (self.EndTimeStr).replace('24:00', '23:00')
+            self.EndTime = dt.datetime.strptime(tstrtmp, '%d %B %Y, %H:%M')
+            self.EndTime += dt.timedelta(hours=1)
+        else:
+            self.EndTime = dt.datetime.strptime(self.EndTimeStr, '%d %B %Y, %H:%M')
+
+    def SetSimulationCSVVars(self, simlist):
+        '''
+        set variables pertaining to a specified simulation
+        :param simlist: dictionary of specified simulation
+        :return: class variables
+                    self.plugin
+                    self.modelAltName
+                    self.defFile
+        '''
+
+        self.plugin = simlist['plugin']
+        self.modelAltName = simlist['modelaltname']
+        self.defFile = simlist['deffile']
+
+    def SetSimulationVariables(self, simulation):
+        '''
+        sets various class variables for selected variable
+        sets simulation dates and times
+        :param simulation: simulation dictionary object for specified simulation
+        :return: class variables
+                    self.SimulationName
+                    self.baseSimulationName
+                    self.simulationDir
+                    self.DSSFile
+                    self.StartTimeStr
+                    self.EndTimeStr
+                    self.LastComputed
+                    self.ModelAlternatives
+        '''
+
+        self.SimulationName = simulation['name']
+        self.baseSimulationName = simulation['basename']
+        self.simulationDir = simulation['directory']
+        self.DSSFile = simulation['dssfile']
+        self.StartTimeStr = simulation['starttime']
+        self.EndTimeStr = simulation['endtime']
+        self.LastComputed = simulation['lastcomputed']
+        self.ModelAlternatives = simulation['modelalternatives']
+        self.SetSimulationDateTimes()
+
+    def getLineDefaultSettings(self, LineSettings, param, i):
+        '''
+        gets line settings and adds missing needed settings with defaults. Then translates java style inputs to
+        python commands. Gets colors and styles.
+        :param LineSettings: dictionary object containing settings and flags for lines/points
+        :param param: parameter of data in order to grab default
+        :param i: number of line on the plot in order to get the right sequential color
+        :return:
+            LineSettings: dictionary containing keys describing how the line/points are drawn
+        '''
+
+        if param != None:
+            param = param.lower()
+        LineSettings = self.getDrawFlags(LineSettings)
+        if LineSettings['drawline'] == 'true':
+            if param in self.defaultLineStyles.keys():
+                if i >= len(self.defaultLineStyles[param]['lines']):
+                    i = i - len(self.defaultLineStyles[param]['lines'])
+                default_lines = self.defaultLineStyles[param]['lines'][i]
+                for key in default_lines.keys():
+                    if key not in LineSettings.keys():
+                        LineSettings[key] = default_lines[key]
+
+            default_default_lines = self.getDefaultDefaultLineStyles(i)
+            for key in default_default_lines.keys():
+                if key not in LineSettings.keys():
+                    LineSettings[key] = default_default_lines[key]
+
+            LineSettings = self.translateLineStylePatterns(LineSettings) #TODO: convert colors?
+
+        if LineSettings['drawpoints'] == 'true':
+            if param in self.defaultLineStyles.keys():
+                if i >= len(self.defaultLineStyles[param]['lines']):
+                    i = i - len(self.defaultLineStyles[param]['lines'])
+                default_lines = self.defaultLineStyles[param]['lines'][i]
+                for key in default_lines.keys():
+                    if key not in LineSettings.keys():
+                        LineSettings[key] = default_lines[key]
+
+            default_default_points = self.getDefaultDefaultPointStyles(i)
+
+            for key in default_default_points.keys():
+                if key not in LineSettings.keys():
+                    LineSettings[key] = default_default_points[key]
+            try:
+                if int(LineSettings['numptsskip']) == 0:
+                    LineSettings['numptsskip'] = 1
+            except ValueError:
+                print('Invalid setting for numptsskip.', LineSettings['numptsskip'])
+                print('defaulting to 25')
+                LineSettings['numptsskip'] = 25
+
+            LineSettings = self.translatePointStylePatterns(LineSettings) #TODO: convert colors?
+
+        return LineSettings
+
+    def getDrawFlags(self, LineSettings):
+        '''
+        reads line settings dictionary to look for defined settings of lines or points to determine if either or both
+        should be drawn. If nothing is explicitly stated, then draw lines with default settings.
+        :param LineSettings: dictionary object containing settings and flags for lines/points
+        :return:
+            LineSettings: dictionary containing keys describing how the line/points are drawn
+        '''
+
+        #unless explicitly stated, look for key identifiers to draw lines or not
+        LineVars = ['linecolor', 'linestylepattern', 'linewidth']
+        PointVars = ['pointfillcolor', 'pointlinecolor', 'symboltype', 'symbolsize', 'numptsskip']
+
+        if 'drawline' not in LineSettings.keys():
+            for var in LineVars:
+                if var in LineSettings.keys():
+                    LineSettings['drawline'] = 'true'
+                    break
+            if 'drawline' not in LineSettings.keys():
+                LineSettings['drawline'] = 'false'
+
+        if 'drawpoints' not in LineSettings.keys():
+            for var in PointVars:
+                if var in LineSettings.keys():
+                    LineSettings['drawpoints'] = 'true'
+                    break
+            if 'drawpoints' not in LineSettings.keys():
+                LineSettings['drawpoints'] = 'false'
+
+        if LineSettings['drawpoints'] == 'false' and LineSettings['drawline'] == 'false':
+            LineSettings['drawline'] = 'true' #gotta do something..
+
+        return LineSettings
+
+    def getDefaultDefaultLineStyles(self, i):
+        '''
+        creates a default line style based off of the number line and default colors
+        used if param is undefined or not in defaults file
+        :param i: count of line on the plot
+        :return: dictionary with line settings
+        '''
+
+        if i >= len(self.def_colors):
+            i = i - len(self.def_colors)
+        return {'linewidth': 2, 'linecolor': self.def_colors[i], 'linestyle': 'solid'}
+
+    def getDefaultDefaultPointStyles(self, i):
+        '''
+        creates a default point style based off of the number points and default colors
+        used if param is undefined or not in defaults file
+        :param i: count of points on the plot
+        :return: dictionary with point settings
+        '''
+
+        if i >= len(self.def_colors):
+            i = i - len(self.def_colors)
+        return {'pointfillcolor': self.def_colors[i], 'pointlinecolor': self.def_colors[i], 'symboltype': 1,
+                'symbolsize': 5, 'numptsskip': 0}
+
+    def getLineSettings(self, LineSettings, Flag):
+        '''
+        gets the correct line settings for the selected flag
+        :param LineSettings: dictionary of settings
+        :param Flag: selected flag to match line
+        :return: deep copy of line
+        '''
+
+        for line in LineSettings:
+            if Flag == line['flag']:
+                return copy.deepcopy(line)
+
+    def getPlotLabelMasks(self, idx, nprofiles, cols):
+        '''
+        Get plot label masks
+        :param idx: page index
+        :param nprofiles: number of profiles
+        :param cols: number of columns
+        :return: boolean fields for plotting
+        '''
+
+        if idx == cols - 1:
+            add_legend = True
+        else:
+            add_legend = False
+        if idx >= nprofiles - cols:
+            add_xlabel = True
+        else:
+            add_xlabel = False
+        if idx % cols == 0:
+            add_ylabel = True
+        else:
+            add_ylabel = False
+        return add_legend, add_xlabel, add_ylabel
+
+    def getTimeSeries(self, Line_info):
+        '''
+        gets time series data from defined sources
+        :param Line_info: dictionary of line setttings containing datasources
+        :return: dates, values, units
+        '''
+
+        if 'dss_path' in Line_info.keys(): #Get data from DSS record
+            if 'dss_filename' not in Line_info.keys():
+                print('DSS_Filename not set for Line: {0}'.format(Line_info))
+                return [], [], None
+            else:
+                times, values, units = WDR.ReadDSSData(Line_info['dss_filename'], Line_info['dss_path'],
+                                                       self.StartTime, self.EndTime)
+
+                if np.any(values == None):
+                    return [], [], None
+                elif len(values) == 0:
+                    return [], [], None
+
+        elif 'w2_file' in Line_info.keys():
+            if 'structurenumbers' in Line_info.keys():
+                # Ryan Miles: yeah looks like it's str_brX.npt, and X is 1-# of branches (which is defined in the control file)
+                times, values = self.ModelAlt.readStructuredTimeSeries(Line_info['w2_file'], Line_info['structurenumbers'])
+                # values, parameter = self.ModelAlt.filterByParameter(values, Line_info) #we need all params...
+            else:
+                times, values = self.ModelAlt.readTimeSeries(Line_info['w2_file'], **Line_info)
+            if 'units' in Line_info.keys():
+                units = Line_info['units']
+            else:
+                units = None
+                # units = self.units[Line_info['parameter'].lower()]
+
+        elif 'xy' in Line_info.keys():
+            times, values = self.ModelAlt.readTimeSeries(Line_info['parameter'], Line_info['xy'])
+            units = self.units[Line_info['parameter'].lower()]
+
+        else:
+            print('No Data Defined for line')
+            return [], [], None
+
+        if len(values) == 0:
+            return [], [], None
+        else:
+            times, values = self.changeTimeSeriesInterval(times, values, Line_info)
+            return times, values, units
+
+    def getTimeIntervalSeconds(self, interval):
+        '''
+        converts a given time interval into seconds
+        :param interval: DSS interval (ex: 6MIN)
+        :return: time interval in seconds
+        '''
+
+        interval = interval.lower()
+        if 'min' in interval:
+            timeint = int(interval.replace('min','')) * 60 #convert to sec
+            return timeint
+        elif 'hour' in interval:
+            timeint = int(interval.replace('hour','')) * 3600 #convert to sec
+            return timeint
+        elif 'day' in interval:
+            timeint = int(interval.replace('day','')) * 86400 #convert to sec
+            return timeint
+        elif 'mon' in interval:
+            timeint = int(interval.replace('mon','')) * 2.628e+6 #convert to sec
+            return timeint
+        elif 'year' in interval:
+            timeint = int(interval.replace('year','')) * 3.154e+7 #convert to sec
+            return timeint
+        else:
+            print('Unidentified time interval')
+            return 0
+
+    def getTimeInterval(self, times):
+        '''
+        attempts to find out the time interval of the time series by finding the most common time interval
+        :param times: list of times
+        :return:
+        '''
+
+        t_ints = []
+        for i, t in enumerate(times):
+            if i == 0: #skip 1
+                last_time = t
+            else:
+                t_ints.append(t - last_time)
+
+        # occurence_count = Counter(t_ints)
+        # most_common_interval = occurence_count.most_common(1)[0][0]
+        return self.getMostCommon(t_ints)
+
+    def getMostCommon(self, listvars):
+        '''
+        gets most common instance of a var in a list
+        :param listvars: list of variables
+        :return: value that is most common in the list
+        '''
+
+        occurence_count = Counter(listvars)
+        most_common_interval = occurence_count.most_common(1)[0][0]
+        return most_common_interval
+
+    def getProfileData(self, Line_info, timesteps):
+        '''
+        reads in profile data from various sources for profile plots at given timesteps
+        attempts to get elevations if possible
+        :param Line_info: dictionary containing settings for line
+        :param timesteps: given list of timesteps to extract data at
+        :return: values, elevations, depths, flag
+        '''
+
+        if 'filename' in Line_info.keys(): #Get data from Observed
+            filename = Line_info['filename']
+            values, depths = WDR.ReadTextProfile(filename, timesteps)
+            return values, [], depths, Line_info['flag']
+
+        elif 'w2_segment' in Line_info.keys():
+            vals, elevations, depths = self.ModelAlt.readProfileData(Line_info['w2_segment'], timesteps)
+            return vals, elevations, depths, Line_info['flag']
+
+        elif 'ressimresname' in Line_info.keys():
+            vals, elevations, depths = self.ModelAlt.readProfileData(Line_info['ressimresname'],
+                                                                     Line_info['parameter'], timesteps)
+            return vals, elevations, depths, Line_info['flag']
+
+        print('No Data Defined for line')
+        print('Line:', Line_info)
+        return [], [], [], None
+
+    def getProfileDates(self, Line_info):
+        '''
+        gets dates from observed text profiles
+        :param Line_info: dictionary containing line information, must include filename
+        :return: list of times
+        '''
+
+        if 'filename' in Line_info.keys(): #Get data from Observed
+            times = WDR.getTextProfileDates(Line_info['filename'], self.StartTime, self.EndTime) #TODO: set up for not observed data??
+            return times
+
+        print('Illegal Dates selection. ')
+        return []
+
+    def getPlotUnits(self, unitslist, object_settings):
+        '''
+        gets units for the plot. Either looks at data already plotted units, or if there are no defined units
+        in the plotted data, look for a parameter flag
+        :param unitslist: list of units plotted
+        :param object_settings: dictionary with plot settings
+        :return: string units value
+        '''
+
+        if len(unitslist) > 0:
+            plotunits = self.getMostCommon(unitslist)
+        elif 'parameter' in object_settings.keys() and len(unitslist) == 0:
+            try:
+                plotunits = self.units[object_settings['parameter'].lower()]
+                if isinstance(plotunits, dict):
+                    if 'unitsystem' in object_settings.keys():
+                        plotunits = plotunits[object_settings['unitsystem'].lower()]
+                    else:
+                        plotunits = ''
+            except KeyError:
+                plotunits = ''
+        else:
+            print('No units defined.')
+            plotunits = ''
+        return plotunits
+
+    def replaceDefaults(self, default_settings, object_settings):
+        '''
+        makes deep copies of default and defined settings so no settings are accidentally carried over
+        replaces flagged values (%%) with easily identified variables
+        iterates through settings and replaces all default settings with defined settings
+        :param default_settings: default object settings dictionary
+        :param object_settings: user defined settings dictionary
+        :return:
+            default_settings: dictionary of user and default settings
+        '''
+
+        default_settings = copy.deepcopy(self.replaceflaggedValues(default_settings))
+        object_settings = copy.deepcopy(self.replaceflaggedValues(object_settings))
+
+        for key in object_settings.keys():
+            if key not in default_settings.keys(): #if defaults doesnt have key
+                default_settings[key] = object_settings[key]
+            elif default_settings[key] == None: #if defaults has key, but is none
+                default_settings[key] = object_settings[key]
+            elif isinstance(object_settings[key], list): #if settings is a list, aka rows or lines
+                if key.lower() == 'rows': #if the default has rows defined, just overwrite them.
+                    if key in default_settings.keys():
+                        default_settings[key] = object_settings[key]
+                elif key.lower() not in default_settings.keys():
+                    default_settings[key] = object_settings[key] #if the defaults dont have anything defined, fill it in
+                else:
+                    for item in object_settings[key]:
+                        if isinstance(item, dict):
+                            if 'flag' in item.keys(): #if we flag line
+                                flag_match = False
+                                for defaultitem in default_settings[key]:
+                                    if 'flag' in defaultitem.keys():
+                                        if defaultitem['flag'].lower() == item['flag'].lower(): #matching flags!
+                                            flag_match = True
+                                            for subkey in item.keys(): #for each settings defined, overwrite
+                                                defaultitem[subkey] = item[subkey]
+                                if not flag_match:
+                                    default_settings[key].append(item)
+                        if isinstance(item, str):
+                            default_settings[key] = object_settings[key] #replace string with list, ex datessource
+                            break
+            else:
+                default_settings[key] = object_settings[key]
+
+        return default_settings
+
+    def replaceflaggedValues(self, settings):
+        '''
+        recursive function to replace flagged values in settings
+        :param settings: dict, list or string containing settings, potentially with flags
+        :return:
+            settings: dict, list or string with flags replaced
+        '''
+
+        if isinstance(settings, str):
+            if '%%' in settings:
+                newval = self.replaceFlaggedValue(settings)
+                settings = newval
+        elif isinstance(settings, dict):
+            for key in settings.keys():
+                if settings[key] == None:
+                    continue
+                elif isinstance(settings[key], dict):
+                    settings[key] = self.replaceflaggedValues(settings[key])
+                elif isinstance(settings[key], list):
+                    new_list = []
+                    for item in settings[key]:
+                        new_list.append(self.replaceflaggedValues(item))
+                    settings[key] = new_list
+                else:
+                    if '%%' in settings[key]:
+                        newval = self.replaceFlaggedValue(settings[key])
+                        settings[key] = newval
+        elif isinstance(settings, list):
+            for i, item in enumerate(settings):
+                if '%%' in item:
+                    settings[i] = self.replaceFlaggedValue(item)
+
+        return settings
+
+    def replaceFlaggedValue(self, value):
+        '''
+        replaces strings with flagged values with known paths
+        flags are now case insensitive with more intelligent matching. yay.
+        needs to use '[1:-1]' for paths, otherwise things like /t in a path C:/trains will be taken literal
+        :param value: string potentially containing flagged value
+        :return:
+            value: string with potential flags replaced
+        '''
+
+        flagged_values = {'%%ModelDSS%%': self.DSSFile,
+                          '%%region%%': self.ChapterRegion,
+                          '%%Fpart%%': self.alternativeFpart,
+                          '%%plugin%%': self.plugin,
+                          '%%modelAltName%%': self.modelAltName,
+                          '%%SimulationName%%': self.SimulationName,
+                          '%%baseSimulationName%%': self.baseSimulationName,
+                          '%%starttime%%': self.StartTimeStr,
+                          '%%endtime%%': self.EndTimeStr,
+                          '%%LastComputed%%': self.LastComputed,
+                          '%%observedDir%%': self.observedDir,
+                          '%%startyear%%': str(self.startYear),
+                          '%%endyear%%': str(self.endYear)
+                          }
+        for fv in flagged_values.keys():
+            pattern = re.compile(re.escape(fv), re.IGNORECASE)
+            value = pattern.sub(repr(flagged_values[fv])[1:-1], value) #this seems weird with [1:-1] but paths wont work otherwise
+        return value
+
+    def translateLineStylePatterns(self, LineSettings):
+        '''
+        translates java line style patterns to python friendly commands.
+        :param LineSettings: dictionary containing keys describing how the line/points are drawn
+        :return:
+            LineSettings: dictionary containing keys describing how the line/points are drawn
+        '''
+
+        #java|python
+        linestylesdict = {'dash': 'dashed',
+                          'dash dot': 'dashdot',
+                          'dash dot-dot': (0, (3, 5, 1, 5, 1, 5)), #this one doesnt get a string name?
+                          'dot': 'dotted',
+                          'solid': 'solid'}
+
+        if 'linestylepattern' in LineSettings.keys():
+            if LineSettings['linestylepattern'].lower() in linestylesdict.values(): #existing python values
+                LineSettings['linestylepattern'] = LineSettings['linestylepattern'].lower() #use python but lower it
+            else:
+                try:
+                    LineSettings['linestylepattern'] = linestylesdict[LineSettings['linestylepattern'].lower()]
+                except KeyError:
+                    print('Invalid lineStylePattern:', LineSettings['linestylepattern'])
+                    print('Defaulting to Solid.')
+                    LineSettings['linestylepattern'] = 'solid'
+        else:
+            print('lineStylePattern undefined for line. Using solid')
+            LineSettings['linestylepattern'] = 'solid'
+
+        return LineSettings
+
+    def translatePointStylePatterns(self, LineSettings):
+        '''
+        translates java point style patterns to python friendly commands.
+        :param LineSettings: dictionary containing keys describing how the line/points are drawn
+        :return:
+            LineSettings: dictionary containing keys describing how the line/points are drawn
+        '''
+
+        #java|python
+        #https://matplotlib.org/stable/api/markers_api.html#module-matplotlib.markers
+        pointstylesdict = {1: 's', #square
+                           2: 'o', #circle
+                           3: '^', #triangle up
+                           4: 'v', #triangle down
+                           5: 'D', #diamond
+                           6: '*' #star
+                           }
+
+        if 'symboltype' in LineSettings.keys():
+            if LineSettings['symboltype'] in pointstylesdict.values(): #existing python values
+                LineSettings['symboltype'] = LineSettings['symboltype'] #needs to be case sensitive..
+            else:
+                try:
+                    LineSettings['symboltype'] = pointstylesdict[int(LineSettings['symboltype'])]
+                except:
+                    print('Invalid Symboltype:', LineSettings['symboltype'])
+                    print('Defaulting to Square.')
+                    LineSettings['symboltype'] = 's'
+
+        else:
+            print('Symbol not defined. Defaulting to Square.')
+            LineSettings['symboltype'] = 's'
+
+        return LineSettings
+
+    def translateDateFormat(self, lim, dateformat, fallback):
+        '''
+        translates date formats between datetime and jdate, as desired
+        :param lim: limit value, either int or datetime
+        :param dateformat: desired date format, either 'datetime' or 'jdate'
+        :param fallback: if setting translation fails, use backup, usually starttime or endtime
+        :return:
+            lim: original limit, if translate fails
+            lim_fmrt: translated limit
+        '''
+
+        if dateformat.lower() == 'datetime': #if want datetime
+            if not isinstance(lim, dt.datetime):
+                try:
+                    lim_frmt = dateutil.parser.parse(lim) #try simple date formatting.
+                    if not self.StartTime <= lim_frmt <= self.EndTime: #check for false negative
+                        print('Xlim of {0} not between start and endtime {1} - {2}'.format(lim_frmt, self.StartTime,
+                                                                                           self.EndTime))
+                        raise Exception
+                except:
+                    print('Error Reading Limit: {0} as a dt.datetime object.'.format(lim))
+                    print('If this is wrong, try format: Apr 2014 1 12:00')
+                    print('Trying as Jdate..')
+                    try:
+                        lim_frmt = float(lim)
+                        lim_frmt = self.JDateToDatetime(lim_frmt)
+                    except:
+                        print('Limit value of {0} also invalid as jdate.'.format(lim))
+                        print('Setting to fallback {0}.'.format(fallback))
+                        lim_frmt = fallback
+
+                return lim_frmt
+
+        elif dateformat.lower() == 'jdate':
+            try:
+                lim_frmt = float(lim) #try simple date formatting.
+            except:
+                print('Error Reading Limit: {0} as a jdate.'.format(lim))
+                print('If this is wrong, try format: 180')
+                print('Trying as Datetime..')
+                try:
+                    if not isinstance(lim, dt.datetime):
+                        lim_frmt = dateutil.parser.parse(lim)
+                    lim_frmt = self.DatetimeToJDate(lim_frmt)
+                except:
+                    print('Limit value of {0} also invalid as datetime.'.format(lim))
+                    print('Setting to fallback {0}.'.format(fallback))
+                    lim_frmt = self.DatetimeToJDate(fallback)
+            return lim_frmt
+
+        else:
+            print('Invalid dateformat of {0}'.format(dateformat))
+            print('Using fallback in dt form.')
+            lim_frmt = fallback
+            return lim_frmt
+
+        return lim
+
+    def translateUnits(self, units):
+        '''
+        translates possible units to better known flags for consistancy in the script and conversion purposes
+        :param units: units string
+        :return: units string
+        '''
+
+        units_conversion = {'f': ['f', 'faren', 'degf', 'fahrenheit', 'fahren', 'deg f'],
+                            'c': ['c', 'cel', 'celsius', 'deg c', 'degc'],
+                            'm3/s': ['m3/s', 'm3s', 'metercubedpersecond', 'cms'],
+                            'cfs': ['cfs', 'cubicftpersecond', 'f3/s', 'f3s'],
+                            'm': ['m', 'meters', 'mtrs'],
+                            'ft': ['ft', 'feet'],
+                            'm3': ['m3', 'meters cubed', 'meters3', 'meterscubed', 'meters-cubed'],
+                            'af': ['af', 'acrefeet', 'acre-feet', 'acfeet', 'acft', 'ac-ft', 'ac/ft'],
+                            'm/s': ['mps', 'm/s', 'meterspersecond', 'm/second'],
+                            'ft/s': ['ft/s', 'fps', 'feetpersecond', 'feet/s']}
+
+        for key in units_conversion.keys():
+            if units.lower() in units_conversion[key]:
+                return key
+
+        print('Units Undefined:', units)
+        return units
+
     def formatDateXAxis(self, curax, object_settings, twin=False):
         '''
         formats the xaxis to be jdate or datetime and sets up xlimits. also sets up secondary xaxis
@@ -1679,63 +1852,357 @@ class MakeAutomatedReport(object):
             print('No Xlims flag set for {0}'.format(xlims_flag))
             print('Not setting Xlims.')
 
-    def translateDateFormat(self, lim, dateformat, fallback):
+    def formatStatsLine(self, row, data_dict, year='ALL'):
         '''
-        translates date formats between datetime and jdate, as desired
-        :param lim: limit value, either int or datetime
-        :param dateformat: desired date format, either 'datetime' or 'jdate'
-        :param fallback: if setting translation fails, use backup, usually starttime or endtime
-        :return:
-            lim: original limit, if translate fails
-            lim_fmrt: translated limit
+        takes rows for tables and replaces flags with the correct data, computing stat analysis if needed
+        :param row: row section string
+        :param data_dict: dictionary of data that could be used
+        :param year: selected year, or 'ALL'
+        :return: new row value
         '''
 
-        if dateformat.lower() == 'datetime': #if want datetime
-            if not isinstance(lim, dt.datetime):
-                try:
-                    lim_frmt = dateutil.parser.parse(lim) #try simple date formatting.
-                    if not self.StartTime <= lim_frmt <= self.EndTime: #check for false negative
-                        print('Xlim of {0} not between start and endtime {1} - {2}'.format(lim_frmt, self.StartTime,
-                                                                                           self.EndTime))
-                        raise Exception
-                except:
-                    print('Error Reading Limit: {0} as a dt.datetime object.'.format(lim))
-                    print('If this is wrong, try format: Apr 2014 1 12:00')
-                    print('Trying as Jdate..')
-                    try:
-                        lim_frmt = float(lim)
-                        lim_frmt = self.JDateToDatetime(lim_frmt)
-                    except:
-                        print('Limit value of {0} also invalid as jdate.'.format(lim))
-                        print('Setting to fallback {0}.'.format(fallback))
-                        lim_frmt = fallback
+        data = copy.deepcopy(data_dict)
+        rrow = row.replace('%%', '')
+        s_row = rrow.split('.')
+        flags = []
+        for sr in s_row:
+            if sr in data_dict.keys():
+                curflag = sr
+                curvalues = np.array(data[sr]['values'])
+                curdates = np.array(data[sr]['dates'])
+                flags.append(curflag)
+            else:
+                if '=' in sr:
+                    sr_spl = sr.split('=')
+                    if sr_spl[0].lower() == 'month':
+                        sr_month = sr_spl[1]
+                        try:
+                            sr_month = int(sr_month)
+                        except ValueError:
+                            try:
+                                sr_month = self.month2num[sr_month.lower()]
+                            except KeyError:
+                                print('Invalid Entry for {0}'.format(sr))
+                                print('Try using interger values or 3 letter monthly code.')
+                                print('Ex: MONTH=1 or MONTH=JAN')
+                                continue
+                        msk = [i for i, n in enumerate(curdates) if n.month == sr_month]
+                        data[curflag]['values'] = curvalues[msk]
+                        data[curflag]['dates'] = curdates[msk]
 
-                return lim_frmt
+        if year != 'ALL':
+            for flag in flags:
+                msk = [i for i, n in enumerate(data[flag]['dates']) if n.year == year]
+                data[flag]['values'] = np.asarray(data[flag]['values'])[msk]
+                data[flag]['dates'] = np.asarray(data[flag]['dates'])[msk]
 
-        elif dateformat.lower() == 'jdate':
-            try:
-                lim_frmt = float(lim) #try simple date formatting.
-            except:
-                print('Error Reading Limit: {0} as a jdate.'.format(lim))
-                print('If this is wrong, try format: 180')
-                print('Trying as Datetime..')
-                try:
-                    if not isinstance(lim, dt.datetime):
-                        lim_frmt = dateutil.parser.parse(lim)
-                    lim_frmt = self.DatetimeToJDate(lim_frmt)
-                except:
-                    print('Limit value of {0} also invalid as datetime.'.format(lim))
-                    print('Setting to fallback {0}.'.format(fallback))
-                    lim_frmt = self.DatetimeToJDate(fallback)
-            return lim_frmt
-
+        if row.lower().startswith('%%meanbias'):
+            return WF.meanbias(data[flags[0]], data[flags[1]])
+        elif row.lower().startswith('%%mae'):
+            return WF.MAE(data[flags[0]], data[flags[1]])
+        elif row.lower().startswith('%%rmse'):
+            return WF.RMSE(data[flags[0]], data[flags[1]])
+        elif row.lower().startswith('%%nse'):
+            return WF.NSE(data[flags[0]], data[flags[1]])
+        elif row.lower().startswith('%%count'):
+            return WF.COUNT(data[flags[0]])
+        elif row.lower().startswith('%%mean'):
+            return WF.MEAN(data[flags[0]])
         else:
-            print('Invalid dateformat of {0}'.format(dateformat))
-            print('Using fallback in dt form.')
-            lim_frmt = fallback
-            return lim_frmt
+            if '%%' in row:
+                print('Unable to convert flag in row', row)
+            return row
 
-        return lim
+    def buildRowsByYear(self, object_settings, years, split_by_year):
+        '''
+        if split by year is selected, and a header has %%year%% flag, iterate through and create a new row object for
+        each year and header
+        :param object_settings: dictionary of settings
+        :param years: list of years
+        :param split_by_year: boolean if splitting up by year or not
+        :return:
+            rows: list of newly built rows
+        '''
+
+        rows = []
+        rows_by_year = []
+        for i, row in enumerate(object_settings['rows']):
+            if isinstance(object_settings['rows'], dict):
+                row = object_settings['rows']['row'] #single headers come as dict objs TODO fix this eventually...
+            srow = row.split('|')
+            r = [srow[0]] #<Row>Jan|%%MEAN.Computed.MONTH=JAN%%|%%MEAN.Observed.MONTH=JAN%%</Row>
+            for si, sr in enumerate(srow[1:]):
+                if isinstance(object_settings['headers'][si], dict):
+                    header = object_settings['headers'][si]['header'] #single headers come as dict objs TODO fix this eventually...
+                else:
+                    header = object_settings['headers'][si]
+                if '%%year%%' in header:
+                    if split_by_year:
+                        rows_by_year.append(sr)
+                    else:
+                        r.append(sr)
+                else:
+                    if len(rows_by_year) > 0:
+                        for year in years:
+                            for yrrow in rows_by_year:
+                                r.append(yrrow)
+                        rows_by_year = []
+                    r.append(sr)
+            if len(rows_by_year) > 0:
+                for year in years:
+                    for yrrow in rows_by_year:
+                        r.append(yrrow)
+                rows_by_year = []
+            rows.append('|'.join(r))
+            # r = []
+        return rows
+
+    def buildHeadersByYear(self, object_settings, years, split_by_year):
+        '''
+        if split by year is selected, and a header has %%year%% flag, iterate through and create a new header for
+        each year and header
+        :param object_settings: dictionary of settings
+        :param years: list of years
+        :param split_by_year: boolean if splitting up by year or not
+        :return: list of headers
+        '''
+
+        headings = []
+        header_by_year = []
+        for i, header in enumerate(object_settings['headers']):
+            if isinstance(object_settings['headers'], dict):
+                header = object_settings['headers']['header'] #single headers come as dict objs TODO fix this eventually...
+            if '%%year%%' in header:
+                if split_by_year:
+                    header_by_year.append(header)
+                else:
+                    headings.append(['ALL', self.updateFlaggedValues(header, '%%year%%', str(years[0]))])
+            else:
+                if len(header_by_year) > 0:
+                    for year in years:
+                        for yrhd in header_by_year:
+                            headings.append([year, self.updateFlaggedValues(yrhd, '%%year%%', str(year))])
+                    header_by_year = []
+                headings.append(['ALL', header])
+        if len(header_by_year) > 0:
+            for year in years:
+                for yrhd in header_by_year:
+                    headings.append([year, self.updateFlaggedValues(yrhd, '%%year%%', str(year))])
+        return headings
+
+    def buildTimeSeries(self, startTime, endTime, interval):
+        '''
+        builds a regular time series using the start and end time and a given interval
+        #TODO: if start time isnt on the hour, but the interval is, change start time to be hourly?
+        :param startTime: datetime object
+        :param endTime: datetime object
+        :param interval: DSS interval
+        :return: list of time series dates
+        '''
+
+        try:
+            intervalinfo = self.time_intervals[interval]
+            interval = intervalinfo[0]
+            interval_info = intervalinfo[1]
+        except KeyError:
+            interval_info = 'np'
+
+        if interval_info == 'np':
+            ts = np.arange(startTime, endTime, interval)
+            ts = [t.astype(dt.datetime) for t in ts]
+        elif interval_info == 'pd':
+            ts = pd.date_range(startTime, endTime, freq=interval, closed=None)
+            ts = [t.to_pydatetime() for t in ts]
+        return ts
+
+    def limitXdata(self, dates, values, xlims):
+        '''
+        if the filterbylimits flag is true, filters out values outside of the xlimits
+        :param dates: list of dates
+        :param values: list of values
+        :param xlims: dictionary of xlims, containing potentially min and/or max
+        :return: filtered dates and values
+        '''
+
+        if isinstance(dates[0], int) or isinstance(dates[0], float):
+            wantedformat = 'jdate'
+        elif isinstance(dates[0], dt.datetime):
+            wantedformat = 'datetime'
+        if 'min' in xlims.keys():
+            #ensure we have dt, dss dates should be... #TODO: make sure values are DT
+            min = self.translateDateFormat(xlims['min'], wantedformat, self.StartTime)
+            for i, d in enumerate(dates):
+                if min > d:
+                    values[i] = np.nan #exclude
+        if 'max' in xlims.keys():
+            max = self.translateDateFormat(xlims['max'], wantedformat, self.EndTime)
+            for i, d in enumerate(dates):
+                if max < d:
+                    values[i] = np.nan #exclude
+
+        return dates, values
+
+    def limitYdata(self, dates, values, ylims):
+        '''
+        if the filterbylimits flag is true, filters out values outside of the ylimits
+        :param dates: list of dates
+        :param values: list of values
+        :param ylims: dictionary of ylims, containing potentially min and/or max
+        :return: filtered dates and values
+        '''
+
+        if 'min' in ylims.keys():
+            for i, v in enumerate(values):
+                if float(ylims['min']) > v:
+                    values[i] = np.nan #exclude
+        if 'max' in ylims.keys():
+            for i, v in enumerate(values):
+                if float(ylims['max']) < v:
+                    values[i] = np.nan #exclude
+
+        return dates, values
+
+    def writeXMLIntroduction(self):
+        '''
+        writes the intro section for XML file. Creates a line in the intro for each model used
+        '''
+
+        self.XML.writeIntroStart()
+        for model in self.SimulationCSV.keys():
+            self.XML.writeIntroLine(self.SimulationCSV[model]['plugin'])
+        self.XML.writeIntroEnd()
+
+    def WriteChapter(self):
+        '''
+        writes each chapter defined in the simulation CSV file to the XML file. Generates plots and figures
+        :return: class variables
+                    self.ChapterName
+                    self.ChapterRegion
+        '''
+
+        for Chapter in self.ChapterDefinitions:
+            self.ChapterName = Chapter['name']
+            self.ChapterRegion = Chapter['region']
+            self.XML.writeChapterStart(self.ChapterName)
+            for section in Chapter['sections']:
+                section_header = section['header']
+                self.XML.writeSectionHeader(section_header)
+                for object in section['objects']:
+                    if object['type'] == 'TimeSeriesPlot':
+                        self.MakeTimeSeriesPlot(object)
+                    elif object['type'] == 'ProfilePlot':
+                        self.MakeProfilePlot(object)
+                    elif object['type'] == 'ErrorStatisticsTable':
+                        self.MakeErrorStatisticsTable(object)
+                    elif object['type'] == 'MonthlyStatisticsTable':
+                        self.MakeMonthlyStatisticsTable(object)
+                    elif object['type'] == 'BuzzPlot':
+                        self.MakeBuzzPlot(object)
+                    else:
+                        print('Section Type {0} not identified.'.format(section['type']))
+                        print('Skipping Section..')
+                self.XML.writeSectionHeaderEnd()
+            self.XML.writeChapterEnd()
+
+    def cleanOutputDirs(self):
+        '''
+        cleans the images output directory, so pngs from old reports aren't mistakenly
+        added to new reports. Creates directory if it doesn't exist.
+        '''
+
+        if not os.path.exists(self.images_path):
+            os.makedirs(self.images_path)
+
+        WF.clean_output_dir(self.images_path, '.png')
+
+    def LoadModelAlt(self, simCSVAlt):
+        '''
+        Loads info for specified model alts. Loads correct model plugin class from WDR
+        :param simCSVAlt: simulation alt dict object from self.simulation class
+        :return: class variables
+                self.alternativeFpart
+                self.alternativeDirectory
+                self.ModelAlt - WDR class that is plugin specific
+        '''
+
+        for modelalt in self.ModelAlternatives:
+            if modelalt['name'] == simCSVAlt['modelaltname'] and modelalt['program'] == simCSVAlt['plugin']:
+                self.alternativeFpart = modelalt['fpart']
+                self.alternativeDirectory = modelalt['directory']
+        if self.plugin.lower() == "ressim":
+            self.ModelAlt = WDR.ResSim_Results(self.simulationDir, self.alternativeFpart, self.StartTime, self.EndTime)
+        elif self.plugin.lower() == 'cequalw2':
+            self.ModelAlt = WDR.W2_Results(self.simulationDir, self.modelAltName, self.alternativeDirectory, self.StartTime, self.EndTime)
+
+    def initializeXML(self):
+        '''
+        creates a new version of the template XML file, initiates the XML class and writes the cover page
+        :return: sets class variables
+                    self.XML
+        '''
+
+        # new_xml = 'USBRAutomatedReportOutput.xml' #required name for file
+        new_xml = os.path.join(self.studyDir, 'reports', 'Datasources', 'USBRAutomatedReportOutput.xml') #required name for file
+        self.XML = XML_Utils.XMLReport(new_xml)
+        self.XML.writeCover('DRAFT Temperature Validation Summary Report')
+
+    def EnsureDefaultFiles(self):
+        '''
+        Copies Reporting files into the main study if they dont exist. Allows for "default" reports out of the gate
+        Checks if the default directory exists in the install. if not continue
+        then look for files ending in specific extensions in the default dir and check for them in the destination
+        '''
+
+
+        if not os.path.exists(self.default_dir):
+            print('ERROR finding default files at {0}'.format(self.default_dir))
+            print('No default files copied.')
+            return
+
+        default_copy_dir = os.path.join(os.path.split(self.batdir)[0], 'Default', '_COPY', 'Reports')
+        to_dir = os.path.join(self.studyDir, 'Reports')
+        filetypes = ['.xml', '.csv', '.jrxml', '.png']
+        self.copyDefaultFiles(default_copy_dir, to_dir, filetypes)
+
+        default_copy_dir = os.path.join(os.path.split(self.batdir)[0], 'Default', '_COPY', 'Reports.DataSources')
+        to_dir = os.path.join(self.studyDir, 'Reports', 'DataSources')
+        filetypes = ['.xml']
+        self.copyDefaultFiles(default_copy_dir, to_dir, filetypes)
+
+    def copyDefaultFiles(self, fromdir, todir, filetypes):
+        '''
+        looks for all files of given extensions in a default directory, and if they dont exist in an output dir, copy
+        them. If the fromdir doesnt exist, return.
+        :param fromdir: default directory where the files live
+        :param todir: directory to copy files too, usually self.study_dir/reports
+        :param filetypes: list of filetype extensions of files to copy
+        '''
+
+        if not os.path.exists(fromdir):
+            print('ERROR finding default files at {0}'.format(fromdir))
+            print('No default files copied.')
+            return
+
+        files_in_directory = os.listdir(fromdir)
+        for filetype in filetypes:
+            filtered_files = [file for file in files_in_directory if file.endswith(filetype)]
+            for filtfile in filtered_files:
+                old_file_path = os.path.join(fromdir, filtfile)
+                new_file_path = os.path.join(todir, filtfile)
+                if not os.path.exists(new_file_path):
+                    shutil.copyfile(old_file_path, new_file_path)
+                    print('Successfully copied to', new_file_path)
+
+    def load_defaultPlotObject(self, plotobject):
+        '''
+        loads the graphic default options. Uses deepcopy so residual settings are not carried over
+        :param plotobject: string specifying the default graphics object
+        :return:
+            plot_info: dict of object settings
+        '''
+
+        plot_info = copy.deepcopy(self.graphicsDefault[plotobject])
+        return plot_info
 
     def DatetimeToJDate(self, dates):
         '''
@@ -1892,31 +2359,6 @@ class MakeAutomatedReport(object):
 
         return values, new_units
 
-    def translateUnits(self, units):
-        '''
-        translates possible units to better known flags for consistancy in the script and conversion purposes
-        :param units: units string
-        :return: units string
-        '''
-
-        units_conversion = {'f': ['f', 'faren', 'degf', 'fahrenheit', 'fahren', 'deg f'],
-                            'c': ['c', 'cel', 'celsius', 'deg c', 'degc'],
-                            'm3/s': ['m3/s', 'm3s', 'metercubedpersecond', 'cms'],
-                            'cfs': ['cfs', 'cubicftpersecond', 'f3/s', 'f3s'],
-                            'm': ['m', 'meters', 'mtrs'],
-                            'ft': ['ft', 'feet'],
-                            'm3': ['m3', 'meters cubed', 'meters3', 'meterscubed', 'meters-cubed'],
-                            'af': ['af', 'acrefeet', 'acre-feet', 'acfeet', 'acft', 'ac-ft', 'ac/ft'],
-                            'm/s': ['mps', 'm/s', 'meterspersecond', 'm/second'],
-                            'ft/s': ['ft/s', 'fps', 'feetpersecond', 'feet/s']}
-
-        for key in units_conversion.keys():
-            if units.lower() in units_conversion[key]:
-                return key
-
-        print('Units Undefined:', units)
-        return units
-
     def buildRowsByYear(self, object_settings, years, split_by_year):
         '''
         if split by year is selected, and a header has %%year%% flag, iterate through and create a new row object for
@@ -2008,79 +2450,6 @@ class MakeAutomatedReport(object):
             return timestamps
         return [n for n in timestamps if n.year == year]
 
-    def formatStatsLine(self, row, data_dict, year='ALL'):
-        '''
-        takes rows for tables and replaces flags with the correct data, computing stat analysis if needed
-        :param row: row section string
-        :param data_dict: dictionary of data that could be used
-        :param year: selected year, or 'ALL'
-        :return: new row value
-        '''
-
-        data = copy.deepcopy(data_dict)
-        rrow = row.replace('%%', '')
-        s_row = rrow.split('.')
-        flags = []
-        for sr in s_row:
-            if sr in data_dict.keys():
-                curflag = sr
-                curvalues = np.array(data[sr]['values'])
-                curdates = np.array(data[sr]['dates'])
-                flags.append(curflag)
-            else:
-                if '=' in sr:
-                    sr_spl = sr.split('=')
-                    if sr_spl[0].lower() == 'month':
-                        sr_month = sr_spl[1]
-                        try:
-                            sr_month = int(sr_month)
-                        except ValueError:
-                            try:
-                                sr_month = self.month2num[sr_month.lower()]
-                            except KeyError:
-                                print('Invalid Entry for {0}'.format(sr))
-                                print('Try using interger values or 3 letter monthly code.')
-                                print('Ex: MONTH=1 or MONTH=JAN')
-                                continue
-                        msk = [i for i, n in enumerate(curdates) if n.month == sr_month]
-                        data[curflag]['values'] = curvalues[msk]
-                        data[curflag]['dates'] = curdates[msk]
-
-        if year != 'ALL':
-            for flag in flags:
-                msk = [i for i, n in enumerate(data[flag]['dates']) if n.year == year]
-                data[flag]['values'] = np.asarray(data[flag]['values'])[msk]
-                data[flag]['dates'] = np.asarray(data[flag]['dates'])[msk]
-
-        if row.lower().startswith('%%meanbias'):
-            return WF.meanbias(data[flags[0]], data[flags[1]])
-        elif row.lower().startswith('%%mae'):
-            return WF.MAE(data[flags[0]], data[flags[1]])
-        elif row.lower().startswith('%%rmse'):
-            return WF.RMSE(data[flags[0]], data[flags[1]])
-        elif row.lower().startswith('%%nse'):
-            return WF.NSE(data[flags[0]], data[flags[1]])
-        elif row.lower().startswith('%%count'):
-            return WF.COUNT(data[flags[0]])
-        elif row.lower().startswith('%%mean'):
-            return WF.MEAN(data[flags[0]])
-        else:
-            if '%%' in row:
-                print('Unable to convert flag in row', row)
-            return row
-
-    def getLineSettings(self, LineSettings, Flag):
-        '''
-        gets the correct line settings for the selected flag
-        :param LineSettings: dictionary of settings
-        :param Flag: selected flag to match line
-        :return: deep copy of line
-        '''
-
-        for line in LineSettings:
-            if Flag == line['flag']:
-                return copy.deepcopy(line)
-
     def updateFlaggedValues(self, settings, flaggedvalue, replacevalue):
         '''
         iterates and updates specific flagged values with a replacement value
@@ -2110,76 +2479,6 @@ class MakeAutomatedReport(object):
         else:
             print('Input Not recognized type', settings)
             return settings
-
-    def get_plot_label_masks(self, idx, nprofiles, cols):
-        '''
-        Get plot label masks
-        :param idx: page index
-        :param nprofiles: number of profiles
-        :param cols: number of columns
-        :return: boolean fields for plotting
-        '''
-
-        if idx == cols - 1:
-            add_legend = True
-        else:
-            add_legend = False
-        if idx >= nprofiles - cols:
-            add_xlabel = True
-        else:
-            add_xlabel = False
-        if idx % cols == 0:
-            add_ylabel = True
-        else:
-            add_ylabel = False
-        return add_legend, add_xlabel, add_ylabel
-
-    def getTimeSeries(self, Line_info):
-        '''
-        gets time series data from defined sources
-        :param Line_info: dictionary of line setttings containing datasources
-        :return: dates, values, units
-        '''
-
-        if 'dss_path' in Line_info.keys(): #Get data from DSS record
-            if 'dss_filename' not in Line_info.keys():
-                print('DSS_Filename not set for Line: {0}'.format(Line_info))
-                return [], [], None
-            else:
-                times, values, units = WDR.readDSSData(Line_info['dss_filename'], Line_info['dss_path'],
-                                                       self.StartTime, self.EndTime)
-
-                if np.any(values == None):
-                    return [], [], None
-                elif len(values) == 0:
-                    return [], [], None
-
-        elif 'w2_file' in Line_info.keys():
-            if 'structurenumbers' in Line_info.keys():
-                # Ryan Miles: yeah looks like it's str_brX.npt, and X is 1-# of branches (which is defined in the control file)
-                times, values = self.ModelAlt.readStructuredTimeSeries(Line_info['w2_file'], Line_info['structurenumbers'])
-                # values, parameter = self.ModelAlt.filterByParameter(values, Line_info) #we need all params...
-            else:
-                times, values = self.ModelAlt.readTimeSeries(Line_info['w2_file'], **Line_info)
-            if 'units' in Line_info.keys():
-                units = Line_info['units']
-            else:
-                units = None
-                # units = self.units[Line_info['parameter'].lower()]
-
-        elif 'xy' in Line_info.keys():
-            times, values = self.ModelAlt.readTimeSeries(Line_info['parameter'], Line_info['xy'])
-            units = self.units[Line_info['parameter'].lower()]
-
-        else:
-            print('No Data Defined for line')
-            return [], [], None
-
-        if len(values) == 0:
-            return [], [], None
-        else:
-            times, values = self.changeTimeSeriesInterval(times, values, Line_info)
-            return times, values, units
 
     def changeTimeSeriesInterval(self, times, values, Line_info):
         '''
@@ -2275,154 +2574,6 @@ class MakeAutomatedReport(object):
                 new_values.append(np.sum(values[date_idx]))
             return new_times, new_values
 
-    def buildTimeSeries(self, startTime, endTime, interval):
-        '''
-        builds a regular time series using the start and end time and a given interval
-        #TODO: if start time isnt on the hour, but the interval is, change start time to be hourly?
-        :param startTime: datetime object
-        :param endTime: datetime object
-        :param interval: DSS interval
-        :return: list of time series dates
-        '''
-
-        try:
-            intervalinfo = self.time_intervals[interval]
-            interval = intervalinfo[0]
-            interval_info = intervalinfo[1]
-        except KeyError:
-            interval_info = 'np'
-
-        if interval_info == 'np':
-            ts = np.arange(startTime, endTime, interval)
-            ts = [t.astype(dt.datetime) for t in ts]
-        elif interval_info == 'pd':
-            ts = pd.date_range(startTime, endTime, freq=interval, closed=None)
-            ts = [t.to_pydatetime() for t in ts]
-        return ts
-
-    def getTimeIntervalSeconds(self, interval):
-        '''
-        converts a given time interval into seconds
-        :param interval: DSS interval (ex: 6MIN)
-        :return: time interval in seconds
-        '''
-
-        interval = interval.lower()
-        if 'min' in interval:
-            timeint = int(interval.replace('min','')) * 60 #convert to sec
-            return timeint
-        elif 'hour' in interval:
-            timeint = int(interval.replace('hour','')) * 3600 #convert to sec
-            return timeint
-        elif 'day' in interval:
-            timeint = int(interval.replace('day','')) * 86400 #convert to sec
-            return timeint
-        elif 'mon' in interval:
-            timeint = int(interval.replace('mon','')) * 2.628e+6 #convert to sec
-            return timeint
-        elif 'year' in interval:
-            timeint = int(interval.replace('year','')) * 3.154e+7 #convert to sec
-            return timeint
-        else:
-            print('Unidentified time interval')
-            return 0
-
-    def getTimeInterval(self, times):
-        '''
-        attempts to find out the time interval of the time series by finding the most common time interval
-        :param times: list of times
-        :return:
-        '''
-
-        t_ints = []
-        for i, t in enumerate(times):
-            if i == 0: #skip 1
-                last_time = t
-            else:
-                t_ints.append(t - last_time)
-
-        # occurence_count = Counter(t_ints)
-        # most_common_interval = occurence_count.most_common(1)[0][0]
-        return self.getMostCommon(t_ints)
-
-    def getMostCommon(self, listvars):
-        '''
-        gets most common instance of a var in a list
-        :param listvars: list of variables
-        :return: value that is most common in the list
-        '''
-
-        occurence_count = Counter(listvars)
-        most_common_interval = occurence_count.most_common(1)[0][0]
-        return most_common_interval
-
-    def getProfileData(self, Line_info, timesteps):
-        '''
-        reads in profile data from various sources for profile plots at given timesteps
-        attempts to get elevations if possible
-        :param Line_info: dictionary containing settings for line
-        :param timesteps: given list of timesteps to extract data at
-        :return: values, elevations, depths, flag
-        '''
-
-        if 'filename' in Line_info.keys(): #Get data from Observed
-            filename = Line_info['filename']
-            values, depths = WDR.readTextProfile(filename, timesteps)
-            return values, [], depths, Line_info['flag']
-
-        elif 'w2_segment' in Line_info.keys():
-            vals, elevations, depths = self.ModelAlt.readProfileData(Line_info['w2_segment'], timesteps)
-            return vals, elevations, depths, Line_info['flag']
-
-        elif 'ressimresname' in Line_info.keys():
-            vals, elevations, depths = self.ModelAlt.readProfileData(Line_info['ressimresname'],
-                                                                       Line_info['parameter'], timesteps)
-            return vals, elevations, depths, Line_info['flag']
-
-        print('No Data Defined for line')
-        print('Line:', Line_info)
-        return [], [], [], None
-
-    def getProfileDates(self, Line_info):
-        '''
-        gets dates from observed text profiles
-        :param Line_info: dictionary containing line information, must include filename
-        :return: list of times
-        '''
-
-        if 'filename' in Line_info.keys(): #Get data from Observed
-            times = WDR.getTextProfileDates(Line_info['filename'], self.StartTime, self.EndTime) #TODO: set up for not observed data??
-            return times
-
-        print('Illegal Dates selection. ')
-        return []
-
-    def getPlotUnits(self, unitslist, object_settings):
-        '''
-        gets units for the plot. Either looks at data already plotted units, or if there are no defined units
-        in the plotted data, look for a parameter flag
-        :param unitslist: list of units plotted
-        :param object_settings: dictionary with plot settings
-        :return: string units value
-        '''
-
-        if len(unitslist) > 0:
-            plotunits = self.getMostCommon(unitslist)
-        elif 'parameter' in object_settings.keys() and len(unitslist) == 0:
-            try:
-                plotunits = self.units[object_settings['parameter'].lower()]
-                if isinstance(plotunits, dict):
-                    if 'unitsystem' in object_settings.keys():
-                        plotunits = plotunits[object_settings['unitsystem'].lower()]
-                    else:
-                        plotunits = ''
-            except KeyError:
-                plotunits = ''
-        else:
-            print('No units defined.')
-            plotunits = ''
-        return plotunits
-
     def makeRegularTimesteps(self, days=15):
         '''
         makes regular time series for profile plots if there are no times defined
@@ -2437,53 +2588,6 @@ class MakeAutomatedReport(object):
             timesteps.append(cur_date)
             cur_date += dt.timedelta(days=days)
         return timesteps
-
-    def limitXdata(self, dates, values, xlims):
-        '''
-        if the filterbylimits flag is true, filters out values outside of the xlimits
-        :param dates: list of dates
-        :param values: list of values
-        :param xlims: dictionary of xlims, containing potentially min and/or max
-        :return: filtered dates and values
-        '''
-
-        if isinstance(dates[0], int) or isinstance(dates[0], float):
-            wantedformat = 'jdate'
-        elif isinstance(dates[0], dt.datetime):
-            wantedformat = 'datetime'
-        if 'min' in xlims.keys():
-            #ensure we have dt, dss dates should be... #TODO: make sure values are DT
-            min = self.translateDateFormat(xlims['min'], wantedformat, self.StartTime)
-            for i, d in enumerate(dates):
-                if min > d:
-                    values[i] = np.nan #exclude
-        if 'max' in xlims.keys():
-            max = self.translateDateFormat(xlims['max'], wantedformat, self.EndTime)
-            for i, d in enumerate(dates):
-                if max < d:
-                    values[i] = np.nan #exclude
-
-        return dates, values
-
-    def limitYdata(self, dates, values, ylims):
-        '''
-        if the filterbylimits flag is true, filters out values outside of the ylimits
-        :param dates: list of dates
-        :param values: list of values
-        :param ylims: dictionary of ylims, containing potentially min and/or max
-        :return: filtered dates and values
-        '''
-
-        if 'min' in ylims.keys():
-            for i, v in enumerate(values):
-                if float(ylims['min']) > v:
-                    values[i] = np.nan #exclude
-        if 'max' in ylims.keys():
-            for i, v in enumerate(values):
-                if float(ylims['max']) < v:
-                    values[i] = np.nan #exclude
-
-        return dates, values
 
 if __name__ == '__main__':
     batdir = sys.argv[1]

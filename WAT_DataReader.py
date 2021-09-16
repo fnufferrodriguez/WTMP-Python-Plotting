@@ -21,6 +21,19 @@ import xml.etree.ElementTree as ET
 import WAT_Functions as WF
 import linecache
 
+def DefinedVarCheck(Block, flags):
+    '''
+    confirms that all flags are contained in the given block, aka check for headers in XML
+    :param Block: xml with flags
+    :param flags: flags that we need for it to be valid
+    :return: True if contains headers, False if not
+    '''
+
+    tags = [n.tag for n in list(Block)]
+    for flag in flags:
+        if flag not in tags:
+            return False
+    return True
 
 def ReadSimulationFile(simulation_name, studyfolder):
     '''
@@ -47,31 +60,133 @@ def ReadSimulationFile(simulation_name, studyfolder):
                            'deffile': defFile}
     return sim_info
 
-def getTextProfileDates(observed_data_filename, starttime, endtime):
+def ReadGraphicsDefaults(GD_file):
     '''
-    reads profile text files and extracts dates
-    :param observed_data_filename: filename of obs data
-    :param starttime: start time for data
-    :param endtime: end time for data
-    :return: list of dates between start and end dates
+    reads graphics default file and iterates through to form dictionary
+    :param GD_file: graphics default file path
+    :return: dictionary with settings
     '''
 
-    t = []
-    if not os.path.exists(observed_data_filename):
-        return t
-    with open(observed_data_filename, 'r') as odf:
-        for j, line in enumerate(odf):
-            if j == 0:
-                continue
-            sline = line.split(',')
-            dt_str = sline[0]
-            dt_tmp = dateutil.parser.parse(dt_str) #trying this to see if it will work
-            if starttime <= dt_tmp <= endtime: #get time window
-                if dt_tmp not in t:
-                    t.append(dt_tmp)
-    return t
+    tree = ET.parse(GD_file)
+    root = tree.getroot()
+    gd_reportObjects = root.findall('ReportObject')
+    reportObjects = iterateGraphicsDefaults(gd_reportObjects, 'Type')
 
-def readTextProfile(observed_data_filename, timestamps):
+    return reportObjects
+
+def ReadDefaultLineStyle(linefile):
+    '''
+    reads default linestyle file and iterates through to form dictionary
+    :param linefile: linestyle default file path
+    :return: dictionary with settings
+    '''
+
+    tree = ET.parse(linefile)
+    root = tree.getroot()
+    def_lineTypes = root.findall('LineType')
+    lineTypes = iterateGraphicsDefaults(def_lineTypes, 'Name')
+    return lineTypes
+
+def ReadChapterDefFile(CD_file):
+    '''
+    reads chapter definitions file
+    :param CD_file: xml of read chapter definitions file
+    :return:
+    '''
+
+    Chapters = []
+    tree = ET.parse(CD_file)
+    root = tree.getroot()
+    for chapter in root:
+        check = DefinedVarCheck(chapter, ['Name', 'Region', 'Sections'])
+        if check:
+            ChapterDef = {}
+            chap_name = chapter.find('Name').text
+            chap_region = chapter.find('Region').text
+            ChapterDef['name'] = chap_name
+            ChapterDef['region'] = chap_region
+            ChapterDef['sections'] = []
+            cd_sections = chapter.findall('Sections/Section')
+            for section in cd_sections:
+                section_objects = {}
+                try:
+                    section_objects['header'] = section.find('Header').text
+                except:
+                    section_objects['header'] = ''
+                section_objects['objects'] = []
+                sec_objects = section.findall('Object')
+                objects = iterateChapterDefintions(sec_objects)
+                section_objects['objects'] = (objects)
+                ChapterDef['sections'].append(section_objects)
+        Chapters.append(ChapterDef)
+
+    return Chapters
+
+def ReadDSSData(dss_file, pathname, startdate, enddate):
+    '''
+    calls pydsstools from https://github.com/gyanz/pydsstools to read dss data
+    :param dss_file: full path to DSS file
+    :param pathname: path to read in DSS file
+    :param startdate: start date datetime object
+    :param enddate: end date datetime object
+    :return: time array and values array and units
+
+    Example from documentation
+    # dss_file = "example.dss"
+    # pathname = "/REGULAR/TIMESERIES/FLOW//1HOUR/Ex1/"
+    # startDate = "15JUL2019 19:00:00"
+    # endDate = "15AUG2019 19:00:00"
+    '''
+
+    startDate = startdate.strftime('%d%b%Y %H:%M:%S')
+    endDate = enddate.strftime('%d%b%Y %H:%M:%S')
+
+    if not os.path.exists(dss_file):
+        print('DSS file not found!', dss_file)
+        return [], [], None
+
+    fid = HecDss.Open(dss_file)
+    ts = fid.read_ts(pathname,window=(startDate,endDate),regular=True,trim_missing=True)
+    # ts = fid.read_ts(pathname,regular=False)
+    times = np.array(ts.pytimes)
+    values = np.array(ts.values)
+    units = ts.units
+
+    return times, values, units
+
+def ReadW2ResultsFile(output_file_name, jd_dates, run_path, targetfieldidx=1):
+    '''
+    reads W2 output text files. files are a bit specialized so the targetfieldidx is variable and allows input
+    :param output_file_name: name of file
+    :param jd_dates: list of jdates. W2 output is in the form of jdates
+    :param run_path: path of W2 run
+    :param targetfieldidx: index of which row in CSV to grab
+    :return: list of list of arrays
+    '''
+
+    out_vals = np.full(len(jd_dates), np.nan)
+    ofn_path = os.path.join(run_path, output_file_name)
+    dates = []
+    values = []
+    skiplines = 3 #not sure if this is always true?
+    with open(ofn_path, 'r') as o:
+        for i, line in enumerate(o):
+            if i >= skiplines:
+                sline = line.split(',')
+                dates.append(float(sline[0].strip()))
+                values.append(float(sline[targetfieldidx].strip()))
+
+    if len(dates) > 1:
+        val_interp = interp1d(dates, values)
+    for j, jd in enumerate(jd_dates):
+        try:
+            out_vals[j] = val_interp(jd)
+        except ValueError:
+            continue
+
+    return out_vals
+
+def ReadTextProfile(observed_data_filename, timestamps):
     '''
     reads in observed data files and returns values for Temperature Profiles
     :param observed_data_filename: file name
@@ -122,6 +237,32 @@ def readTextProfile(observed_data_filename, timestamps):
 
     return wtn, dn
 
+def getTextProfileDates(observed_data_filename, starttime, endtime):
+    '''
+    reads profile text files and extracts dates
+    :param observed_data_filename: filename of obs data
+    :param starttime: start time for data
+    :param endtime: end time for data
+    :return: list of dates between start and end dates
+    '''
+
+    t = []
+    if not os.path.exists(observed_data_filename):
+        return t
+    with open(observed_data_filename, 'r') as odf:
+        for j, line in enumerate(odf):
+            if j == 0:
+                continue
+            sline = line.split(',')
+            dt_str = sline[0]
+            dt_tmp = dateutil.parser.parse(dt_str) #trying this to see if it will work
+            if starttime <= dt_tmp <= endtime: #get time window
+                if dt_tmp not in t:
+                    t.append(dt_tmp)
+    return t
+
+
+
 def getClosestTime(timestamps, dates):
     '''
     gets timestamp closest to given timestamps for profile plots
@@ -143,166 +284,6 @@ def getClosestTime(timestamps, dates):
 
         cdi.append(closestDateidx)
     return cdi
-
-def readDSSData(dss_file, pathname, startdate, enddate):
-    '''
-    calls pydsstools from https://github.com/gyanz/pydsstools to read dss data
-    :param dss_file: full path to DSS file
-    :param pathname: path to read in DSS file
-    :param startdate: start date datetime object
-    :param enddate: end date datetime object
-    :return: time array and values array and units
-
-    Example from documentation
-    # dss_file = "example.dss"
-    # pathname = "/REGULAR/TIMESERIES/FLOW//1HOUR/Ex1/"
-    # startDate = "15JUL2019 19:00:00"
-    # endDate = "15AUG2019 19:00:00"
-    '''
-
-    startDate = startdate.strftime('%d%b%Y %H:%M:%S')
-    endDate = enddate.strftime('%d%b%Y %H:%M:%S')
-
-    if not os.path.exists(dss_file):
-        print('DSS file not found!', dss_file)
-        return [], [], None
-
-    fid = HecDss.Open(dss_file)
-    ts = fid.read_ts(pathname,window=(startDate,endDate),regular=True,trim_missing=True)
-    # ts = fid.read_ts(pathname,regular=False)
-    times = np.array(ts.pytimes)
-    values = np.array(ts.values)
-    units = ts.units
-
-    return times, values, units
-
-def readW2ResultsFile(output_file_name, jd_dates, run_path, targetfieldidx=1):
-    '''
-    reads W2 output text files. files are a bit specialized so the targetfieldidx is variable and allows input
-    :param output_file_name: name of file
-    :param jd_dates: list of jdates. W2 output is in the form of jdates
-    :param run_path: path of W2 run
-    :param targetfieldidx: index of which row in CSV to grab
-    :return: list of list of arrays
-    '''
-
-    out_vals = np.full(len(jd_dates), np.nan)
-    ofn_path = os.path.join(run_path, output_file_name)
-    dates = []
-    values = []
-    skiplines = 3 #not sure if this is always true?
-    with open(ofn_path, 'r') as o:
-        for i, line in enumerate(o):
-            if i >= skiplines:
-                sline = line.split(',')
-                dates.append(float(sline[0].strip()))
-                values.append(float(sline[targetfieldidx].strip()))
-
-    if len(dates) > 1:
-        val_interp = interp1d(dates, values)
-    for j, jd in enumerate(jd_dates):
-        try:
-            out_vals[j] = val_interp(jd)
-        except ValueError:
-            continue
-
-    return out_vals
-
-def read_GraphicsDefaults(GD_file):
-    '''
-    reads graphics default file and iterates through to form dictionary
-    :param GD_file: graphics default file path
-    :return: dictionary with settings
-    '''
-
-    tree = ET.parse(GD_file)
-    root = tree.getroot()
-    gd_reportObjects = root.findall('ReportObject')
-    reportObjects = iterateGraphicsDefaults(gd_reportObjects, 'Type')
-
-    return reportObjects
-
-def read_DefaultLineStyle(linefile):
-    '''
-    reads default linestyle file and iterates through to form dictionary
-    :param linefile: linestyle default file path
-    :return: dictionary with settings
-    '''
-
-    tree = ET.parse(linefile)
-    root = tree.getroot()
-    def_lineTypes = root.findall('LineType')
-    lineTypes = iterateGraphicsDefaults(def_lineTypes, 'Name')
-    return lineTypes
-
-def read_ChapterDefFile(CD_file):
-    '''
-    reads chapter definitions file
-    :param CD_file: xml of read chapter definitions file
-    :return:
-    '''
-
-    Chapters = []
-    tree = ET.parse(CD_file)
-    root = tree.getroot()
-    for chapter in root:
-        check = DefinedVarCheck(chapter, ['Name', 'Region', 'Sections'])
-        if check:
-            ChapterDef = {}
-            chap_name = chapter.find('Name').text
-            chap_region = chapter.find('Region').text
-            ChapterDef['name'] = chap_name
-            ChapterDef['region'] = chap_region
-            ChapterDef['sections'] = []
-            cd_sections = chapter.findall('Sections/Section')
-            for section in cd_sections:
-                section_objects = {}
-                try:
-                    section_objects['header'] = section.find('Header').text
-                except:
-                    section_objects['header'] = ''
-                section_objects['objects'] = []
-                sec_objects = section.findall('Object')
-                objects = iterateChapterDefintions(sec_objects)
-                section_objects['objects'] = (objects)
-                ChapterDef['sections'].append(section_objects)
-        Chapters.append(ChapterDef)
-
-    return Chapters
-
-def iterateGraphicsDefaults(root, main_key):
-    '''
-    iterates through the graphics default file to get settings
-    :param root: section of XML to be read
-    :param main_key: Name of main id for xml
-    :return: dictionary with settings
-    '''
-
-    out = {}
-    for cr in root:
-        key = cr.find(main_key).text.lower()
-        out[key.lower()] = {}
-        for child in cr:
-            if child.tag == main_key:
-                continue
-            else:
-                out[key.lower()][child.tag.lower()] = get_children(child, returnkeyless=True)
-    return out
-
-def iterateChapterDefintions(root):
-    '''
-    iterates through chapter definition file
-    :param root: section of xml to be read
-    :return: list of settings
-    '''
-
-    out = []
-    for cr in root:
-        keylist = {}
-        for child in cr:
-            keylist[child.tag.lower()] = get_children(child, returnkeyless=True)
-        out.append(keylist)
-    return out
 
 def get_children(root, returnkeyless=False):
     '''
@@ -340,19 +321,40 @@ def get_children(root, returnkeyless=False):
         children = children[root.tag.lower()]
     return children
 
-def DefinedVarCheck(Block, flags):
+def iterateGraphicsDefaults(root, main_key):
     '''
-    confirms that all flags are contained in the given block, aka check for headers in XML
-    :param Block: xml with flags
-    :param flags: flags that we need for it to be valid
-    :return: True if contains headers, False if not
+    iterates through the graphics default file to get settings
+    :param root: section of XML to be read
+    :param main_key: Name of main id for xml
+    :return: dictionary with settings
     '''
 
-    tags = [n.tag for n in list(Block)]
-    for flag in flags:
-        if flag not in tags:
-            return False
-    return True
+    out = {}
+    for cr in root:
+        key = cr.find(main_key).text.lower()
+        out[key.lower()] = {}
+        for child in cr:
+            if child.tag == main_key:
+                continue
+            else:
+                out[key.lower()][child.tag.lower()] = get_children(child, returnkeyless=True)
+    return out
+
+def iterateChapterDefintions(root):
+    '''
+    iterates through chapter definition file
+    :param root: section of xml to be read
+    :return: list of settings
+    '''
+
+    out = []
+    for cr in root:
+        keylist = {}
+        for child in cr:
+            keylist[child.tag.lower()] = get_children(child, returnkeyless=True)
+        out.append(keylist)
+    return out
+
 
 class W2_Results(object):
 
@@ -1025,7 +1027,7 @@ if __name__ == '__main__':
     #TODO: for debugging, remove.
 
     # graphicsDefaultfile = r"D:\Work2021\USBR\RessimXMLTest\Shasta_W2_BUZZ.xml"
-    # results = read_ChapterDefFile(graphicsDefaultfile)
+    # results = ReadChapterDefFile(graphicsDefaultfile)
     # for n in results:
     #     print(n)
     graphicsDefaultfile = r"D:\Work2021\USBR\RessimXMLTest\Graphics_Defaults_Beta_v5.xml"

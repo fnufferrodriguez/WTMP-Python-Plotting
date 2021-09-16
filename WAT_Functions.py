@@ -55,6 +55,24 @@ def clean_computed(indata):
     indata[indata == -9999.] = np.nan
     return indata
 
+def clean_output_dir(dir_name, filetype):
+    '''
+    removes all files with a prescribed file type from a given directory
+    mainly used to erase old images from output directory
+    :param dir_name: full path to directory to clean
+    :param filetype: file type to delete
+    '''
+
+    files_in_directory = os.listdir(dir_name)
+    filtered_files = [file for file in files_in_directory if file.endswith(filetype)]
+    for file in filtered_files:
+        path_to_file = os.path.join(dir_name, file)
+        try:
+            os.remove(path_to_file)
+        except:
+            print('Failed to delete', path_to_file)
+            print('Continuing..')
+
 def do_saturation(temp, diss_ox):
     '''
     calulates dissolved oxygen saturation. uses a series of pre computed DO values interpolated
@@ -382,23 +400,7 @@ def MEAN(data1):
         return np.nan
     return(np.nanmean(data1['values']))
 
-def clean_output_dir(dir_name, filetype):
-    '''
-    removes all files with a prescribed file type from a given directory
-    mainly used to erase old images from output directory
-    :param dir_name: full path to directory to clean
-    :param filetype: file type to delete
-    '''
 
-    files_in_directory = os.listdir(dir_name)
-    filtered_files = [file for file in files_in_directory if file.endswith(filetype)]
-    for file in filtered_files:
-        path_to_file = os.path.join(dir_name, file)
-        try:
-            os.remove(path_to_file)
-        except:
-            print('Failed to delete', path_to_file)
-            print('Continuing..')
 
 
 def convert_obs_depths(obs_depths, model_elevs):
