@@ -624,7 +624,7 @@ class W2_Results(object):
                     hname = header
                 else:
                     hname = header+'.{0}'.format(structure_num-1)
-                vals = [float(str(n).replace(',','')) for n in stsf[hname].tolist()]
+                vals = np.asarray([float(str(n).replace(',','')) for n in stsf[hname].tolist()])
                 # vals = [float(n) for n in stsf[hname].tolist()]
                 values[structure_num][header.lower()] = vals
 
