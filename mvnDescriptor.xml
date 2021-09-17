@@ -1,0 +1,15 @@
+<assembly>
+<formats>
+    <format>zip</format>
+</formats>
+
+<fileSets>
+    <fileSet>
+        <directory>dist/WAT_Report_Generator</directory>
+        <includes>
+            <include>**/*</include>
+        </includes>
+        <outputDirectory>.</outputDirectory>
+    </fileSet>
+</fileSets>
+</assembly>
