@@ -177,6 +177,8 @@ class MakeAutomatedReport(object):
         default_settings = self.load_defaultPlotObject('timeseriesplot') #get default TS plot items
         object_settings = self.replaceDefaults(default_settings, object_settings) #overwrite the defaults with chapter file
 
+        object_settings = self.updateFlaggedValues(object_settings, '%%year%%', self.years_str)
+
         fig = plt.figure(figsize=(12, 6))
         ax = fig.add_subplot()
         param_count = {}
@@ -297,13 +299,14 @@ class MakeAutomatedReport(object):
             plt.xlabel(object_settings['xlabel'], fontsize=xlabsize)
 
         if 'legend' in object_settings.keys():
-            if 'legendsize' in object_settings.keys():
-                legsize = float(object_settings['legendsize'])
-            elif 'fontsize' in object_settings.keys():
-                legsize = float(object_settings['fontsize'])
-            else:
-                legsize = 12
-            plt.legend(fontsize=legsize)
+            if object_settings['legend'].lower() == 'true':
+                if 'legendsize' in object_settings.keys():
+                    legsize = float(object_settings['legendsize'])
+                elif 'fontsize' in object_settings.keys():
+                    legsize = float(object_settings['fontsize'])
+                else:
+                    legsize = 12
+                plt.legend(fontsize=legsize)
 
         self.formatDateXAxis(ax, object_settings)
 
@@ -470,6 +473,9 @@ class MakeAutomatedReport(object):
 
                 for i, j in enumerate(pgi):
                     ax = fig.add_subplot(int(subplot_rows), int(subplot_cols), i + 1)
+
+                    if object_settings['usedepth'].lower() == 'true':
+                        ax.invert_yaxis()
 
                     for li, line in enumerate(linedata.keys()):
                         try:
