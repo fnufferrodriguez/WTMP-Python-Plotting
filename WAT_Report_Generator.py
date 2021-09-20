@@ -2620,7 +2620,7 @@ class MakeAutomatedReport(object):
             return new_times, new_values
 
 
-def makeRegularTimesteps(self, days=15):
+    def makeRegularTimesteps(self, days=15):
         '''
         makes regular time series for profile plots if there are no times defined
         :param days: day interval
