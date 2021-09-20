@@ -1404,6 +1404,10 @@ class MakeAutomatedReport(object):
             print('No Data Defined for line')
             return [], [], None
 
+        if 'omitvalue' in Line_info.keys():
+            omitval = float(Line_info['omitvalue'])
+            values = self.replaceOmittedValues(values, omitval)
+
         if len(values) == 0:
             return [], [], None
         else:
@@ -1641,6 +1645,18 @@ class MakeAutomatedReport(object):
             pattern = re.compile(re.escape(fv), re.IGNORECASE)
             value = pattern.sub(repr(flagged_values[fv])[1:-1], value) #this seems weird with [1:-1] but paths wont work otherwise
         return value
+
+    def replaceOmittedValues(self, values, omitval):
+        if isinstance(values, dict):
+            new_values = {}
+            for key in values:
+                new_values[key] = self.replaceOmittedValues(values[key], omitval)
+        else:
+            o_msk = np.where(values==omitval)
+            values[o_msk] = np.nan
+            new_values = values
+            print('Omitted {0} values of {1}'.format(len(o_msk[0]), omitval))
+        return new_values
 
     def translateLineStylePatterns(self, LineSettings):
         '''
@@ -2494,7 +2510,6 @@ class MakeAutomatedReport(object):
             times = self.JDateToDatetime(times)
             convert_to_jdate = True
 
-
         if 'type' in Line_info.keys() and 'interval' not in Line_info.keys():
             print('Defined Type but no interval..')
             if convert_to_jdate:
@@ -2621,9 +2636,9 @@ def makeRegularTimesteps(self, days=15):
         return timesteps
 
 if __name__ == '__main__':
-    batdir = sys.argv[1]
-    simInfoFile = sys.argv[2]
+    rundir = sys.argv[0]
+    simInfoFile = sys.argv[1]
     # simInfoFile = r"\\wattest\C\WAT\USBR_FrameworkTest_r3_singlescript\reports\ResSim-val2013.xml"
 
-    ar = MakeAutomatedReport(simInfoFile, batdir)
+    ar = MakeAutomatedReport(simInfoFile, rundir)
 
