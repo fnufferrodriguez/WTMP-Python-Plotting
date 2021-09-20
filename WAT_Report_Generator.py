@@ -1125,7 +1125,7 @@ class MakeAutomatedReport(object):
         '''
 
         graphicsDefaultfile = os.path.join(self.studyDir, 'reports', 'Graphics_Defaults.xml')
-        # graphicsDefaultfile = os.path.join(self.default_dir, 'Graphics_Defaults.xml') #TODO: implent with build
+        # graphicsDefaultfile = os.path.join(self.default_dir, 'Graphics_Defaults.xml') #TODO: implement with build
         self.graphicsDefault = WDR.ReadGraphicsDefaults(graphicsDefaultfile)
 
     def ReadLinesstylesDefaultFile(self):
@@ -1136,7 +1136,7 @@ class MakeAutomatedReport(object):
         '''
 
         defaultLinesFile = os.path.join(self.studyDir, 'reports', 'defaultLineStyles.xml')
-        # defaultLinesFile = os.path.join(self.default_dir, 'defaultLineStyles.xml') #TODO: implent with build
+        # defaultLinesFile = os.path.join(self.default_dir, 'defaultLineStyles.xml') #TODO: implement with build
         self.defaultLineStyles = WDR.ReadDefaultLineStyle(defaultLinesFile)
 
     def ReadDefinitionsFile(self, simorder):
@@ -1404,6 +1404,10 @@ class MakeAutomatedReport(object):
             print('No Data Defined for line')
             return [], [], None
 
+        if 'omitvalue' in Line_info.keys():
+            omitval = float(Line_info['omitvalue'])
+            values = self.replaceOmittedValues(values, omitval)
+
         if len(values) == 0:
             return [], [], None
         else:
@@ -1641,6 +1645,18 @@ class MakeAutomatedReport(object):
             pattern = re.compile(re.escape(fv), re.IGNORECASE)
             value = pattern.sub(repr(flagged_values[fv])[1:-1], value) #this seems weird with [1:-1] but paths wont work otherwise
         return value
+
+    def replaceOmittedValues(self, values, omitval):
+        if isinstance(values, dict):
+            new_values = {}
+            for key in values:
+                new_values[key] = self.replaceOmittedValues(values[key], omitval)
+        else:
+            o_msk = np.where(values==omitval)
+            values[o_msk] = np.nan
+            new_values = values
+            print('Omitted {0} values of {1}'.format(len(o_msk[0]), omitval))
+        return new_values
 
     def translateLineStylePatterns(self, LineSettings):
         '''
@@ -2489,15 +2505,24 @@ class MakeAutomatedReport(object):
         :return: new times and values
         '''
 
+        convert_to_jdate = False
+        if isinstance(times[0], (int, float)): #chcek for jdate, this is easier in dt..
+            times = self.JDateToDatetime(times)
+            convert_to_jdate = True
+
         if 'type' in Line_info.keys() and 'interval' not in Line_info.keys():
             print('Defined Type but no interval..')
-            return times, values
+            if convert_to_jdate:
+                return self.DatetimeToJDate(times), values
+            else:
+                return times, values
 
         # INST-CUM, INST-VAL, PER-AVER, PER-CUM)
         if 'type' in Line_info:
             avgtype = Line_info['type'].upper()
         else:
             avgtype = 'INST-VAL'
+            # avgtype = 'PER-AVER'
 
         if 'interval' in Line_info:
             interval = Line_info['interval'].upper()
@@ -2509,72 +2534,93 @@ class MakeAutomatedReport(object):
         new_times = self.buildTimeSeries(times[0], times[-1], interval)
         new_times_interval = self.getTimeInterval(new_times)
 
-        if isinstance(new_times_interval, (int, float)):
-            if new_times_interval < input_interval:
-                print('New interval is smaller than the old interval.')
-                print('Currently not supporting this.')
-                return times, values
-        elif isinstance(new_times_interval, dt.timedelta):
+        # if isinstance(new_times_interval, (int, float)):
+        #     if new_times_interval < input_interval:
+        #         print('New interval is smaller than the old interval.')
+        #         print('Currently not supporting this.')
+        #         return times, values
+        if isinstance(new_times_interval, dt.timedelta):
             if new_times_interval.total_seconds() < input_interval.total_seconds():
                 print('New interval is smaller than the old interval.')
                 print('Currently not supporting this.')
-                return times, values
+                if convert_to_jdate:
+                    return self.DatetimeToJDate(times), values
+                else:
+                    return times, values
         else:
             print('Error defining new interval types')
-            return times, values
+            if convert_to_jdate:
+                return self.DatetimeToJDate(times), values
+            else:
+                return times, values
 
         if new_times_interval == input_interval: #no change..
             print('Input interval matches data interval.')
-            return times, values
+            if convert_to_jdate:
+                return self.DatetimeToJDate(times), values
+            else:
+                return times, values
 
-        if avgtype == 'INST-VAL':
-            #at the point in time, find intervals and use values
-            new_values = []
-            for t in new_times:
-                ti = np.where(np.asarray(times)==t)[0]
-                if len(ti) == 1:
-                    new_values.append(values[ti][0])
-                elif len(ti) == 0:
-                    #missing date, could be missing data or irreg?
-                    new_values.append(np.NaN)
-                else:
-                    print('Multiple date idx found??')
-                    new_values.append(np.NaN)
-                    continue
+        if isinstance(values, dict):
+            new_values = {}
+            for key in values:
+                new_times, new_values[key] = self.changeTimeSeriesInterval(times, values[key], Line_info)
+        else:
+            values = np.asarray(values)
+            if avgtype == 'INST-VAL':
+                #at the point in time, find intervals and use values
+                new_values = []
+                for t in new_times:
+                    ti = np.where(np.asarray(times) == t)[0]
+                    if len(ti) == 1:
+                        new_values.append(np.asarray(values)[ti][0])
+                    elif len(ti) == 0:
+                        #missing date, could be missing data or irreg?
+                        new_values.append(np.NaN)
+                    else:
+                        print('Multiple date idx found??')
+                        new_values.append(np.NaN)
+                        continue
+                # return new_times, new_values
+
+            elif avgtype == 'INST-CUM':
+                if interval == input_interval:
+                    new_times = copy.deepcopy(times)
+                new_values = []
+                for t in new_times:
+                    ti = [i for i, n in enumerate(times) if n <= t]
+                    cum_val = np.sum(values[ti])
+                    new_values.append(cum_val)
+
+                # return new_times, new_values
+
+            elif avgtype == 'PER-AVER':
+                #average over the period
+                new_values = []
+                interval = self.getTimeIntervalSeconds(interval)
+                for t in new_times:
+                    t2 = t + dt.timedelta(seconds=interval)
+                    date_idx = [i for i, n in enumerate(times) if t <= n < t2]
+                    new_values.append(np.mean(values[date_idx]))
+                # return new_times, new_values
+
+            elif avgtype == 'PER-CUM':
+                #cum over the perio
+                new_values = []
+                interval = self.getTimeIntervalSeconds(interval)
+                for t in new_times:
+                    t2 = t + dt.timedelta(seconds=interval)
+                    date_idx = [i for i, n in enumerate(times) if t <= n < t2]
+                    new_values.append(np.sum(values[date_idx]))
+                # return new_times, new_values
+
+        if convert_to_jdate:
+            return self.DatetimeToJDate(new_times), new_values
+        else:
             return new_times, new_values
 
-        elif avgtype == 'INST-CUM':
-            if interval == input_interval:
-                new_times = copy.deepcopy(times)
-            new_values = []
-            for t in new_times:
-                ti = [i for i, n in enumerate(times) if n <= t]
-                cum_val = np.sum(values[ti])
-                new_values.append(cum_val)
 
-            return new_times, new_values
-
-        elif avgtype == 'PER-AVER':
-            #average over the period
-            new_values = []
-            interval = self.getTimeIntervalSeconds(interval)
-            for t in new_times:
-                t2 = t + dt.timedelta(seconds=interval)
-                date_idx = [i for i, n in enumerate(times) if t <= n < t2]
-                new_values.append(np.mean(values[date_idx]))
-            return new_times, new_values
-
-        elif avgtype == 'PER-CUM':
-            #cum over the perio
-            new_values = []
-            interval = self.getTimeIntervalSeconds(interval)
-            for t in new_times:
-                t2 = t + dt.timedelta(seconds=interval)
-                date_idx = [i for i, n in enumerate(times) if t <= n < t2]
-                new_values.append(np.sum(values[date_idx]))
-            return new_times, new_values
-
-    def makeRegularTimesteps(self, days=15):
+def makeRegularTimesteps(self, days=15):
         '''
         makes regular time series for profile plots if there are no times defined
         :param days: day interval
@@ -2590,9 +2636,9 @@ class MakeAutomatedReport(object):
         return timesteps
 
 if __name__ == '__main__':
-    batdir = sys.argv[1]
-    simInfoFile = sys.argv[2]
+    rundir = sys.argv[0]
+    simInfoFile = sys.argv[1]
     # simInfoFile = r"\\wattest\C\WAT\USBR_FrameworkTest_r3_singlescript\reports\ResSim-val2013.xml"
 
-    ar = MakeAutomatedReport(simInfoFile, batdir)
+    ar = MakeAutomatedReport(simInfoFile, rundir)
 
