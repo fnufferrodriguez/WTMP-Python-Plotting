@@ -36,6 +36,7 @@ def dt_to_ord(indate):
 
 def clean_missing(indata):
     '''
+    TODO: merge with omit values function?
     removes data with -901. flags
     :param indata: array of data to be cleaned
     :return: cleaned data array
@@ -47,6 +48,7 @@ def clean_missing(indata):
 
 def clean_computed(indata):
     '''
+    TODO: merge with omit values function?
     removes data with -9999 flags
     :param indata: array of data to be cleaned
     :return: cleaned data array
@@ -160,8 +162,6 @@ def get_subplot_config(n_profiles, plots_per_row):
     :return: subplot rows, subplot columns
     '''
 
-    # plot_per_page = 3.
-    # plot_per_page = 4.
     factor = n_profiles / plots_per_row
     if factor < 1:
         return 1, n_profiles
@@ -400,9 +400,6 @@ def MEAN(data1):
         return np.nan
     return(np.nanmean(data1['values']))
 
-
-
-
 def convert_obs_depths(obs_depths, model_elevs):
     '''
     calculate observed elevations based on model elevations and obs depths
@@ -429,11 +426,9 @@ def convertTempUnits(values, units):
     '''
 
     if units.lower() in ['f', 'faren', 'degf', 'fahrenheit', 'fahren', 'deg f']:
-        print('Converting F to C...')
         values = convert_temperature(values, 'F', 'C')
         return values
     elif units.lower() in ['c', 'cel', 'celsius', 'deg c', 'degc']:
-        print('Converting C to F...')
         values = convert_temperature(values, 'C', 'F')
         return values
     else:
