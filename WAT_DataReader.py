@@ -13,13 +13,10 @@ import h5py
 from scipy.interpolate import interp1d
 import dateutil.parser
 from collections import Counter
-try:
-    from pydsstools.heclib.dss import HecDss
-except:
-    print('Failed to load HecDss')
+from pydsstools.heclib.dss import HecDss
 import xml.etree.ElementTree as ET
-import WAT_Functions as WF
 import linecache
+import WAT_Functions as WF
 
 def DefinedVarCheck(Block, flags):
     '''
@@ -259,9 +256,7 @@ def getTextProfileDates(observed_data_filename, starttime, endtime):
             if starttime <= dt_tmp <= endtime: #get time window
                 if dt_tmp not in t:
                     t.append(dt_tmp)
-    return t
-
-
+    return np.asarray(t)
 
 def getClosestTime(timestamps, dates):
     '''
@@ -354,7 +349,6 @@ def iterateChapterDefintions(root):
             keylist[child.tag.lower()] = get_children(child, returnkeyless=True)
         out.append(keylist)
     return out
-
 
 class W2_Results(object):
 
@@ -579,7 +573,8 @@ class W2_Results(object):
             elevations.append(np.asarray(e))
             depths.append(self.layers * 3.28)
         select_wt, elevations, depths = self.matchProfileLengths(select_wt, elevations, depths)
-        return select_wt, elevations, depths
+
+        return select_wt, elevations, np.asarray(depths)
 
     def readStructuredTimeSeries(self, output_file_name, structure_nums, skiprows=2):
         """
@@ -629,7 +624,7 @@ class W2_Results(object):
                 values[structure_num][header.lower()] = vals
 
         dates = stsf['jday'].tolist()
-        dates = [float(str(n).replace(',', '')) for n in dates]
+        dates = np.asarray([float(str(n).replace(',', '')) for n in dates])
         # dates = [float(n) for n in dates]
 
         return dates, values
@@ -965,7 +960,7 @@ class ResSim_Results(object):
 
         x = data['easting']
         y = data['northing']
-        dates, vals = self.get_Timeseries( metric, xy=[x, y])
+        dates, vals = self.get_Timeseries(metric, xy=[x, y])
         return dates, vals
 
     def find_computed_station_cell(self, xy):

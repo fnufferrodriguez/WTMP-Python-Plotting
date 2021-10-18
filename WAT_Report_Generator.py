@@ -49,7 +49,7 @@ class MakeAutomatedReport(object):
         self.ReadLinesstylesDefaultFile()
         if self.reportType == 'single': #Eventually be able to do comparison reports, put that here
             for simulation in self.Simulations:
-                # print('SIMULATION:', simulation)
+                print('Running Simulation:', simulation)
                 self.SetSimulationVariables(simulation)
                 self.DefineStartEndYears()
                 self.ReadSimulationsCSV() #read to determine order/sims/regions in report
@@ -169,7 +169,7 @@ class MakeAutomatedReport(object):
     def MakeTimeSeriesPlot(self, object_settings):
         '''
         takes in object settings to build time series plot and write to XML
-        #TODO: pull common settings out into their own funcitons so we dont have to look at them
+        #TODO: pull common settings out into their own functions so we dont have to look at them
         :param object_settings: currently selected object settings dictionary
         :return: creates png in images dir and writes to XML file
         '''
@@ -244,7 +244,6 @@ class MakeAutomatedReport(object):
                     dates, values = self.limitXdata(dates, values, object_settings['xlims'])
                 if 'ylims' in object_settings.keys():
                     dates, values = self.limitYdata(dates, values, object_settings['ylims'])
-
 
             if line_settings['drawline'].lower() == 'true' and line_settings['drawpoints'].lower() == 'true':
                 ax.plot(dates, values, label=line_settings['label'], c=line_settings['linecolor'],
@@ -591,14 +590,12 @@ class MakeAutomatedReport(object):
                 plt.tight_layout()
                 figname = 'ProfilePlot_{0}_{1}_{2}_{3}_{4}.png'.format(self.ChapterName, yearstr, plot_parameter, self.plugin, page_i)
 
-                plt.savefig(os.path.join(self.images_path, figname), dpi=600)
+                # plt.savefig(os.path.join(self.images_path, figname), dpi=600)
+                plt.savefig(os.path.join(self.images_path, figname))
                 plt.close('all')
 
                 ################################################
-                # if not split_by_year:
-                #     description = '{0} {1}: {2} of {3}'.format(current_object_settings['description'], yearstr, page_i+1, len(page_indices))
-                # else:
-                # description = '{0}: {1} of {2}'.format(current_object_settings['description'], page_i+1, len(page_indices))
+
                 description = '{0}: {1} of {2}'.format(cur_obj_settings['description'], page_i+1, len(page_indices))
                 self.XML.writeProfilePlotFigure(figname, description)
 
@@ -738,6 +735,7 @@ class MakeAutomatedReport(object):
             if units != None:
                 unitslist.append(units)
 
+
             if 'filterbylimits' not in dp.keys():
                 dp['filterbylimits'] = 'true' #set default
 
@@ -747,7 +745,7 @@ class MakeAutomatedReport(object):
                 if 'ylims' in object_settings.keys():
                     dates, values = self.limitYdata(dates, values, object_settings['ylims'])
 
-            data[dp['flag']] = {'dates':dates,
+            data[dp['flag']] = {'dates': dates,
                                 'values': values,
                                 'units': units}
 
@@ -870,7 +868,7 @@ class MakeAutomatedReport(object):
             if 'scalar' in line.keys():
                 try:
                     scalar = float(line['scalar'])
-                    values = scalar * np.asarray(values)
+                    values = scalar * values
                 except ValueError:
                     print('Invalid Scalar. {0}'.format(line['scalar']))
                     continue
@@ -965,7 +963,7 @@ class MakeAutomatedReport(object):
             #now filter values associated with dates not in this list
             for di, datelist in enumerate(dates):
                 mask_date_idx = [ni for ni, date in enumerate(datelist) if date in matched_dates]
-                values[di] = list(np.asarray(values[di])[mask_date_idx])
+                values[di] = np.asarray(values[di])[mask_date_idx]
 
             curax.stackplot(matched_dates, values, labels=labels, colors=colors, zorder=2)
 
@@ -1121,6 +1119,7 @@ class MakeAutomatedReport(object):
         :return: class variable
                     self.SimulationCSV
         '''
+
         self.SimulationCSV = WDR.ReadSimulationFile(self.baseSimulationName, self.studyDir)
 
     def ReadGraphicsDefaultFile(self):
@@ -1199,6 +1198,7 @@ class MakeAutomatedReport(object):
         sets simulation dates and times
         :param simulation: simulation dictionary object for specified simulation
         :return: class variables
+                    self.Data_Memory
                     self.SimulationName
                     self.baseSimulationName
                     self.simulationDir
@@ -1209,6 +1209,7 @@ class MakeAutomatedReport(object):
                     self.ModelAlternatives
         '''
 
+        self.Data_Memory = {}
         self.SimulationName = simulation['name']
         self.baseSimulationName = simulation['basename']
         self.simulationDir = simulation['directory']
@@ -1381,8 +1382,20 @@ class MakeAutomatedReport(object):
                 print('DSS_Filename not set for Line: {0}'.format(Line_info))
                 return [], [], None
             else:
-                times, values, units = WDR.ReadDSSData(Line_info['dss_filename'], Line_info['dss_path'],
-                                                       self.StartTime, self.EndTime)
+
+                if '{0}_{1}'.format(Line_info['dss_filename'], Line_info['dss_path']) in self.Data_Memory.keys():
+                    print('READING {0} {1} FROM MEMORY'.format(Line_info['dss_filename'], Line_info['dss_path']))
+                    times = copy.deepcopy(self.Data_Memory['{0}_{1}'.format(Line_info['dss_filename'], Line_info['dss_path'])]['times'])
+                    values = copy.deepcopy(self.Data_Memory['{0}_{1}'.format(Line_info['dss_filename'], Line_info['dss_path'])]['values'])
+                    units = copy.deepcopy(self.Data_Memory['{0}_{1}'.format(Line_info['dss_filename'], Line_info['dss_path'])]['units'])
+                else:
+
+                    times, values, units = WDR.ReadDSSData(Line_info['dss_filename'], Line_info['dss_path'],
+                                                           self.StartTime, self.EndTime)
+                    self.Data_Memory['{0}_{1}'.format(Line_info['dss_filename'],
+                                                      Line_info['dss_path'])] = {'times': copy.deepcopy(np.asarray(times)),
+                                                                                 'values': copy.deepcopy(np.asarray(values)),
+                                                                                 'units': copy.deepcopy(units)}
 
                 if np.any(values == None):
                     return [], [], None
@@ -1393,14 +1406,12 @@ class MakeAutomatedReport(object):
             if 'structurenumbers' in Line_info.keys():
                 # Ryan Miles: yeah looks like it's str_brX.npt, and X is 1-# of branches (which is defined in the control file)
                 times, values = self.ModelAlt.readStructuredTimeSeries(Line_info['w2_file'], Line_info['structurenumbers'])
-                # values, parameter = self.ModelAlt.filterByParameter(values, Line_info) #we need all params...
             else:
                 times, values = self.ModelAlt.readTimeSeries(Line_info['w2_file'], **Line_info)
             if 'units' in Line_info.keys():
                 units = Line_info['units']
             else:
                 units = None
-                # units = self.units[Line_info['parameter'].lower()]
 
         elif 'xy' in Line_info.keys():
             times, values = self.ModelAlt.readTimeSeries(Line_info['parameter'], Line_info['xy'])
@@ -1416,9 +1427,9 @@ class MakeAutomatedReport(object):
 
         if len(values) == 0:
             return [], [], None
-        else:
+        elif 'interval' in Line_info.keys():
             times, values = self.changeTimeSeriesInterval(times, values, Line_info)
-            return times, values, units
+        return times, values, units
 
     def getTimeIntervalSeconds(self, interval):
         '''
@@ -1461,8 +1472,6 @@ class MakeAutomatedReport(object):
             else:
                 t_ints.append(t - last_time)
 
-        # occurence_count = Counter(t_ints)
-        # most_common_interval = occurence_count.most_common(1)[0][0]
         return self.getMostCommon(t_ints)
 
     def getMostCommon(self, listvars):
@@ -1647,20 +1656,28 @@ class MakeAutomatedReport(object):
                           '%%startyear%%': str(self.startYear),
                           '%%endyear%%': str(self.endYear)
                           }
+
         for fv in flagged_values.keys():
             pattern = re.compile(re.escape(fv), re.IGNORECASE)
             value = pattern.sub(repr(flagged_values[fv])[1:-1], value) #this seems weird with [1:-1] but paths wont work otherwise
         return value
 
     def replaceOmittedValues(self, values, omitval):
+        '''
+        replaces a specified value in time series. Can be variable depending on data source (-99999, 0, 100, etc)
+        :param values: array of values
+        :param omitval: value to be omitted
+        :return: new values
+        '''
+
         if isinstance(values, dict):
             new_values = {}
             for key in values:
                 new_values[key] = self.replaceOmittedValues(values[key], omitval)
         else:
-            o_msk = np.where(values==omitval)
+            o_msk = np.where(values == omitval)
             values[o_msk] = np.nan
-            new_values = values
+            new_values = np.asarray(values)
             print('Omitted {0} values of {1}'.format(len(o_msk[0]), omitval))
         return new_values
 
@@ -2031,10 +2048,10 @@ class MakeAutomatedReport(object):
 
         if interval_info == 'np':
             ts = np.arange(startTime, endTime, interval)
-            ts = [t.astype(dt.datetime) for t in ts]
+            ts = np.asarray([t.astype(dt.datetime) for t in ts])
         elif interval_info == 'pd':
             ts = pd.date_range(startTime, endTime, freq=interval, closed=None)
-            ts = [t.to_pydatetime() for t in ts]
+            ts = np.asarray([t.to_pydatetime() for t in ts])
         return ts
 
     def limitXdata(self, dates, values, xlims):
@@ -2175,7 +2192,6 @@ class MakeAutomatedReport(object):
         then look for files ending in specific extensions in the default dir and check for them in the destination
         '''
 
-
         if not os.path.exists(self.default_dir):
             print('ERROR finding default files at {0}'.format(self.default_dir))
             print('No default files copied.')
@@ -2237,7 +2253,7 @@ class MakeAutomatedReport(object):
         '''
 
         if isinstance(dates, list) or isinstance(dates, np.ndarray):
-            jdates = [(WF.dt_to_ord(n) - self.ModelAlt.t_offset) + 1 for n in dates]
+            jdates = np.asarray([(WF.dt_to_ord(n) - self.ModelAlt.t_offset) + 1 for n in dates])
             return jdates
         elif isinstance(dates, dt.datetime):
             jdate = (WF.dt_to_ord(dates) - self.ModelAlt.t_offset) + 1
@@ -2255,9 +2271,10 @@ class MakeAutomatedReport(object):
             dtime: single date
             dates: original date if unable to convert
         '''
+
         first_year_Date = dt.datetime(self.ModelAlt.dt_dates[0].year, 1, 1, 0, 0)
         if isinstance(dates, list) or isinstance(dates, np.ndarray):
-            dtimes = [first_year_Date + dt.timedelta(days=n) for n in dates]
+            dtimes = np.asarray([first_year_Date + dt.timedelta(days=n) for n in dates])
             return dtimes
         elif isinstance(dates, float) or isinstance(dates, int):
             dtime = first_year_Date + dt.timedelta(days=dates)
@@ -2310,7 +2327,7 @@ class MakeAutomatedReport(object):
                 if values[sn]['elevcl'][i] == target:
                     sum += values[sn]['q(m3/s)'][i]
             sum_vals.append(sum)
-        return sum_vals
+        return np.asarray(sum_vals)
 
     def convertUnitSystem(self, values, units, target_unitsystem):
         '''
@@ -2346,21 +2363,25 @@ class MakeAutomatedReport(object):
         if target_unitsystem.lower() == 'english':
             if units.lower() in english_units.keys():
                 new_units = english_units[units.lower()]
+                print('Converting {0} to {1}'.format(units, new_units))
             elif units.lower() in english_units.values():
                 print('Values already in target unit system. {0} {1}'.format(units, target_unitsystem))
                 return values, units
             else:
                 print('Units not found in definitions. Not Converting.')
                 return values, units
+
         elif target_unitsystem.lower() == 'metric':
             if units.lower() in metric_units.keys():
                 new_units = metric_units[units.lower()]
+                print('Converting {0} to {1}'.format(units, new_units))
             elif units.lower() in metric_units.values():
                 print('Values already in target unit system. {0} {1}'.format(units, target_unitsystem))
                 return values, units
             else:
                 print('Units not found in definitions. Not Converting.')
                 return values, units
+
         else:
             print('Target Unit System undefined.', target_unitsystem)
             print('Try english or metric')
@@ -2370,10 +2391,10 @@ class MakeAutomatedReport(object):
             values = WF.convertTempUnits(values, units)
         elif units.lower() in conversion.keys():
             conversion_factor = conversion[units.lower()]
-            values = np.asarray(values) * conversion_factor
+            values *= conversion_factor
         elif new_units.lower() in conversion.keys():
             conversion_factor = 1/conversion[units.lower()]
-            values = np.asarray(values) * conversion_factor
+            values *= conversion_factor
         else:
             print('Undefined Units conversion for units {0}.'.format(units))
             print('No Conversions taking place.')
@@ -2422,7 +2443,6 @@ class MakeAutomatedReport(object):
                         r.append(yrrow)
                 rows_by_year = []
             rows.append('|'.join(r))
-            # r = []
         return rows
 
     def buildHeadersByYear(self, object_settings, years, split_by_year):
@@ -2512,7 +2532,8 @@ class MakeAutomatedReport(object):
         '''
 
         convert_to_jdate = False
-        if isinstance(times[0], (int, float)): #chcek for jdate, this is easier in dt..
+
+        if isinstance(times[0], (int, float)): #check for jdate, this is easier in dt..
             times = self.JDateToDatetime(times)
             convert_to_jdate = True
 
@@ -2540,11 +2561,6 @@ class MakeAutomatedReport(object):
         new_times = self.buildTimeSeries(times[0], times[-1], interval)
         new_times_interval = self.getTimeInterval(new_times)
 
-        # if isinstance(new_times_interval, (int, float)):
-        #     if new_times_interval < input_interval:
-        #         print('New interval is smaller than the old interval.')
-        #         print('Currently not supporting this.')
-        #         return times, values
         if isinstance(new_times_interval, dt.timedelta):
             if new_times_interval.total_seconds() < input_interval.total_seconds():
                 print('New interval is smaller than the old interval.')
@@ -2567,19 +2583,19 @@ class MakeAutomatedReport(object):
             else:
                 return times, values
 
+
         if isinstance(values, dict):
             new_values = {}
             for key in values:
                 new_times, new_values[key] = self.changeTimeSeriesInterval(times, values[key], Line_info)
         else:
-            values = np.asarray(values)
             if avgtype == 'INST-VAL':
                 #at the point in time, find intervals and use values
                 new_values = []
                 for t in new_times:
-                    ti = np.where(np.asarray(times) == t)[0]
+                    ti = np.where(times == t)[0]
                     if len(ti) == 1:
-                        new_values.append(np.asarray(values)[ti][0])
+                        new_values.append(values[ti][0])
                     elif len(ti) == 0:
                         #missing date, could be missing data or irreg?
                         new_values.append(np.NaN)
@@ -2587,18 +2603,16 @@ class MakeAutomatedReport(object):
                         print('Multiple date idx found??')
                         new_values.append(np.NaN)
                         continue
-                # return new_times, new_values
 
             elif avgtype == 'INST-CUM':
                 if interval == input_interval:
                     new_times = copy.deepcopy(times)
                 new_values = []
                 for t in new_times:
-                    ti = [i for i, n in enumerate(times) if n <= t]
+                    ti = np.where(times <= t)[0]
                     cum_val = np.sum(values[ti])
                     new_values.append(cum_val)
 
-                # return new_times, new_values
 
             elif avgtype == 'PER-AVER':
                 #average over the period
@@ -2606,9 +2620,11 @@ class MakeAutomatedReport(object):
                 interval = self.getTimeIntervalSeconds(interval)
                 for t in new_times:
                     t2 = t + dt.timedelta(seconds=interval)
-                    date_idx = [i for i, n in enumerate(times) if t <= n < t2]
+                    # date_idx = [i for i, n in enumerate(times) if t <= n < t2]
+                    date_idx1 = np.where(t <= times)[0]
+                    date_idx2 = np.where(times < t2)[0]
+                    date_idx = np.intersect1d(date_idx1, date_idx2)
                     new_values.append(np.mean(values[date_idx]))
-                # return new_times, new_values
 
             elif avgtype == 'PER-CUM':
                 #cum over the perio
@@ -2616,15 +2632,19 @@ class MakeAutomatedReport(object):
                 interval = self.getTimeIntervalSeconds(interval)
                 for t in new_times:
                     t2 = t + dt.timedelta(seconds=interval)
-                    date_idx = [i for i, n in enumerate(times) if t <= n < t2]
+                    # date_idx = [i for i, n in enumerate(times) if t <= n < t2]
+                    date_idx1 = np.where(t <= times)[0]
+                    date_idx2 = np.where(times < t2)[0]
+                    date_idx = np.intersect1d(date_idx1, date_idx2)
                     new_values.append(np.sum(values[date_idx]))
-                # return new_times, new_values
+            else:
+                print('INVALID INPUT TYPE DETECTED', avgtype)
+                return times, values
 
         if convert_to_jdate:
-            return self.DatetimeToJDate(new_times), new_values
+            return self.DatetimeToJDate(new_times), np.asarray(new_values)
         else:
-            return new_times, new_values
-
+            return new_times, np.asarray(new_values)
 
     def makeRegularTimesteps(self, days=15):
         '''
@@ -2639,12 +2659,13 @@ class MakeAutomatedReport(object):
         while cur_date < self.EndTime:
             timesteps.append(cur_date)
             cur_date += dt.timedelta(days=days)
-        return timesteps
+        return np.asarray(timesteps)
 
 if __name__ == '__main__':
     rundir = sys.argv[0]
     simInfoFile = sys.argv[1]
     # simInfoFile = r"\\wattest\C\WAT\USBR_FrameworkTest_r3_singlescript\reports\ResSim-val2013.xml"
-
-    ar = MakeAutomatedReport(simInfoFile, rundir)
+    # import cProfile
+    # ar = cProfile.run('MakeAutomatedReport(simInfoFile, rundir)')
+    MakeAutomatedReport(simInfoFile, rundir)
 
