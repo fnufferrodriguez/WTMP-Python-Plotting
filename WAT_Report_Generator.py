@@ -37,6 +37,7 @@ class MakeAutomatedReport(object):
         :param simulationInfoFile: full path to simulation information XML file output from WAT.
         '''
         self.simulationInfoFile = simulationInfoFile
+        self.WriteLog = True #TODO we're testing this.
         self.batdir = batdir
         self.ReadSimulationInfo(simulationInfoFile) #read file output by WAT
         # self.EnsureDefaultFiles() #TODO: turn this back on for copying
@@ -47,6 +48,7 @@ class MakeAutomatedReport(object):
         self.DefineDefaultColors()
         self.ReadGraphicsDefaultFile() #read graphical component defaults
         self.ReadLinesstylesDefaultFile()
+        self.BuildLogFile()
         if self.reportType == 'single': #Eventually be able to do comparison reports, put that here
             for simulation in self.Simulations:
                 print('Running Simulation:', simulation)
@@ -60,8 +62,36 @@ class MakeAutomatedReport(object):
                     self.SetSimulationCSVVars(self.SimulationCSV[simorder])
                     self.ReadDefinitionsFile(self.SimulationCSV[simorder])
                     self.LoadModelAlt(self.SimulationCSV[simorder])
+                    self.AddSimLogEntry()
                     self.WriteChapter()
                 self.XML.writeReportEnd()
+                self.EqualizeLog()
+        self.WriteLogFile()
+
+    def AddLogEntry(self, keys, values, data=False):
+        for i, key in enumerate(keys):
+            self.Log[key].append(values[i])
+        if data:
+            allkeys = ['type', 'name', 'function', 'description', 'value', 'units', 'value_start_date', 'value_end_date']
+            for key in allkeys:
+                if key not in keys:
+                    self.Log[key].append('')
+
+        # self.Log['type'].append(type)
+        # self.Log['name'].append(name)
+        # self.Log['description'].append(description)
+        # self.Log['value'].append(value)
+        # self.Log['units'].append(units)
+
+    def AddSimLogEntry(self):
+        self.Log['observed_data_path'].append(self.observedDir)
+        self.Log['start_time'].append(self.StartTimeStr)
+        self.Log['end_time'].append(self.EndTimeStr)
+        self.Log['compute_time'].append(self.LastComputed)
+        self.Log['program'].append(self.plugin)
+        self.Log['alternative_name'].append(self.modelAltName)
+        self.Log['fpart'].append(self.alternativeFpart)
+        self.Log['program_directory'].append(self.alternativeDirectory)
 
     def DefineMonths(self):
         '''
@@ -263,6 +293,15 @@ class MakeAutomatedReport(object):
                            edgecolor=line_settings['pointlinecolor'], s=float(line_settings['symbolsize']),
                            label=line_settings['label'], zorder=float(line_settings['zorder']))
 
+            # self.AddLogEntry(type=line_settings['label'] + '_TimeSeries' if line_settings['label'] != '' else 'Timeseries',
+            #                      name=self.ChapterRegion,
+            #                      description=object_settings['description'],
+            #                      units=units)
+            self.AddLogEntry(['type', 'name', 'description', 'units'],
+                             [line_settings['label'] + '_TimeSeries' if line_settings['label'] != '' else 'Timeseries',
+                              self.ChapterRegion, object_settings['description'], units],
+                             data=True)
+
         plotunits = self.getPlotUnits(unitslist, object_settings)
         object_settings = self.updateFlaggedValues(object_settings, '%%units%%', plotunits)
 
@@ -424,6 +463,8 @@ class MakeAutomatedReport(object):
             linedata[flag] = {'values': vals,
                               'elevations': elevations,
                               'depths': depths}
+
+
 
         ################ convert Elevs ################
         elev_flag = 'NOVALID'
@@ -599,6 +640,14 @@ class MakeAutomatedReport(object):
                 description = '{0}: {1} of {2}'.format(cur_obj_settings['description'], page_i+1, len(page_indices))
                 self.XML.writeProfilePlotFigure(figname, description)
 
+                # self.AddLogEntry(type=flag+'_ProfilePlot',
+                #                  name=self.ChapterRegion,
+                #                  description=object_settings['description'],
+                #                  units=plot_units)
+                self.AddLogEntry(['type', 'name', 'description', 'units'],
+                                 [flag+'_ProfilePlot', self.ChapterRegion, object_settings['description'], plot_units],
+                                 data=True)
+
         self.XML.writeProfilePlotEnd()
 
     def MakeErrorStatisticsTable(self, object_settings):
@@ -679,7 +728,13 @@ class MakeAutomatedReport(object):
                 rowname = s_row[0]
                 row_val = s_row[i+1]
                 if '%%' in row_val:
-                    row_val = self.formatStatsLine(row_val, data, year=year)
+                    row_val, stat = self.formatStatsLine(row_val, data, year=year)
+
+                    data_start_date, data_end_date = self.GetYearlyTableDates(year, object_settings)
+                    self.AddLogEntry(['type', 'name', 'description', 'value', 'units'],
+                                     ['Statistic', ' '.join([self.ChapterRegion, header, stat]),
+                                      '{0} {1} {2}'.format(desc, rowname, year), row_val, plotunits],
+                                     data=True)
                 header = '' if header == None else header
                 frmt_rows.append('{0}|{1}'.format(rowname, row_val))
             self.XML.writeTableColumn(header, frmt_rows)
@@ -762,7 +817,12 @@ class MakeAutomatedReport(object):
                 rowname = s_row[0]
                 row_val = s_row[i+1]
                 if '%%' in row_val:
-                    row_val = self.formatStatsLine(row_val, data, year=year)
+                    row_val, stat = self.formatStatsLine(row_val, data, year=year)
+                    self.AddLogEntry(['type', 'name', 'description', 'value', 'units'],
+                                     ['Statistic', ' '.join([self.ChapterRegion, header, stat]),
+                                      '{0} {1} {2}'.format(object_settings['description'], rowname, year),
+                                      row_val, units],
+                                      data=True)
                 header = '' if header == None else header
                 frmt_rows.append('{0}|{1}'.format(rowname, row_val))
             self.XML.writeTableColumn(header, frmt_rows)
@@ -1552,6 +1612,21 @@ class MakeAutomatedReport(object):
             plotunits = ''
         return plotunits
 
+    def getYearlyTableDates(self, year, object_settings):
+        if 'xlims' in object_settings.keys():
+            xlims = object_settings['xlims']
+        if year == self.startYear:
+            start_date = self.StartTime.strftime('%Y %b %d')
+        else:
+            start_date = '{0} Jan 1'.format(year)
+
+        if year == self.endYear:
+            end_date = self.EndTime.strftime('%Y %b %d')
+        else:
+            end_date = '{0} Dec 31'.format(year)
+
+        return start_date, end_date
+
     def replaceDefaults(self, default_settings, object_settings):
         '''
         makes deep copies of default and defined settings so no settings are accidentally carried over
@@ -1936,21 +2011,29 @@ class MakeAutomatedReport(object):
                 data[flag]['dates'] = np.asarray(data[flag]['dates'])[msk]
 
         if row.lower().startswith('%%meanbias'):
-            return WF.meanbias(data[flags[0]], data[flags[1]])
+            out_stat = WF.meanbias(data[flags[0]], data[flags[1]])
+            stat = 'meanbias'
         elif row.lower().startswith('%%mae'):
-            return WF.MAE(data[flags[0]], data[flags[1]])
+            out_stat = WF.MAE(data[flags[0]], data[flags[1]])
+            stat = 'mae'
         elif row.lower().startswith('%%rmse'):
-            return WF.RMSE(data[flags[0]], data[flags[1]])
+            out_stat = WF.RMSE(data[flags[0]], data[flags[1]])
+            stat = 'rmse'
         elif row.lower().startswith('%%nse'):
-            return WF.NSE(data[flags[0]], data[flags[1]])
+            out_stat = WF.NSE(data[flags[0]], data[flags[1]])
+            stat = 'nse'
         elif row.lower().startswith('%%count'):
-            return WF.COUNT(data[flags[0]])
+            out_stat = WF.COUNT(data[flags[0]])
+            stat = '{0}_count'.format(flags[0])
         elif row.lower().startswith('%%mean'):
-            return WF.MEAN(data[flags[0]])
+            out_stat = WF.MEAN(data[flags[0]])
+            stat = '{0}_mean'.format(flags[0])
         else:
             if '%%' in row:
                 print('Unable to convert flag in row', row)
             return row
+
+        return out_stat, stat
 
     def buildRowsByYear(self, object_settings, years, split_by_year):
         '''
@@ -2054,6 +2137,22 @@ class MakeAutomatedReport(object):
             ts = np.asarray([t.to_pydatetime() for t in ts])
         return ts
 
+    def EqualizeLog(self):
+        longest_array_len = 0
+        for key in self.Log.keys():
+            if len(self.Log[key]) > longest_array_len:
+                longest_array_len = len(self.Log[key])
+        for key in self.Log.keys():
+            if len(self.Log[key]) < longest_array_len:
+                num_entries = longest_array_len - len(self.Log[key])
+                for i in range(num_entries):
+                    self.Log[key].append('')
+
+    def BuildLogFile(self):
+        self.Log = {'type': [], 'name': [], 'description': [], 'value': [], 'units': [], 'observed_data_path': [],
+                    'start_time': [], 'end_time': [], 'compute_time': [], 'program': [], 'alternative_name': [],
+                    'fpart': [], 'program_directory': [], 'region': []}
+
     def limitXdata(self, dates, values, xlims):
         '''
         if the filterbylimits flag is true, filters out values outside of the xlimits
@@ -2122,6 +2221,7 @@ class MakeAutomatedReport(object):
         for Chapter in self.ChapterDefinitions:
             self.ChapterName = Chapter['name']
             self.ChapterRegion = Chapter['region']
+            self.AddLogEntry(['region'], [self.ChapterRegion])
             self.XML.writeChapterStart(self.ChapterName)
             for section in Chapter['sections']:
                 section_header = section['header']
@@ -2143,6 +2243,32 @@ class MakeAutomatedReport(object):
                 self.XML.writeSectionHeaderEnd()
             self.XML.writeChapterEnd()
 
+    def WriteLogFile(self):
+        # data = [self.Log['observed_data_path'], self.Log['start_time'], self.Log['end_time'],
+        #         self.Log['compute_time'], self.Log['program'], self.Log['alternative_name'],
+        #         self.Log['fpart'], self.Log['program_directory'], self.Log['type'],
+        #         self.Log['name'], self.Log['description'], self.Log['value'], self.Log['units']]
+        # columns = ['observed_data_path', 'start_time', 'end_time', 'compute_time', 'program', 'alternative_name',
+        #            'fpart', 'program_directory', 'type', 'name', 'description', 'value', 'units']
+        df = pd.DataFrame({'observed_data_path' :self.Log['observed_data_path'],
+                           'start_time': self.Log['start_time'],
+                           'end_time': self.Log['end_time'],
+                           'compute_time': self.Log['compute_time'],
+                           'program': self.Log['program'],
+                           'region': self.Log['region'],
+                           'alternative_name': self.Log['alternative_name'],
+                           'fpart': self.Log['fpart'],
+                           'program_directory': self.Log['program_directory'],
+                           'type': self.Log['type'],
+                           'name': self.Log['name'],
+                           'description': self.Log['description'],
+                           'value': self.Log['value'],
+                           'units': self.Log['units']})
+
+        # df = pd.DataFrame(data, columns=columns)
+        df.to_csv(os.path.join(self.images_path, 'Log.csv'))
+
+
     def cleanOutputDirs(self):
         '''
         cleans the images output directory, so pngs from old reports aren't mistakenly
@@ -2153,6 +2279,7 @@ class MakeAutomatedReport(object):
             os.makedirs(self.images_path)
 
         WF.clean_output_dir(self.images_path, '.png')
+        WF.clean_output_dir(self.images_path, '.csv')
 
     def LoadModelAlt(self, simCSVAlt):
         '''
