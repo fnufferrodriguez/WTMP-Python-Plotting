@@ -745,9 +745,11 @@ class ResSim_Results(object):
         :return: class variable
                     self.h
         '''
+
         h5filefrmt = self.alternativeName.replace(' ', '_')
-        h5fname = os.path.join(self.simulationPath, 'rss', h5filefrmt + '.h5')
-        self.h = h5py.File(h5fname, 'r')
+        self.h5fname = os.path.join(self.simulationPath, 'rss', h5filefrmt + '.h5')
+        self.h = h5py.File(self.h5fname, 'r')
+
 
     def load_time(self):
         '''
