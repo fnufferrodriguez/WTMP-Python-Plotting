@@ -224,7 +224,6 @@ class MakeAutomatedReport(object):
 
             dates, values, units = self.getTimeSeries(line)
 
-
             if units == None:
                 if param != None:
                     try:
@@ -562,8 +561,6 @@ class MakeAutomatedReport(object):
                                        edgecolor=current_ls['pointlinecolor'], s=float(current_ls['symbolsize']),
                                        label=current_ls['label'])
 
-
-
                     show_legend, show_xlabel, show_ylabel = self.getPlotLabelMasks(i, len(pgi), subplot_cols)
 
                     if current_object_settings['gridlines'].lower() == 'true':
@@ -649,10 +646,6 @@ class MakeAutomatedReport(object):
 
                 description = '{0}: {1} of {2}'.format(cur_obj_settings['description'], page_i+1, len(page_indices))
                 self.XML.writeProfilePlotFigure(figname, description)
-
-                # self.AddLogEntry(['type', 'name', 'description', 'units'],
-                #                  [flag+'_ProfilePlot', self.ChapterRegion, object_settings['description'], plot_units],
-                #                  data=True)
 
                 self.AddLogEntry({'type': flag+'_ProfilePlot',
                                   'name': self.ChapterRegion,
@@ -748,10 +741,6 @@ class MakeAutomatedReport(object):
                 if '%%' in row_val:
                     row_val, stat, _ = self.formatStatsLine(row_val, data, year=year)
 
-                    # self.AddLogEntry(['type', 'name', 'description', 'value', 'units'],
-                    #                  ['Statistic', ' '.join([self.ChapterRegion, header, stat]),
-                    #                   '{0} {1} {2}'.format(desc, rowname, year), row_val, plotunits],
-                    #                  data=True)
                     data_start_date, data_end_date = self.getTableDates(year, object_settings)
                     self.AddLogEntry({'type': 'Statistic',
                                       'name': ' '.join([self.ChapterRegion, header, stat]),
@@ -821,7 +810,6 @@ class MakeAutomatedReport(object):
             if units != None:
                 unitslist.append(units)
 
-
             if 'filterbylimits' not in dp.keys():
                 dp['filterbylimits'] = 'true' #set default
 
@@ -850,11 +838,7 @@ class MakeAutomatedReport(object):
                 row_val = s_row[i+1]
                 if '%%' in row_val:
                     row_val, stat, month = self.formatStatsLine(row_val, data, year=year)
-                    # self.AddLogEntry(['type', 'name', 'description', 'value', 'units'],
-                    #                  ['Statistic', ' '.join([self.ChapterRegion, header, stat]),
-                    #                   '{0} {1} {2}'.format(object_settings['description'], rowname, year),
-                    #                   row_val, units],
-                    #                   data=True)
+
                     data_start_date, data_end_date = self.getTableDates(year, object_settings, month=month)
                     self.AddLogEntry({'type': 'Statistic',
                                       'name': ' '.join([self.ChapterRegion, header, stat]),
@@ -1496,8 +1480,6 @@ class MakeAutomatedReport(object):
                 print('DSS_Filename not set for Line: {0}'.format(Line_info))
                 return [], [], None
             else:
-                # datamem_key = '{0}_{1}'.format(os.path.basename(Line_info['dss_filename']).split('.')[0],
-                #                                Line_info['dss_path'].replace('/', '').replace(':', ''))
                 datamem_key = self.buildDataMemoryKey(Line_info)
                 if datamem_key in self.Data_Memory.keys():
                     print('Reading {0} from memory'.format(datamem_key))
@@ -1517,15 +1499,6 @@ class MakeAutomatedReport(object):
                     return [], [], None
 
         elif 'w2_file' in Line_info.keys():
-            # datamem_key = '{0}'.format(os.path.basename(Line_info['w2_file']).split('.')[0])
-            # if 'structurenumbers' in Line_info.keys():
-            #     if isinstance(Line_info['structurenumbers'], dict):
-            #         structure_nums = [Line_info['structurenumbers']['structurenumber']]
-            #     elif isinstance(Line_info['structurenumbers'], str):
-            #         structure_nums = [Line_info['structurenumbers']]
-            #     elif isinstance(Line_info['structurenumbers'], (list, np.ndarray)):
-            #         structure_nums = Line_info['structurenumbers']
-            #     datamem_key += '_Struct_' + '_'.join(structure_nums)
             datamem_key = self.buildDataMemoryKey(Line_info)
             if datamem_key in self.Data_Memory.keys():
                 print('READING {0} FROM MEMORY'.format(datamem_key))
@@ -1550,7 +1523,6 @@ class MakeAutomatedReport(object):
 
         elif 'xy' in Line_info.keys():
             datamem_key = self.buildDataMemoryKey(Line_info)
-            # datamem_key = '{0}_{1}'.format(Line_info['parameter'], '_'.join(Line_info['xy']))
             if datamem_key in self.Data_Memory.keys():
                 print('READING {0} FROM MEMORY'.format(datamem_key))
                 times = copy.deepcopy(self.Data_Memory[datamem_key]['times'])
@@ -1571,13 +1543,6 @@ class MakeAutomatedReport(object):
             omitval = float(Line_info['omitvalue'])
             values = self.replaceOmittedValues(values, omitval)
 
-        # if isinstance(values, list):
-        #     if len(values) == 0:
-        #         return [], [], None
-        # elif isinstance(values, np.ndarray):
-        #     if values.size == 0:
-        #         return [], [], None
-        # elif 'interval' in Line_info.keys():
         if 'interval' in Line_info.keys():
             times, values = self.changeTimeSeriesInterval(times, values, Line_info)
         return times, values, units
@@ -1704,6 +1669,13 @@ class MakeAutomatedReport(object):
         return plotunits
 
     def getTableDates(self, year, object_settings, month='None'):
+        '''
+        gets start and end dates from lines in tables for logging
+        :param year: selected year int or 'all' string
+        :param object_settings: dictionary of item setting
+        :param month: selected month (for monthly table) or None
+        :return: start and end date
+        '''
 
         xmin = 'NONE'
         xmax = 'NONE'
@@ -1759,12 +1731,14 @@ class MakeAutomatedReport(object):
                     end_date -= dt.timedelta(days=1)
                     end_date = end_date.strftime('%d %b %Y')
 
-
-                # end_date = dt.datetime.strptime(end_date, '%d %b %Y').replace(month=month).strftime('%d %b %Y')
-
         return start_date, end_date
 
     def getListItems(self, listvals):
+        '''
+        recursive function to convert lists of lists into single lists for logging
+        :param listvals: value object
+        :return: list of values
+        '''
         if isinstance(listvals, (list, np.ndarray)):
             outvalues = []
             for item in listvals:
@@ -1779,6 +1753,12 @@ class MakeAutomatedReport(object):
         return outvalues
 
     def getListItemsFromDict(self, indict):
+        '''
+        recursive function to convert dictionary of lists into single dictionary for logging. Keys are determined
+        using original keys
+        :param indict: value dictionary object
+        :return: dictionary of values
+        '''
         outdict = {}
         for key in indict:
             if isinstance(indict[key], dict):
@@ -1789,9 +1769,6 @@ class MakeAutomatedReport(object):
             elif isinstance(indict[key], (list, np.ndarray)):
                 outdict[key] = indict[key]
         return outdict
-
-
-
 
     def replaceDefaults(self, default_settings, object_settings):
         '''
@@ -2305,6 +2282,12 @@ class MakeAutomatedReport(object):
         return ts
 
     def buildFileName(self, Line_info):
+        '''
+        creates uniform name for csv log output for data
+        :param Line_info: dictionary containing line values
+        :return: file name
+        '''
+
         MemKey = self.buildDataMemoryKey(Line_info)
         if MemKey == 'Null':
             return MemKey
@@ -2312,6 +2295,12 @@ class MakeAutomatedReport(object):
             return MemKey + '.csv'
 
     def buildDataMemoryKey(self, Line_info):
+        '''
+        creates uniform name for csv log output for data
+        determines how to build the file name from the input type
+        :param Line_info:
+        :return:
+        '''
         if 'dss_path' in Line_info.keys(): #Get data from DSS record
             if 'dss_filename' in Line_info.keys():
                 outname = '{0}_{1}'.format(os.path.basename(Line_info['dss_filename']).split('.')[0],
@@ -2352,6 +2341,10 @@ class MakeAutomatedReport(object):
         return 'NULL'
 
     def EqualizeLog(self):
+        '''
+        ensure that all arrays are the same length with a '' character
+        :return: append self.Log object
+        '''
         longest_array_len = 0
         for key in self.Log.keys():
             if len(self.Log[key]) > longest_array_len:
@@ -2363,6 +2356,11 @@ class MakeAutomatedReport(object):
                     self.Log[key].append('')
 
     def BuildLogFile(self):
+        '''
+        builts the log dictionary for conisistent dictionary values
+        :return:
+        '''
+
         self.Log = {'type': [], 'name': [], 'description': [], 'value': [], 'units': [], 'observed_data_path': [],
                     'start_time': [], 'end_time': [], 'compute_time': [], 'program': [], 'alternative_name': [],
                     'fpart': [], 'program_directory': [], 'region': [], 'value_start_date': [], 'value_end_date': [],
