@@ -250,7 +250,7 @@ class MakeAutomatedReport(object):
                     if isinstance(dates[0], dt.datetime):
                         dates = self.DatetimeToJDate(dates)
                 elif object_settings['dateformat'].lower() == 'datetime':
-                    if isinstance(dates[0], float) or isinstance(dates[0], int):
+                    if isinstance(dates[0], (int,float)):
                         dates = self.JDateToDatetime(dates)
 
             if units != '' and units != None:
@@ -459,19 +459,19 @@ class MakeAutomatedReport(object):
         #do now incase no elevs, so we can convert
         for line in object_settings['lines']:
             vals, elevations, depths, flag = self.getProfileData(line, timestamps) #Test this speed for grabbing all profiles and then choosing
-            line['logoutputfilename'] = self.buildFileName(line)
+            # line['logoutputfilename'] = self.buildFileName(line)
+            datamem_key = self.buildDataMemoryKey(line)
             linedata[flag] = {'values': vals,
                               'elevations': elevations,
                               'depths': depths,
-                              'logoutputfilename': line['logoutputfilename']}
+                              'logoutputfilename': datamem_key}
 
-            datamem_key = self.buildDataMemoryKey(line)
-            self.Data_Memory[datamem_key] = {'times': copy.deepcopy(timestamps),
-                                             'values': copy.deepcopy(vals),
-                                             'elevations': copy.deepcopy(elevations),
-                                             'depths': depths,
-                                             'units': plot_units,
-                                             'isprofile': True}
+            # self.Data_Memory[datamem_key] = {'times': copy.deepcopy(timestamps),
+            #                                  'values': copy.deepcopy(vals),
+            #                                  'elevations': copy.deepcopy(elevations),
+            #                                  'depths': copy.deepcopy(depths),
+            #                                  'units': plot_units,
+            #                                  'isprofile': True}
 
         ################ convert Elevs ################
         elev_flag = 'NOVALID'
@@ -489,6 +489,20 @@ class MakeAutomatedReport(object):
                                                                                     linedata[elev_flag]['elevations'])
                     else:
                         object_settings['usedepth'] = 'true'
+
+        for line in linedata.keys():
+            values = linedata[line]['values']
+            depths = linedata[line]['depths']
+            elevations = linedata[line]['elevations']
+            datamem_key = linedata[line]['logoutputfilename']
+            self.Data_Memory[datamem_key] = {'times': copy.deepcopy(timestamps),
+                                             'values': copy.deepcopy(values),
+                                             'elevations': copy.deepcopy(elevations),
+                                             'depths': copy.deepcopy(depths),
+                                             'units': plot_units,
+                                             'isprofile': True}
+
+
 
         split_by_year = False
         if 'splitbyyear' in object_settings.keys():
@@ -940,10 +954,10 @@ class MakeAutomatedReport(object):
                     if isinstance(dates[0], dt.datetime):
                         dates = self.DatetimeToJDate(dates)
                 elif object_settings['dateformat'].lower() == 'datetime':
-                    if isinstance(dates[0], float) or isinstance(dates[0], int):
+                    if isinstance(dates[0], (float, int)):
                         dates = self.JDateToDatetime(dates)
                 else:
-                    if isinstance(dates[0], float) or isinstance(dates[0], int):
+                    if isinstance(dates[0], (float, int)):
                         dates = self.JDateToDatetime(dates)
 
             if 'unitsystem' in object_settings.keys():
@@ -2375,7 +2389,7 @@ class MakeAutomatedReport(object):
         :return: filtered dates and values
         '''
 
-        if isinstance(dates[0], int) or isinstance(dates[0], float):
+        if isinstance(dates[0], (int, float)):
             wantedformat = 'jdate'
         elif isinstance(dates[0], dt.datetime):
             wantedformat = 'datetime'
