@@ -202,8 +202,12 @@ def matchData(data1, data2):
     '''
 
     v_1 = data1['values']
+    if isinstance(v_1, list):
+        v_1 = np.asarray(v_1)
     t_1 = [n.timestamp() for n in data1['dates']]
     v_2 = data2['values']
+    if isinstance(v_2, list):
+        v_2 = np.asarray(v_2)
     t_2 = [n.timestamp() for n in data2['dates']]
     if len(v_1) == 0 or len(v_2) == 0:
         return data1, data2
