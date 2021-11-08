@@ -70,15 +70,26 @@ class MakeAutomatedReport(object):
         self.WriteDataFiles()
 
     def AddLogEntry(self, keysvalues, isdata=False):
+        '''
+        adds an entry to the log file. If data, add an entry for all lists.
+        :param keysvalues: dictionary containing values and headers
+        :param isdata: if True, adds blanks for all data rows to keep things consistent
+        '''
+
         for key in keysvalues.keys():
             self.Log[key].append(keysvalues[key])
         if isdata:
-            allkeys = ['type', 'name', 'function', 'description', 'value', 'units', 'value_start_date', 'value_end_date', 'logoutputfilename']
+            allkeys = ['type', 'name', 'function', 'description', 'value', 'units',
+                       'value_start_date', 'value_end_date', 'logoutputfilename']
             for key in allkeys:
                 if key not in keysvalues.keys():
                     self.Log[key].append('')
 
     def AddSimLogEntry(self):
+        '''
+        adds entries for a simulation with relevenat metadata
+        '''
+
         self.Log['observed_data_path'].append(self.observedDir)
         self.Log['start_time'].append(self.StartTimeStr)
         self.Log['end_time'].append(self.EndTimeStr)
@@ -195,7 +206,6 @@ class MakeAutomatedReport(object):
     def MakeTimeSeriesPlot(self, object_settings):
         '''
         takes in object settings to build time series plot and write to XML
-        #TODO: pull common settings out into their own functions so we dont have to look at them
         :param object_settings: currently selected object settings dictionary
         :return: creates png in images dir and writes to XML file
         '''
@@ -389,8 +399,6 @@ class MakeAutomatedReport(object):
     def MakeProfilePlot(self, object_settings):
         '''
         takes in object settings to build profile plot and write to XML
-        #TODO: pull common settings out into their own funcitons so we dont have to look at them
-        #TODO: figure out way to change or control units on the axis?
         #TODO: figure out way to convert profiles that are essentially unitless
         :param object_settings: currently selected object settings dictionary
         :return: creates png in images dir and writes to XML file
@@ -466,13 +474,6 @@ class MakeAutomatedReport(object):
                               'depths': depths,
                               'logoutputfilename': datamem_key}
 
-            # self.Data_Memory[datamem_key] = {'times': copy.deepcopy(timestamps),
-            #                                  'values': copy.deepcopy(vals),
-            #                                  'elevations': copy.deepcopy(elevations),
-            #                                  'depths': copy.deepcopy(depths),
-            #                                  'units': plot_units,
-            #                                  'isprofile': True}
-
         ################ convert Elevs ################
         elev_flag = 'NOVALID'
         if object_settings['usedepth'].lower() == 'false':
@@ -501,8 +502,6 @@ class MakeAutomatedReport(object):
                                              'depths': copy.deepcopy(depths),
                                              'units': plot_units,
                                              'isprofile': True}
-
-
 
         split_by_year = False
         if 'splitbyyear' in object_settings.keys():
@@ -931,6 +930,7 @@ class MakeAutomatedReport(object):
         for i, line in enumerate(object_settings['lines']):
             line['logoutputfilename'] = self.buildFileName(line)
             dates, values, units = self.getTimeSeries(line)
+
             if 'target' in line.keys():
                 values = self.BuzzTargetSum(dates, values, float(line['target']))
             else:
@@ -1489,6 +1489,7 @@ class MakeAutomatedReport(object):
         :param Line_info: dictionary of line setttings containing datasources
         :return: dates, values, units
         '''
+
         if 'dss_path' in Line_info.keys(): #Get data from DSS record
             if 'dss_filename' not in Line_info.keys():
                 print('DSS_Filename not set for Line: {0}'.format(Line_info))
@@ -2189,7 +2190,7 @@ class MakeAutomatedReport(object):
         else:
             if '%%' in row:
                 print('Unable to convert flag in row', row)
-            return row
+            return row, '', ''
 
         return out_stat, stat, sr_month
 
@@ -2394,7 +2395,6 @@ class MakeAutomatedReport(object):
         elif isinstance(dates[0], dt.datetime):
             wantedformat = 'datetime'
         if 'min' in xlims.keys():
-            #ensure we have dt, dss dates should be... #TODO: make sure values are DT
             min = self.translateDateFormat(xlims['min'], wantedformat, self.StartTime)
             for i, d in enumerate(dates):
                 if min > d:
@@ -2471,6 +2471,10 @@ class MakeAutomatedReport(object):
             self.XML.writeChapterEnd()
 
     def WriteLogFile(self):
+        '''
+        Writes out logfile data to csv file in report dir
+        :return:
+        '''
 
         df = pd.DataFrame({'observed_data_path': self.Log['observed_data_path'],
                            'start_time': self.Log['start_time'],
@@ -2495,6 +2499,9 @@ class MakeAutomatedReport(object):
         df.to_csv(os.path.join(self.images_path, 'Log.csv'), index=False)
 
     def WriteDataFiles(self):
+        '''
+        writes out the data used in figures to csv files for later use and checking
+        '''
 
         for key in self.Data_Memory.keys():
             csv_name = os.path.join(self.CSVPath, '{0}.csv'.format(key))
@@ -2541,14 +2548,24 @@ class MakeAutomatedReport(object):
             df.to_csv(csv_name, index=False)
 
     def matcharrays(self, array1, array2):
+        '''
+        iterative recursive function that aims to line up arrays of different lengths. Takes in variable input so that
+        if there are lists of lists with a single date (aka profiles), alligns those so each elevation value has a date
+        assigned to it for easy output
+        :param array1: np.array or list of values, generally values
+        :param array2: np.array or list of values, generally dates
+        :return:
+        '''
         if isinstance(array1, (list, np.ndarray)) and isinstance(array2, (list, np.ndarray)):
             #if both are lists..
             if len(array1) < len(array2):
-                #either ['Date1', 'Date2'], ['1,2,3'] OR ['Date1'], [1,2,3] OR ['DATE1'], [[1,2,3], [1,2,3,4]]
-                # OR ['Date1', 'Date2'], [[1,2,3], [2,4,5],[6,
-                #scenario 1: shouldnt ever happen
-                #scenario 2: do Date1 for each item in array2
-                #scenario 3: do date1 for each value in each subarray in 2
+                '''
+                either ['Date1', 'Date2'], ['1,2,3'] OR ['Date1'], [1,2,3] OR ['DATE1'], [[1,2,3], [1,2,3,4]]
+                 OR ['Date1', 'Date2'], [[1,2,3], [2,4,5],[6,
+                scenario 1: shouldnt ever happen
+                scenario 2: do Date1 for each item in array2
+                scenario 3: do date1 for each value in each subarray in 2 '''
+
                 if len(array1) == 1: #solo date
                     new_array1 = []
                     for subarray2 in array2:
@@ -2795,7 +2812,7 @@ class MakeAutomatedReport(object):
             new_units: new converted units if successful
         '''
 
-        english_units = {'m3/s':'cfs',
+        english_units = {'m3/s': 'cfs',
                          'm': 'ft',
                          'm3': 'af',
                          'c': 'f'}
@@ -3037,7 +3054,6 @@ class MakeAutomatedReport(object):
             else:
                 return times, values
 
-
         if isinstance(values, dict):
             new_values = {}
             for key in values:
@@ -3066,7 +3082,6 @@ class MakeAutomatedReport(object):
                     ti = np.where(times <= t)[0]
                     cum_val = np.sum(values[ti])
                     new_values.append(cum_val)
-
 
             elif avgtype == 'PER-AVER':
                 #average over the period

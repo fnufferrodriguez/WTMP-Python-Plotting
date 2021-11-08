@@ -750,7 +750,6 @@ class ResSim_Results(object):
         self.h5fname = os.path.join(self.simulationPath, 'rss', h5filefrmt + '.h5')
         self.h = h5py.File(self.h5fname, 'r')
 
-
     def load_time(self):
         '''
         Loads times from H5 file
@@ -1031,6 +1030,7 @@ if __name__ == '__main__':
     # results = ReadChapterDefFile(graphicsDefaultfile)
     # for n in results:
     #     print(n)
-    graphicsDefaultfile = r"D:\Work2021\USBR\RessimXMLTest\Graphics_Defaults_Beta_v5.xml"
-    results = read_GraphicsDefaults(graphicsDefaultfile)
-    print(results)
+    # graphicsDefaultfile = r"D:\Work2021\USBR\RessimXMLTest\Graphics_Defaults_Beta_v5.xml"
+    # results = read_GraphicsDefaults(graphicsDefaultfile)
+    # print(results)
+    print('debug.')
