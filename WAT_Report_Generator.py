@@ -36,7 +36,7 @@ class MakeAutomatedReport(object):
         organizes input data and generates XML report
         :param simulationInfoFile: full path to simulation information XML file output from WAT.
         '''
-
+        self.simulationInfoFile = simulationInfoFile
         self.batdir = batdir
         self.ReadSimulationInfo(simulationInfoFile) #read file output by WAT
         # self.EnsureDefaultFiles() #TODO: turn this back on for copying
@@ -2164,10 +2164,18 @@ class MakeAutomatedReport(object):
                 self.ModelAlt - WDR class that is plugin specific
         '''
 
-        for modelalt in self.ModelAlternatives:
-            if modelalt['name'] == simCSVAlt['modelaltname'] and modelalt['program'] == simCSVAlt['plugin']:
-                self.alternativeFpart = modelalt['fpart']
-                self.alternativeDirectory = modelalt['directory']
+        approved_modelalts = [modelalt for modelalt in self.ModelAlternatives if modelalt['name'] == simCSVAlt['modelaltname'] and
+                              modelalt['program'] == simCSVAlt['plugin']]
+        if len(approved_modelalts) == 0:
+            print('Incompatible input information from the WAT XML output file ({0})\nand Simulation CSV file ({1})'.format(self.simulationInfoFile, '{0}.csv'.format(self.baseSimulationName.replace(' ', '_'))))
+            print('Please Confirm inputs and run again.')
+            print('Now Exiting...')
+            sys.exit()
+        else:
+            approved_modelalt = approved_modelalts[0]
+            self.alternativeFpart = approved_modelalt['fpart']
+            self.alternativeDirectory = approved_modelalt['directory']
+
         if self.plugin.lower() == "ressim":
             self.ModelAlt = WDR.ResSim_Results(self.simulationDir, self.alternativeFpart, self.StartTime, self.EndTime)
         elif self.plugin.lower() == 'cequalw2':
