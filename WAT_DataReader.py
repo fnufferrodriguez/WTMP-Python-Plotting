@@ -145,6 +145,10 @@ def ReadDSSData(dss_file, pathname, startdate, enddate):
     fid = HecDss.Open(dss_file)
     ts = fid.read_ts(pathname,window=(startDate,endDate),regular=True,trim_missing=True)
     # ts = fid.read_ts(pathname,regular=False)
+    if ts.empty: #if empty, it must be the path or time window. DSS record must exist
+        print('Invalid Timeseries record path of {0} or time window of {1} - {2}'.format(pathname, startDate, endDate))
+        print('Please check these parameters and rerun.')
+        return [], [], None
     times = np.array(ts.pytimes)
     values = np.array(ts.values)
     units = ts.units
