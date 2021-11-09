@@ -168,6 +168,7 @@ class MakeAutomatedReport(object):
                                '6MON': ['6M', 'pd'],
                                '1YEAR': ['1Y', 'pd']}
 
+
     def DefineDefaultColors(self):
         '''
         sets up a list of default colors to use in the event that colors are not set up in the graphics default file
@@ -1332,6 +1333,37 @@ class MakeAutomatedReport(object):
         self.LastComputed = simulation['lastcomputed']
         self.ModelAlternatives = simulation['modelalternatives']
         self.SetSimulationDateTimes()
+
+    def getPandasTimeFreq(self, intervalstring):
+        '''
+        Reads in the DSS formatted time intervals and translates them to a format pandas.resample() understands
+        bases off of the time interval, so 15MIN becomes 15T, or 6MON becomes 6M
+        :param intervalstring: DSS interval string such as 1HOUR or 1DAY
+        :return: pandas time interval
+        '''
+
+        intervalstring = intervalstring.lower()
+        if 'min' in intervalstring:
+            timeint = intervalstring.replace('min','') + 'T'
+            return timeint
+        elif 'hour' in intervalstring:
+            timeint = intervalstring.replace('hour','') + 'H'
+            return timeint
+        elif 'day' in intervalstring:
+            timeint = intervalstring.replace('day','') + 'D'
+            return timeint
+        elif 'mon' in intervalstring:
+            timeint = intervalstring.replace('mon','') + 'M'
+            return timeint
+        elif 'week' in intervalstring:
+            timeint = intervalstring.replace('week','') + 'W'
+            return timeint
+        elif 'year' in intervalstring:
+            timeint = intervalstring.replace('year','') + 'A'
+            return timeint
+        else:
+            print('Unidentified time interval')
+            return 0
 
     def getLineDefaultSettings(self, LineSettings, param, i):
         '''
@@ -3022,90 +3054,51 @@ class MakeAutomatedReport(object):
             avgtype = 'INST-VAL'
             # avgtype = 'PER-AVER'
 
-        if 'interval' in Line_info:
-            interval = Line_info['interval'].upper()
-        else:
-            interval = self.getTimeInterval(times)
-
-        input_interval = self.getTimeInterval(times)
-
-        new_times = self.buildTimeSeries(times[0], times[-1], interval)
-        new_times_interval = self.getTimeInterval(new_times)
-
-        if isinstance(new_times_interval, dt.timedelta):
-            if new_times_interval.total_seconds() < input_interval.total_seconds():
-                print('New interval is smaller than the old interval.')
-                print('Currently not supporting this.')
-                if convert_to_jdate:
-                    return self.DatetimeToJDate(times), values
-                else:
-                    return times, values
-        else:
-            print('Error defining new interval types')
-            if convert_to_jdate:
-                return self.DatetimeToJDate(times), values
-            else:
-                return times, values
-
-        if new_times_interval == input_interval: #no change..
-            print('Input interval matches data interval.')
-            if convert_to_jdate:
-                return self.DatetimeToJDate(times), values
-            else:
-                return times, values
-
         if isinstance(values, dict):
             new_values = {}
             for key in values:
                 new_times, new_values[key] = self.changeTimeSeriesInterval(times, values[key], Line_info)
         else:
+
+            if 'interval' in Line_info:
+                interval = Line_info['interval'].upper()
+                pd_interval = self.getPandasTimeFreq(interval)
+            else:
+                print('No time interval Defined.')
+                return times, values
+
             if avgtype == 'INST-VAL':
                 #at the point in time, find intervals and use values
-                new_values = []
-                for t in new_times:
-                    ti = np.where(times == t)[0]
-                    if len(ti) == 1:
-                        new_values.append(values[ti][0])
-                    elif len(ti) == 0:
-                        #missing date, could be missing data or irreg?
-                        new_values.append(np.NaN)
-                    else:
-                        print('Multiple date idx found??')
-                        new_values.append(np.NaN)
-                        continue
+                df = pd.DataFrame({'times': times, 'values': values})
+                df = df.set_index('times')
+                df = df.resample(pd_interval).asfreq().fillna(method='bfill')
+                new_values = df['values'].to_numpy()
+                new_times = df.index.to_pydatetime()
 
             elif avgtype == 'INST-CUM':
-                if interval == input_interval:
-                    new_times = copy.deepcopy(times)
-                new_values = []
-                for t in new_times:
-                    ti = np.where(times <= t)[0]
-                    cum_val = np.sum(values[ti])
-                    new_values.append(cum_val)
+                df = pd.DataFrame({'times': times, 'values': values})
+                df = df.set_index('times')
+                df = df.cumsum(skipna=True).resample(pd_interval).asfreq().fillna(method='bfill')
+                new_values = df['values'].to_numpy()
+                new_times = df.index.to_pydatetime()
+
 
             elif avgtype == 'PER-AVER':
                 #average over the period
-                new_values = []
-                interval = self.getTimeIntervalSeconds(interval)
-                for t in new_times:
-                    t2 = t + dt.timedelta(seconds=interval)
-                    # date_idx = [i for i, n in enumerate(times) if t <= n < t2]
-                    date_idx1 = np.where(t <= times)[0]
-                    date_idx2 = np.where(times < t2)[0]
-                    date_idx = np.intersect1d(date_idx1, date_idx2)
-                    new_values.append(np.mean(values[date_idx]))
+                df = pd.DataFrame({'times': times, 'values': values})
+                df = df.set_index('times')
+                df = df.resample(pd_interval).mean().fillna(method='bfill')
+                new_values = df['values'].to_numpy()
+                new_times = df.index.to_pydatetime()
 
             elif avgtype == 'PER-CUM':
-                #cum over the perio
-                new_values = []
-                interval = self.getTimeIntervalSeconds(interval)
-                for t in new_times:
-                    t2 = t + dt.timedelta(seconds=interval)
-                    # date_idx = [i for i, n in enumerate(times) if t <= n < t2]
-                    date_idx1 = np.where(t <= times)[0]
-                    date_idx2 = np.where(times < t2)[0]
-                    date_idx = np.intersect1d(date_idx1, date_idx2)
-                    new_values.append(np.sum(values[date_idx]))
+                #cum over the period
+                df = pd.DataFrame({'times': times, 'values': values})
+                df = df.set_index('times')
+                df = df.resample(pd_interval).sum().fillna(method='bfill')
+                new_values = df['values'].to_numpy()
+                new_times = df.index.to_pydatetime()
+
             else:
                 print('INVALID INPUT TYPE DETECTED', avgtype)
                 return times, values
@@ -3133,7 +3126,6 @@ class MakeAutomatedReport(object):
 if __name__ == '__main__':
     rundir = sys.argv[0]
     simInfoFile = sys.argv[1]
-    # simInfoFile = r"\\wattest\C\WAT\USBR_FrameworkTest_r3_singlescript\reports\ResSim-val2013.xml"
     # import cProfile
     # ar = cProfile.run('MakeAutomatedReport(simInfoFile, rundir)')
     MakeAutomatedReport(simInfoFile, rundir)
