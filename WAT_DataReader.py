@@ -745,9 +745,10 @@ class ResSim_Results(object):
         :return: class variable
                     self.h
         '''
+
         h5filefrmt = self.alternativeName.replace(' ', '_')
-        h5fname = os.path.join(self.simulationPath, 'rss', h5filefrmt + '.h5')
-        self.h = h5py.File(h5fname, 'r')
+        self.h5fname = os.path.join(self.simulationPath, 'rss', h5filefrmt + '.h5')
+        self.h = h5py.File(self.h5fname, 'r')
 
     def load_time(self):
         '''
@@ -1029,6 +1030,7 @@ if __name__ == '__main__':
     # results = ReadChapterDefFile(graphicsDefaultfile)
     # for n in results:
     #     print(n)
-    graphicsDefaultfile = r"D:\Work2021\USBR\RessimXMLTest\Graphics_Defaults_Beta_v5.xml"
-    results = read_GraphicsDefaults(graphicsDefaultfile)
-    print(results)
+    # graphicsDefaultfile = r"D:\Work2021\USBR\RessimXMLTest\Graphics_Defaults_Beta_v5.xml"
+    # results = read_GraphicsDefaults(graphicsDefaultfile)
+    # print(results)
+    print('debug.')

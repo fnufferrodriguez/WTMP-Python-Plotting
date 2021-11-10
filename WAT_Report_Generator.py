@@ -37,6 +37,7 @@ class MakeAutomatedReport(object):
         :param simulationInfoFile: full path to simulation information XML file output from WAT.
         '''
         self.simulationInfoFile = simulationInfoFile
+        self.WriteLog = True #TODO we're testing this.
         self.batdir = batdir
         self.ReadSimulationInfo(simulationInfoFile) #read file output by WAT
         # self.EnsureDefaultFiles() #TODO: turn this back on for copying
@@ -47,6 +48,7 @@ class MakeAutomatedReport(object):
         self.DefineDefaultColors()
         self.ReadGraphicsDefaultFile() #read graphical component defaults
         self.ReadLinesstylesDefaultFile()
+        self.BuildLogFile()
         if self.reportType == 'single': #Eventually be able to do comparison reports, put that here
             for simulation in self.Simulations:
                 print('Running Simulation:', simulation)
@@ -60,8 +62,42 @@ class MakeAutomatedReport(object):
                     self.SetSimulationCSVVars(self.SimulationCSV[simorder])
                     self.ReadDefinitionsFile(self.SimulationCSV[simorder])
                     self.LoadModelAlt(self.SimulationCSV[simorder])
+                    self.AddSimLogEntry()
                     self.WriteChapter()
                 self.XML.writeReportEnd()
+                self.EqualizeLog()
+        self.WriteLogFile()
+        self.WriteDataFiles()
+
+    def AddLogEntry(self, keysvalues, isdata=False):
+        '''
+        adds an entry to the log file. If data, add an entry for all lists.
+        :param keysvalues: dictionary containing values and headers
+        :param isdata: if True, adds blanks for all data rows to keep things consistent
+        '''
+
+        for key in keysvalues.keys():
+            self.Log[key].append(keysvalues[key])
+        if isdata:
+            allkeys = ['type', 'name', 'function', 'description', 'value', 'units',
+                       'value_start_date', 'value_end_date', 'logoutputfilename']
+            for key in allkeys:
+                if key not in keysvalues.keys():
+                    self.Log[key].append('')
+
+    def AddSimLogEntry(self):
+        '''
+        adds entries for a simulation with relevenat metadata
+        '''
+
+        self.Log['observed_data_path'].append(self.observedDir)
+        self.Log['start_time'].append(self.StartTimeStr)
+        self.Log['end_time'].append(self.EndTimeStr)
+        self.Log['compute_time'].append(self.LastComputed)
+        self.Log['program'].append(self.plugin)
+        self.Log['alternative_name'].append(self.modelAltName)
+        self.Log['fpart'].append(self.alternativeFpart)
+        self.Log['program_directory'].append(self.alternativeDirectory)
 
     def DefineMonths(self):
         '''
@@ -132,6 +168,7 @@ class MakeAutomatedReport(object):
                                '6MON': ['6M', 'pd'],
                                '1YEAR': ['1Y', 'pd']}
 
+
     def DefineDefaultColors(self):
         '''
         sets up a list of default colors to use in the event that colors are not set up in the graphics default file
@@ -164,12 +201,12 @@ class MakeAutomatedReport(object):
         '''
 
         self.images_path = os.path.join(self.studyDir, 'reports', 'Images')
+        self.CSVPath = os.path.join(self.studyDir, 'reports', 'CSVData')
         self.default_dir = os.path.join(os.path.split(self.batdir)[0], 'Default')
 
     def MakeTimeSeriesPlot(self, object_settings):
         '''
         takes in object settings to build time series plot and write to XML
-        #TODO: pull common settings out into their own functions so we dont have to look at them
         :param object_settings: currently selected object settings dictionary
         :return: creates png in images dir and writes to XML file
         '''
@@ -193,6 +230,8 @@ class MakeAutomatedReport(object):
             else:
                 param_count[param] += 1
             i = param_count[param]
+
+            line['logoutputfilename'] = self.buildFileName(line)
 
             dates, values, units = self.getTimeSeries(line)
 
@@ -222,7 +261,7 @@ class MakeAutomatedReport(object):
                     if isinstance(dates[0], dt.datetime):
                         dates = self.DatetimeToJDate(dates)
                 elif object_settings['dateformat'].lower() == 'datetime':
-                    if isinstance(dates[0], float) or isinstance(dates[0], int):
+                    if isinstance(dates[0], (int,float)):
                         dates = self.JDateToDatetime(dates)
 
             if units != '' and units != None:
@@ -262,6 +301,17 @@ class MakeAutomatedReport(object):
                            marker=line_settings['symboltype'], facecolor=line_settings['pointfillcolor'],
                            edgecolor=line_settings['pointlinecolor'], s=float(line_settings['symbolsize']),
                            label=line_settings['label'], zorder=float(line_settings['zorder']))
+
+
+            self.AddLogEntry({'type': line_settings['label'] + '_TimeSeries' if line_settings['label'] != '' else 'Timeseries',
+                              'name': self.ChapterRegion,
+                              'description': object_settings['description'],
+                              'units': units,
+                              'value_start_date': self.translateDateFormat(dates[0], 'datetime', '').strftime('%d %b %Y'),
+                              'value_end_date': self.translateDateFormat(dates[-1], 'datetime', '').strftime('%d %b %Y'),
+                              'logoutputfilename': line['logoutputfilename']
+                              },
+                             isdata=True)
 
         plotunits = self.getPlotUnits(unitslist, object_settings)
         object_settings = self.updateFlaggedValues(object_settings, '%%units%%', plotunits)
@@ -350,8 +400,6 @@ class MakeAutomatedReport(object):
     def MakeProfilePlot(self, object_settings):
         '''
         takes in object settings to build profile plot and write to XML
-        #TODO: pull common settings out into their own funcitons so we dont have to look at them
-        #TODO: figure out way to change or control units on the axis?
         #TODO: figure out way to convert profiles that are essentially unitless
         :param object_settings: currently selected object settings dictionary
         :return: creates png in images dir and writes to XML file
@@ -420,10 +468,12 @@ class MakeAutomatedReport(object):
         #do now incase no elevs, so we can convert
         for line in object_settings['lines']:
             vals, elevations, depths, flag = self.getProfileData(line, timestamps) #Test this speed for grabbing all profiles and then choosing
-
+            # line['logoutputfilename'] = self.buildFileName(line)
+            datamem_key = self.buildDataMemoryKey(line)
             linedata[flag] = {'values': vals,
                               'elevations': elevations,
-                              'depths': depths}
+                              'depths': depths,
+                              'logoutputfilename': datamem_key}
 
         ################ convert Elevs ################
         elev_flag = 'NOVALID'
@@ -441,6 +491,18 @@ class MakeAutomatedReport(object):
                                                                                     linedata[elev_flag]['elevations'])
                     else:
                         object_settings['usedepth'] = 'true'
+
+        for line in linedata.keys():
+            values = linedata[line]['values']
+            depths = linedata[line]['depths']
+            elevations = linedata[line]['elevations']
+            datamem_key = linedata[line]['logoutputfilename']
+            self.Data_Memory[datamem_key] = {'times': copy.deepcopy(timestamps),
+                                             'values': copy.deepcopy(values),
+                                             'elevations': copy.deepcopy(elevations),
+                                             'depths': copy.deepcopy(depths),
+                                             'units': plot_units,
+                                             'isprofile': True}
 
         split_by_year = False
         if 'splitbyyear' in object_settings.keys():
@@ -576,7 +638,7 @@ class MakeAutomatedReport(object):
                         yticksize = 10
                     ax.tick_params(axis='y', labelsize=yticksize)
 
-                    ttl_str = dt.datetime.strftime(t_stmps[j], '%d %b %Y')
+                    ttl_str = t_stmps[j].strftime('%d %b %Y')
                     xbufr = 0.05
                     ybufr = 0.05
                     xl = ax.get_xlim()
@@ -598,6 +660,16 @@ class MakeAutomatedReport(object):
 
                 description = '{0}: {1} of {2}'.format(cur_obj_settings['description'], page_i+1, len(page_indices))
                 self.XML.writeProfilePlotFigure(figname, description)
+
+                self.AddLogEntry({'type': flag+'_ProfilePlot',
+                                  'name': self.ChapterRegion,
+                                  'description': description,
+                                  'units': plot_units,
+                                  'value_start_date': self.translateDateFormat(t_stmps[pgi[0]], 'datetime', '').strftime('%d %b %Y'),
+                                  'value_end_date': self.translateDateFormat(t_stmps[pgi[-1]], 'datetime', '').strftime('%d %b %Y'),
+                                  'logoutputfilename': ', '.join([linedata[flag]['logoutputfilename'] for flag in linedata])
+                                  },
+                                 isdata=True)
 
         self.XML.writeProfilePlotEnd()
 
@@ -624,6 +696,7 @@ class MakeAutomatedReport(object):
         data = {}
         unitslist = []
         for dp in datapaths:
+            dp['logoutputfilename'] = self.buildFileName(dp)
             dates, values, units = self.getTimeSeries(dp)
 
             if units == None:
@@ -656,7 +729,8 @@ class MakeAutomatedReport(object):
 
             data[dp['flag']] = {'dates': dates,
                                 'values': values,
-                                'units': units}
+                                'units': units,
+                                'logoutputfilename': dp['logoutputfilename']}
 
         plotunits = self.getPlotUnits(unitslist, object_settings)
         object_settings = self.updateFlaggedValues(object_settings, '%%units%%', plotunits)
@@ -679,7 +753,21 @@ class MakeAutomatedReport(object):
                 rowname = s_row[0]
                 row_val = s_row[i+1]
                 if '%%' in row_val:
-                    row_val = self.formatStatsLine(row_val, data, year=year)
+                    row_val, stat, _ = self.formatStatsLine(row_val, data, year=year)
+
+                    data_start_date, data_end_date = self.getTableDates(year, object_settings)
+                    self.AddLogEntry({'type': 'Statistic',
+                                      'name': ' '.join([self.ChapterRegion, header, stat]),
+                                      'description': desc,
+                                      'value': row_val,
+                                      'function': stat,
+                                      'units': plotunits,
+                                      'value_start_date': self.translateDateFormat(data_start_date, 'datetime', ''),
+                                      'value_end_date': self.translateDateFormat(data_end_date, 'datetime', ''),
+                                      'logoutputfilename': ', '.join([data[flag]['logoutputfilename'] for flag in data])
+                                      },
+                                     isdata=True)
+
                 header = '' if header == None else header
                 frmt_rows.append('{0}|{1}'.format(rowname, row_val))
             self.XML.writeTableColumn(header, frmt_rows)
@@ -714,6 +802,7 @@ class MakeAutomatedReport(object):
         data = {}
         unitslist = []
         for dp in datapaths:
+            dp['logoutputfilename'] = self.buildFileName(dp)
             dates, values, units = self.getTimeSeries(dp)
 
             if units == None:
@@ -735,7 +824,6 @@ class MakeAutomatedReport(object):
             if units != None:
                 unitslist.append(units)
 
-
             if 'filterbylimits' not in dp.keys():
                 dp['filterbylimits'] = 'true' #set default
 
@@ -747,7 +835,8 @@ class MakeAutomatedReport(object):
 
             data[dp['flag']] = {'dates': dates,
                                 'values': values,
-                                'units': units}
+                                'units': units,
+                                'logoutputfilename': dp['logoutputfilename']}
 
         plotunits = self.getPlotUnits(unitslist, object_settings)
         object_settings = self.updateFlaggedValues(object_settings, '%%units%%', plotunits)
@@ -762,7 +851,21 @@ class MakeAutomatedReport(object):
                 rowname = s_row[0]
                 row_val = s_row[i+1]
                 if '%%' in row_val:
-                    row_val = self.formatStatsLine(row_val, data, year=year)
+                    row_val, stat, month = self.formatStatsLine(row_val, data, year=year)
+
+                    data_start_date, data_end_date = self.getTableDates(year, object_settings, month=month)
+                    self.AddLogEntry({'type': 'Statistic',
+                                      'name': ' '.join([self.ChapterRegion, header, stat]),
+                                      'description': object_settings['description'],
+                                      'value': row_val,
+                                      'units': plotunits,
+                                      'function': stat,
+                                      'value_start_date': self.translateDateFormat(data_start_date, 'datetime', ''),
+                                      'value_end_date': self.translateDateFormat(data_end_date, 'datetime', ''),
+                                      'logoutputfilename': ', '.join([data[flag]['logoutputfilename'] for flag in data])
+                                      },
+                                     isdata=True)
+
                 header = '' if header == None else header
                 frmt_rows.append('{0}|{1}'.format(rowname, row_val))
             self.XML.writeTableColumn(header, frmt_rows)
@@ -826,6 +929,7 @@ class MakeAutomatedReport(object):
         ### Plot Lines ###
         stackplots = {}
         for i, line in enumerate(object_settings['lines']):
+            line['logoutputfilename'] = self.buildFileName(line)
             dates, values, units = self.getTimeSeries(line)
 
             if 'target' in line.keys():
@@ -851,10 +955,10 @@ class MakeAutomatedReport(object):
                     if isinstance(dates[0], dt.datetime):
                         dates = self.DatetimeToJDate(dates)
                 elif object_settings['dateformat'].lower() == 'datetime':
-                    if isinstance(dates[0], float) or isinstance(dates[0], int):
+                    if isinstance(dates[0], (float, int)):
                         dates = self.JDateToDatetime(dates)
                 else:
-                    if isinstance(dates[0], float) or isinstance(dates[0], int):
+                    if isinstance(dates[0], (float, int)):
                         dates = self.JDateToDatetime(dates)
 
             if 'unitsystem' in object_settings.keys():
@@ -944,6 +1048,16 @@ class MakeAutomatedReport(object):
                                   marker=line_settings['symboltype'], facecolor=line_settings['pointfillcolor'],
                                   edgecolor=line_settings['pointlinecolor'], s=float(line_settings['symbolsize']),
                                   label=line_settings['label'], zorder=int(line_settings['zorder']))
+
+                self.AddLogEntry({'type': line_settings['label'] + '_BuzzPlot' if line_settings['label'] != '' else 'BuzzPlot',
+                                  'name': self.ChapterRegion,
+                                  'description': object_settings['description'],
+                                  'units': units,
+                                  'value_start_date': self.translateDateFormat(dates[0], 'datetime', '').strftime('%d %b %Y'),
+                                  'value_end_date': self.translateDateFormat(dates[-1], 'datetime', '').strftime('%d %b %Y'),
+                                  'logoutputfilename': line['logoutputfilename']
+                                  },
+                                 isdata=True)
 
         for stackplot_ax in stackplots.keys():
             if stackplot_ax == 'left':
@@ -1220,6 +1334,37 @@ class MakeAutomatedReport(object):
         self.ModelAlternatives = simulation['modelalternatives']
         self.SetSimulationDateTimes()
 
+    def getPandasTimeFreq(self, intervalstring):
+        '''
+        Reads in the DSS formatted time intervals and translates them to a format pandas.resample() understands
+        bases off of the time interval, so 15MIN becomes 15T, or 6MON becomes 6M
+        :param intervalstring: DSS interval string such as 1HOUR or 1DAY
+        :return: pandas time interval
+        '''
+
+        intervalstring = intervalstring.lower()
+        if 'min' in intervalstring:
+            timeint = intervalstring.replace('min','') + 'T'
+            return timeint
+        elif 'hour' in intervalstring:
+            timeint = intervalstring.replace('hour','') + 'H'
+            return timeint
+        elif 'day' in intervalstring:
+            timeint = intervalstring.replace('day','') + 'D'
+            return timeint
+        elif 'mon' in intervalstring:
+            timeint = intervalstring.replace('mon','') + 'M'
+            return timeint
+        elif 'week' in intervalstring:
+            timeint = intervalstring.replace('week','') + 'W'
+            return timeint
+        elif 'year' in intervalstring:
+            timeint = intervalstring.replace('year','') + 'A'
+            return timeint
+        else:
+            print('Unidentified time interval')
+            return 0
+
     def getLineDefaultSettings(self, LineSettings, param, i):
         '''
         gets line settings and adds missing needed settings with defaults. Then translates java style inputs to
@@ -1382,20 +1527,18 @@ class MakeAutomatedReport(object):
                 print('DSS_Filename not set for Line: {0}'.format(Line_info))
                 return [], [], None
             else:
-
-                if '{0}_{1}'.format(Line_info['dss_filename'], Line_info['dss_path']) in self.Data_Memory.keys():
-                    print('READING {0} {1} FROM MEMORY'.format(Line_info['dss_filename'], Line_info['dss_path']))
-                    times = copy.deepcopy(self.Data_Memory['{0}_{1}'.format(Line_info['dss_filename'], Line_info['dss_path'])]['times'])
-                    values = copy.deepcopy(self.Data_Memory['{0}_{1}'.format(Line_info['dss_filename'], Line_info['dss_path'])]['values'])
-                    units = copy.deepcopy(self.Data_Memory['{0}_{1}'.format(Line_info['dss_filename'], Line_info['dss_path'])]['units'])
+                datamem_key = self.buildDataMemoryKey(Line_info)
+                if datamem_key in self.Data_Memory.keys():
+                    print('Reading {0} from memory'.format(datamem_key))
+                    times = copy.deepcopy(self.Data_Memory[datamem_key]['times'])
+                    values = copy.deepcopy(self.Data_Memory[datamem_key]['values'])
+                    units = copy.deepcopy(self.Data_Memory[datamem_key]['units'])
                 else:
-
                     times, values, units = WDR.ReadDSSData(Line_info['dss_filename'], Line_info['dss_path'],
                                                            self.StartTime, self.EndTime)
-                    self.Data_Memory['{0}_{1}'.format(Line_info['dss_filename'],
-                                                      Line_info['dss_path'])] = {'times': copy.deepcopy(np.asarray(times)),
-                                                                                 'values': copy.deepcopy(np.asarray(values)),
-                                                                                 'units': copy.deepcopy(units)}
+                    self.Data_Memory[datamem_key] = {'times': copy.deepcopy(times),
+                                                     'values': copy.deepcopy(values),
+                                                     'units': copy.deepcopy(units)}
 
                 if np.any(values == None):
                     return [], [], None
@@ -1403,19 +1546,41 @@ class MakeAutomatedReport(object):
                     return [], [], None
 
         elif 'w2_file' in Line_info.keys():
-            if 'structurenumbers' in Line_info.keys():
-                # Ryan Miles: yeah looks like it's str_brX.npt, and X is 1-# of branches (which is defined in the control file)
-                times, values = self.ModelAlt.readStructuredTimeSeries(Line_info['w2_file'], Line_info['structurenumbers'])
+            datamem_key = self.buildDataMemoryKey(Line_info)
+            if datamem_key in self.Data_Memory.keys():
+                print('READING {0} FROM MEMORY'.format(datamem_key))
+                times = copy.deepcopy(self.Data_Memory[datamem_key]['times'])
+                values = copy.deepcopy(self.Data_Memory[datamem_key]['values'])
+                units = copy.deepcopy(self.Data_Memory[datamem_key]['units'])
+
             else:
-                times, values = self.ModelAlt.readTimeSeries(Line_info['w2_file'], **Line_info)
-            if 'units' in Line_info.keys():
-                units = Line_info['units']
-            else:
-                units = None
+                if 'structurenumbers' in Line_info.keys():
+                    # Ryan Miles: yeah looks like it's str_brX.npt, and X is 1-# of branches (which is defined in the control file)
+                    times, values = self.ModelAlt.readStructuredTimeSeries(Line_info['w2_file'], Line_info['structurenumbers'])
+                else:
+                    times, values = self.ModelAlt.readTimeSeries(Line_info['w2_file'], **Line_info)
+                if 'units' in Line_info.keys():
+                    units = Line_info['units']
+                else:
+                    units = None
+
+                self.Data_Memory[datamem_key] = {'times': copy.deepcopy(times),
+                                                 'values': copy.deepcopy(values),
+                                                 'units': copy.deepcopy(units)}
 
         elif 'xy' in Line_info.keys():
-            times, values = self.ModelAlt.readTimeSeries(Line_info['parameter'], Line_info['xy'])
-            units = self.units[Line_info['parameter'].lower()]
+            datamem_key = self.buildDataMemoryKey(Line_info)
+            if datamem_key in self.Data_Memory.keys():
+                print('READING {0} FROM MEMORY'.format(datamem_key))
+                times = copy.deepcopy(self.Data_Memory[datamem_key]['times'])
+                values = copy.deepcopy(self.Data_Memory[datamem_key]['values'])
+                units = copy.deepcopy(self.Data_Memory[datamem_key]['units'])
+            else:
+                times, values = self.ModelAlt.readTimeSeries(Line_info['parameter'], Line_info['xy'])
+                units = self.units[Line_info['parameter'].lower()]
+                self.Data_Memory[datamem_key] = {'times': copy.deepcopy(times),
+                                                 'values': copy.deepcopy(values),
+                                                 'units': copy.deepcopy(units)}
 
         else:
             print('No Data Defined for line')
@@ -1425,9 +1590,7 @@ class MakeAutomatedReport(object):
             omitval = float(Line_info['omitvalue'])
             values = self.replaceOmittedValues(values, omitval)
 
-        if len(values) == 0:
-            return [], [], None
-        elif 'interval' in Line_info.keys():
+        if 'interval' in Line_info.keys():
             times, values = self.changeTimeSeriesInterval(times, values, Line_info)
         return times, values, units
 
@@ -1551,6 +1714,108 @@ class MakeAutomatedReport(object):
             print('No units defined.')
             plotunits = ''
         return plotunits
+
+    def getTableDates(self, year, object_settings, month='None'):
+        '''
+        gets start and end dates from lines in tables for logging
+        :param year: selected year int or 'all' string
+        :param object_settings: dictionary of item setting
+        :param month: selected month (for monthly table) or None
+        :return: start and end date
+        '''
+
+        xmin = 'NONE'
+        xmax = 'NONE'
+        if 'xlims' in object_settings.keys():
+            if 'min' in object_settings['xlims'].keys():
+                xmin = self.translateDateFormat(object_settings['xlims']['min'], 'datetime', self.StartTime)
+                xmin = xmin.strftime('%d %b %Y')
+            if 'max' in object_settings['xlims'].keys():
+                xmax = self.translateDateFormat(object_settings['xlims']['max'], 'datetime', self.EndTime)
+                xmax = xmax.strftime('%d %b %Y')
+
+        if xmin != 'NONE':
+            start_date = xmin
+        elif year == self.startYear:
+            start_date = self.StartTime.strftime('%d %b %Y')
+        else:
+            if str(year).lower() == 'all':
+                start_date = '01 Jan {0}'.format(self.startYear)
+            else:
+                start_date = '01 Jan {0}'.format(year)
+
+        if xmax != 'NONE':
+            start_date = xmax
+        elif year == self.endYear:
+            end_date = self.EndTime.strftime('%d %b %Y')
+        else:
+            if str(year).lower() == 'all':
+                end_date = '31 Dec {0}'.format(self.endYear)
+            else:
+                end_date = '31 Dec {0}'.format(year)
+
+            if month != 'None':
+                try:
+                    month = int(month)
+                except ValueError:
+                    month = self.month2num
+
+                try:
+                    start_date = dt.datetime.strptime(start_date, '%d %b %Y').replace(month=month).strftime('%d %b %Y')
+                except ValueError:
+                    start_date = dt.datetime.strptime(start_date, '%d %b %Y')
+                    start_date = start_date.replace(day=1)
+                    start_date = start_date.replace(month=month+1)
+                    start_date -= dt.timedelta(days=1)
+                    start_date = start_date.strftime('%d %b %Y')
+
+                try:
+                    end_date = dt.datetime.strptime(end_date, '%d %b %Y').replace(month=month).strftime('%d %b %Y')
+                except ValueError:
+                    end_date = dt.datetime.strptime(end_date, '%d %b %Y')
+                    end_date = end_date.replace(day=1)
+                    end_date = end_date.replace(month=month+1)
+                    end_date -= dt.timedelta(days=1)
+                    end_date = end_date.strftime('%d %b %Y')
+
+        return start_date, end_date
+
+    def getListItems(self, listvals):
+        '''
+        recursive function to convert lists of lists into single lists for logging
+        :param listvals: value object
+        :return: list of values
+        '''
+        if isinstance(listvals, (list, np.ndarray)):
+            outvalues = []
+            for item in listvals:
+                if isinstance(item, (list, np.ndarray)):
+                    vals = self.getListItems(item)
+                    for v in vals:
+                        outvalues.append(v)
+                else:
+                    return listvals #we just have a list of values, so we're good! return list
+        elif isinstance(listvals, dict):
+            outvalues = self.getListItemsFromDict(listvals)
+        return outvalues
+
+    def getListItemsFromDict(self, indict):
+        '''
+        recursive function to convert dictionary of lists into single dictionary for logging. Keys are determined
+        using original keys
+        :param indict: value dictionary object
+        :return: dictionary of values
+        '''
+        outdict = {}
+        for key in indict:
+            if isinstance(indict[key], dict):
+                returndict = self.getListItemsFromDict(indict[key])
+                returndict = {'{0}_{1}'.format(key, newkey): returndict[newkey] for newkey in returndict}
+                for key in returndict.keys():
+                    outdict[key] = returndict[key]
+            elif isinstance(indict[key], (list, np.ndarray)):
+                outdict[key] = indict[key]
+        return outdict
 
     def replaceDefaults(self, default_settings, object_settings):
         '''
@@ -1903,6 +2168,7 @@ class MakeAutomatedReport(object):
         data = copy.deepcopy(data_dict)
         rrow = row.replace('%%', '')
         s_row = rrow.split('.')
+        sr_month = ''
         flags = []
         for sr in s_row:
             if sr in data_dict.keys():
@@ -1936,21 +2202,29 @@ class MakeAutomatedReport(object):
                 data[flag]['dates'] = np.asarray(data[flag]['dates'])[msk]
 
         if row.lower().startswith('%%meanbias'):
-            return WF.meanbias(data[flags[0]], data[flags[1]])
+            out_stat = WF.meanbias(data[flags[0]], data[flags[1]])
+            stat = 'meanbias'
         elif row.lower().startswith('%%mae'):
-            return WF.MAE(data[flags[0]], data[flags[1]])
+            out_stat = WF.MAE(data[flags[0]], data[flags[1]])
+            stat = 'mae'
         elif row.lower().startswith('%%rmse'):
-            return WF.RMSE(data[flags[0]], data[flags[1]])
+            out_stat = WF.RMSE(data[flags[0]], data[flags[1]])
+            stat = 'rmse'
         elif row.lower().startswith('%%nse'):
-            return WF.NSE(data[flags[0]], data[flags[1]])
+            out_stat = WF.NSE(data[flags[0]], data[flags[1]])
+            stat = 'nse'
         elif row.lower().startswith('%%count'):
-            return WF.COUNT(data[flags[0]])
+            out_stat = WF.COUNT(data[flags[0]])
+            stat = 'count'
         elif row.lower().startswith('%%mean'):
-            return WF.MEAN(data[flags[0]])
+            out_stat = WF.MEAN(data[flags[0]])
+            stat = 'mean'
         else:
             if '%%' in row:
                 print('Unable to convert flag in row', row)
-            return row
+            return row, '', ''
+
+        return out_stat, stat, sr_month
 
     def buildRowsByYear(self, object_settings, years, split_by_year):
         '''
@@ -2054,6 +2328,91 @@ class MakeAutomatedReport(object):
             ts = np.asarray([t.to_pydatetime() for t in ts])
         return ts
 
+    def buildFileName(self, Line_info):
+        '''
+        creates uniform name for csv log output for data
+        :param Line_info: dictionary containing line values
+        :return: file name
+        '''
+
+        MemKey = self.buildDataMemoryKey(Line_info)
+        if MemKey == 'Null':
+            return MemKey
+        else:
+            return MemKey + '.csv'
+
+    def buildDataMemoryKey(self, Line_info):
+        '''
+        creates uniform name for csv log output for data
+        determines how to build the file name from the input type
+        :param Line_info:
+        :return:
+        '''
+        if 'dss_path' in Line_info.keys(): #Get data from DSS record
+            if 'dss_filename' in Line_info.keys():
+                outname = '{0}_{1}'.format(os.path.basename(Line_info['dss_filename']).split('.')[0],
+                                        Line_info['dss_path'].replace('/', '').replace(':', ''))
+                return outname
+
+        elif 'w2_file' in Line_info.keys():
+            if 'structurenumbers' in Line_info.keys():
+                outname = '{0}'.format(os.path.basename(Line_info['w2_file']).split('.')[0])
+                if isinstance(Line_info['structurenumbers'], dict):
+                    structure_nums = [Line_info['structurenumbers']['structurenumber']]
+                elif isinstance(Line_info['structurenumbers'], str):
+                    structure_nums = [Line_info['structurenumbers']]
+                elif isinstance(Line_info['structurenumbers'], (list, np.ndarray)):
+                    structure_nums = Line_info['structurenumbers']
+                outname += '_Struct_' + '_'.join(structure_nums)
+            else:
+                outname = '{0}'.format(os.path.basename(Line_info['w2_file']).split('.')[0])
+            return outname
+
+        elif 'xy' in Line_info.keys():
+            outname = '{0}_{1}'.format(Line_info['parameter'], '_'.join(Line_info['xy']))
+            return outname
+
+        elif 'filename' in Line_info.keys(): #Get data from Observed Profile
+            outname = '{0}'.format(os.path.basename(Line_info['filename']).split('.')[0].replace(' ', '_'))
+            return outname
+
+        elif 'w2_segment' in Line_info.keys():
+            outname = '{0}'.format(self.ModelAlt.output_file_name.split('.')[0])
+            return outname
+
+        elif 'ressimresname' in Line_info.keys():
+            outname = '{0}_{1}_{2}'.format(os.path.basename(self.ModelAlt.h5fname).split('.')[0]+'_h5',
+                                               Line_info['parameter'], Line_info['ressimresname'])
+            return outname
+
+        return 'NULL'
+
+    def EqualizeLog(self):
+        '''
+        ensure that all arrays are the same length with a '' character
+        :return: append self.Log object
+        '''
+        longest_array_len = 0
+        for key in self.Log.keys():
+            if len(self.Log[key]) > longest_array_len:
+                longest_array_len = len(self.Log[key])
+        for key in self.Log.keys():
+            if len(self.Log[key]) < longest_array_len:
+                num_entries = longest_array_len - len(self.Log[key])
+                for i in range(num_entries):
+                    self.Log[key].append('')
+
+    def BuildLogFile(self):
+        '''
+        builts the log dictionary for conisistent dictionary values
+        :return:
+        '''
+
+        self.Log = {'type': [], 'name': [], 'description': [], 'value': [], 'units': [], 'observed_data_path': [],
+                    'start_time': [], 'end_time': [], 'compute_time': [], 'program': [], 'alternative_name': [],
+                    'fpart': [], 'program_directory': [], 'region': [], 'value_start_date': [], 'value_end_date': [],
+                    'function': [], 'logoutputfilename': []}
+
     def limitXdata(self, dates, values, xlims):
         '''
         if the filterbylimits flag is true, filters out values outside of the xlimits
@@ -2063,12 +2422,11 @@ class MakeAutomatedReport(object):
         :return: filtered dates and values
         '''
 
-        if isinstance(dates[0], int) or isinstance(dates[0], float):
+        if isinstance(dates[0], (int, float)):
             wantedformat = 'jdate'
         elif isinstance(dates[0], dt.datetime):
             wantedformat = 'datetime'
         if 'min' in xlims.keys():
-            #ensure we have dt, dss dates should be... #TODO: make sure values are DT
             min = self.translateDateFormat(xlims['min'], wantedformat, self.StartTime)
             for i, d in enumerate(dates):
                 if min > d:
@@ -2122,6 +2480,7 @@ class MakeAutomatedReport(object):
         for Chapter in self.ChapterDefinitions:
             self.ChapterName = Chapter['name']
             self.ChapterRegion = Chapter['region']
+            self.AddLogEntry({'region': self.ChapterRegion})
             self.XML.writeChapterStart(self.ChapterName)
             for section in Chapter['sections']:
                 section_header = section['header']
@@ -2143,6 +2502,126 @@ class MakeAutomatedReport(object):
                 self.XML.writeSectionHeaderEnd()
             self.XML.writeChapterEnd()
 
+    def WriteLogFile(self):
+        '''
+        Writes out logfile data to csv file in report dir
+        :return:
+        '''
+
+        df = pd.DataFrame({'observed_data_path': self.Log['observed_data_path'],
+                           'start_time': self.Log['start_time'],
+                           'end_time': self.Log['end_time'],
+                           'compute_time': self.Log['compute_time'],
+                           'program': self.Log['program'],
+                           'region': self.Log['region'],
+                           'alternative_name': self.Log['alternative_name'],
+                           'fpart': self.Log['fpart'],
+                           'program_directory': self.Log['program_directory'],
+                           'type': self.Log['type'],
+                           'name': self.Log['name'],
+                           'description': self.Log['description'],
+                           'function': self.Log['function'],
+                           'value': self.Log['value'],
+                           'units': self.Log['units'],
+                           'value_start_date': self.Log['value_start_date'],
+                           'value_end_date': self.Log['value_end_date'],
+                           'CSVOutputFilename': self.Log['logoutputfilename']})
+
+        # df = pd.DataFrame(data, columns=columns)
+        df.to_csv(os.path.join(self.images_path, 'Log.csv'), index=False)
+
+    def WriteDataFiles(self):
+        '''
+        writes out the data used in figures to csv files for later use and checking
+        '''
+
+        for key in self.Data_Memory.keys():
+            csv_name = os.path.join(self.CSVPath, '{0}.csv'.format(key))
+            if 'isprofile' in self.Data_Memory[key].keys():
+                if self.Data_Memory[key]['isprofile'] == True:
+                    alltimes = self.Data_Memory[key]['times']
+                    allvalues = self.Data_Memory[key]['values']
+                    alltimes = self.matcharrays(alltimes, allvalues)
+                    allelevs = self.Data_Memory[key]['elevations']
+                    alldepths = self.Data_Memory[key]['depths']
+                    if len(allelevs) == 0: #elevations may not always fall out
+                        allelevs = self.matcharrays('', alldepths)
+                    units = self.Data_Memory[key]['units']
+                    values = self.getListItems(allvalues)
+                    times = self.getListItems(alltimes)
+                    elevs = self.getListItems(allelevs)
+                    depths = self.getListItems(alldepths)
+                    if isinstance(values, (list, np.ndarray)):
+                        df = pd.DataFrame({'Dates': times, 'Values ({0})'.format(units): values, 'Elevations': elevs,
+                                           'Depths': depths})
+                    elif isinstance(values, dict):
+                        colvals = {}
+                        colvals['Dates'] = times
+                        for key in values:
+                            colvals[key] = values[key]
+                            colvals[key] = elevs[key]
+                            colvals[key] = depths[key]
+                        df = pd.DataFrame(colvals)
+
+            else:
+                allvalues = self.Data_Memory[key]['values']
+                alltimes = self.Data_Memory[key]['times']
+                units = self.Data_Memory[key]['units']
+                values = self.getListItems(allvalues)
+                times = self.getListItems(alltimes)
+                if isinstance(values, (list, np.ndarray)):
+                    df = pd.DataFrame({'Dates': times, 'Values ({0})'.format(units): values})
+                elif isinstance(values, dict):
+                    colvals = {}
+                    colvals['Dates'] = times
+                    for key in values:
+                        colvals[key] = values[key]
+                    df = pd.DataFrame(colvals)
+            df.to_csv(csv_name, index=False)
+
+    def matcharrays(self, array1, array2):
+        '''
+        iterative recursive function that aims to line up arrays of different lengths. Takes in variable input so that
+        if there are lists of lists with a single date (aka profiles), alligns those so each elevation value has a date
+        assigned to it for easy output
+        :param array1: np.array or list of values, generally values
+        :param array2: np.array or list of values, generally dates
+        :return:
+        '''
+        if isinstance(array1, (list, np.ndarray)) and isinstance(array2, (list, np.ndarray)):
+            #if both are lists..
+            if len(array1) < len(array2):
+                '''
+                either ['Date1', 'Date2'], ['1,2,3'] OR ['Date1'], [1,2,3] OR ['DATE1'], [[1,2,3], [1,2,3,4]]
+                 OR ['Date1', 'Date2'], [[1,2,3], [2,4,5],[6,
+                scenario 1: shouldnt ever happen
+                scenario 2: do Date1 for each item in array2
+                scenario 3: do date1 for each value in each subarray in 2 '''
+
+                if len(array1) == 1: #solo date
+                    new_array1 = []
+                    for subarray2 in array2:
+                        new_array1.append(self.matcharrays(array1[0], subarray2))
+                    return new_array1
+                else:
+                    print('ERROR') #If the Len of the arrays are offset, then there should only ever be 1 date
+            elif len(array1) == len(array2):
+                new_array1 = []
+                for i, subarray1 in enumerate(array1):
+                    new_array1.append(self.matcharrays(subarray1, array2[i]))
+                return new_array1
+
+        #GOAL LOOP
+        elif isinstance(array1, (str, dt.datetime, int, float)) and isinstance(array2, (list, np.ndarray)):
+            # array1 is a single value, array2 is a list of values
+            new_array1 = []
+            for subarray2 in array2:
+                if isinstance(subarray2, (list, np.ndarray)):
+                    new_array1.append(self.matcharrays(array1, subarray2))
+                else:
+                    new_array1.append(array1)
+            return new_array1
+
     def cleanOutputDirs(self):
         '''
         cleans the images output directory, so pngs from old reports aren't mistakenly
@@ -2151,8 +2630,12 @@ class MakeAutomatedReport(object):
 
         if not os.path.exists(self.images_path):
             os.makedirs(self.images_path)
+        if not os.path.exists(self.CSVPath):
+            os.makedirs(self.CSVPath)
 
         WF.clean_output_dir(self.images_path, '.png')
+        WF.clean_output_dir(self.images_path, '.csv')
+        WF.clean_output_dir(self.CSVPath, '.csv')
 
     def LoadModelAlt(self, simCSVAlt):
         '''
@@ -2259,15 +2742,20 @@ class MakeAutomatedReport(object):
             jdate: single date
             dates: original date if unable to convert
         '''
-
-        if isinstance(dates, list) or isinstance(dates, np.ndarray):
+        if isinstance(dates, (float, int)):
+            print('Dates already in JDate form.')
+            return dates
+        elif isinstance(dates, (list, np.ndarray)):
+            if isinstance(dates[0], (float, int)):
+                print('Dates already in JDate form.')
+                return dates
             jdates = np.asarray([(WF.dt_to_ord(n) - self.ModelAlt.t_offset) + 1 for n in dates])
             return jdates
         elif isinstance(dates, dt.datetime):
             jdate = (WF.dt_to_ord(dates) - self.ModelAlt.t_offset) + 1
             return jdate
         else:
-            print('Unable to convert to JDates')
+            print('Unable to convert type {0} to JDates'.format(type(dates)))
             return dates
 
     def JDateToDatetime(self, dates):
@@ -2281,14 +2769,21 @@ class MakeAutomatedReport(object):
         '''
 
         first_year_Date = dt.datetime(self.ModelAlt.dt_dates[0].year, 1, 1, 0, 0)
-        if isinstance(dates, list) or isinstance(dates, np.ndarray):
+
+        if isinstance(dates, dt.datetime):
+            print('Dates already in Datetime form.')
+            return dates
+        elif isinstance(dates, (list, np.ndarray)):
+            if isinstance(dates[0], dt.datetime):
+                print('Dates already in Datetime form.')
+                return dates
             dtimes = np.asarray([first_year_Date + dt.timedelta(days=n) for n in dates])
             return dtimes
-        elif isinstance(dates, float) or isinstance(dates, int):
+        elif isinstance(dates, (float, int)):
             dtime = first_year_Date + dt.timedelta(days=dates)
             return dtime
         else:
-            print('Unable to convert to datetime')
+            print('Unable to convert type {0} to datetime'.format(type(dates)))
             return dates
 
     def pickByParameter(self, values, line):
@@ -2349,7 +2844,7 @@ class MakeAutomatedReport(object):
             new_units: new converted units if successful
         '''
 
-        english_units = {'m3/s':'cfs',
+        english_units = {'m3/s': 'cfs',
                          'm': 'ft',
                          'm3': 'af',
                          'c': 'f'}
@@ -2559,92 +3054,51 @@ class MakeAutomatedReport(object):
             avgtype = 'INST-VAL'
             # avgtype = 'PER-AVER'
 
-        if 'interval' in Line_info:
-            interval = Line_info['interval'].upper()
-        else:
-            interval = self.getTimeInterval(times)
-
-        input_interval = self.getTimeInterval(times)
-
-        new_times = self.buildTimeSeries(times[0], times[-1], interval)
-        new_times_interval = self.getTimeInterval(new_times)
-
-        if isinstance(new_times_interval, dt.timedelta):
-            if new_times_interval.total_seconds() < input_interval.total_seconds():
-                print('New interval is smaller than the old interval.')
-                print('Currently not supporting this.')
-                if convert_to_jdate:
-                    return self.DatetimeToJDate(times), values
-                else:
-                    return times, values
-        else:
-            print('Error defining new interval types')
-            if convert_to_jdate:
-                return self.DatetimeToJDate(times), values
-            else:
-                return times, values
-
-        if new_times_interval == input_interval: #no change..
-            print('Input interval matches data interval.')
-            if convert_to_jdate:
-                return self.DatetimeToJDate(times), values
-            else:
-                return times, values
-
-
         if isinstance(values, dict):
             new_values = {}
             for key in values:
                 new_times, new_values[key] = self.changeTimeSeriesInterval(times, values[key], Line_info)
         else:
+
+            if 'interval' in Line_info:
+                interval = Line_info['interval'].upper()
+                pd_interval = self.getPandasTimeFreq(interval)
+            else:
+                print('No time interval Defined.')
+                return times, values
+
             if avgtype == 'INST-VAL':
                 #at the point in time, find intervals and use values
-                new_values = []
-                for t in new_times:
-                    ti = np.where(times == t)[0]
-                    if len(ti) == 1:
-                        new_values.append(values[ti][0])
-                    elif len(ti) == 0:
-                        #missing date, could be missing data or irreg?
-                        new_values.append(np.NaN)
-                    else:
-                        print('Multiple date idx found??')
-                        new_values.append(np.NaN)
-                        continue
+                df = pd.DataFrame({'times': times, 'values': values})
+                df = df.set_index('times')
+                df = df.resample(pd_interval).asfreq().fillna(method='bfill')
+                new_values = df['values'].to_numpy()
+                new_times = df.index.to_pydatetime()
 
             elif avgtype == 'INST-CUM':
-                if interval == input_interval:
-                    new_times = copy.deepcopy(times)
-                new_values = []
-                for t in new_times:
-                    ti = np.where(times <= t)[0]
-                    cum_val = np.sum(values[ti])
-                    new_values.append(cum_val)
+                df = pd.DataFrame({'times': times, 'values': values})
+                df = df.set_index('times')
+                df = df.cumsum(skipna=True).resample(pd_interval).asfreq().fillna(method='bfill')
+                new_values = df['values'].to_numpy()
+                new_times = df.index.to_pydatetime()
 
 
             elif avgtype == 'PER-AVER':
                 #average over the period
-                new_values = []
-                interval = self.getTimeIntervalSeconds(interval)
-                for t in new_times:
-                    t2 = t + dt.timedelta(seconds=interval)
-                    # date_idx = [i for i, n in enumerate(times) if t <= n < t2]
-                    date_idx1 = np.where(t <= times)[0]
-                    date_idx2 = np.where(times < t2)[0]
-                    date_idx = np.intersect1d(date_idx1, date_idx2)
-                    new_values.append(np.mean(values[date_idx]))
+                df = pd.DataFrame({'times': times, 'values': values})
+                df = df.set_index('times')
+                df = df.resample(pd_interval).mean().fillna(method='bfill')
+                new_values = df['values'].to_numpy()
+                new_times = df.index.to_pydatetime()
 
             elif avgtype == 'PER-CUM':
-                #cum over the perio
-                new_values = []
-                interval = self.getTimeIntervalSeconds(interval)
-                for t in new_times:
-                    t2 = t + dt.timedelta(seconds=interval)
-                    # date_idx = [i for i, n in enumerate(times) if t <= n < t2]
-                    date_idx1 = np.where(t <= times)[0]
-                    date_idx2 = np.where(times < t2)[0]
-                    date_idx = np.intersect1d(date_idx1, date_idx2)
-                    new_values.append(np.sum(values[date_idx]))
+                #cum over the period
+                df = pd.DataFrame({'times': times, 'values': values})
+                df = df.set_index('times')
+                df = df.resample(pd_interval).sum().fillna(method='bfill')
+                new_values = df['values'].to_numpy()
+                new_times = df.index.to_pydatetime()
+
             else:
                 print('INVALID INPUT TYPE DETECTED', avgtype)
                 return times, values
@@ -2672,7 +3126,6 @@ class MakeAutomatedReport(object):
 if __name__ == '__main__':
     rundir = sys.argv[0]
     simInfoFile = sys.argv[1]
-    # simInfoFile = r"\\wattest\C\WAT\USBR_FrameworkTest_r3_singlescript\reports\ResSim-val2013.xml"
     # import cProfile
     # ar = cProfile.run('MakeAutomatedReport(simInfoFile, rundir)')
     MakeAutomatedReport(simInfoFile, rundir)
