@@ -235,8 +235,7 @@ def ReadTextProfile(observed_data_filename, timestamps):
         else:
             wtn.append([])
             dn.append([])
-
-    return wtn, dn
+    return np.asarray(wtn), np.asarray(dn)
 
 def getTextProfileDates(observed_data_filename, starttime, endtime):
     '''
@@ -563,7 +562,10 @@ class W2_Results(object):
         select_wt = np.full((len(unique_times), len(self.layers)), np.nan)
         elevations = []
         depths = []
+        times = []
+        print('UNIQUE TIMES:', unique_times)
         for t, time in enumerate(unique_times):
+            print(time)
             e = []
             timestep = WF.get_idx_for_time(self.jd_dates, time, self.t_offset)
             if timestep > -1:
@@ -576,9 +578,13 @@ class W2_Results(object):
                 select_wt[t] = wt[timestep][:]
             elevations.append(np.asarray(e))
             depths.append(self.layers * 3.28)
+            # times.append(times)
+        print('Done with times')
         select_wt, elevations, depths = self.matchProfileLengths(select_wt, elevations, depths)
+        print('returning')
+        # return select_wt, elevations, np.asarray(depths), np.asarray(times)
 
-        return select_wt, elevations, np.asarray(depths)
+        return select_wt, elevations, depths, np.asarray(times)
 
     def readStructuredTimeSeries(self, output_file_name, structure_nums, skiprows=2):
         """
@@ -811,25 +817,34 @@ class ResSim_Results(object):
         vals = []
         elevations = []
         depths = []
+        times = []
+        # print('UNIQUE TIMES:', unique_times)
         for j, time_in in enumerate(unique_times):
             timestep = WF.get_idx_for_time(self.jd_dates, time_in, self.t_offset)
             if timestep == -1:
-                continue
-            self.load_results(time_in, metric.lower(), alt_subdomain_name=resname)
-            ktop = self.get_top_layer(timestep) #get waterlevel top layer to know where to grab data from
-            v_el = self.vals[:ktop + 1]
-            el = self.elev[:ktop + 1]
-            d_step = []
-            e_step = []
-            v_step = []
-            for ei, e in enumerate(el):
-                d_step.append(np.max(el) - e)
-                e_step.append(e)
-                v_step.append(v_el[ei])
-            depths.append(np.asarray(d_step))
-            elevations.append(np.asarray(e_step))
-            vals.append(np.asarray(v_step))
-        return vals, elevations, depths
+                depths.append(np.asarray([]))
+                elevations.append(np.asarray([]))
+                vals.append(np.asarray([]))
+                times.append(time_in)
+                # continue
+            else:
+            # print('finding time for', time_in)
+                self.load_results(time_in, metric.lower(), alt_subdomain_name=resname)
+                ktop = self.get_top_layer(timestep) #get waterlevel top layer to know where to grab data from
+                v_el = self.vals[:ktop + 1]
+                el = self.elev[:ktop + 1]
+                d_step = []
+                e_step = []
+                v_step = []
+                for ei, e in enumerate(el):
+                    d_step.append(np.max(el) - e)
+                    e_step.append(e)
+                    v_step.append(v_el[ei])
+                depths.append(np.asarray(d_step))
+                elevations.append(np.asarray(e_step))
+                vals.append(np.asarray(v_step))
+                times.append(time_in)
+        return vals, elevations, depths, np.asarray(times)
 
     def get_top_layer(self, timestep_index):
         '''
