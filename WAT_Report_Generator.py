@@ -39,20 +39,16 @@ class MakeAutomatedReport(object):
         self.simulationInfoFile = simulationInfoFile
         self.WriteLog = True #TODO we're testing this.
         self.batdir = batdir
-        print('Reading Sim info..')
         self.ReadSimulationInfo(simulationInfoFile) #read file output by WAT
         # self.EnsureDefaultFiles() #TODO: turn this back on for copying
         self.DefinePaths()
-        print('First Clean')
         self.cleanOutputDirs()
 
         self.DefineUnits()
         self.DefineMonths()
         self.DefineTimeIntervals()
         self.DefineDefaultColors()
-        print('Reading graphics Default')
         self.ReadGraphicsDefaultFile() #read graphical component defaults
-        print('Reading Linestyles')
         self.ReadLinesstylesDefaultFile()
         self.BuildLogFile()
         if self.reportType == 'single': #Eventually be able to do comparison reports, put that here
@@ -507,7 +503,6 @@ class MakeAutomatedReport(object):
 
 
         for line in linedata.keys():
-            # print(line)
             values = linedata[line]['values']
             depths = linedata[line]['depths']
             elevations = linedata[line]['elevations']
@@ -537,8 +532,7 @@ class MakeAutomatedReport(object):
 
             t_stmps = self.filterTimestepByYear(timestamps, year)
             prof_indices = [np.where(timestamps == n)[0][0] for n in t_stmps]
-            # print('t_stmp_idx', t_stmp_idx)
-            # prof_indices = list(range(len(t_stmps)))
+
             n = int(object_settings['profilesperrow']) * int(object_settings['rowsperpage']) #Get number of plots on page
             page_indices = [prof_indices[i * n:(i + 1) * n] for i in range((len(prof_indices) + n - 1) // n)]
             cur_obj_settings = copy.deepcopy(object_settings)
@@ -582,7 +576,6 @@ class MakeAutomatedReport(object):
 
                         current_ls = self.getLineSettings(object_settings['lines'], line)
                         current_ls = self.getLineDefaultSettings(current_ls, plot_parameter, li)
-                        # print('KEY {0}:'.format(line), 'Time: {0}:'.format(t_stmps[j].strftime('%d %b %Y')), values)
 
                         if current_ls['drawline'].lower() == 'true' and current_ls['drawpoints'].lower() == 'true':
                             ax.plot(values, levels, label=current_ls['label'], c=current_ls['linecolor'],
@@ -602,7 +595,7 @@ class MakeAutomatedReport(object):
                                        edgecolor=current_ls['pointlinecolor'], s=float(current_ls['symbolsize']),
                                        label=current_ls['label'], zorder=int(current_ls['zorder']))
 
-                    show_legend, show_xlabel, show_ylabel = self.getPlotLabelMasks(i, len(pgi), subplot_cols)
+                    show_legend, show_xlabel, show_ylabel = self.getPlotLabelMasks(i, len(pgi), subplot_cols) #TODO: change to not care about show_legend..
 
                     if current_object_settings['gridlines'].lower() == 'true':
                         ax.grid(zorder=0)
@@ -669,16 +662,6 @@ class MakeAutomatedReport(object):
 
                 plt.tight_layout()
 
-                # if show_legend:
-                    # if 'legend' in current_object_settings.keys():
-                    #     if current_object_settings['legend'].lower() == 'true':
-                    #         if 'legendsize' in current_object_settings.keys():
-                    #             legsize = float(current_object_settings['legendsize'])
-                    #         elif 'fontsize' in current_object_settings.keys():
-                    #             legsize = float(current_object_settings['fontsize'])
-                    #         else:
-                    #             legsize = 12
-                    #         ax.legend(loc='lower right', fontsize=legsize)
                 if 'legend' in current_object_settings.keys():
                     if current_object_settings['legend'].lower() == 'true':
                         if 'legendsize' in current_object_settings.keys():
