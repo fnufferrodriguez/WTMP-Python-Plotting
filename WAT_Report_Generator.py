@@ -589,17 +589,18 @@ class MakeAutomatedReport(object):
                                     lw=current_ls['linewidth'], ls=current_ls['linestylepattern'],
                                     marker=current_ls['symboltype'], markerfacecolor=current_ls['pointfillcolor'],
                                     markeredgecolor=current_ls['pointlinecolor'], markersize=float(current_ls['symbolsize']),
-                                    markevery=int(current_ls['numptsskip']))
+                                    markevery=int(current_ls['numptsskip']), zorder=int(current_ls['zorder']))
 
                         elif current_ls['drawline'].lower() == 'true':
                             ax.plot(values, levels, label=current_ls['label'], c=current_ls['linecolor'],
-                                    lw=current_ls['linewidth'], ls=current_ls['linestylepattern'])
+                                    lw=current_ls['linewidth'], ls=current_ls['linestylepattern'],
+                                    zorder=int(current_ls['zorder']))
 
                         elif current_ls['drawpoints'].lower() == 'true':
                             ax.scatter(values[::int(current_ls['numptsskip'])], levels[::int(current_ls['numptsskip'])],
                                        marker=current_ls['symboltype'], facecolor=current_ls['pointfillcolor'],
                                        edgecolor=current_ls['pointlinecolor'], s=float(current_ls['symbolsize']),
-                                       label=current_ls['label'])
+                                       label=current_ls['label'], zorder=int(current_ls['zorder']))
 
                     show_legend, show_xlabel, show_ylabel = self.getPlotLabelMasks(i, len(pgi), subplot_cols)
 
@@ -626,16 +627,7 @@ class MakeAutomatedReport(object):
                                 xlabsize = 12
                             ax.set_xlabel(current_object_settings['xlabel'], fontsize=xlabsize)
 
-                    if show_legend:
-                        if 'legend' in current_object_settings.keys():
-                            if current_object_settings['legend'].lower() == 'true':
-                                if 'legendsize' in current_object_settings.keys():
-                                    legsize = float(current_object_settings['legendsize'])
-                                elif 'fontsize' in current_object_settings.keys():
-                                    legsize = float(current_object_settings['fontsize'])
-                                else:
-                                    legsize = 12
-                                ax.legend(loc='lower right', fontsize=legsize)
+
 
                     if 'xlims' in object_settings.keys():
                         if 'min' in object_settings['xlims']:
@@ -676,6 +668,37 @@ class MakeAutomatedReport(object):
                             zorder=10)
 
                 plt.tight_layout()
+
+                # if show_legend:
+                    # if 'legend' in current_object_settings.keys():
+                    #     if current_object_settings['legend'].lower() == 'true':
+                    #         if 'legendsize' in current_object_settings.keys():
+                    #             legsize = float(current_object_settings['legendsize'])
+                    #         elif 'fontsize' in current_object_settings.keys():
+                    #             legsize = float(current_object_settings['fontsize'])
+                    #         else:
+                    #             legsize = 12
+                    #         ax.legend(loc='lower right', fontsize=legsize)
+                if 'legend' in current_object_settings.keys():
+                    if current_object_settings['legend'].lower() == 'true':
+                        if 'legendsize' in current_object_settings.keys():
+                            legsize = float(current_object_settings['legendsize'])
+                        elif 'fontsize' in current_object_settings.keys():
+                            legsize = float(current_object_settings['fontsize'])
+                        else:
+                            legsize = 12
+
+                        ncolumns = 3
+
+                        n_legends_row = np.ceil(len(linedata.keys()) / ncolumns) * .65
+                        if n_legends_row < 1:
+                            n_legends_row = 1
+
+                        plt.subplots_adjust(bottom=(.3/n_nrow_active)*n_legends_row)
+                        plt.legend(bbox_to_anchor=(.5,0), loc="lower center", fontsize=legsize,
+                                   bbox_transform=fig.transFigure, ncol=ncolumns)
+
+                # plt.tight_layout()
                 figname = 'ProfilePlot_{0}_{1}_{2}_{3}_{4}.png'.format(self.ChapterName, yearstr, plot_parameter, self.plugin, page_i)
 
                 # plt.savefig(os.path.join(self.images_path, figname), dpi=600)
