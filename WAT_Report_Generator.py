@@ -190,9 +190,18 @@ class MakeAutomatedReport(object):
         '''
 
         self.units = {'temperature': {'metric':'c', 'english':'f'},
-                      'do_sat': '%',
+                      'temp': {'metric':'c', 'english':'f'},
+                      'do_sat': {'metric': '%', 'english': '%'},
                       'flow': {'metric': 'm3/s', 'english': 'cfs'},
-                      'storage': {'metric': 'm3', 'english': 'af'}}
+                      'storage': {'metric': 'm3', 'english': 'af'},
+                      'stor': {'metric': 'm3', 'english': 'af'},
+                      'elevation': {'metric': 'm', 'english': 'ft'},
+                      'elev': {'metric': 'm', 'english': 'ft'},
+                      'ec':  {'metric': 'us/cm', 'english': 'us/cm'},
+                      'electrical conductivity': {'metric': 'us/cm', 'english': 'us/cm'},
+                      'salinity': {'metric': 'psu', 'english': 'psu'},
+                      'sal': {'metric': 'psu', 'english': 'psu'},
+                      }
 
     def DefinePaths(self):
         '''
@@ -414,7 +423,6 @@ class MakeAutomatedReport(object):
 
         linedata = {}
         ################# Get timestamps #################
-        print('getting Timestamps..')
         timestamps = []
         if 'datessource' in object_settings.keys():
             datessource_flag = object_settings['datessource'] #determine how you want to get dates? either flag or list
@@ -442,7 +450,6 @@ class MakeAutomatedReport(object):
             timestamps = self.makeRegularTimesteps(days=15)
 
         ################# Get units #################
-        print('getting Units')
         if 'parameter' in object_settings.keys():
             plot_parameter = object_settings['parameter']
         else:
@@ -469,7 +476,6 @@ class MakeAutomatedReport(object):
         object_settings = self.updateFlaggedValues(object_settings, '%%units%%', plot_units)
 
         ################# Get data #################
-        print('getting data..')
         #do now incase no elevs, so we can convert
         for line in object_settings['lines']:
             vals, elevations, depths, times, flag = self.getProfileData(line, timestamps) #Test this speed for grabbing all profiles and then choosing
@@ -481,10 +487,7 @@ class MakeAutomatedReport(object):
                               'times': times,
                               'logoutputfilename': datamem_key}
 
-
-
         ################ convert Elevs ################
-        print('converting elevations..')
         elev_flag = 'NOVALID'
         if object_settings['usedepth'].lower() == 'false':
             for ld in linedata.keys():
@@ -500,7 +503,6 @@ class MakeAutomatedReport(object):
                                                                                     linedata[elev_flag]['elevations'])
                     else:
                         object_settings['usedepth'] = 'true'
-
 
         for line in linedata.keys():
             values = linedata[line]['values']
@@ -525,7 +527,6 @@ class MakeAutomatedReport(object):
             years = ['ALLYEARS']
 
         ################ Build Plots ################
-        print('building plot')
         for yi, year in enumerate(years):
             if split_by_year:
                 yearstr = str(year)
@@ -536,7 +537,6 @@ class MakeAutomatedReport(object):
             n = int(object_settings['profilesperrow']) * int(object_settings['rowsperpage']) #Get number of plots on page
             page_indices = [prof_indices[i * n:(i + 1) * n] for i in range((len(prof_indices) + n - 1) // n)]
             cur_obj_settings = copy.deepcopy(object_settings)
-
 
             for page_i, pgi in enumerate(page_indices):
 
@@ -553,12 +553,16 @@ class MakeAutomatedReport(object):
                         ax.invert_yaxis()
 
                     for li, line in enumerate(linedata.keys()):
+
                         try:
                             values = linedata[line]['values'][j]
+                            if len(values) == 0:
+                                print('No values for {0} on {1}'.format(line, timestamps[j]))
+                                continue
                             msk = np.where(~np.isnan(values))
                             values = values[msk]
                         except IndexError:
-                            print('No Data. Skipping line...')
+                            print('No values for {0} on {1}'.format(line, timestamps[j]))
                             continue
 
                         try:
@@ -566,13 +570,15 @@ class MakeAutomatedReport(object):
                                 levels = linedata[line]['depths'][j][msk]
                             else:
                                 levels = linedata[line]['elevations'][j][msk]
+                            if not WF.check_data(levels):
+                                print('Non Viable depths/elevations for {0} on {1}'.format(line, timestamps[j]))
+                                continue
                         except IndexError:
-                            print('No Elev/depths. Continuing.')
+                            print('Non Viable depths/elevations for {0} on {1}'.format(line, timestamps[j]))
                             continue
 
                         if not WF.check_data(values):
                             continue
-
 
                         current_ls = self.getLineSettings(object_settings['lines'], line)
                         current_ls = self.getLineDefaultSettings(current_ls, plot_parameter, li)
@@ -620,8 +626,6 @@ class MakeAutomatedReport(object):
                                 xlabsize = 12
                             ax.set_xlabel(current_object_settings['xlabel'], fontsize=xlabsize)
 
-
-
                     if 'xlims' in object_settings.keys():
                         if 'min' in object_settings['xlims']:
                             ax.set_xlim(left=float(object_settings['xlims']['min']))
@@ -664,22 +668,22 @@ class MakeAutomatedReport(object):
 
                 if 'legend' in current_object_settings.keys():
                     if current_object_settings['legend'].lower() == 'true':
-                        if 'legendsize' in current_object_settings.keys():
-                            legsize = float(current_object_settings['legendsize'])
-                        elif 'fontsize' in current_object_settings.keys():
-                            legsize = float(current_object_settings['fontsize'])
-                        else:
-                            legsize = 12
+                        if len(ax.get_legend_handles_labels()[1]) > 0:
+                            if 'legendsize' in current_object_settings.keys():
+                                legsize = float(current_object_settings['legendsize'])
+                            elif 'fontsize' in current_object_settings.keys():
+                                legsize = float(current_object_settings['fontsize'])
+                            else:
+                                legsize = 12
 
-                        ncolumns = 3
+                            ncolumns = 3
 
-                        n_legends_row = np.ceil(len(linedata.keys()) / ncolumns) * .65
-                        if n_legends_row < 1:
-                            n_legends_row = 1
-
-                        plt.subplots_adjust(bottom=(.3/n_nrow_active)*n_legends_row)
-                        plt.legend(bbox_to_anchor=(.5,0), loc="lower center", fontsize=legsize,
-                                   bbox_transform=fig.transFigure, ncol=ncolumns)
+                            n_legends_row = np.ceil(len(linedata.keys()) / ncolumns) * .65
+                            if n_legends_row < 1:
+                                n_legends_row = 1
+                            plt.subplots_adjust(bottom=(.3/n_nrow_active)*n_legends_row)
+                            plt.legend(bbox_to_anchor=(.5,0), loc="lower center", fontsize=legsize,
+                                       bbox_transform=fig.transFigure, ncol=ncolumns)
 
                 # plt.tight_layout()
                 figname = 'ProfilePlot_{0}_{1}_{2}_{3}_{4}.png'.format(self.ChapterName, yearstr, plot_parameter, self.plugin, page_i)
@@ -1600,7 +1604,8 @@ class MakeAutomatedReport(object):
                                                  'values': copy.deepcopy(values),
                                                  'units': copy.deepcopy(units)}
 
-        elif 'xy' in Line_info.keys():
+        # elif 'xy' in Line_info.keys():
+        elif 'easting' in Line_info.keys() and 'northing' in Line_info.keys():
             datamem_key = self.buildDataMemoryKey(Line_info)
             if datamem_key in self.Data_Memory.keys():
                 print('READING {0} FROM MEMORY'.format(datamem_key))
@@ -1608,8 +1613,14 @@ class MakeAutomatedReport(object):
                 values = copy.deepcopy(self.Data_Memory[datamem_key]['values'])
                 units = copy.deepcopy(self.Data_Memory[datamem_key]['units'])
             else:
-                times, values = self.ModelAlt.readTimeSeries(Line_info['parameter'], Line_info['xy'])
-                units = self.units[Line_info['parameter'].lower()]
+                times, values = self.ModelAlt.readTimeSeries(Line_info['parameter'],
+                                                             float(Line_info['easting']),
+                                                             float(Line_info['northing']))
+                if 'units' in Line_info.keys():
+                    units = Line_info['units']
+                else:
+                    units = None
+
                 self.Data_Memory[datamem_key] = {'times': copy.deepcopy(times),
                                                  'values': copy.deepcopy(values),
                                                  'units': copy.deepcopy(units)}
@@ -1691,13 +1702,12 @@ class MakeAutomatedReport(object):
 
         if 'filename' in Line_info.keys(): #Get data from Observed
             filename = Line_info['filename']
-            values, depths = WDR.ReadTextProfile(filename, timesteps)
-            times = WDR.getTextProfileDates(filename, self.StartTime, self.EndTime)
+            values, depths, times = WDR.ReadTextProfile(filename, timesteps)
+            # times = WDR.getTextProfileDates(filename, self.StartTime, self.EndTime)
             return values, [], depths, times, Line_info['flag']
 
         elif 'w2_segment' in Line_info.keys():
             vals, elevations, depths, times = self.ModelAlt.readProfileData(Line_info['w2_segment'], timesteps)
-            print('done getting data in getProfileData.. returning')
             return vals, elevations, depths, times, Line_info['flag']
 
         elif 'ressimresname' in Line_info.keys():
@@ -2122,9 +2132,10 @@ class MakeAutomatedReport(object):
                             'm/s': ['mps', 'm/s', 'meterspersecond', 'm/second'],
                             'ft/s': ['ft/s', 'fps', 'feetpersecond', 'feet/s']}
 
-        for key in units_conversion.keys():
-            if units.lower() in units_conversion[key]:
-                return key
+        if units != None:
+            for key in units_conversion.keys():
+                if units.lower() in units_conversion[key]:
+                    return key
 
         print('Units Undefined:', units)
         return units
@@ -2184,7 +2195,6 @@ class MakeAutomatedReport(object):
             max = self.translateDateFormat(max, dateformat, self.EndTime)
 
             curax.set_xlim(left=min, right=max)
-            print('set Xlims at', min, max)
 
         else:
             print('No Xlims flag set for {0}'.format(xlims_flag))
@@ -2402,8 +2412,8 @@ class MakeAutomatedReport(object):
                 outname = '{0}'.format(os.path.basename(Line_info['w2_file']).split('.')[0])
             return outname
 
-        elif 'xy' in Line_info.keys():
-            outname = '{0}_{1}'.format(Line_info['parameter'], '_'.join(Line_info['xy']))
+        elif 'easting' in Line_info.keys() and 'northing' in Line_info.keys():
+            outname = '{0}_{1}_{2}'.format(Line_info['parameter'], Line_info['easting'], Line_info['northing'])
             return outname
 
         elif 'filename' in Line_info.keys(): #Get data from Observed Profile
@@ -2786,11 +2796,11 @@ class MakeAutomatedReport(object):
             dates: original date if unable to convert
         '''
         if isinstance(dates, (float, int)):
-            print('Dates already in JDate form.')
+            # print('Dates already in JDate form.')
             return dates
         elif isinstance(dates, (list, np.ndarray)):
             if isinstance(dates[0], (float, int)):
-                print('Dates already in JDate form.')
+                # print('Dates already in JDate form.')
                 return dates
             jdates = np.asarray([(WF.dt_to_ord(n) - self.ModelAlt.t_offset) + 1 for n in dates])
             return jdates
@@ -2798,7 +2808,7 @@ class MakeAutomatedReport(object):
             jdate = (WF.dt_to_ord(dates) - self.ModelAlt.t_offset) + 1
             return jdate
         else:
-            print('Unable to convert type {0} to JDates'.format(type(dates)))
+            # print('Unable to convert type {0} to JDates'.format(type(dates)))
             return dates
 
     def JDateToDatetime(self, dates):
@@ -2814,11 +2824,11 @@ class MakeAutomatedReport(object):
         first_year_Date = dt.datetime(self.ModelAlt.dt_dates[0].year, 1, 1, 0, 0)
 
         if isinstance(dates, dt.datetime):
-            print('Dates already in Datetime form.')
+            # print('Dates already in Datetime form.')
             return dates
         elif isinstance(dates, (list, np.ndarray)):
             if isinstance(dates[0], dt.datetime):
-                print('Dates already in Datetime form.')
+                # print('Dates already in Datetime form.')
                 return dates
             dtimes = np.asarray([first_year_Date + dt.timedelta(days=n) for n in dates])
             return dtimes
@@ -2826,7 +2836,7 @@ class MakeAutomatedReport(object):
             dtime = first_year_Date + dt.timedelta(days=dates)
             return dtime
         else:
-            print('Unable to convert type {0} to datetime'.format(type(dates)))
+            # print('Unable to convert type {0} to datetime'.format(type(dates)))
             return dates
 
     def pickByParameter(self, values, line):
@@ -2887,17 +2897,6 @@ class MakeAutomatedReport(object):
             new_units: new converted units if successful
         '''
 
-        english_units = {'m3/s': 'cfs',
-                         'm': 'ft',
-                         'm3': 'af',
-                         'c': 'f'}
-        metric_units = {v: k for k, v in english_units.items()}
-
-        if units == None:
-            return values, units
-
-        units = self.translateUnits(units)
-
         #Following is the SOURCE units, then the conversion to units listed above
         conversion = {'m3/s': 35.314666213,
                       'cfs': 0.0283168469997284,
@@ -2905,6 +2904,15 @@ class MakeAutomatedReport(object):
                       'ft': 0.3048,
                       'm3': 0.000810714,
                       'af': 1233.48}
+
+        units = self.translateUnits(units)
+
+        english_units = {self.units[key]['metric']: self.units[key]['english'] for key in self.units.keys()}
+        metric_units = {v: k for k, v in english_units.items()}
+
+        if units == None:
+            print('Units undefined.')
+            return values, units
 
         if target_unitsystem.lower() == 'english':
             if units.lower() in english_units.keys():
@@ -2931,6 +2939,10 @@ class MakeAutomatedReport(object):
         else:
             print('Target Unit System undefined.', target_unitsystem)
             print('Try english or metric')
+            return values, units
+
+        if units == new_units:
+            print('data already in target unit system.')
             return values, units
 
         if units.lower() in ['c', 'f']:
@@ -3196,7 +3208,6 @@ class MakeAutomatedReport(object):
 
 
 if __name__ == '__main__':
-    print('SCRIPT START.')
     rundir = sys.argv[0]
     simInfoFile = sys.argv[1]
     # import cProfile

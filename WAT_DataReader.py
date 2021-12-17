@@ -225,17 +225,27 @@ def ReadTextProfile(observed_data_filename, timestamps):
                 d_profile.append(float(sline[2]))
             hold_dt = dt_tmp
 
+    if len(t_profile) != 0 and len(wt_profile) != 0 and len(d_profile) != 0:
+        t.append(np.array(t_profile))
+        wt.append(np.array(wt_profile))
+        d.append(np.array(d_profile))
+
     cti = getClosestTime(timestamps, [n[0] for n in t])
     wtn = []
     dn = []
-    for i in cti:
+    ts = []
+
+    for ci, i in enumerate(cti):
         if i != None:
             wtn.append(wt[i])
             dn.append(d[i])
+            ts.append(timestamps[ci])
         else:
             wtn.append([])
             dn.append([])
-    return np.asarray(wtn, dtype=object), np.asarray(dn, dtype=object)
+            ts.append(timestamps[ci])
+
+    return np.asarray(wtn, dtype=object), np.asarray(dn, dtype=object), np.asarray(ts)
 
 def getTextProfileDates(observed_data_filename, starttime, endtime):
     '''
@@ -273,7 +283,8 @@ def getClosestTime(timestamps, dates):
     cdi = [] #closest date index
     for timestamp in timestamps:
         closestDateidx = None
-        closestDateDist = 9999999999999999999999 #seconds, so this needs to be sorta big.
+        # closestDateDist = 9999999999999999999999 #seconds, so this needs to be sorta big.
+        closestDateDist = 86400 #1 day in seconds
         for i, date in enumerate(dates):
             timedelt = abs((timestamp-date).total_seconds())
             if timedelt < closestDateDist:
@@ -921,16 +932,18 @@ class ResSim_Results(object):
             vals = WF.calc_computed_dosat(vt, vdo)
         self.vals = vals
 
-    def readTimeseries(self, metric, xy):
+    def readTimeSeries(self, metric, x, y):
         '''
         Gets Time series values from Ressim H5 files.
         :param metric: metric of data
-        :param xy: XY coordinates of the observed data to be passed into self.find_computed_station_cell(xy) to find
+        :param x: X coordinate of the observed data to be passed into self.find_computed_station_cell(xy) to find
+                    location of modeled data
+        :param y: Y coordinate of the observed data to be passed into self.find_computed_station_cell(xy) to find
                     location of modeled data
         :return: times and values arrays for selected metric and time window
         '''
 
-        i, subdomain_name = self.find_computed_station_cell(xy)
+        i, subdomain_name = self.find_computed_station_cell(x, y)
 
         if metric.lower() == 'flow':
             dataset_name = 'Cell flow'
@@ -967,7 +980,6 @@ class ResSim_Results(object):
             self.load_computed_time()
         istart = 0
         iend = -1
-
         return self.t_computed[istart:iend], v[istart:iend]
 
     def readModelTimeseriesData(self, data, metric):
@@ -983,7 +995,7 @@ class ResSim_Results(object):
         dates, vals = self.get_Timeseries(metric, xy=[x, y])
         return dates, vals
 
-    def find_computed_station_cell(self, xy):
+    def find_computed_station_cell(self, easting, northing):
         '''
         finds subdomains that are closest to observed station coordinates
         TODO: add some kind of tolerance or max distance?
@@ -991,8 +1003,7 @@ class ResSim_Results(object):
         :return: cell index and subdomain information closest to observed data
         '''
 
-        easting = xy[0]
-        northing = xy[1]
+
         nearest_dist = 1e6
         for subdomain, sd_data in self.subdomains.items():
             x = sd_data['x']

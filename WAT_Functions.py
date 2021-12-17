@@ -151,8 +151,8 @@ def get_idx_for_time(time_Array, t_in, offset):
     timestep = np.where((np.abs(time_Array - ttmp) - min_diff) < tol)[0][0]
     if min_diff > 1.:
         print('nearest time step > 1 day away')
-        print('t_in:', t_in)
-        print('ttmp:', ttmp)
+        # print('t_in:', t_in)
+        # print('ttmp:', ttmp)
         # print('Available times:', [n for n in time_Array])
         return -1
     return timestep
@@ -416,9 +416,6 @@ def convert_obs_depths(obs_depths, model_elevs):
     '''
 
     obs_elev = []
-    print('BEN STOP HERE')
-    print('Num obs depths:', len(obs_depths))
-    print('Num model_elevs:', len(model_elevs))
     for i, d in enumerate(obs_depths):
         e = []
         modeled_elevs = model_elevs[i]
@@ -430,7 +427,6 @@ def convert_obs_depths(obs_depths, model_elevs):
             for depth in d:
                 e.append(topwater_elev - depth)
             obs_elev.append(np.asarray(e))
-    print('returning {0} profiles'.format(len(obs_elev)))
     return obs_elev
 
 def convertTempUnits(values, units):
