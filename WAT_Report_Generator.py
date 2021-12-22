@@ -230,27 +230,20 @@ class MakeAutomatedReport(object):
 
         fig = plt.figure(figsize=(12, 6))
         ax = fig.add_subplot()
-        param_count = {}
         unitslist = []
         for line in object_settings['lines']:
-            if 'parameter' in line.keys():
-                param = line['parameter']
-            else:
-                param = None
-            if param not in param_count.keys():
-                param_count[param] = 0
-            else:
-                param_count[param] += 1
-            i = param_count[param]
+
+            parameter, object_settings['param_count'] = self.getParameterCount(line, object_settings)
+            i = object_settings['param_count'][parameter]
 
             line['logoutputfilename'] = self.buildFileName(line)
 
             dates, values, units = self.getTimeSeries(line)
 
             if units == None:
-                if param != None:
+                if parameter != None:
                     try:
-                        units = self.units[param.lower()]
+                        units = self.units[parameter.lower()]
                     except KeyError:
                         units = None
 
@@ -279,9 +272,7 @@ class MakeAutomatedReport(object):
             if units != '' and units != None:
                 unitslist.append(units)
 
-
-
-            line_settings = self.getLineDefaultSettings(line, param, i)
+            line_settings = self.getLineDefaultSettings(line, parameter, i)
 
             if 'zorder' not in line_settings.keys():
                 line_settings['zorder'] = 4
@@ -326,6 +317,7 @@ class MakeAutomatedReport(object):
                               'logoutputfilename': line['logoutputfilename']
                               },
                              isdata=True)
+
         object_settings['units_list'] = unitslist
         plotunits = self.getPlotUnits(object_settings)
         object_settings = self.updateFlaggedValues(object_settings, '%%units%%', plotunits)
@@ -705,61 +697,18 @@ class MakeAutomatedReport(object):
 
         default_settings = self.load_defaultPlotObject('errorstatisticstable')
         object_settings = self.replaceDefaults(default_settings, object_settings)
-        datapaths = object_settings['datapaths']
 
-        years = self.years
+        object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = self.getPlotYears(object_settings)
 
-        split_by_year = False
-        if 'splitbyyear' in object_settings.keys():
-            if object_settings['splitbyyear'].lower() == 'true':
-                split_by_year = True
-        if not split_by_year:
-            years = [self.years_str]
+        object_settings['unitslist'] = []
 
-        data = {}
-        unitslist = []
-        for dp in datapaths:
-            dp['logoutputfilename'] = self.buildFileName(dp)
-            dates, values, units = self.getTimeSeries(dp)
+        object_settings['data'], object_settings['units_list'] = self.getTableData(object_settings)
 
-            if units == None:
-                if 'parameter' in dp.keys():
-                    try:
-                        units = self.units[dp['parameter'].lower()]
-                    except KeyError:
-                        units = None
-
-            if isinstance(units, dict):
-                if 'unitsystem' in object_settings.keys():
-                    units = units[object_settings['unitsystem'].lower()]
-                else:
-                    units = None
-
-            if 'unitsystem' in object_settings.keys():
-                values, units = self.convertUnitSystem(values, units, object_settings['unitsystem'])
-
-            if 'filterbylimits' not in dp.keys():
-                dp['filterbylimits'] = 'true' #set default
-
-            if dp['filterbylimits'].lower() == 'true':
-                if 'xlims' in object_settings.keys():
-                    dates, values = self.limitXdata(dates, values, object_settings['xlims'])
-                if 'ylims' in object_settings.keys():
-                    dates, values = self.limitYdata(dates, values, object_settings['ylims'])
-
-            if units != None:
-                unitslist.append(units)
-
-            data[dp['flag']] = {'dates': dates,
-                                'values': values,
-                                'units': units,
-                                'logoutputfilename': dp['logoutputfilename']}
-        object_settings['units_list'] = unitslist
         plotunits = self.getPlotUnits(object_settings)
         object_settings = self.updateFlaggedValues(object_settings, '%%units%%', plotunits)
 
-        headings = self.buildHeadersByYear(object_settings, years, split_by_year)
-        rows = self.buildRowsByYear(object_settings, years, split_by_year)
+        headings = self.buildHeadersByYear(object_settings, object_settings['years'], object_settings['split_by_year'])
+        rows = self.buildRowsByYear(object_settings, object_settings['years'], object_settings['split_by_year'])
 
         if 'description' in object_settings.keys():
             desc = object_settings['description']
@@ -776,7 +725,7 @@ class MakeAutomatedReport(object):
                 rowname = s_row[0]
                 row_val = s_row[i+1]
                 if '%%' in row_val:
-                    rowdata, sr_month = self.getStatsLineData(row_val, data, year=year)
+                    rowdata, sr_month = self.getStatsLineData(row_val, object_settings['data'], year=year)
                     row_val, stat = self.getStatsLine(row_val, rowdata)
 
                     data_start_date, data_end_date = self.getTableDates(year, object_settings)
@@ -788,7 +737,7 @@ class MakeAutomatedReport(object):
                                       'units': plotunits,
                                       'value_start_date': self.translateDateFormat(data_start_date, 'datetime', ''),
                                       'value_end_date': self.translateDateFormat(data_end_date, 'datetime', ''),
-                                      'logoutputfilename': ', '.join([data[flag]['logoutputfilename'] for flag in data])
+                                      'logoutputfilename': ', '.join([object_settings['data'][flag]['logoutputfilename'] for flag in object_settings['data']])
                                       },
                                      isdata=True)
 
@@ -806,64 +755,17 @@ class MakeAutomatedReport(object):
 
         default_settings = self.load_defaultPlotObject('monthlystatisticstable')
         object_settings = self.replaceDefaults(default_settings, object_settings)
-        datapaths = object_settings['datapaths']
+        object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = self.getPlotYears(object_settings)
 
-        years = self.years
+        object_settings['unitslist'] = []
 
-        split_by_year = False
-        if 'splitbyyear' in object_settings.keys():
-            if object_settings['splitbyyear'].lower() == 'true':
-                split_by_year = True
-        if not split_by_year:
-            if len(years) == 1:
-                years = [str(n) for n in years]
-            else:
-                years = ['{0}-{1}'.format(years[0], years[-1])]
+        object_settings['data'], object_settings['units_list'] = self.getTableData(object_settings)
 
-        headings = self.buildHeadersByYear(object_settings, years, split_by_year)
-        rows = self.buildRowsByYear(object_settings, years, split_by_year)
-
-        data = {}
-        unitslist = []
-        for dp in datapaths:
-            dp['logoutputfilename'] = self.buildFileName(dp)
-            dates, values, units = self.getTimeSeries(dp)
-
-            if units == None:
-                if 'parameter' in dp.keys():
-                    try:
-                        units = self.units[dp['parameter'].lower()]
-                    except KeyError:
-                        units = None
-
-            if isinstance(units, dict):
-                if 'unitsystem' in object_settings.keys():
-                    units = units[object_settings['unitsystem'].lower()]
-                else:
-                    units = None
-
-            if 'unitsystem' in object_settings.keys():
-                values, units = self.convertUnitSystem(values, units, object_settings['unitsystem'])
-
-            if units != None:
-                unitslist.append(units)
-
-            if 'filterbylimits' not in dp.keys():
-                dp['filterbylimits'] = 'true' #set default
-
-            if dp['filterbylimits'].lower() == 'true':
-                if 'xlims' in object_settings.keys():
-                    dates, values = self.limitXdata(dates, values, object_settings['xlims'])
-                if 'ylims' in object_settings.keys():
-                    dates, values = self.limitYdata(dates, values, object_settings['ylims'])
-
-            data[dp['flag']] = {'dates': dates,
-                                'values': values,
-                                'units': units,
-                                'logoutputfilename': dp['logoutputfilename']}
-        object_settings['units_list'] = unitslist
         plotunits = self.getPlotUnits(object_settings)
         object_settings = self.updateFlaggedValues(object_settings, '%%units%%', plotunits)
+
+        headings = self.buildHeadersByYear(object_settings, object_settings['years'], object_settings['split_by_year'])
+        rows = self.buildRowsByYear(object_settings, object_settings['years'], object_settings['split_by_year'])
 
         self.XML.writeTableStart(object_settings['description'], 'Month')
         for i, yearheader in enumerate(headings):
@@ -875,7 +777,7 @@ class MakeAutomatedReport(object):
                 rowname = s_row[0]
                 row_val = s_row[i+1]
                 if '%%' in row_val:
-                    rowdata, sr_month = self.getStatsLineData(row_val, data, year=year)
+                    rowdata, sr_month = self.getStatsLineData(row_val, object_settings['data'], year=year)
 
                     row_val, stat = self.getStatsLine(row_val, rowdata)
 
@@ -888,7 +790,7 @@ class MakeAutomatedReport(object):
                                       'function': stat,
                                       'value_start_date': self.translateDateFormat(data_start_date, 'datetime', ''),
                                       'value_end_date': self.translateDateFormat(data_end_date, 'datetime', ''),
-                                      'logoutputfilename': ', '.join([data[flag]['logoutputfilename'] for flag in data])
+                                      'logoutputfilename': ', '.join([object_settings['data'][flag]['logoutputfilename'] for flag in object_settings['data']])
                                       },
                                      isdata=True)
 
@@ -1831,6 +1733,36 @@ class MakeAutomatedReport(object):
 
         return start_date, end_date
 
+    def getTableData(self, object_settings):
+        data = {}
+        units_list = []
+        for dp in object_settings['datapaths']:
+            dp['logoutputfilename'] = self.buildFileName(dp)
+            dates, values, units = self.getTimeSeries(dp)
+
+            units = self.configureUnits(object_settings, dp, units)
+
+            if 'unitsystem' in object_settings.keys():
+                values, units = self.convertUnitSystem(values, units, object_settings['unitsystem'])
+
+            if 'filterbylimits' not in dp.keys():
+                dp['filterbylimits'] = 'true' #set default
+
+            if dp['filterbylimits'].lower() == 'true':
+                if 'xlims' in object_settings.keys():
+                    dates, values = self.limitXdata(dates, values, object_settings['xlims'])
+                if 'ylims' in object_settings.keys():
+                    dates, values = self.limitYdata(dates, values, object_settings['ylims'])
+
+            if units != None:
+                units_list.append(units)
+
+            data[dp['flag']] = {'dates': dates,
+                                'values': values,
+                                'units': units,
+                                'logoutputfilename': dp['logoutputfilename']}
+        return data, units_list
+
     def getListItems(self, listvals):
         '''
         recursive function to convert lists of lists into single lists for logging
@@ -1933,6 +1865,23 @@ class MakeAutomatedReport(object):
             years = ['ALLYEARS']
 
         return split_by_year, years, yearstr
+
+    def getParameterCount(self, line, object_settings):
+        if 'param_count' not in object_settings.keys():
+            param_count = {}
+        else:
+            param_count = object_settings['param_count']
+
+        if 'parameter' in line.keys():
+            param = line['parameter']
+        else:
+            param = None
+        if param not in param_count.keys():
+            param_count[param] = 0
+        else:
+            param_count[param] += 1
+
+        return param, param_count
 
     def replaceDefaults(self, default_settings, object_settings):
         '''
@@ -3400,6 +3349,21 @@ class MakeAutomatedReport(object):
                                              'depths': copy.deepcopy(depths),
                                              'units': object_settings['plot_units'],
                                              'isprofile': True}
+
+    def configureUnits(self, object_settings, line, units):
+        if units == None:
+            if 'parameter' in line.keys():
+                try:
+                    units = self.units[line['parameter'].lower()]
+                except KeyError:
+                    units = None
+
+        if isinstance(units, dict):
+            if 'unitsystem' in object_settings.keys():
+                units = units[object_settings['unitsystem'].lower()]
+            else:
+                units = None
+        return units
 
 if __name__ == '__main__':
     rundir = sys.argv[0]
