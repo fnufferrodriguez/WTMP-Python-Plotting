@@ -574,9 +574,7 @@ class W2_Results(object):
         elevations = []
         depths = []
         times = []
-        print('UNIQUE TIMES:', unique_times)
         for t, time in enumerate(unique_times):
-            print(time)
             e = []
             timestep = WF.get_idx_for_time(self.jd_dates, time, self.t_offset)
             if timestep > -1:
@@ -590,9 +588,7 @@ class W2_Results(object):
             elevations.append(np.asarray(e))
             depths.append(self.layers * 3.28)
             # times.append(times)
-        print('Done with times')
         select_wt, elevations, depths = self.matchProfileLengths(select_wt, elevations, depths)
-        print('returning')
         # return select_wt, elevations, np.asarray(depths), np.asarray(times)
 
         return select_wt, elevations, depths, np.asarray(times)

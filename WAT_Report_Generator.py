@@ -19,6 +19,7 @@ import dateutil.parser
 import re
 from collections import Counter
 import shutil
+from scipy import interpolate
 
 import WAT_DataReader as WDR
 import WAT_Functions as WF
@@ -278,6 +279,8 @@ class MakeAutomatedReport(object):
             if units != '' and units != None:
                 unitslist.append(units)
 
+
+
             line_settings = self.getLineDefaultSettings(line, param, i)
 
             if 'zorder' not in line_settings.keys():
@@ -323,8 +326,8 @@ class MakeAutomatedReport(object):
                               'logoutputfilename': line['logoutputfilename']
                               },
                              isdata=True)
-
-        plotunits = self.getPlotUnits(unitslist, object_settings)
+        object_settings['units_list'] = unitslist
+        plotunits = self.getPlotUnits(object_settings)
         object_settings = self.updateFlaggedValues(object_settings, '%%units%%', plotunits)
 
         if 'title' in object_settings.keys():
@@ -408,6 +411,67 @@ class MakeAutomatedReport(object):
 
         self.XML.writeTimeSeriesPlot(os.path.basename(figname), object_settings['description'])
 
+    def MakeProfileStatisticsTable(self, object_settings):
+        default_settings = self.load_defaultPlotObject('profilestatisticstable')
+        object_settings = self.replaceDefaults(default_settings, object_settings)
+
+        ################# Get timestamps #################
+        object_settings['datessource_flag'] = self.getDateSourceFlag(object_settings)
+
+        object_settings['timestamps'] = self.getProfileTimestamps(object_settings)
+
+        ################# Get units #################
+        object_settings['plot_parameter'] = self.getPlotParameter(object_settings)
+
+        ################# Get data #################
+        object_settings['linedata'], object_settings['units_list'] = self.getProfileLines(object_settings)
+
+        ################# Get plot units #################
+        object_settings['plot_units'] = self.getPlotUnits(object_settings)
+        object_settings = self.updateFlaggedValues(object_settings, '%%units%%', object_settings['plot_units'])
+
+        object_settings['resolution'] = self.getProfileInterpResolution(object_settings)
+
+        object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = self.getPlotYears(object_settings)
+
+        #start data loop
+        for yi, year in enumerate(object_settings['years']):
+            if object_settings['split_by_year']:
+                yearstr = str(year)
+            else:
+                yearstr = object_settings['yearstr']
+
+            object_desc = self.updateFlaggedValues(object_settings['description'], '%%year%%', yearstr)
+            self.XML.writeTableStart(object_desc, 'Statistics')
+            yrheaders = self.buildHeadersByTimestamps(object_settings['timestamps'], year=year)
+
+            for i, header in enumerate(yrheaders):
+                frmt_rows = []
+                for row in object_settings['rows']:
+                    s_row = row.split('|')
+                    rowname = s_row[0]
+                    row_val = s_row[1]
+                    if '%%' in row_val:
+                        data = self.formatStatsProfileLineData(row, object_settings['linedata'],
+                                                               object_settings['resolution'], i)
+                        row_val, stat = self.getStatsLine(row_val, data)
+                        self.AddLogEntry({'type': 'ProfileTableStatistic',
+                                          'name': ' '.join([self.ChapterRegion, header, stat]),
+                                          'description': object_desc,
+                                          'value': row_val,
+                                          'function': stat,
+                                          'units': object_settings['plot_units'],
+                                          'value_start_date': header,
+                                          'value_end_date': header,
+                                          'logoutputfilename': ', '.join([object_settings['linedata'][flag]['logoutputfilename'] for flag in object_settings['linedata']])
+                                          },
+                                         isdata=True)
+                    header = '' if header == None else header
+                    frmt_rows.append('{0}|{1}'.format(rowname, row_val))
+                self.XML.writeTableColumn(header, frmt_rows)
+            self.XML.writeTableEnd()
+
+
     def MakeProfilePlot(self, object_settings):
         '''
         takes in object settings to build profile plot and write to XML
@@ -421,119 +485,37 @@ class MakeAutomatedReport(object):
         obj_desc = self.updateFlaggedValues(object_settings['description'], '%%year%%', self.years_str)
         self.XML.writeProfilePlotStart(obj_desc)
 
-        linedata = {}
         ################# Get timestamps #################
-        timestamps = []
-        if 'datessource' in object_settings.keys():
-            datessource_flag = object_settings['datessource'] #determine how you want to get dates? either flag or list
-        else:
-            datessource_flag = [] #let it make timesteps
-
-        if isinstance(datessource_flag, str):
-            for line in object_settings['lines']:
-                if line['flag'] == datessource_flag:
-                    timestamps = self.getProfileDates(line)
-        elif isinstance(datessource_flag, dict): #single date instance..
-            timestamps = object_settings['datessource']['date']
-        elif isinstance(datessource_flag, list):
-            timestamps = []
-            for d in object_settings['datessource']:
-                dfrmt = self.translateDateFormat(d, 'datetime', None)
-                if dfrmt != None:
-                    timestamps.append(dfrmt)
-                else:
-                    print('Invalid Timestamp', d)
-
-        if len(timestamps) == 0:
-            #if something fails, or not implemented, or theres just no dates in the window, make some up
-            print('No TimeSteps found.. Making regular timesteps..')
-            timestamps = self.makeRegularTimesteps(days=15)
+        object_settings['datessource_flag'] = self.getDateSourceFlag(object_settings)
+        object_settings['timestamps'] = self.getProfileTimestamps(object_settings)
 
         ################# Get units #################
-        if 'parameter' in object_settings.keys():
-            plot_parameter = object_settings['parameter']
-        else:
-            params = []
-            for line in object_settings['lines']:
-                if 'parameter' in line.keys():
-                    params.append(line['parameter'])
-            if len(list(set(params))) == 1:
-                plot_parameter = params[0]
-            else:
-                plot_parameter = None
-
-        if 'units' in object_settings.keys():
-            plot_units = object_settings['units'].lower()
-        elif plot_parameter != None:
-            plot_units = self.units[plot_parameter.lower()]
-            if isinstance(plot_units, dict):
-                if 'unitsystem' in object_settings.keys():
-                    plot_units = plot_units[object_settings['unitsystem'].lower()]
-                else:
-                    plot_units = ''
-        else:
-            plot_units = ''
-        object_settings = self.updateFlaggedValues(object_settings, '%%units%%', plot_units)
+        object_settings['plot_parameter'] = self.getPlotParameter(object_settings)
 
         ################# Get data #################
-        #do now incase no elevs, so we can convert
-        for line in object_settings['lines']:
-            vals, elevations, depths, times, flag = self.getProfileData(line, timestamps) #Test this speed for grabbing all profiles and then choosing
-            # line['logoutputfilename'] = self.buildFileName(line)
-            datamem_key = self.buildDataMemoryKey(line)
-            linedata[flag] = {'values': vals,
-                              'elevations': elevations,
-                              'depths': depths,
-                              'times': times,
-                              'logoutputfilename': datamem_key}
+        object_settings['linedata'], object_settings['units_list'] = self.getProfileLines(object_settings)
+
+        ################# Get plot units #################
+        object_settings['plot_units'] = self.getPlotUnits(object_settings)
+        object_settings = self.updateFlaggedValues(object_settings, '%%units%%', object_settings['plot_units'])
 
         ################ convert Elevs ################
-        elev_flag = 'NOVALID'
-        if object_settings['usedepth'].lower() == 'false':
-            for ld in linedata.keys():
-                if linedata[ld]['elevations'] == []:
-                    noelev_flag = ld
-                    for old in linedata.keys():
-                        if len(linedata[old]['elevations']) > 0:
-                            elev_flag = old
-                            break
+        object_settings = self.convertDepthsToElevations(object_settings)
 
-                    if elev_flag != 'NOVALID':
-                        linedata[noelev_flag]['elevations'] = WF.convert_obs_depths(linedata[noelev_flag]['depths'],
-                                                                                    linedata[elev_flag]['elevations'])
-                    else:
-                        object_settings['usedepth'] = 'true'
+        self.commitProfileDataToMemory(object_settings)
 
-        for line in linedata.keys():
-            values = linedata[line]['values']
-            depths = linedata[line]['depths']
-            elevations = linedata[line]['elevations']
-            datamem_key = linedata[line]['logoutputfilename']
-            self.Data_Memory[datamem_key] = {'times': copy.deepcopy(timestamps),
-                                             'values': copy.deepcopy(values),
-                                             'elevations': copy.deepcopy(elevations),
-                                             'depths': copy.deepcopy(depths),
-                                             'units': plot_units,
-                                             'isprofile': True}
-
-
-        split_by_year = False
-        if 'splitbyyear' in object_settings.keys():
-            if object_settings['splitbyyear'].lower() == 'true':
-                split_by_year = True
-                years = self.years
-        if not split_by_year:
-            yearstr = self.years_str
-            years = ['ALLYEARS']
+        object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = self.getPlotYears(object_settings)
 
         ################ Build Plots ################
-        for yi, year in enumerate(years):
-            if split_by_year:
+        for yi, year in enumerate(object_settings['years']):
+            if object_settings['split_by_year']:
                 yearstr = str(year)
+            else:
+                yearstr = object_settings['yearstr']
 
-            t_stmps = self.filterTimestepByYear(timestamps, year)
-            prof_indices = [np.where(timestamps == n)[0][0] for n in t_stmps]
+            t_stmps = self.filterTimestepByYear(object_settings['timestamps'], year)
 
+            prof_indices = [np.where(object_settings['timestamps'] == n)[0][0] for n in t_stmps]
             n = int(object_settings['profilesperrow']) * int(object_settings['rowsperpage']) #Get number of plots on page
             page_indices = [prof_indices[i * n:(i + 1) * n] for i in range((len(prof_indices) + n - 1) // n)]
             cur_obj_settings = copy.deepcopy(object_settings)
@@ -552,36 +534,36 @@ class MakeAutomatedReport(object):
                     if object_settings['usedepth'].lower() == 'true':
                         ax.invert_yaxis()
 
-                    for li, line in enumerate(linedata.keys()):
+                    for li, line in enumerate(object_settings['linedata'].keys()):
 
                         try:
-                            values = linedata[line]['values'][j]
+                            values = object_settings['linedata'][line]['values'][j]
                             if len(values) == 0:
-                                print('No values for {0} on {1}'.format(line, timestamps[j]))
+                                print('No values for {0} on {1}'.format(line, object_settings['timestamps'][j]))
                                 continue
                             msk = np.where(~np.isnan(values))
                             values = values[msk]
                         except IndexError:
-                            print('No values for {0} on {1}'.format(line, timestamps[j]))
+                            print('No values for {0} on {1}'.format(line, object_settings['timestamps'][j]))
                             continue
 
                         try:
                             if object_settings['usedepth'].lower() == 'true':
-                                levels = linedata[line]['depths'][j][msk]
+                                levels = object_settings['linedata'][line]['depths'][j][msk]
                             else:
-                                levels = linedata[line]['elevations'][j][msk]
+                                levels = object_settings['linedata'][line]['elevations'][j][msk]
                             if not WF.check_data(levels):
-                                print('Non Viable depths/elevations for {0} on {1}'.format(line, timestamps[j]))
+                                print('Non Viable depths/elevations for {0} on {1}'.format(line, object_settings['timestamps'][j]))
                                 continue
                         except IndexError:
-                            print('Non Viable depths/elevations for {0} on {1}'.format(line, timestamps[j]))
+                            print('Non Viable depths/elevations for {0} on {1}'.format(line, object_settings['timestamps'][j]))
                             continue
 
                         if not WF.check_data(values):
                             continue
 
                         current_ls = self.getLineSettings(object_settings['lines'], line)
-                        current_ls = self.getLineDefaultSettings(current_ls, plot_parameter, li)
+                        current_ls = self.getLineDefaultSettings(current_ls, object_settings['plot_parameter'], li)
 
                         if current_ls['drawline'].lower() == 'true' and current_ls['drawpoints'].lower() == 'true':
                             ax.plot(values, levels, label=current_ls['label'], c=current_ls['linecolor'],
@@ -601,7 +583,8 @@ class MakeAutomatedReport(object):
                                        edgecolor=current_ls['pointlinecolor'], s=float(current_ls['symbolsize']),
                                        label=current_ls['label'], zorder=int(current_ls['zorder']))
 
-                    show_legend, show_xlabel, show_ylabel = self.getPlotLabelMasks(i, len(pgi), subplot_cols) #TODO: change to not care about show_legend..
+                    # show_legend, show_xlabel, show_ylabel = self.getPlotLabelMasks(i, len(pgi), subplot_cols) #TODO: change to not care about show_legend..
+                    show_xlabel, show_ylabel = self.getPlotLabelMasks(i, len(pgi), subplot_cols) #TODO: change to not care about show_legend..
 
                     if current_object_settings['gridlines'].lower() == 'true':
                         ax.grid(zorder=0)
@@ -653,7 +636,7 @@ class MakeAutomatedReport(object):
                         yticksize = 10
                     ax.tick_params(axis='y', labelsize=yticksize)
 
-                    ttl_str = timestamps[j].strftime('%d %b %Y')
+                    ttl_str = object_settings['timestamps'][j].strftime('%d %b %Y')
                     xbufr = 0.05
                     ybufr = 0.05
                     xl = ax.get_xlim()
@@ -678,7 +661,7 @@ class MakeAutomatedReport(object):
 
                             ncolumns = 3
 
-                            n_legends_row = np.ceil(len(linedata.keys()) / ncolumns) * .65
+                            n_legends_row = np.ceil(len(object_settings['linedata'].keys()) / ncolumns) * .65
                             if n_legends_row < 1:
                                 n_legends_row = 1
                             plt.subplots_adjust(bottom=(.3/n_nrow_active)*n_legends_row)
@@ -686,7 +669,9 @@ class MakeAutomatedReport(object):
                                        bbox_transform=fig.transFigure, ncol=ncolumns)
 
                 # plt.tight_layout()
-                figname = 'ProfilePlot_{0}_{1}_{2}_{3}_{4}.png'.format(self.ChapterName, yearstr, plot_parameter, self.plugin, page_i)
+                figname = 'ProfilePlot_{0}_{1}_{2}_{3}_{4}.png'.format(self.ChapterName, yearstr,
+                                                                       object_settings['plot_parameter'], self.plugin,
+                                                                       page_i)
 
                 # plt.savefig(os.path.join(self.images_path, figname), dpi=600)
                 plt.savefig(os.path.join(self.images_path, figname))
@@ -697,13 +682,15 @@ class MakeAutomatedReport(object):
                 description = '{0}: {1} of {2}'.format(cur_obj_settings['description'], page_i+1, len(page_indices))
                 self.XML.writeProfilePlotFigure(figname, description)
 
-                self.AddLogEntry({'type': flag+'_ProfilePlot',
+                self.AddLogEntry({'type': 'ProfilePlot',
                                   'name': self.ChapterRegion,
                                   'description': description,
-                                  'units': plot_units,
-                                  'value_start_date': self.translateDateFormat(timestamps[pgi[0]], 'datetime', '').strftime('%d %b %Y'),
-                                  'value_end_date': self.translateDateFormat(timestamps[pgi[-1]], 'datetime', '').strftime('%d %b %Y'),
-                                  'logoutputfilename': ', '.join([linedata[flag]['logoutputfilename'] for flag in linedata])
+                                  'units': object_settings['plot_units'],
+                                  'value_start_date': self.translateDateFormat(object_settings['timestamps'][pgi[0]],
+                                                                               'datetime', '').strftime('%d %b %Y'),
+                                  'value_end_date': self.translateDateFormat(object_settings['timestamps'][pgi[-1]],
+                                                                             'datetime', '').strftime('%d %b %Y'),
+                                  'logoutputfilename': ', '.join([object_settings['linedata'][flag]['logoutputfilename'] for flag in object_settings['linedata']])
                                   },
                                  isdata=True)
 
@@ -767,8 +754,8 @@ class MakeAutomatedReport(object):
                                 'values': values,
                                 'units': units,
                                 'logoutputfilename': dp['logoutputfilename']}
-
-        plotunits = self.getPlotUnits(unitslist, object_settings)
+        object_settings['units_list'] = unitslist
+        plotunits = self.getPlotUnits(object_settings)
         object_settings = self.updateFlaggedValues(object_settings, '%%units%%', plotunits)
 
         headings = self.buildHeadersByYear(object_settings, years, split_by_year)
@@ -789,7 +776,8 @@ class MakeAutomatedReport(object):
                 rowname = s_row[0]
                 row_val = s_row[i+1]
                 if '%%' in row_val:
-                    row_val, stat, _ = self.formatStatsLine(row_val, data, year=year)
+                    rowdata, sr_month = self.getStatsLineData(row_val, data, year=year)
+                    row_val, stat = self.getStatsLine(row_val, rowdata)
 
                     data_start_date, data_end_date = self.getTableDates(year, object_settings)
                     self.AddLogEntry({'type': 'Statistic',
@@ -873,8 +861,8 @@ class MakeAutomatedReport(object):
                                 'values': values,
                                 'units': units,
                                 'logoutputfilename': dp['logoutputfilename']}
-
-        plotunits = self.getPlotUnits(unitslist, object_settings)
+        object_settings['units_list'] = unitslist
+        plotunits = self.getPlotUnits(object_settings)
         object_settings = self.updateFlaggedValues(object_settings, '%%units%%', plotunits)
 
         self.XML.writeTableStart(object_settings['description'], 'Month')
@@ -887,9 +875,11 @@ class MakeAutomatedReport(object):
                 rowname = s_row[0]
                 row_val = s_row[i+1]
                 if '%%' in row_val:
-                    row_val, stat, month = self.formatStatsLine(row_val, data, year=year)
+                    rowdata, sr_month = self.getStatsLineData(row_val, data, year=year)
 
-                    data_start_date, data_end_date = self.getTableDates(year, object_settings, month=month)
+                    row_val, stat = self.getStatsLine(row_val, rowdata)
+
+                    data_start_date, data_end_date = self.getTableDates(year, object_settings, month=sr_month)
                     self.AddLogEntry({'type': 'Statistic',
                                       'name': ' '.join([self.ChapterRegion, header, stat]),
                                       'description': object_settings['description'],
@@ -1537,10 +1527,10 @@ class MakeAutomatedReport(object):
         :return: boolean fields for plotting
         '''
 
-        if idx == cols - 1:
-            add_legend = True
-        else:
-            add_legend = False
+        # if idx == cols - 1:
+        #     add_legend = True
+        # else:
+        #     add_legend = False
         if idx >= nprofiles - cols:
             add_xlabel = True
         else:
@@ -1549,7 +1539,8 @@ class MakeAutomatedReport(object):
             add_ylabel = True
         else:
             add_ylabel = False
-        return add_legend, add_xlabel, add_ylabel
+        # return add_legend, add_xlabel, add_ylabel
+        return add_xlabel, add_ylabel
 
     def getTimeSeries(self, Line_info):
         '''
@@ -1719,6 +1710,21 @@ class MakeAutomatedReport(object):
         print('Line:', Line_info)
         return [], [], [], [], None
 
+    def getProfileLines(self, object_settings):
+        units_list = []
+        linedata = {}
+        for line in object_settings['lines']:
+            vals, elevations, depths, times, flag = self.getProfileData(line, object_settings['timestamps']) #Test this speed for grabbing all profiles and then choosing
+            datamem_key = self.buildDataMemoryKey(line)
+            if 'units' in line.keys():
+                units_list.append(line['units'])
+            linedata[flag] = {'values': vals,
+                              'elevations': elevations,
+                              'depths': depths,
+                               'times': times,
+                               'logoutputfilename': datamem_key}
+        return linedata, units_list
+
     def getProfileDates(self, Line_info):
         '''
         gets dates from observed text profiles
@@ -1733,31 +1739,32 @@ class MakeAutomatedReport(object):
         print('Illegal Dates selection. ')
         return []
 
-    def getPlotUnits(self, unitslist, object_settings):
+    def getPlotUnits(self, object_settings):
         '''
         gets units for the plot. Either looks at data already plotted units, or if there are no defined units
         in the plotted data, look for a parameter flag
-        :param unitslist: list of units plotted
         :param object_settings: dictionary with plot settings
         :return: string units value
         '''
 
-        if len(unitslist) > 0:
-            plotunits = self.getMostCommon(unitslist)
-        elif 'parameter' in object_settings.keys() and len(unitslist) == 0:
+        if len(object_settings['units_list']) > 0:
+            plotunits = self.getMostCommon(object_settings['units_list'])
+        elif 'parameter' in object_settings.keys():
             try:
                 plotunits = self.units[object_settings['parameter'].lower()]
                 if isinstance(plotunits, dict):
                     if 'unitsystem' in object_settings.keys():
                         plotunits = plotunits[object_settings['unitsystem'].lower()]
                     else:
-                        plotunits = ''
+                        plotunits = plotunits['metric']
             except KeyError:
                 plotunits = ''
         else:
             print('No units defined.')
             plotunits = ''
+
         return plotunits
+
 
     def getTableDates(self, year, object_settings, month='None'):
         '''
@@ -1860,6 +1867,72 @@ class MakeAutomatedReport(object):
             elif isinstance(indict[key], (list, np.ndarray)):
                 outdict[key] = indict[key]
         return outdict
+
+    def getDateSourceFlag(self, object_settings):
+        if 'datessource' in object_settings.keys():
+            datessource_flag = object_settings['datessource'] #determine how you want to get dates? either flag or list
+        else:
+            datessource_flag = [] #let it make timesteps
+
+        return datessource_flag
+
+    def getProfileTimestamps(self, object_settings):
+        if isinstance(object_settings['datessource_flag'], str):
+            for line in object_settings['lines']:
+                if line['flag'] == object_settings['datessource_flag']:
+                    timestamps = self.getProfileDates(line)
+        elif isinstance(object_settings['datessource_flag'], dict): #single date instance..
+            timestamps = object_settings['datessource']['date']
+        elif isinstance(object_settings['datessource_flag'], list):
+            timestamps = []
+            for d in object_settings['datessource']:
+                dfrmt = self.translateDateFormat(d, 'datetime', None)
+                if dfrmt != None:
+                    timestamps.append(dfrmt)
+                else:
+                    print('Invalid Timestamp', d)
+
+        if len(timestamps) == 0:
+            #if something fails, or not implemented, or theres just no dates in the window, make some up
+            print('No TimeSteps found.. Making regular timesteps..')
+            timestamps = self.makeRegularTimesteps(days=15)
+
+        return np.asarray(timestamps)
+
+    def getPlotParameter(self, object_settings):
+        if 'parameter' in object_settings.keys():
+            plot_parameter = object_settings['parameter']
+        else:
+            params = []
+            for line in object_settings['lines']:
+                if 'parameter' in line.keys():
+                    params.append(line['parameter'])
+            if len(list(set(params))) == 1:
+                plot_parameter = params[0]
+            else:
+                plot_parameter = None
+        return plot_parameter
+
+    def getProfileInterpResolution(self, object_settings, default=30):
+        if 'resolution' in object_settings.keys():
+            resolution = object_settings['resolution']
+        else:
+            print('Resolution not defined. Setting to default values.')
+            resolution = default
+        return resolution
+
+    def getPlotYears(self, object_settings):
+        split_by_year = False
+        yearstr = ''
+        if 'splitbyyear' in object_settings.keys():
+            if object_settings['splitbyyear'].lower() == 'true':
+                split_by_year = True
+                years = self.years
+        if not split_by_year:
+            yearstr = self.years_str
+            years = ['ALLYEARS']
+
+        return split_by_year, years, yearstr
 
     def replaceDefaults(self, default_settings, object_settings):
         '''
@@ -2200,7 +2273,7 @@ class MakeAutomatedReport(object):
             print('No Xlims flag set for {0}'.format(xlims_flag))
             print('Not setting Xlims.')
 
-    def formatStatsLine(self, row, data_dict, year='ALL'):
+    def getStatsLineData(self, row, data_dict, year='ALL'):
         '''
         takes rows for tables and replaces flags with the correct data, computing stat analysis if needed
         :param row: row section string
@@ -2219,7 +2292,7 @@ class MakeAutomatedReport(object):
                 curflag = sr
                 curvalues = np.array(data[sr]['values'])
                 curdates = np.array(data[sr]['dates'])
-                flags.append(curflag)
+                flags.append(sr)
             else:
                 if '=' in sr:
                     sr_spl = sr.split('=')
@@ -2235,15 +2308,76 @@ class MakeAutomatedReport(object):
                                 print('Try using interger values or 3 letter monthly code.')
                                 print('Ex: MONTH=1 or MONTH=JAN')
                                 continue
+
                         msk = [i for i, n in enumerate(curdates) if n.month == sr_month]
                         data[curflag]['values'] = curvalues[msk]
                         data[curflag]['dates'] = curdates[msk]
+
+        popflags = []
+        for df in data.keys():
+            if df not in flags:
+                popflags.append(df)
+        for flag in popflags:
+            data.pop(flag)
 
         if year != 'ALL':
             for flag in flags:
                 msk = [i for i, n in enumerate(data[flag]['dates']) if n.year == year]
                 data[flag]['values'] = np.asarray(data[flag]['values'])[msk]
                 data[flag]['dates'] = np.asarray(data[flag]['dates'])[msk]
+
+        return data, sr_month
+
+    def formatStatsProfileLineData(self, row, data_dict, resolution, index):
+        data = copy.deepcopy(data_dict)
+        rrow = row.replace('%%', '')
+        s_row = rrow.split('.')
+        flags = []
+        out_data = {}
+        for sr in s_row:
+            if sr in data.keys():
+                flags.append(sr)
+        top = None
+        bottom = None
+        for flag in flags:
+            #get elevs
+            depths = data[flag]['depths'][index]
+            top_depth = np.min(depths)
+            bottom_depth = np.max(depths)
+
+            #find limits comparing flags so we can be sure to interpolate over the same data
+            if top == None:
+                top = top_depth
+            else:
+                if top_depth > top:
+                    top = top_depth
+
+            if bottom == None:
+                bottom = bottom_depth
+            else:
+                if bottom_depth < bottom:
+                    bottom = bottom_depth
+        #build elev profiles
+        output_interp_elevations = np.arange(top, bottom, (bottom-top)/float(resolution))
+
+        for flag in flags:
+            out_data[flag] = {}
+            #interpolate over all values and then get interp values
+            f_interp = interpolate.interp1d(data[flag]['depths'][index], data[flag]['values'][index])
+            out_data[flag]['depths'] = output_interp_elevations
+            out_data[flag]['values'] = f_interp(output_interp_elevations)
+
+        return out_data
+
+    def getStatsLine(self, row, data):
+        '''
+        takes rows for tables and replaces flags with the correct data, computing stat analysis if needed
+        :param row: row section string
+        :param data_dict: dictionary of data that could be used
+        :param year: selected year, or 'ALL'
+        :return: new row value
+        '''
+        flags = [n for n in data.keys()]
 
         if row.lower().startswith('%%meanbias'):
             out_stat = WF.meanbias(data[flags[0]], data[flags[1]])
@@ -2266,9 +2400,9 @@ class MakeAutomatedReport(object):
         else:
             if '%%' in row:
                 print('Unable to convert flag in row', row)
-            return row, '', ''
+            return row, ''
 
-        return out_stat, stat, sr_month
+        return out_stat, stat
 
     def buildRowsByYear(self, object_settings, years, split_by_year):
         '''
@@ -2431,6 +2565,26 @@ class MakeAutomatedReport(object):
 
         return 'NULL'
 
+    def buildHeadersByTimestamps(self, timestamps, year='ALLYEARS'):
+        headers = []
+        for timestamp in timestamps:
+
+            if isinstance(timestamp, dt.datetime):
+                if year != 'ALLYEARS':
+                    if year == timestamp.year:
+                        headers.append(timestamp.strftime('%d%b%Y'))
+                else:
+                    headers.append(timestamp.strftime('%d%b%Y'))
+
+            elif isinstance(timestamp, float):
+                ts_dt = self.JDateToDatetime(timestamp)
+                if year != 'ALLYEARS':
+                    if year == ts_dt.year:
+                        headers.append(str(timestamp))
+                else:
+                    headers.append(str(timestamp))
+        return headers
+
     def EqualizeLog(self):
         '''
         ensure that all arrays are the same length with a '' character
@@ -2540,6 +2694,8 @@ class MakeAutomatedReport(object):
                         self.MakeMonthlyStatisticsTable(object)
                     elif object['type'] == 'BuzzPlot':
                         self.MakeBuzzPlot(object)
+                    elif object['type'] == 'ProfileStatisticsTable':
+                        self.MakeProfileStatisticsTable(object)
                     else:
                         print('Section Type {0} not identified.'.format(section['type']))
                         print('Skipping Section..')
@@ -3066,6 +3222,13 @@ class MakeAutomatedReport(object):
                 new_list.append(item)
             return new_list
 
+        if isinstance(settings, np.ndarray):
+            new_list = []
+            for item in settings:
+                item = self.updateFlaggedValues(item, flaggedvalue, replacevalue)
+                new_list.append(item)
+            return np.asarray(new_list, dtype=settings.dtype)
+
         elif isinstance(settings, dict):
             for key in settings.keys():
                 settings[key] = self.updateFlaggedValues(settings[key], flaggedvalue, replacevalue)
@@ -3077,7 +3240,9 @@ class MakeAutomatedReport(object):
             return settings
 
         else:
-            print('Input Not recognized type', settings)
+            #this gets REALLY noisey.
+            # print('Cannot set {0}'.format(flaggedvalue))
+            # print('Input Not recognized type', settings)
             return settings
 
     def changeTimeSeriesInterval(self, times, values, Line_info):
@@ -3205,7 +3370,36 @@ class MakeAutomatedReport(object):
         # print('REVISED TIMES', [linedata[n]['times'] for n in linedata.keys()])
         return new_linedata
 
+    def convertDepthsToElevations(self, object_settings):
+        elev_flag = 'NOVALID'
+        if object_settings['usedepth'].lower() == 'false':
+            for ld in object_settings['linedata'].keys():
+                if object_settings['linedata'][ld]['elevations'] == []:
+                    noelev_flag = ld
+                    for old in object_settings['linedata'].keys():
+                        if len(object_settings['linedata'][old]['elevations']) > 0:
+                            elev_flag = old
+                            break
 
+                    if elev_flag != 'NOVALID':
+                        object_settings['linedata'][noelev_flag]['elevations'] = WF.convert_obs_depths(object_settings['linedata'][noelev_flag]['depths'],
+                                                                                                       object_settings['linedata'][elev_flag]['elevations'])
+                    else:
+                        object_settings['usedepth'] = 'true'
+        return object_settings
+
+    def commitProfileDataToMemory(self, object_settings):
+        for line in object_settings['linedata'].keys():
+            values = object_settings['linedata'][line]['values']
+            depths = object_settings['linedata'][line]['depths']
+            elevations = object_settings['linedata'][line]['elevations']
+            datamem_key = object_settings['linedata'][line]['logoutputfilename']
+            self.Data_Memory[datamem_key] = {'times': copy.deepcopy(object_settings['timestamps']),
+                                             'values': copy.deepcopy(values),
+                                             'elevations': copy.deepcopy(elevations),
+                                             'depths': copy.deepcopy(depths),
+                                             'units': object_settings['plot_units'],
+                                             'isprofile': True}
 
 if __name__ == '__main__':
     rundir = sys.argv[0]

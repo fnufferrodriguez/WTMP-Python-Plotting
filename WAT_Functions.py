@@ -204,14 +204,31 @@ def matchData(data1, data2):
     :return: Two dictionaries containing dates and values flags (data1 and data2)
     '''
 
+    if 'dates' in data1.keys() and 'dates' in data2.keys():
+        y_key = 'dates'
+    elif 'depths' in data1.keys() and 'depths' in data2.keys():
+        y_key = 'depths'
+    elif 'elevations' in data1.keys() and 'elevations' in data2.keys():
+        y_key = 'elevations'
+
     v_1 = data1['values']
     if isinstance(v_1, list):
         v_1 = np.asarray(v_1)
-    t_1 = [n.timestamp() for n in data1['dates']]
+
+    if y_key == 'dates':
+        t_1 = [n.timestamp() for n in data1[y_key]]
+    else:
+        t1 = data1[y_key]
+
     v_2 = data2['values']
     if isinstance(v_2, list):
         v_2 = np.asarray(v_2)
-    t_2 = [n.timestamp() for n in data2['dates']]
+
+    if y_key == 'dates':
+        t_2 = [n.timestamp() for n in data2[y_key]]
+    else:
+        t2 = data2[y_key]
+
     if len(v_1) == 0 or len(v_2) == 0:
         return data1, data2
     if len(v_1) == len(v_2):
@@ -224,7 +241,7 @@ def matchData(data1, data2):
         v_2_msk = v2_interp[msk]
         data1['values'] = v_1_msk
         data2['values'] = v_2_msk
-        data2['dates'] = data1['dates']
+        data2[y_key] = data1[y_key]
         return data1, data2
     elif len(v_2) > len(v_1):
         f_interp = interpolate.interp1d(t_1, v_1, bounds_error=False, fill_value=np.nan)
@@ -233,7 +250,7 @@ def matchData(data1, data2):
         v_1_msk = v1_interp[msk]
         v_2_msk = np.asarray(v_2)[msk]
         data1['values'] = v_1_msk
-        data1['dates'] = data2['dates']
+        data1[y_key] = data2[y_key]
         data2['values'] = v_2_msk
         return data1, data2
 
