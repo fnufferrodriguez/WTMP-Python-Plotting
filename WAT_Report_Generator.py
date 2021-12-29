@@ -408,6 +408,12 @@ class MakeAutomatedReport(object):
         self.XML.writeTimeSeriesPlot(os.path.basename(figname), object_settings['description'])
 
     def makeProfileStatisticsTable(self, object_settings):
+        '''
+        Makes a table to compute stats based off of profile lines. Data is interpolated over a series of points
+        determined by the user
+        :param object_settings: currently selected object settings dictionary
+        :return: writes table to XML
+        '''
 
         print('\n################################')
         print('Now making Profile Stats Table.')
@@ -424,7 +430,6 @@ class MakeAutomatedReport(object):
         object_settings['plot_parameter'] = self.getPlotParameter(object_settings)
 
         ################# Get data #################
-        # object_settings['linedata'], object_settings['units_list'] = self.getProfileLines(object_settings)
         object_settings['linedata'] = self.getProfileLines(object_settings)
 
         ################# Get plot units #################
@@ -455,7 +460,6 @@ class MakeAutomatedReport(object):
                     s_row = row.split('|')
                     rowname = s_row[0]
                     row_val = s_row[1]
-                    print('header:', header)
                     if '%%' in row_val:
                         data = self.formatStatsProfileLineData(row, object_settings['linedata'],
                                                                object_settings['resolution'], i)
@@ -479,7 +483,6 @@ class MakeAutomatedReport(object):
     def makeProfilePlot(self, object_settings):
         '''
         takes in object settings to build profile plot and write to XML
-        #TODO: figure out way to convert profiles that are essentially unitless
         :param object_settings: currently selected object settings dictionary
         :return: creates png in images dir and writes to XML file
         '''
@@ -501,7 +504,6 @@ class MakeAutomatedReport(object):
         object_settings['plot_parameter'] = self.getPlotParameter(object_settings)
 
         ################# Get data #################
-        # object_settings['linedata'], object_settings['units_list'] = self.getProfileLines(object_settings)
         object_settings['linedata'] = self.getProfileLines(object_settings)
 
         ################# Get plot units #################
@@ -509,7 +511,6 @@ class MakeAutomatedReport(object):
         object_settings['units_list'] = self.getUnitsList(object_settings)
         object_settings['plot_units'] = self.getPlotUnits(object_settings)
         object_settings = self.updateFlaggedValues(object_settings, '%%units%%', object_settings['plot_units'])
-
 
         ################ convert Elevs ################
         object_settings = self.convertDepthsToElevations(object_settings)
@@ -595,8 +596,7 @@ class MakeAutomatedReport(object):
                                        edgecolor=current_ls['pointlinecolor'], s=float(current_ls['symbolsize']),
                                        label=current_ls['label'], zorder=int(current_ls['zorder']))
 
-                    # show_legend, show_xlabel, show_ylabel = self.getPlotLabelMasks(i, len(pgi), subplot_cols) #TODO: change to not care about show_legend..
-                    show_xlabel, show_ylabel = self.getPlotLabelMasks(i, len(pgi), subplot_cols) #TODO: change to not care about show_legend..
+                    show_xlabel, show_ylabel = self.getPlotLabelMasks(i, len(pgi), subplot_cols)
 
                     if current_object_settings['gridlines'].lower() == 'true':
                         ax.grid(zorder=0)
@@ -1473,10 +1473,6 @@ class MakeAutomatedReport(object):
         :return: boolean fields for plotting
         '''
 
-        # if idx == cols - 1:
-        #     add_legend = True
-        # else:
-        #     add_legend = False
         if idx >= nprofiles - cols:
             add_xlabel = True
         else:
@@ -1485,7 +1481,7 @@ class MakeAutomatedReport(object):
             add_ylabel = True
         else:
             add_ylabel = False
-        # return add_legend, add_xlabel, add_ylabel
+
         return add_xlabel, add_ylabel
 
     def getTimeSeries(self, Line_info):
@@ -1541,7 +1537,6 @@ class MakeAutomatedReport(object):
                                                  'values': copy.deepcopy(values),
                                                  'units': copy.deepcopy(units)}
 
-        # elif 'xy' in Line_info.keys():
         elif 'easting' in Line_info.keys() and 'northing' in Line_info.keys():
             datamem_key = self.buildDataMemoryKey(Line_info)
             if datamem_key in self.Data_Memory.keys():
@@ -1657,14 +1652,18 @@ class MakeAutomatedReport(object):
         return [], [], [], [], None
 
     def getProfileLines(self, object_settings):
-        units_list = []
+        '''
+        Gets profile line data from defined data sources in XML files
+        :param object_settings: currently selected object settings dictionary
+        :return: dictionary containing data and information about each data set
+        '''
+
         linedata = {}
         for line in object_settings['lines']:
             vals, elevations, depths, times, flag = self.getProfileData(line, object_settings['timestamps']) #Test this speed for grabbing all profiles and then choosing
             datamem_key = self.buildDataMemoryKey(line)
             if 'units' in line.keys():
                 units = line['units']
-                # units_list.append(line['units'])
             else:
                 units = None
 
@@ -1674,7 +1673,7 @@ class MakeAutomatedReport(object):
                               'times': times,
                               'units': units,
                               'logoutputfilename': datamem_key}
-        # return linedata, units_list
+
         return linedata
 
     def getProfileDates(self, Line_info):
@@ -1716,7 +1715,6 @@ class MakeAutomatedReport(object):
             plotunits = ''
 
         return plotunits
-
 
     def getTableDates(self, year, object_settings, month='None'):
         '''
@@ -1782,6 +1780,12 @@ class MakeAutomatedReport(object):
         return start_date, end_date
 
     def getTableData(self, object_settings):
+        '''
+        Grabs data from time series data to be used in tables
+        :param object_settings: currently selected object settings dictionary
+        :return: dictionary object containing info from each data source and list of units
+        '''
+
         data = {}
         units_list = []
         for dp in object_settings['datapaths']:
@@ -1817,6 +1821,7 @@ class MakeAutomatedReport(object):
         :param listvals: value object
         :return: list of values
         '''
+
         if isinstance(listvals, (list, np.ndarray)):
             outvalues = []
             for item in listvals:
@@ -1837,6 +1842,7 @@ class MakeAutomatedReport(object):
         :param indict: value dictionary object
         :return: dictionary of values
         '''
+
         outdict = {}
         for key in indict:
             if isinstance(indict[key], dict):
@@ -1849,6 +1855,12 @@ class MakeAutomatedReport(object):
         return outdict
 
     def getDateSourceFlag(self, object_settings):
+        '''
+        Gets the datesource from object settings
+        :param object_settings: currently selected object settings dictionary
+        :return: datessource_flag
+        '''
+
         if 'datessource' in object_settings.keys():
             datessource_flag = object_settings['datessource'] #determine how you want to get dates? either flag or list
         else:
@@ -1857,6 +1869,12 @@ class MakeAutomatedReport(object):
         return datessource_flag
 
     def getProfileTimestamps(self, object_settings):
+        '''
+        Gets timestamps based off of user settings in XML file and reads/builds them.
+        :param object_settings: currently selected object settings dictionary
+        :return: list of timestamp values to be plotted
+        '''
+
         if isinstance(object_settings['datessource_flag'], str):
             for line in object_settings['lines']:
                 if line['flag'] == object_settings['datessource_flag']:
@@ -1880,6 +1898,13 @@ class MakeAutomatedReport(object):
         return np.asarray(timestamps)
 
     def getPlotParameter(self, object_settings):
+        '''
+        Gets the plot parameter based on user settings. If explicitly stated, uses that. Otherwise, looks at the
+        defined parameters in the linedata and grabs the most common one.
+        :param object_settings: currently selected object settings dictionary
+        :return: plot parameter if possible, otherwise None
+        '''
+
         if 'parameter' in object_settings.keys():
             plot_parameter = object_settings['parameter']
         else:
@@ -1894,14 +1919,32 @@ class MakeAutomatedReport(object):
         return plot_parameter
 
     def getProfileInterpResolution(self, object_settings, default=30):
+        '''
+        Gets the resolution value to interpolate profile data over for table stats. default value of 30
+        if not defined.
+        :param object_settings: currently selected object settings dictionary
+        :param default: used if not defined in user settings
+        :return: interpolation int value
+        '''
+
         if 'resolution' in object_settings.keys():
             resolution = object_settings['resolution']
         else:
             print('Resolution not defined. Setting to default values.')
             resolution = default
-        return resolution
+        return int(resolution)
 
     def getPlotYears(self, object_settings):
+        '''
+        formats years settings for plots/tables. Figures out years used, if split by year, and year strings
+        years is set to "ALLYEARS" if not split by year. This tells other parts of script to include all.
+        :param object_settings: currently selected object settings dictionary
+        :return:
+            split_by_year: boolean if plots/tables should be split up year to year or all at once
+            years: list of years that are used
+            yearstr: list of years as strings, or set of years (ex: 2013-2016)
+        '''
+
         split_by_year = False
         yearstr = ''
         if 'splitbyyear' in object_settings.keys():
@@ -1916,6 +1959,15 @@ class MakeAutomatedReport(object):
         return split_by_year, years, yearstr
 
     def getParameterCount(self, line, object_settings):
+        '''
+        Returns parameter used in dataset and keeps a running total of used parameters in dataset
+        :param line: current line in linedata dataset
+        :param object_settings: currently selected object settings dictionary
+        :return:
+            param: current parameter if available else None
+            param_count: running count of used parameters
+        '''
+
         if 'param_count' not in object_settings.keys():
             param_count = {}
         else:
@@ -1933,6 +1985,12 @@ class MakeAutomatedReport(object):
         return param, param_count
 
     def getUnitsList(self, object_settings):
+        '''
+        creates a list of units from defined lines in user defined settings
+        :param object_settings: currently selected object settings dictionary
+        :return: units_list: list of used units
+        '''
+
         units_list = []
         for flag in object_settings['linedata'].keys():
             units = object_settings['linedata'][flag]['units']
@@ -2339,6 +2397,18 @@ class MakeAutomatedReport(object):
         return data, sr_month
 
     def formatStatsProfileLineData(self, row, data_dict, resolution, index):
+        '''
+        formats Profile line statistics for table using user inputs
+        finds the highest and lowest overlapping profile points and uses them as end points, then interpolates
+        :param row: Row line from inputs. String seperated by '|' and using flags surrounded by '%%'
+        :param data_dict: dictionary containing available line data to be used
+        :param resolution: number of values to interpolate to. this way each dataset has values at the same levels
+                            and there is enough data to do stats over.
+        :param index: date index for profile to use
+        :return:
+            out_data: dictionary containing values and depths/elevations
+        '''
+
         data = copy.deepcopy(data_dict)
         rrow = row.replace('%%', '')
         s_row = rrow.split('.')
@@ -2389,8 +2459,11 @@ class MakeAutomatedReport(object):
         takes rows for tables and replaces flags with the correct data, computing stat analysis if needed
         :param row: row section string
         :param data_dict: dictionary of data that could be used
-        :return: new row value
+        :return:
+            out_stat: stat value
+            stat: string name for stat
         '''
+
         flags = [n for n in data.keys()]
 
         if row.lower().startswith('%%meanbias'):
@@ -2494,9 +2567,10 @@ class MakeAutomatedReport(object):
         '''
         creates uniform name for csv log output for data
         determines how to build the file name from the input type
-        :param Line_info:
-        :return:
+        :param Line_info: information about line
+        :return: name for memory key, or null if can't be determined
         '''
+
         if 'dss_path' in Line_info.keys(): #Get data from DSS record
             if 'dss_filename' in Line_info.keys():
                 outname = '{0}_{1}'.format(os.path.basename(Line_info['dss_filename']).split('.')[0],
@@ -2537,16 +2611,23 @@ class MakeAutomatedReport(object):
         return 'NULL'
 
     def buildHeadersByTimestamps(self, timestamps, year='ALLYEARS'):
+        '''
+        build headers for profile line stat tables by timestamp
+        convert to Datetime, no matter what. We can convert back..
+        Filter by year, using year input. If ALLYEARS, no data is filtered.
+        :param timestamps: list of available timesteps
+        :param year: used to filter down to the year, or if ALLYEARS, allow all years
+        :return: list of headers
+        '''
+
         headers = []
         for timestamp in timestamps:
 
             if isinstance(timestamp, dt.datetime):
                 if year != 'ALLYEARS':
                     if year == timestamp.year:
-                        # headers.append(timestamp.strftime('%d%b%Y'))
                         headers.append(timestamp)
                 else:
-                    # headers.append(timestamp.strftime('%d%b%Y'))
                     headers.append(timestamp)
 
             elif isinstance(timestamp, float):
@@ -2563,6 +2644,7 @@ class MakeAutomatedReport(object):
         ensure that all arrays are the same length with a '' character
         :return: append self.Log object
         '''
+
         longest_array_len = 0
         for key in self.Log.keys():
             if len(self.Log[key]) > longest_array_len:
@@ -2576,7 +2658,6 @@ class MakeAutomatedReport(object):
     def buildLogFile(self):
         '''
         builts the log dictionary for conisistent dictionary values
-        :return:
         '''
 
         self.Log = {'type': [], 'name': [], 'description': [], 'value': [], 'units': [], 'observed_data_path': [],
@@ -2681,7 +2762,6 @@ class MakeAutomatedReport(object):
     def writeLogFile(self):
         '''
         Writes out logfile data to csv file in report dir
-        :return:
         '''
 
         df = pd.DataFrame({'observed_data_path': self.Log['observed_data_path'],
@@ -2762,7 +2842,7 @@ class MakeAutomatedReport(object):
         assigned to it for easy output
         :param array1: np.array or list of values, generally values
         :param array2: np.array or list of values, generally dates
-        :return:
+        :return: array1 with correct length
         '''
 
         if isinstance(array1, (list, np.ndarray)) and isinstance(array2, (list, np.ndarray)):
@@ -2927,6 +3007,7 @@ class MakeAutomatedReport(object):
             jdate: single date
             dates: original date if unable to convert
         '''
+
         if isinstance(dates, (float, int)):
             # print('Dates already in JDate form.')
             return dates
@@ -3093,22 +3174,38 @@ class MakeAutomatedReport(object):
         return values, new_units
 
     def convertHeaderFormats(self, headers, object_settings):
-        if 'dateformat' in object_settings:
-            new_headers = []
-            for header in headers:
-                if object_settings['dateformat'].lower() == 'datetime':
-                    header = self.translateDateFormat(header, 'datetime', '')
-                    header = header.strftime('%d%b%Y')
-                elif object_settings['dateformat'].lower() == 'jdate':
-                    header = self.translateDateFormat(header, 'jdate', '')
-                    header = str(header)
-                new_headers.append(header)
-            return new_headers
-        else:
-            print('Dateformat Flag not found in settings.')
-            return headers
+        '''
+        converts the formats of headers for profile line data tables to the correct format
+        if the dateformat is selected, returns a formatted string.
+        if Jdate, the string of the float value is used
+        Datetime if not specified
+        :param headers: list of datetime objects for headers
+        :param object_settings: user defined settings for current object
+        :return: list of new headers
+        '''
+
+        if 'dateformat' not in object_settings.keys():
+            object_settings['dateformat'] = 'datetime'
+
+        new_headers = []
+        for header in headers:
+            if object_settings['dateformat'].lower() == 'datetime':
+                header = self.translateDateFormat(header, 'datetime', '')
+                header = header.strftime('%d%b%Y')
+            elif object_settings['dateformat'].lower() == 'jdate':
+                header = self.translateDateFormat(header, 'jdate', '')
+                header = str(header)
+            new_headers.append(header)
+
+        return new_headers
 
     def convertProfileDataUnits(self, object_settings):
+        '''
+        converts the units of profile data if unitsystem is defined
+        :param object_settings: user defined settings for current object
+        :return: object_setting dictionaries with updated units and values
+        '''
+
         if 'unitsystem' not in object_settings.keys():
             print('Unit system not defined.')
             return object_settings
@@ -3121,11 +3218,8 @@ class MakeAutomatedReport(object):
                 for pi, profile in enumerate(profiles):
                     profile, newunits = self.convertUnitSystem(profile, profileunits, object_settings['unitsystem'])
                     profiles[pi] = profile
-                print('NEW UNITS:', newunits)
                 object_settings['linedata'][flag]['units'] = newunits
         return object_settings
-
-
 
     def buildRowsByYear(self, object_settings, years, split_by_year):
         '''
@@ -3218,7 +3312,8 @@ class MakeAutomatedReport(object):
             return settings
 
         else:
-            #this gets REALLY noisey.
+            #this gets REALLY noisy.
+            #lots is set up to not be replaceable, so uncomment at your own risk
             # print('Cannot set {0}'.format(flaggedvalue))
             # print('Input Not recognized type', settings)
             return settings
@@ -3321,34 +3416,13 @@ class MakeAutomatedReport(object):
             cur_date += dt.timedelta(days=days)
         return np.asarray(timesteps)
 
-    def allignProfileData(self, linedata, chosen_times):
-        # print('ALL TIMES', [linedata[n]['times'] for n in linedata.keys()])
-
-        new_linedata = {}
-        for time in chosen_times:
-            for key in linedata.keys():
-                if time in linedata[key]['times']:
-                    ti = np.where(linedata[key]['times'] == time) #TODO: np array outside of loops
-                    if key not in new_linedata.keys():
-                        new_linedata[key] = {}
-                        for k2 in new_linedata[key].keys():
-                            new_linedata[key][k2] = [linedata[key][k2][ti]]
-                    else:
-                        for k2 in new_linedata[key].keys():
-                            new_linedata[key][k2].append(linedata[key][k2][ti])
-                else:
-                    if key not in new_linedata.keys():
-                        new_linedata[key] = {}
-                        for k2 in new_linedata[key].keys():
-                            new_linedata[key][k2] = []
-                    else:
-                        for k2 in new_linedata[key].keys():
-                            new_linedata[key][k2].append([])
-
-        # print('REVISED TIMES', [linedata[n]['times'] for n in linedata.keys()])
-        return new_linedata
-
     def convertDepthsToElevations(self, object_settings):
+        '''
+        handles data to convert depths into elevations for observed data
+        :param object_settings: dicitonary of user defined settings for current object
+        :return: object settings dictionary with updated elevation data
+        '''
+
         elev_flag = 'NOVALID'
         if object_settings['usedepth'].lower() == 'false':
             for ld in object_settings['linedata'].keys():
@@ -3367,6 +3441,11 @@ class MakeAutomatedReport(object):
         return object_settings
 
     def commitProfileDataToMemory(self, object_settings):
+        '''
+        commits updated data to data memory dictionary that keeps track of data
+        :param object_settings:  dicitonary of user defined settings for current object
+        '''
+
         for line in object_settings['linedata'].keys():
             values = object_settings['linedata'][line]['values']
             depths = object_settings['linedata'][line]['depths']
@@ -3380,6 +3459,14 @@ class MakeAutomatedReport(object):
                                              'isprofile': True}
 
     def configureUnits(self, object_settings, line, units):
+        '''
+        configure units from line settings
+        :param object_settings:  dicitonary of user defined settings for current object
+        :param line: current line settings
+        :param units: current units of line
+        :return: units
+        '''
+
         if units == None:
             if 'parameter' in line.keys():
                 try:
