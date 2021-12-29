@@ -223,7 +223,11 @@ class MakeAutomatedReport(object):
         :return: creates png in images dir and writes to XML file
         '''
 
-        default_settings = self.load_defaultPlotObject('timeseriesplot') #get default TS plot items
+        print('\n################################')
+        print('Now making TimeSeries Plot.')
+        print('################################\n')
+
+        default_settings = self.loadDefaultPlotObject('timeseriesplot') #get default TS plot items
         object_settings = self.replaceDefaults(default_settings, object_settings) #overwrite the defaults with chapter file
 
         object_settings = self.updateFlaggedValues(object_settings, '%%year%%', self.years_str)
@@ -272,7 +276,7 @@ class MakeAutomatedReport(object):
             if units != '' and units != None:
                 unitslist.append(units)
 
-            line_settings = self.getLineDefaultSettings(line, parameter, i)
+            line_settings = self.getDefaultLineSettings(line, parameter, i)
 
             if 'zorder' not in line_settings.keys():
                 line_settings['zorder'] = 4
@@ -404,21 +408,28 @@ class MakeAutomatedReport(object):
         self.XML.writeTimeSeriesPlot(os.path.basename(figname), object_settings['description'])
 
     def MakeProfileStatisticsTable(self, object_settings):
-        default_settings = self.load_defaultPlotObject('profilestatisticstable')
+
+        print('\n################################')
+        print('Now making Profile Stats Table.')
+        print('################################\n')
+
+        default_settings = self.loadDefaultPlotObject('profilestatisticstable')
         object_settings = self.replaceDefaults(default_settings, object_settings)
 
         ################# Get timestamps #################
         object_settings['datessource_flag'] = self.getDateSourceFlag(object_settings)
-
         object_settings['timestamps'] = self.getProfileTimestamps(object_settings)
 
         ################# Get units #################
         object_settings['plot_parameter'] = self.getPlotParameter(object_settings)
 
         ################# Get data #################
-        object_settings['linedata'], object_settings['units_list'] = self.getProfileLines(object_settings)
+        # object_settings['linedata'], object_settings['units_list'] = self.getProfileLines(object_settings)
+        object_settings['linedata'] = self.getProfileLines(object_settings)
 
         ################# Get plot units #################
+        object_settings = self.convertProfileDataUnits(object_settings)
+        object_settings['units_list'] = self.getUnitsList(object_settings)
         object_settings['plot_units'] = self.getPlotUnits(object_settings)
         object_settings = self.updateFlaggedValues(object_settings, '%%units%%', object_settings['plot_units'])
 
@@ -436,6 +447,7 @@ class MakeAutomatedReport(object):
             object_desc = self.updateFlaggedValues(object_settings['description'], '%%year%%', yearstr)
             self.XML.writeTableStart(object_desc, 'Statistics')
             yrheaders = self.buildHeadersByTimestamps(object_settings['timestamps'], year=year)
+            yrheaders = self.convertHeaderFormats(yrheaders, object_settings)
 
             for i, header in enumerate(yrheaders):
                 frmt_rows = []
@@ -472,7 +484,11 @@ class MakeAutomatedReport(object):
         :return: creates png in images dir and writes to XML file
         '''
 
-        default_settings = self.load_defaultPlotObject('profileplot')
+        print('\n################################')
+        print('Now making Profile Plot.')
+        print('################################\n')
+
+        default_settings = self.loadDefaultPlotObject('profileplot')
         object_settings = self.replaceDefaults(default_settings, object_settings)
         obj_desc = self.updateFlaggedValues(object_settings['description'], '%%year%%', self.years_str)
         self.XML.writeProfilePlotStart(obj_desc)
@@ -485,11 +501,15 @@ class MakeAutomatedReport(object):
         object_settings['plot_parameter'] = self.getPlotParameter(object_settings)
 
         ################# Get data #################
-        object_settings['linedata'], object_settings['units_list'] = self.getProfileLines(object_settings)
+        # object_settings['linedata'], object_settings['units_list'] = self.getProfileLines(object_settings)
+        object_settings['linedata'] = self.getProfileLines(object_settings)
 
         ################# Get plot units #################
+        object_settings = self.convertProfileDataUnits(object_settings)
+        object_settings['units_list'] = self.getUnitsList(object_settings)
         object_settings['plot_units'] = self.getPlotUnits(object_settings)
         object_settings = self.updateFlaggedValues(object_settings, '%%units%%', object_settings['plot_units'])
+
 
         ################ convert Elevs ################
         object_settings = self.convertDepthsToElevations(object_settings)
@@ -555,7 +575,7 @@ class MakeAutomatedReport(object):
                             continue
 
                         current_ls = self.getLineSettings(object_settings['lines'], line)
-                        current_ls = self.getLineDefaultSettings(current_ls, object_settings['plot_parameter'], li)
+                        current_ls = self.getDefaultLineSettings(current_ls, object_settings['plot_parameter'], li)
 
                         if current_ls['drawline'].lower() == 'true' and current_ls['drawpoints'].lower() == 'true':
                             ax.plot(values, levels, label=current_ls['label'], c=current_ls['linecolor'],
@@ -628,7 +648,19 @@ class MakeAutomatedReport(object):
                         yticksize = 10
                     ax.tick_params(axis='y', labelsize=yticksize)
 
-                    ttl_str = object_settings['timestamps'][j].strftime('%d %b %Y')
+                    cur_timestamp = object_settings['timestamps'][j]
+                    if 'dateformat' in object_settings:
+                        if object_settings['dateformat'].lower() == 'datetime':
+                            cur_timestamp = self.translateDateFormat(cur_timestamp, 'datetime', '')
+                            ttl_str = cur_timestamp.strftime('%d %b %Y')
+                        elif object_settings['dateformat'].lower() == 'jdate':
+                            cur_timestamp = self.translateDateFormat(cur_timestamp, 'jdate', '')
+                            ttl_str = str(cur_timestamp)
+                        else:
+                            ttl_str = cur_timestamp
+                    else:
+                        ttl_str = object_settings['timestamps'][j].strftime('%d %b %Y') #should get set to datetime anyways..
+
                     xbufr = 0.05
                     ybufr = 0.05
                     xl = ax.get_xlim()
@@ -695,7 +727,11 @@ class MakeAutomatedReport(object):
         :return: writes to XML file
         '''
 
-        default_settings = self.load_defaultPlotObject('errorstatisticstable')
+        print('\n################################')
+        print('Now making Error Stats table.')
+        print('################################\n')
+
+        default_settings = self.loadDefaultPlotObject('errorstatisticstable')
         object_settings = self.replaceDefaults(default_settings, object_settings)
 
         object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = self.getPlotYears(object_settings)
@@ -753,7 +789,11 @@ class MakeAutomatedReport(object):
         :return: writes to XML file
         '''
 
-        default_settings = self.load_defaultPlotObject('monthlystatisticstable')
+        print('\n################################')
+        print('Now making Monthly Stats Table.')
+        print('################################\n')
+
+        default_settings = self.loadDefaultPlotObject('monthlystatisticstable')
         object_settings = self.replaceDefaults(default_settings, object_settings)
         object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = self.getPlotYears(object_settings)
 
@@ -806,7 +846,11 @@ class MakeAutomatedReport(object):
         :return: creates png in images dir and writes to XML file
         '''
 
-        default_settings = self.load_defaultPlotObject('buzzplot')
+        print('\n################################')
+        print('Now making Buzz Plot.')
+        print('################################\n')
+
+        default_settings = self.loadDefaultPlotObject('buzzplot')
         object_settings = self.replaceDefaults(default_settings, object_settings)
         fig = plt.figure(figsize=(12, 6))
         ax = fig.add_subplot()
@@ -893,9 +937,9 @@ class MakeAutomatedReport(object):
                 values, units = self.convertUnitSystem(values, units, object_settings['unitsystem'])
 
             if 'parameter' in line.keys():
-                line_settings = self.getLineDefaultSettings(line, line['parameter'], i)
+                line_settings = self.getDefaultLineSettings(line, line['parameter'], i)
             else:
-                line_settings = self.getLineDefaultSettings(line, None, i)
+                line_settings = self.getDefaultLineSettings(line, None, i)
 
             if 'scalar' in line.keys():
                 try:
@@ -1293,7 +1337,7 @@ class MakeAutomatedReport(object):
             print('Unidentified time interval')
             return 0
 
-    def getLineDefaultSettings(self, LineSettings, param, i):
+    def getDefaultLineSettings(self, LineSettings, param, i):
         '''
         gets line settings and adds missing needed settings with defaults. Then translates java style inputs to
         python commands. Gets colors and styles.
@@ -1619,13 +1663,19 @@ class MakeAutomatedReport(object):
             vals, elevations, depths, times, flag = self.getProfileData(line, object_settings['timestamps']) #Test this speed for grabbing all profiles and then choosing
             datamem_key = self.buildDataMemoryKey(line)
             if 'units' in line.keys():
-                units_list.append(line['units'])
+                units = line['units']
+                # units_list.append(line['units'])
+            else:
+                units = None
+
             linedata[flag] = {'values': vals,
                               'elevations': elevations,
                               'depths': depths,
-                               'times': times,
-                               'logoutputfilename': datamem_key}
-        return linedata, units_list
+                              'times': times,
+                              'units': units,
+                              'logoutputfilename': datamem_key}
+        # return linedata, units_list
+        return linedata
 
     def getProfileDates(self, Line_info):
         '''
@@ -1706,7 +1756,6 @@ class MakeAutomatedReport(object):
                 end_date = '31 Dec {0}'.format(self.endYear)
             else:
                 end_date = '31 Dec {0}'.format(year)
-
             if month != 'None':
                 try:
                     month = int(month)
@@ -1721,7 +1770,6 @@ class MakeAutomatedReport(object):
                     start_date = start_date.replace(month=month+1)
                     start_date -= dt.timedelta(days=1)
                     start_date = start_date.strftime('%d %b %Y')
-
                 try:
                     end_date = dt.datetime.strptime(end_date, '%d %b %Y').replace(month=month).strftime('%d %b %Y')
                 except ValueError:
@@ -1860,6 +1908,7 @@ class MakeAutomatedReport(object):
             if object_settings['splitbyyear'].lower() == 'true':
                 split_by_year = True
                 years = self.years
+                yearstr = [str(year) for year in years]
         if not split_by_year:
             yearstr = self.years_str
             years = ['ALLYEARS']
@@ -1882,6 +1931,14 @@ class MakeAutomatedReport(object):
             param_count[param] += 1
 
         return param, param_count
+
+    def getUnitsList(self, object_settings):
+        units_list = []
+        for flag in object_settings['linedata'].keys():
+            units = object_settings['linedata'][flag]['units']
+            if units != None:
+                units_list.append(units)
+        return units_list
 
     def replaceDefaults(self, default_settings, object_settings):
         '''
@@ -2104,6 +2161,7 @@ class MakeAutomatedReport(object):
                     try:
                         lim_frmt = float(lim)
                         lim_frmt = self.JDateToDatetime(lim_frmt)
+                        print('JDate {0} as {1} Accepted!'.format(lim, lim_frmt))
                     except:
                         print('Limit value of {0} also invalid as jdate.'.format(lim))
                         print('Setting to fallback {0}.'.format(fallback))
@@ -2121,7 +2179,10 @@ class MakeAutomatedReport(object):
                 try:
                     if not isinstance(lim, dt.datetime):
                         lim_frmt = dateutil.parser.parse(lim)
+                    else:
+                        lim_frmt = lim
                     lim_frmt = self.DatetimeToJDate(lim_frmt)
+                    print('Datetime {0} as {1} Accepted!'.format(lim, lim_frmt))
                 except:
                     print('Limit value of {0} also invalid as datetime.'.format(lim))
                     print('Setting to fallback {0}.'.format(fallback))
@@ -2291,30 +2352,35 @@ class MakeAutomatedReport(object):
         for flag in flags:
             #get elevs
             depths = data[flag]['depths'][index]
-            top_depth = np.min(depths)
-            bottom_depth = np.max(depths)
-
-            #find limits comparing flags so we can be sure to interpolate over the same data
-            if top == None:
-                top = top_depth
-            else:
-                if top_depth > top:
+            if len(depths) > 0:
+                top_depth = np.min(depths)
+                bottom_depth = np.max(depths)
+                #find limits comparing flags so we can be sure to interpolate over the same data
+                if top == None:
                     top = top_depth
+                else:
+                    if top_depth > top:
+                        top = top_depth
 
-            if bottom == None:
-                bottom = bottom_depth
-            else:
-                if bottom_depth < bottom:
+                if bottom == None:
                     bottom = bottom_depth
+                else:
+                    if bottom_depth < bottom:
+                        bottom = bottom_depth
         #build elev profiles
         output_interp_elevations = np.arange(top, bottom, (bottom-top)/float(resolution))
 
         for flag in flags:
             out_data[flag] = {}
             #interpolate over all values and then get interp values
-            f_interp = interpolate.interp1d(data[flag]['depths'][index], data[flag]['values'][index])
-            out_data[flag]['depths'] = output_interp_elevations
-            out_data[flag]['values'] = f_interp(output_interp_elevations)
+            try:
+                f_interp = interpolate.interp1d(data[flag]['depths'][index], data[flag]['values'][index])
+                out_data[flag]['depths'] = output_interp_elevations
+                out_data[flag]['values'] = f_interp(output_interp_elevations)
+            except ValueError:
+                print('Cannot interpolate depths for', flag)
+                out_data[flag]['depths'] = output_interp_elevations
+                out_data[flag]['values'] = np.full(len(output_interp_elevations), np.nan)
 
         return out_data
 
@@ -2353,50 +2419,6 @@ class MakeAutomatedReport(object):
 
         return out_stat, stat
 
-    def buildRowsByYear(self, object_settings, years, split_by_year):
-        '''
-        if split by year is selected, and a header has %%year%% flag, iterate through and create a new row object for
-        each year and header
-        :param object_settings: dictionary of settings
-        :param years: list of years
-        :param split_by_year: boolean if splitting up by year or not
-        :return:
-            rows: list of newly built rows
-        '''
-
-        rows = []
-        rows_by_year = []
-        for i, row in enumerate(object_settings['rows']):
-            if isinstance(object_settings['rows'], dict):
-                row = object_settings['rows']['row'] #single headers come as dict objs TODO fix this eventually...
-            srow = row.split('|')
-            r = [srow[0]] #<Row>Jan|%%MEAN.Computed.MONTH=JAN%%|%%MEAN.Observed.MONTH=JAN%%</Row>
-            for si, sr in enumerate(srow[1:]):
-                if isinstance(object_settings['headers'][si], dict):
-                    header = object_settings['headers'][si]['header'] #single headers come as dict objs TODO fix this eventually...
-                else:
-                    header = object_settings['headers'][si]
-                if '%%year%%' in header:
-                    if split_by_year:
-                        rows_by_year.append(sr)
-                    else:
-                        r.append(sr)
-                else:
-                    if len(rows_by_year) > 0:
-                        for year in years:
-                            for yrrow in rows_by_year:
-                                r.append(yrrow)
-                        rows_by_year = []
-                    r.append(sr)
-            if len(rows_by_year) > 0:
-                for year in years:
-                    for yrrow in rows_by_year:
-                        r.append(yrrow)
-                rows_by_year = []
-            rows.append('|'.join(r))
-            # r = []
-        return rows
-
     def buildHeadersByYear(self, object_settings, years, split_by_year):
         '''
         if split by year is selected, and a header has %%year%% flag, iterate through and create a new header for
@@ -2409,6 +2431,7 @@ class MakeAutomatedReport(object):
 
         headings = []
         header_by_year = []
+        yearstr = object_settings['yearstr']
         for i, header in enumerate(object_settings['headers']):
             if isinstance(object_settings['headers'], dict):
                 header = object_settings['headers']['header'] #single headers come as dict objs TODO fix this eventually...
@@ -2416,18 +2439,18 @@ class MakeAutomatedReport(object):
                 if split_by_year:
                     header_by_year.append(header)
                 else:
-                    headings.append(['ALL', self.updateFlaggedValues(header, '%%year%%', str(years[0]))])
+                    headings.append(['ALL', self.updateFlaggedValues(header, '%%year%%', yearstr)])
             else:
                 if len(header_by_year) > 0:
-                    for year in years:
+                    for yi, year in enumerate(years):
                         for yrhd in header_by_year:
-                            headings.append([year, self.updateFlaggedValues(yrhd, '%%year%%', str(year))])
+                            headings.append([year, self.updateFlaggedValues(yrhd, '%%year%%', yearstr[yi])])
                     header_by_year = []
                 headings.append(['ALL', header])
         if len(header_by_year) > 0:
-            for year in years:
+            for yi, year in enumerate(years):
                 for yrhd in header_by_year:
-                    headings.append([year, self.updateFlaggedValues(yrhd, '%%year%%', str(year))])
+                    headings.append([year, self.updateFlaggedValues(yrhd, '%%year%%', yearstr[yi])])
         return headings
 
     def buildTimeSeries(self, startTime, endTime, interval):
@@ -2521,9 +2544,11 @@ class MakeAutomatedReport(object):
             if isinstance(timestamp, dt.datetime):
                 if year != 'ALLYEARS':
                     if year == timestamp.year:
-                        headers.append(timestamp.strftime('%d%b%Y'))
+                        # headers.append(timestamp.strftime('%d%b%Y'))
+                        headers.append(timestamp)
                 else:
-                    headers.append(timestamp.strftime('%d%b%Y'))
+                    # headers.append(timestamp.strftime('%d%b%Y'))
+                    headers.append(timestamp)
 
             elif isinstance(timestamp, float):
                 ts_dt = self.JDateToDatetime(timestamp)
@@ -2880,7 +2905,7 @@ class MakeAutomatedReport(object):
                     shutil.copyfile(old_file_path, new_file_path)
                     print('Successfully copied to', new_file_path)
 
-    def load_defaultPlotObject(self, plotobject):
+    def loadDefaultPlotObject(self, plotobject):
         '''
         loads the graphic default options. Uses deepcopy so residual settings are not carried over
         :param plotobject: string specifying the default graphics object
@@ -3065,6 +3090,41 @@ class MakeAutomatedReport(object):
 
         return values, new_units
 
+    def convertHeaderFormats(self, headers, object_settings):
+        if 'dateformat' in object_settings:
+            new_headers = []
+            for header in headers:
+                if object_settings['dateformat'].lower() == 'datetime':
+                    header = self.translateDateFormat(header, 'datetime', '')
+                    header = header.strftime('%d%b%Y')
+                elif object_settings['dateformat'].lower() == 'jdate':
+                    header = self.translateDateFormat(header, 'jdate', '')
+                    header = str(header)
+                new_headers.append(header)
+            return new_headers
+        else:
+            print('Dateformat Flag not found in settings.')
+            return headers
+
+    def convertProfileDataUnits(self, object_settings):
+        if 'unitsystem' not in object_settings.keys():
+            print('Unit system not defined.')
+            return object_settings
+        for flag in object_settings['linedata'].keys():
+            if object_settings['linedata'][flag]['units'] == None:
+                continue
+            else:
+                profiles = object_settings['linedata'][flag]['values']
+                profileunits = object_settings['linedata'][flag]['units']
+                for pi, profile in enumerate(profiles):
+                    profile, newunits = self.convertUnitSystem(profile, profileunits, object_settings['unitsystem'])
+                    profiles[pi] = profile
+                print('NEW UNITS:', newunits)
+                object_settings['linedata'][flag]['units'] = newunits
+        return object_settings
+
+
+
     def buildRowsByYear(self, object_settings, years, split_by_year):
         '''
         if split by year is selected, and a header has %%year%% flag, iterate through and create a new row object for
@@ -3107,39 +3167,6 @@ class MakeAutomatedReport(object):
                 rows_by_year = []
             rows.append('|'.join(r))
         return rows
-
-    def buildHeadersByYear(self, object_settings, years, split_by_year):
-        '''
-        if split by year is selected, and a header has %%year%% flag, iterate through and create a new header for
-        each year and header
-        :param object_settings: dictionary of settings
-        :param years: list of years
-        :param split_by_year: boolean if splitting up by year or not
-        :return: list of headers
-        '''
-
-        headings = []
-        header_by_year = []
-        for i, header in enumerate(object_settings['headers']):
-            if isinstance(object_settings['headers'], dict):
-                header = object_settings['headers']['header'] #single headers come as dict objs TODO fix this eventually...
-            if '%%year%%' in header:
-                if split_by_year:
-                    header_by_year.append(header)
-                else:
-                    headings.append(['ALL', self.updateFlaggedValues(header, '%%year%%', str(years[0]))])
-            else:
-                if len(header_by_year) > 0:
-                    for year in years:
-                        for yrhd in header_by_year:
-                            headings.append([year, self.updateFlaggedValues(yrhd, '%%year%%', str(year))])
-                    header_by_year = []
-                headings.append(['ALL', header])
-        if len(header_by_year) > 0:
-            for year in years:
-                for yrhd in header_by_year:
-                    headings.append([year, self.updateFlaggedValues(yrhd, '%%year%%', str(year))])
-        return headings
 
     def filterTimestepByYear(self, timestamps, year):
         '''

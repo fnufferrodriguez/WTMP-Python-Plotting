@@ -237,15 +237,15 @@ def ReadTextProfile(observed_data_filename, timestamps):
 
     for ci, i in enumerate(cti):
         if i != None:
-            wtn.append(wt[i])
-            dn.append(d[i])
+            wtn.append(np.asarray(wt[i]))
+            dn.append(np.asarray(d[i]))
             ts.append(timestamps[ci])
         else:
-            wtn.append([])
-            dn.append([])
+            wtn.append(np.array([]))
+            dn.append(np.array([]))
             ts.append(timestamps[ci])
 
-    return np.asarray(wtn, dtype=object), np.asarray(dn, dtype=object), np.asarray(ts)
+    return wtn, dn, np.asarray(ts)
 
 def getTextProfileDates(observed_data_filename, starttime, endtime):
     '''
