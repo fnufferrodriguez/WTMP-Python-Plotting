@@ -40,39 +40,39 @@ class MakeAutomatedReport(object):
         self.simulationInfoFile = simulationInfoFile
         self.WriteLog = True #TODO we're testing this.
         self.batdir = batdir
-        self.ReadSimulationInfo(simulationInfoFile) #read file output by WAT
+        self.readSimulationInfo(simulationInfoFile) #read file output by WAT
         # self.EnsureDefaultFiles() #TODO: turn this back on for copying
-        self.DefinePaths()
+        self.definePaths()
         self.cleanOutputDirs()
 
-        self.DefineUnits()
-        self.DefineMonths()
-        self.DefineTimeIntervals()
-        self.DefineDefaultColors()
-        self.ReadGraphicsDefaultFile() #read graphical component defaults
-        self.ReadLinesstylesDefaultFile()
-        self.BuildLogFile()
+        self.defineUnits()
+        self.defineMonths()
+        self.defineTimeIntervals()
+        self.defineDefaultColors()
+        self.readGraphicsDefaultFile() #read graphical component defaults
+        self.readDefaultLineStylesFile()
+        self.buildLogFile()
         if self.reportType == 'single': #Eventually be able to do comparison reports, put that here
             for simulation in self.Simulations:
                 print('Running Simulation:', simulation)
-                self.SetSimulationVariables(simulation)
-                self.DefineStartEndYears()
-                self.ReadSimulationsCSV() #read to determine order/sims/regions in report
+                self.setSimulationVariables(simulation)
+                self.defineStartEndYears()
+                self.readSimulationsCSV() #read to determine order/sims/regions in report
                 self.cleanOutputDirs()
                 self.initializeXML()
                 self.writeXMLIntroduction()
                 for simorder in self.SimulationCSV.keys():
-                    self.SetSimulationCSVVars(self.SimulationCSV[simorder])
-                    self.ReadDefinitionsFile(self.SimulationCSV[simorder])
-                    self.LoadModelAlt(self.SimulationCSV[simorder])
-                    self.AddSimLogEntry()
-                    self.WriteChapter()
+                    self.setSimulationCSVVars(self.SimulationCSV[simorder])
+                    self.readDefinitionsFile(self.SimulationCSV[simorder])
+                    self.loadModelAlt(self.SimulationCSV[simorder])
+                    self.addSimLogEntry()
+                    self.writeChapter()
                 self.XML.writeReportEnd()
-                self.EqualizeLog()
-        self.WriteLogFile()
-        self.WriteDataFiles()
+                self.equalizeLog()
+        self.writeLogFile()
+        self.writeDataFiles()
 
-    def AddLogEntry(self, keysvalues, isdata=False):
+    def addLogEntry(self, keysvalues, isdata=False):
         '''
         adds an entry to the log file. If data, add an entry for all lists.
         :param keysvalues: dictionary containing values and headers
@@ -88,7 +88,7 @@ class MakeAutomatedReport(object):
                 if key not in keysvalues.keys():
                     self.Log[key].append('')
 
-    def AddSimLogEntry(self):
+    def addSimLogEntry(self):
         '''
         adds entries for a simulation with relevenat metadata
         '''
@@ -102,7 +102,7 @@ class MakeAutomatedReport(object):
         self.Log['fpart'].append(self.alternativeFpart)
         self.Log['program_directory'].append(self.alternativeDirectory)
 
-    def DefineMonths(self):
+    def defineMonths(self):
         '''
         defines month 3 letter codes for table labels, and reference dicts for months and numbers (aka Jan: 1)
         :return: class variables
@@ -115,7 +115,7 @@ class MakeAutomatedReport(object):
         self.num2month = {index: month.lower() for index, month in enumerate(calendar.month_abbr) if month}
         self.mo_str_3 = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
-    def DefineStartEndYears(self):
+    def defineStartEndYears(self):
         '''
         defines start and end years for the simulation so they can be replaced by flagged values.
         end dates that end on the first of the year with no min seconds (aka Dec 31 @ 24:00) have their end
@@ -143,7 +143,7 @@ class MakeAutomatedReport(object):
             self.years = range(tw_start.year, tw_end.year+1)
             self.years_str = "{0}-{1}".format(self.startYear, self.endYear)
 
-    def DefineTimeIntervals(self):
+    def defineTimeIntervals(self):
         '''
         sets up a dictionary for DSS intervals and their associated timedelta amount for setting up regular
         interval time series arrays
@@ -172,7 +172,7 @@ class MakeAutomatedReport(object):
                                '1YEAR': ['1Y', 'pd']}
 
 
-    def DefineDefaultColors(self):
+    def defineDefaultColors(self):
         '''
         sets up a list of default colors to use in the event that colors are not set up in the graphics default file
         for a line
@@ -182,7 +182,7 @@ class MakeAutomatedReport(object):
 
         self.def_colors = ['darkgreen', 'red', 'blue', 'orange', 'darkcyan', 'darkmagenta', 'gray', 'black']
 
-    def DefineUnits(self):
+    def defineUnits(self):
         '''
         creates dictionary with units for vars for labels
         #TODO: expand this
@@ -204,7 +204,7 @@ class MakeAutomatedReport(object):
                       'sal': {'metric': 'psu', 'english': 'psu'},
                       }
 
-    def DefinePaths(self):
+    def definePaths(self):
         '''
         defines run specific paths
         used to contain more paths, but not needed. Consider moving.
@@ -216,7 +216,7 @@ class MakeAutomatedReport(object):
         self.CSVPath = os.path.join(self.studyDir, 'reports', 'CSVData')
         self.default_dir = os.path.join(os.path.split(self.batdir)[0], 'Default')
 
-    def MakeTimeSeriesPlot(self, object_settings):
+    def makeTimeSeriesPlot(self, object_settings):
         '''
         takes in object settings to build time series plot and write to XML
         :param object_settings: currently selected object settings dictionary
@@ -260,7 +260,7 @@ class MakeAutomatedReport(object):
             if 'unitsystem' in object_settings.keys():
                 values, units = self.convertUnitSystem(values, units, object_settings['unitsystem'])
 
-            chkvals = WF.check_data(values)
+            chkvals = WF.checkData(values)
             if not chkvals:
                 print('Invalid Data settings for line:', line)
                 continue
@@ -312,7 +312,7 @@ class MakeAutomatedReport(object):
                            label=line_settings['label'], zorder=float(line_settings['zorder']))
 
 
-            self.AddLogEntry({'type': line_settings['label'] + '_TimeSeries' if line_settings['label'] != '' else 'Timeseries',
+            self.addLogEntry({'type': line_settings['label'] + '_TimeSeries' if line_settings['label'] != '' else 'Timeseries',
                               'name': self.ChapterRegion,
                               'description': object_settings['description'],
                               'units': units,
@@ -407,7 +407,7 @@ class MakeAutomatedReport(object):
 
         self.XML.writeTimeSeriesPlot(os.path.basename(figname), object_settings['description'])
 
-    def MakeProfileStatisticsTable(self, object_settings):
+    def makeProfileStatisticsTable(self, object_settings):
 
         print('\n################################')
         print('Now making Profile Stats Table.')
@@ -455,11 +455,12 @@ class MakeAutomatedReport(object):
                     s_row = row.split('|')
                     rowname = s_row[0]
                     row_val = s_row[1]
+                    print('header:', header)
                     if '%%' in row_val:
                         data = self.formatStatsProfileLineData(row, object_settings['linedata'],
                                                                object_settings['resolution'], i)
                         row_val, stat = self.getStatsLine(row_val, data)
-                        self.AddLogEntry({'type': 'ProfileTableStatistic',
+                        self.addLogEntry({'type': 'ProfileTableStatistic',
                                           'name': ' '.join([self.ChapterRegion, header, stat]),
                                           'description': object_desc,
                                           'value': row_val,
@@ -475,8 +476,7 @@ class MakeAutomatedReport(object):
                 self.XML.writeTableColumn(header, frmt_rows)
             self.XML.writeTableEnd()
 
-
-    def MakeProfilePlot(self, object_settings):
+    def makeProfilePlot(self, object_settings):
         '''
         takes in object settings to build profile plot and write to XML
         #TODO: figure out way to convert profiles that are essentially unitless
@@ -534,7 +534,7 @@ class MakeAutomatedReport(object):
 
             for page_i, pgi in enumerate(page_indices):
 
-                subplot_rows, subplot_cols = WF.get_subplot_config(len(pgi), int(cur_obj_settings['profilesperrow']))
+                subplot_rows, subplot_cols = WF.getSubplotConfig(len(pgi), int(cur_obj_settings['profilesperrow']))
                 n_nrow_active = np.ceil(len(pgi) / subplot_cols)
                 fig = plt.figure(figsize=(7, 1 + 3 * n_nrow_active))
 
@@ -564,14 +564,14 @@ class MakeAutomatedReport(object):
                                 levels = object_settings['linedata'][line]['depths'][j][msk]
                             else:
                                 levels = object_settings['linedata'][line]['elevations'][j][msk]
-                            if not WF.check_data(levels):
+                            if not WF.checkData(levels):
                                 print('Non Viable depths/elevations for {0} on {1}'.format(line, object_settings['timestamps'][j]))
                                 continue
                         except IndexError:
                             print('Non Viable depths/elevations for {0} on {1}'.format(line, object_settings['timestamps'][j]))
                             continue
 
-                        if not WF.check_data(values):
+                        if not WF.checkData(values):
                             continue
 
                         current_ls = self.getLineSettings(object_settings['lines'], line)
@@ -706,7 +706,7 @@ class MakeAutomatedReport(object):
                 description = '{0}: {1} of {2}'.format(cur_obj_settings['description'], page_i+1, len(page_indices))
                 self.XML.writeProfilePlotFigure(figname, description)
 
-                self.AddLogEntry({'type': 'ProfilePlot',
+                self.addLogEntry({'type': 'ProfilePlot',
                                   'name': self.ChapterRegion,
                                   'description': description,
                                   'units': object_settings['plot_units'],
@@ -720,7 +720,7 @@ class MakeAutomatedReport(object):
 
         self.XML.writeProfilePlotEnd()
 
-    def MakeErrorStatisticsTable(self, object_settings):
+    def makeErrorStatisticsTable(self, object_settings):
         '''
         takes in object settings to build error stats table and write to XML
         :param object_settings: currently selected object settings dictionary
@@ -765,7 +765,7 @@ class MakeAutomatedReport(object):
                     row_val, stat = self.getStatsLine(row_val, rowdata)
 
                     data_start_date, data_end_date = self.getTableDates(year, object_settings)
-                    self.AddLogEntry({'type': 'Statistic',
+                    self.addLogEntry({'type': 'Statistic',
                                       'name': ' '.join([self.ChapterRegion, header, stat]),
                                       'description': desc,
                                       'value': row_val,
@@ -782,7 +782,7 @@ class MakeAutomatedReport(object):
             self.XML.writeTableColumn(header, frmt_rows)
         self.XML.writeTableEnd()
 
-    def MakeMonthlyStatisticsTable(self, object_settings):
+    def makeMonthlyStatisticsTable(self, object_settings):
         '''
         takes in object settings to build monthly stats table and write to XML
         :param object_settings: currently selected object settings dictionary
@@ -822,7 +822,7 @@ class MakeAutomatedReport(object):
                     row_val, stat = self.getStatsLine(row_val, rowdata)
 
                     data_start_date, data_end_date = self.getTableDates(year, object_settings, month=sr_month)
-                    self.AddLogEntry({'type': 'Statistic',
+                    self.addLogEntry({'type': 'Statistic',
                                       'name': ' '.join([self.ChapterRegion, header, stat]),
                                       'description': object_settings['description'],
                                       'value': row_val,
@@ -839,7 +839,7 @@ class MakeAutomatedReport(object):
             self.XML.writeTableColumn(header, frmt_rows)
         self.XML.writeTableEnd()
 
-    def MakeBuzzPlot(self, object_settings):
+    def makeBuzzPlot(self, object_settings):
         '''
         takes in object settings to build buzzplots and write to XML
         :param object_settings: currently selected object settings dictionary
@@ -905,7 +905,7 @@ class MakeAutomatedReport(object):
             dates, values, units = self.getTimeSeries(line)
 
             if 'target' in line.keys():
-                values = self.BuzzTargetSum(dates, values, float(line['target']))
+                values = self.buzzTargetSum(dates, values, float(line['target']))
             else:
                 if isinstance(values, dict):
                     if len(values.keys()) == 1: #single struct station, like leakage..
@@ -917,7 +917,7 @@ class MakeAutomatedReport(object):
                         print('Line:', line)
                         continue
 
-            chkvals = WF.check_data(values)
+            chkvals = WF.checkData(values)
             if not chkvals:
                 print('Invalid Data settings for line:', line)
                 continue
@@ -1021,7 +1021,7 @@ class MakeAutomatedReport(object):
                                   edgecolor=line_settings['pointlinecolor'], s=float(line_settings['symbolsize']),
                                   label=line_settings['label'], zorder=int(line_settings['zorder']))
 
-                self.AddLogEntry({'type': line_settings['label'] + '_BuzzPlot' if line_settings['label'] != '' else 'BuzzPlot',
+                self.addLogEntry({'type': line_settings['label'] + '_BuzzPlot' if line_settings['label'] != '' else 'BuzzPlot',
                                   'name': self.ChapterRegion,
                                   'description': object_settings['description'],
                                   'units': units,
@@ -1159,7 +1159,7 @@ class MakeAutomatedReport(object):
 
         self.XML.writeTimeSeriesPlot(os.path.basename(figname), object_settings['description'])
 
-    def ReadSimulationInfo(self, simulationInfoFile):
+    def readSimulationInfo(self, simulationInfoFile):
         '''
         reads sim info XML file and organizes paths and variables into a list for iteration
         :param simulationInfoFile: full path to simulation information XML file from WAT
@@ -1199,16 +1199,16 @@ class MakeAutomatedReport(object):
             simulationInfo['modelalternatives'] = modelAlternatives
             self.Simulations.append(simulationInfo)
 
-    def ReadSimulationsCSV(self):
+    def readSimulationsCSV(self):
         '''
         reads the Simulation file and gets the region info
         :return: class variable
                     self.SimulationCSV
         '''
 
-        self.SimulationCSV = WDR.ReadSimulationFile(self.baseSimulationName, self.studyDir)
+        self.SimulationCSV = WDR.readSimulationFile(self.baseSimulationName, self.studyDir)
 
-    def ReadGraphicsDefaultFile(self):
+    def readGraphicsDefaultFile(self):
         '''
         sets up path for graphics default file in study and reads the xml
         :return: class variable
@@ -1217,9 +1217,9 @@ class MakeAutomatedReport(object):
 
         graphicsDefaultfile = os.path.join(self.studyDir, 'reports', 'Graphics_Defaults.xml')
         # graphicsDefaultfile = os.path.join(self.default_dir, 'Graphics_Defaults.xml') #TODO: implement with build
-        self.graphicsDefault = WDR.ReadGraphicsDefaults(graphicsDefaultfile)
+        self.graphicsDefault = WDR.readGraphicsDefaults(graphicsDefaultfile)
 
-    def ReadLinesstylesDefaultFile(self):
+    def readDefaultLineStylesFile(self):
         '''
         sets up path for default line styles file and reads the xml
         :return: class variable
@@ -1228,9 +1228,9 @@ class MakeAutomatedReport(object):
 
         defaultLinesFile = os.path.join(self.studyDir, 'reports', 'defaultLineStyles.xml')
         # defaultLinesFile = os.path.join(self.default_dir, 'defaultLineStyles.xml') #TODO: implement with build
-        self.defaultLineStyles = WDR.ReadDefaultLineStyle(defaultLinesFile)
+        self.defaultLineStyles = WDR.readDefaultLineStyle(defaultLinesFile)
 
-    def ReadDefinitionsFile(self, simorder):
+    def readDefinitionsFile(self, simorder):
         '''
         reads the chapter definitions file defined in the plugin csv file for a specified simulation
         :param simorder: simulation dictionary object
@@ -1239,9 +1239,9 @@ class MakeAutomatedReport(object):
         '''
 
         ChapterDefinitionsFile = os.path.join(self.studyDir, 'reports', simorder['deffile'])
-        self.ChapterDefinitions = WDR.ReadChapterDefFile(ChapterDefinitionsFile)
+        self.ChapterDefinitions = WDR.readChapterDefFile(ChapterDefinitionsFile)
 
-    def SetSimulationDateTimes(self):
+    def setSimulationDateTimes(self):
         '''
         sets the simulation start time and dates from string format. If timestamp says 24:00, converts it to be correct
         Datetime format of the next day at 00:00
@@ -1264,7 +1264,7 @@ class MakeAutomatedReport(object):
         else:
             self.EndTime = dt.datetime.strptime(self.EndTimeStr, '%d %B %Y, %H:%M')
 
-    def SetSimulationCSVVars(self, simlist):
+    def setSimulationCSVVars(self, simlist):
         '''
         set variables pertaining to a specified simulation
         :param simlist: dictionary of specified simulation
@@ -1278,7 +1278,7 @@ class MakeAutomatedReport(object):
         self.modelAltName = simlist['modelaltname']
         self.defFile = simlist['deffile']
 
-    def SetSimulationVariables(self, simulation):
+    def setSimulationVariables(self, simulation):
         '''
         sets various class variables for selected variable
         sets simulation dates and times
@@ -1304,7 +1304,7 @@ class MakeAutomatedReport(object):
         self.EndTimeStr = simulation['endtime']
         self.LastComputed = simulation['lastcomputed']
         self.ModelAlternatives = simulation['modelalternatives']
-        self.SetSimulationDateTimes()
+        self.setSimulationDateTimes()
 
     def getPandasTimeFreq(self, intervalstring):
         '''
@@ -1507,7 +1507,7 @@ class MakeAutomatedReport(object):
                     values = copy.deepcopy(self.Data_Memory[datamem_key]['values'])
                     units = copy.deepcopy(self.Data_Memory[datamem_key]['units'])
                 else:
-                    times, values, units = WDR.ReadDSSData(Line_info['dss_filename'], Line_info['dss_path'],
+                    times, values, units = WDR.readDSSData(Line_info['dss_filename'], Line_info['dss_path'],
                                                            self.StartTime, self.EndTime)
                     self.Data_Memory[datamem_key] = {'times': copy.deepcopy(times),
                                                      'values': copy.deepcopy(values),
@@ -1639,7 +1639,7 @@ class MakeAutomatedReport(object):
 
         if 'filename' in Line_info.keys(): #Get data from Observed
             filename = Line_info['filename']
-            values, depths, times = WDR.ReadTextProfile(filename, timesteps)
+            values, depths, times = WDR.readTextProfile(filename, timesteps)
             # times = WDR.getTextProfileDates(filename, self.StartTime, self.EndTime)
             return values, [], depths, times, Line_info['flag']
 
@@ -2389,28 +2389,27 @@ class MakeAutomatedReport(object):
         takes rows for tables and replaces flags with the correct data, computing stat analysis if needed
         :param row: row section string
         :param data_dict: dictionary of data that could be used
-        :param year: selected year, or 'ALL'
         :return: new row value
         '''
         flags = [n for n in data.keys()]
 
         if row.lower().startswith('%%meanbias'):
-            out_stat = WF.meanbias(data[flags[0]], data[flags[1]])
+            out_stat = WF.calcMeanBias(data[flags[0]], data[flags[1]])
             stat = 'meanbias'
         elif row.lower().startswith('%%mae'):
-            out_stat = WF.MAE(data[flags[0]], data[flags[1]])
+            out_stat = WF.calcMAE(data[flags[0]], data[flags[1]])
             stat = 'mae'
         elif row.lower().startswith('%%rmse'):
-            out_stat = WF.RMSE(data[flags[0]], data[flags[1]])
+            out_stat = WF.calcRMSE(data[flags[0]], data[flags[1]])
             stat = 'rmse'
         elif row.lower().startswith('%%nse'):
-            out_stat = WF.NSE(data[flags[0]], data[flags[1]])
+            out_stat = WF.calcNSE(data[flags[0]], data[flags[1]])
             stat = 'nse'
         elif row.lower().startswith('%%count'):
-            out_stat = WF.COUNT(data[flags[0]])
+            out_stat = WF.getCount(data[flags[0]])
             stat = 'count'
         elif row.lower().startswith('%%mean'):
-            out_stat = WF.MEAN(data[flags[0]])
+            out_stat = WF.calcMean(data[flags[0]])
             stat = 'mean'
         else:
             if '%%' in row:
@@ -2559,7 +2558,7 @@ class MakeAutomatedReport(object):
                     headers.append(str(timestamp))
         return headers
 
-    def EqualizeLog(self):
+    def equalizeLog(self):
         '''
         ensure that all arrays are the same length with a '' character
         :return: append self.Log object
@@ -2574,7 +2573,7 @@ class MakeAutomatedReport(object):
                 for i in range(num_entries):
                     self.Log[key].append('')
 
-    def BuildLogFile(self):
+    def buildLogFile(self):
         '''
         builts the log dictionary for conisistent dictionary values
         :return:
@@ -2641,7 +2640,7 @@ class MakeAutomatedReport(object):
             self.XML.writeIntroLine(self.SimulationCSV[model]['plugin'])
         self.XML.writeIntroEnd()
 
-    def WriteChapter(self):
+    def writeChapter(self):
         '''
         writes each chapter defined in the simulation CSV file to the XML file. Generates plots and figures
         :return: class variables
@@ -2652,31 +2651,34 @@ class MakeAutomatedReport(object):
         for Chapter in self.ChapterDefinitions:
             self.ChapterName = Chapter['name']
             self.ChapterRegion = Chapter['region']
-            self.AddLogEntry({'region': self.ChapterRegion})
+            self.addLogEntry({'region': self.ChapterRegion})
             self.XML.writeChapterStart(self.ChapterName)
             for section in Chapter['sections']:
                 section_header = section['header']
                 self.XML.writeSectionHeader(section_header)
                 for object in section['objects']:
                     if object['type'] == 'TimeSeriesPlot':
-                        self.MakeTimeSeriesPlot(object)
+                        self.makeTimeSeriesPlot(object)
                     elif object['type'] == 'ProfilePlot':
-                        self.MakeProfilePlot(object)
+                        self.makeProfilePlot(object)
                     elif object['type'] == 'ErrorStatisticsTable':
-                        self.MakeErrorStatisticsTable(object)
+                        self.makeErrorStatisticsTable(object)
                     elif object['type'] == 'MonthlyStatisticsTable':
-                        self.MakeMonthlyStatisticsTable(object)
+                        self.makeMonthlyStatisticsTable(object)
                     elif object['type'] == 'BuzzPlot':
-                        self.MakeBuzzPlot(object)
+                        self.makeBuzzPlot(object)
                     elif object['type'] == 'ProfileStatisticsTable':
-                        self.MakeProfileStatisticsTable(object)
+                        self.makeProfileStatisticsTable(object)
                     else:
                         print('Section Type {0} not identified.'.format(section['type']))
                         print('Skipping Section..')
                 self.XML.writeSectionHeaderEnd()
+            print('\n################################')
+            print('Chapter Complete.')
+            print('################################\n')
             self.XML.writeChapterEnd()
 
-    def WriteLogFile(self):
+    def writeLogFile(self):
         '''
         Writes out logfile data to csv file in report dir
         :return:
@@ -2704,7 +2706,7 @@ class MakeAutomatedReport(object):
         # df = pd.DataFrame(data, columns=columns)
         df.to_csv(os.path.join(self.images_path, 'Log.csv'), index=False)
 
-    def WriteDataFiles(self):
+    def writeDataFiles(self):
         '''
         writes out the data used in figures to csv files for later use and checking
         '''
@@ -2816,11 +2818,11 @@ class MakeAutomatedReport(object):
         if not os.path.exists(self.CSVPath):
             os.makedirs(self.CSVPath)
 
-        WF.clean_output_dir(self.images_path, '.png')
-        WF.clean_output_dir(self.images_path, '.csv')
-        WF.clean_output_dir(self.CSVPath, '.csv')
+        WF.cleanOutputDirectory(self.images_path, '.png')
+        WF.cleanOutputDirectory(self.images_path, '.csv')
+        WF.cleanOutputDirectory(self.CSVPath, '.csv')
 
-    def LoadModelAlt(self, simCSVAlt):
+    def loadModelAlt(self, simCSVAlt):
         '''
         Loads info for specified model alts. Loads correct model plugin class from WDR
         :param simCSVAlt: simulation alt dict object from self.simulation class
@@ -2859,7 +2861,7 @@ class MakeAutomatedReport(object):
         self.XML = XML_Utils.XMLReport(new_xml)
         self.XML.writeCover('DRAFT Temperature Validation Summary Report')
 
-    def EnsureDefaultFiles(self):
+    def ensureDefaultFiles(self):
         '''
         Copies Reporting files into the main study if they dont exist. Allows for "default" reports out of the gate
         Checks if the default directory exists in the install. if not continue
@@ -2932,10 +2934,10 @@ class MakeAutomatedReport(object):
             if isinstance(dates[0], (float, int)):
                 # print('Dates already in JDate form.')
                 return dates
-            jdates = np.asarray([(WF.dt_to_ord(n) - self.ModelAlt.t_offset) + 1 for n in dates])
+            jdates = np.asarray([(WF.datetime2Ordinal(n) - self.ModelAlt.t_offset) + 1 for n in dates])
             return jdates
         elif isinstance(dates, dt.datetime):
-            jdate = (WF.dt_to_ord(dates) - self.ModelAlt.t_offset) + 1
+            jdate = (WF.datetime2Ordinal(dates) - self.ModelAlt.t_offset) + 1
             return jdate
         else:
             # print('Unable to convert type {0} to JDates'.format(type(dates)))
@@ -2997,7 +2999,7 @@ class MakeAutomatedReport(object):
                 param_key = w2_param_dict[p]
                 return values[param_key]
 
-    def BuzzTargetSum(self, dates, values, target):
+    def buzzTargetSum(self, dates, values, target):
         '''
         finds buzzplot targets defined and returns the flow sums
         :param dates: list of dates
@@ -3358,7 +3360,7 @@ class MakeAutomatedReport(object):
                             break
 
                     if elev_flag != 'NOVALID':
-                        object_settings['linedata'][noelev_flag]['elevations'] = WF.convert_obs_depths(object_settings['linedata'][noelev_flag]['depths'],
+                        object_settings['linedata'][noelev_flag]['elevations'] = WF.convertObsDepths2Elevations(object_settings['linedata'][noelev_flag]['depths'],
                                                                                                        object_settings['linedata'][elev_flag]['elevations'])
                     else:
                         object_settings['usedepth'] = 'true'

@@ -18,7 +18,7 @@ import xml.etree.ElementTree as ET
 import linecache
 import WAT_Functions as WF
 
-def DefinedVarCheck(Block, flags):
+def definedVarCheck(Block, flags):
     '''
     confirms that all flags are contained in the given block, aka check for headers in XML
     :param Block: xml with flags
@@ -32,7 +32,7 @@ def DefinedVarCheck(Block, flags):
             return False
     return True
 
-def ReadSimulationFile(simulation_name, studyfolder):
+def readSimulationFile(simulation_name, studyfolder):
     '''
        Read the right csv file, and determine what region you are working with.
        Simulation CSV files are named after the simulation, and consist of plugin, model alter name, and then region(s)
@@ -57,7 +57,7 @@ def ReadSimulationFile(simulation_name, studyfolder):
                            'deffile': defFile}
     return sim_info
 
-def ReadGraphicsDefaults(GD_file):
+def readGraphicsDefaults(GD_file):
     '''
     reads graphics default file and iterates through to form dictionary
     :param GD_file: graphics default file path
@@ -71,7 +71,7 @@ def ReadGraphicsDefaults(GD_file):
 
     return reportObjects
 
-def ReadDefaultLineStyle(linefile):
+def readDefaultLineStyle(linefile):
     '''
     reads default linestyle file and iterates through to form dictionary
     :param linefile: linestyle default file path
@@ -84,7 +84,7 @@ def ReadDefaultLineStyle(linefile):
     lineTypes = iterateGraphicsDefaults(def_lineTypes, 'Name')
     return lineTypes
 
-def ReadChapterDefFile(CD_file):
+def readChapterDefFile(CD_file):
     '''
     reads chapter definitions file
     :param CD_file: xml of read chapter definitions file
@@ -95,7 +95,7 @@ def ReadChapterDefFile(CD_file):
     tree = ET.parse(CD_file)
     root = tree.getroot()
     for chapter in root:
-        check = DefinedVarCheck(chapter, ['Name', 'Region', 'Sections'])
+        check = definedVarCheck(chapter, ['Name', 'Region', 'Sections'])
         if check:
             ChapterDef = {}
             chap_name = chapter.find('Name').text
@@ -119,7 +119,7 @@ def ReadChapterDefFile(CD_file):
 
     return Chapters
 
-def ReadDSSData(dss_file, pathname, startdate, enddate):
+def readDSSData(dss_file, pathname, startdate, enddate):
     '''
     calls pydsstools from https://github.com/gyanz/pydsstools to read dss data
     :param dss_file: full path to DSS file
@@ -155,7 +155,7 @@ def ReadDSSData(dss_file, pathname, startdate, enddate):
 
     return times, values, units
 
-def ReadW2ResultsFile(output_file_name, jd_dates, run_path, targetfieldidx=1):
+def readW2ResultsFile(output_file_name, jd_dates, run_path, targetfieldidx=1):
     '''
     reads W2 output text files. files are a bit specialized so the targetfieldidx is variable and allows input
     :param output_file_name: name of file
@@ -187,7 +187,7 @@ def ReadW2ResultsFile(output_file_name, jd_dates, run_path, targetfieldidx=1):
 
     return out_vals
 
-def ReadTextProfile(observed_data_filename, timestamps):
+def readTextProfile(observed_data_filename, timestamps):
     '''
     reads in observed data files and returns values for Temperature Profiles
     :param observed_data_filename: file name
@@ -294,7 +294,7 @@ def getClosestTime(timestamps, dates):
         cdi.append(closestDateidx)
     return cdi
 
-def get_children(root, returnkeyless=False):
+def getchildren(root, returnkeyless=False):
     '''
     recursive function that will read through settings and break down into smaller components. Forms dict relationships
     if simple value- label. Forms lists of several of the same flag within a flag.
@@ -322,9 +322,9 @@ def get_children(root, returnkeyless=False):
                 break
         for subroot in root:
             if isinstance(children[root.tag.lower()], list):
-                children[root.tag.lower()].append(get_children(subroot, returnkeyless=True))
+                children[root.tag.lower()].append(getchildren(subroot, returnkeyless=True))
             elif isinstance(children[root.tag.lower()], dict):
-                children[root.tag.lower()].update(get_children(subroot))
+                children[root.tag.lower()].update(getchildren(subroot))
 
     if returnkeyless:
         children = children[root.tag.lower()]
@@ -346,7 +346,7 @@ def iterateGraphicsDefaults(root, main_key):
             if child.tag == main_key:
                 continue
             else:
-                out[key.lower()][child.tag.lower()] = get_children(child, returnkeyless=True)
+                out[key.lower()][child.tag.lower()] = getchildren(child, returnkeyless=True)
     return out
 
 def iterateChapterDefintions(root):
@@ -360,7 +360,7 @@ def iterateChapterDefintions(root):
     for cr in root:
         keylist = {}
         for child in cr:
-            keylist[child.tag.lower()] = get_children(child, returnkeyless=True)
+            keylist[child.tag.lower()] = getchildren(child, returnkeyless=True)
         out.append(keylist)
     return out
 
@@ -384,11 +384,11 @@ class W2_Results(object):
         self.endtime = endtime
         self.interval_min = interval_min #output time series
         self.control_file = os.path.join(self.run_path, 'w2_con.npt') #this should always be the same
-        self.read_control_file()
+        self.readControlFile()
         # dates are output irregular, so we need to build a regular time series to interpolate to
-        self.jd_dates, self.dt_dates, self.t_offset = self.build_times(self.starttime, self.endtime, self.interval_min)
+        self.jd_dates, self.dt_dates, self.t_offset = self.buildTimes(self.starttime, self.endtime, self.interval_min)
 
-    def read_control_file(self):
+    def readControlFile(self):
         '''
         Open control file lines and format them. Control file lines are split into "groups", usually based off of a
         header, and then the values. Control files are split into sections based off of spaces in the control file
@@ -397,8 +397,8 @@ class W2_Results(object):
                     self.line_sections
         '''
 
-        self.cf_lines = self.get_control_file_lines(self.control_file)
-        self.line_sections = self.format_cf_lines(self.cf_lines)
+        self.cf_lines = self.getControlFileLines(self.control_file)
+        self.line_sections = self.formatCFLines(self.cf_lines)
 
     def get_tempprofile_layers(self):
         '''
@@ -407,17 +407,17 @@ class W2_Results(object):
                     self.layers
         '''
 
-        self.layers = self.get_control_variable(self.line_sections, 'TSR LAYE', pref_output_type=np.float)
+        self.layers = self.getControlVariable(self.line_sections, 'TSR LAYE', pref_output_type=np.float)
 
-    def get_outputfile_name(self):
+    def getOutputFileName(self):
         '''
         gets the name of output files
         :return:
         '''
 
-        self.output_file_name = self.get_control_variable(self.line_sections, 'TSR FILE')[0]
+        self.output_file_name = self.getControlVariable(self.line_sections, 'TSR FILE')[0]
 
-    def get_control_file_lines(self, control_file):
+    def getControlFileLines(self, control_file):
         '''
         reads control file
         :param input_file: full path to control file
@@ -429,7 +429,7 @@ class W2_Results(object):
         file_read.close()
         return np.asarray(file_lines)
 
-    def format_cf_lines(self, cf_lines):
+    def formatCFLines(self, cf_lines):
         '''
         seperates control file lines into sections, based off of spaces in the file. Control files are generally
         formatted like:
@@ -460,7 +460,7 @@ class W2_Results(object):
 
         return sections
 
-    def get_control_variable(self, lines_sections, variable, pref_output_type=np.str):
+    def getControlVariable(self, lines_sections, variable, pref_output_type=np.str):
         '''
         Parses the split control file sections from self.format_cf_lines() for a wanted card. Cards usually preface
         headers in the contro file, see docuemntation. For the give example below...
@@ -503,7 +503,7 @@ class W2_Results(object):
             return outputs[0]
         return outputs
 
-    def build_times(self, start_day, end_day, interval_min):
+    def buildTimes(self, start_day, end_day, interval_min):
         '''
         Creates a regular time series. W2 time series are irregular, so we'll create a regular time series for output
         and then interpolate over it. Return a list of jdates (days past the jan 1, starting at 1) and a list of
@@ -519,10 +519,10 @@ class W2_Results(object):
 
         #Get the offset
         year = start_day.year
-        t_offset = WF.dt_to_ord(dt.datetime(year,1,1,0,0))
+        t_offset = WF.datetime2Ordinal(dt.datetime(year, 1, 1, 0, 0))
         interval_perc_day = interval_min / (60 * 24)
-        start_jdate = (WF.dt_to_ord(start_day) -t_offset) + 1
-        end_jdate = (WF.dt_to_ord(end_day) - t_offset) + 1
+        start_jdate = (WF.datetime2Ordinal(start_day) - t_offset) + 1
+        end_jdate = (WF.datetime2Ordinal(end_day) - t_offset) + 1
         jd_dates = np.arange(start_jdate, end_jdate, interval_perc_day)
         dt_dates = [start_day+dt.timedelta(days=n-1) for n in jd_dates]
 
@@ -545,7 +545,7 @@ class W2_Results(object):
         unique_times = timesteps
 
         self.get_tempprofile_layers() #get the output layers. out at 2m depths
-        self.get_outputfile_name() #get the W2 sanctioned output file name convention
+        self.getOutputFileName() #get the W2 sanctioned output file name convention
 
         wt = np.full((len(self.jd_dates), len(self.layers)), np.nan)
         WS_Elev = np.full((len(self.jd_dates), len(self.layers)), np.nan)
@@ -576,10 +576,10 @@ class W2_Results(object):
         times = []
         for t, time in enumerate(unique_times):
             e = []
-            timestep = WF.get_idx_for_time(self.jd_dates, time, self.t_offset)
+            timestep = WF.getIdxForTimestamp(self.jd_dates, time, self.t_offset)
             if timestep > -1:
                 WSE = WS_Elev[timestep] #Meters
-                if not WF.check_data(WSE):
+                if not WF.checkData(WSE):
                     continue
                 WSE = WSE[np.where(~np.isnan(WSE))][0]
                 for depth in self.layers:
@@ -748,11 +748,11 @@ class ResSim_Results(object):
         self.starttime = starttime
         self.endtime = endtime
 
-        self.GetH5File()
+        self.getH5File()
         self.load_time() #load time vars from h5
-        self.load_subdomains()
+        self.loadSubdomains()
 
-    def GetH5File(self):
+    def getH5File(self):
         '''
         build h5 file name and open file
         :return: class variable
@@ -793,7 +793,7 @@ class ResSim_Results(object):
         self.jd_dates = np.asarray(jd_dates)
         self.t_offset = t_offset
 
-    def load_subdomains(self):
+    def loadSubdomains(self):
         '''
         creates a dictionary of all subdomains in the H5 file and grabes their XY coordinates for later reference
         :return: set class variables
@@ -818,7 +818,7 @@ class ResSim_Results(object):
         :return: vals, elevations, depths
         '''
 
-        self.load_elevation(alt_subdomain_name=resname)
+        self.loadElevation(alt_subdomain_name=resname)
         unique_times = [n for n in times]
 
         vals = []
@@ -827,7 +827,7 @@ class ResSim_Results(object):
         times = []
         # print('UNIQUE TIMES:', unique_times)
         for j, time_in in enumerate(unique_times):
-            timestep = WF.get_idx_for_time(self.jd_dates, time_in, self.t_offset)
+            timestep = WF.getIdxForTimestamp(self.jd_dates, time_in, self.t_offset)
             if timestep == -1:
                 depths.append(np.asarray([]))
                 elevations.append(np.asarray([]))
@@ -836,8 +836,8 @@ class ResSim_Results(object):
                 # continue
             else:
             # print('finding time for', time_in)
-                self.load_results(time_in, metric.lower(), alt_subdomain_name=resname)
-                ktop = self.get_top_layer(timestep) #get waterlevel top layer to know where to grab data from
+                self.loadResults(time_in, metric.lower(), alt_subdomain_name=resname)
+                ktop = self.getTopLayer(timestep) #get waterlevel top layer to know where to grab data from
                 v_el = self.vals[:ktop + 1]
                 el = self.elev[:ktop + 1]
                 d_step = []
@@ -853,7 +853,7 @@ class ResSim_Results(object):
                 times.append(time_in)
         return vals, elevations, depths, np.asarray(times)
 
-    def get_top_layer(self, timestep_index):
+    def getTopLayer(self, timestep_index):
         '''
         grabs the top active layer of water for a given timestep
         :param timestep_index: timestep index to grab data at
@@ -869,7 +869,7 @@ class ResSim_Results(object):
                 break
         return k
 
-    def load_elevation(self, alt_subdomain_name=None):
+    def loadElevation(self, alt_subdomain_name=None):
         '''
         loads elevations from the H5 file
         :param alt_subdomain_name: alternate field if the domain is not class defined subdomain name
@@ -887,7 +887,7 @@ class ResSim_Results(object):
         self.elev_ts = np.array([elev_ts[i] for i in range(self.nt)])
 
 
-    def load_results(self, t_in, metrc, alt_subdomain_name=None):
+    def loadResults(self, t_in, metrc, alt_subdomain_name=None):
         '''
         loads results for a specific time step from h5 file
         :param t_in: time in datetime object
@@ -900,7 +900,7 @@ class ResSim_Results(object):
 
         this_subdomain = self.subdomain_name if alt_subdomain_name is None else alt_subdomain_name
 
-        timestep = WF.get_idx_for_time(self.jd_dates, t_in, self.t_offset) #get timestep index for current date
+        timestep = WF.getIdxForTimestamp(self.jd_dates, t_in, self.t_offset) #get timestep index for current date
         if timestep == -1:
             print('should never be here..')
         self.t_data = t_in
@@ -925,7 +925,7 @@ class ResSim_Results(object):
             metric_name = 'Dissolved Oxygen'
             vtmp = self.h['Results/Subdomains/' + this_subdomain + '/' + metric_name]
             vdo = np.array([vtmp[timestep][i] for i in range(self.ncells)])
-            vals = WF.calc_computed_dosat(vt, vdo)
+            vals = WF.calcComputedDOSat(vt, vdo)
         self.vals = vals
 
     def readTimeSeries(self, metric, x, y):
@@ -939,28 +939,28 @@ class ResSim_Results(object):
         :return: times and values arrays for selected metric and time window
         '''
 
-        i, subdomain_name = self.find_computed_station_cell(x, y)
+        i, subdomain_name = self.findComputedStationCell(x, y)
 
         if metric.lower() == 'flow':
             dataset_name = 'Cell flow'
             dataset = self.h['Results/Subdomains/{0}/{1}'.format(subdomain_name, dataset_name)]
             v = np.array(dataset[:, i])
-            v = WF.clean_computed(v)
+            v = WF.cleanComputed(v)
         elif metric.lower() == 'elevation':
             dataset_name = 'Water Surface Elevation'
             dataset = self.h['Results/Subdomains/{0}/{1}'.format(subdomain_name, dataset_name)]
             v = np.array(dataset[:])
-            v = WF.clean_computed(v)
+            v = WF.cleanComputed(v)
         elif metric.lower() == 'temperature':
             dataset_name = 'Water Temperature'
             dataset = self.h['Results/Subdomains/{0}/{1}'.format(subdomain_name, dataset_name)]
             v = np.array(dataset[:, i])
-            v = WF.clean_computed(v)
+            v = WF.cleanComputed(v)
         elif metric.lower() == 'do':
             dataset_name = 'Dissolved Oxygen'
             dataset = self.h['Results/Subdomains/{0}/{1}'.format(subdomain_name, dataset_name)]
             v = np.array(dataset[:, i])
-            v = WF.clean_computed(v)
+            v = WF.cleanComputed(v)
         elif metric.lower() == 'do_sat':
             dataset_name = 'Water Temperature'
             dataset = self.h['Results/Subdomains/{0}/{1}'.format(subdomain_name, dataset_name)]
@@ -968,12 +968,12 @@ class ResSim_Results(object):
             dataset_name = 'Dissolved Oxygen'
             dataset = self.h['Results/Subdomains/{0}/{1}'.format(subdomain_name, dataset_name)]
             vdo = np.array(dataset[:, i])
-            vt = WF.clean_computed(vt)
-            vdo = WF.clean_computed(vdo)
-            v = WF.calc_computed_dosat(vt, vdo)
+            vt = WF.cleanComputed(vt)
+            vdo = WF.cleanComputed(vdo)
+            v = WF.calcComputedDOSat(vt, vdo)
 
         if not hasattr(self, 't_computed'):
-            self.load_computed_time()
+            self.loadComputedTime()
         istart = 0
         iend = -1
         return self.t_computed[istart:iend], v[istart:iend]
@@ -991,7 +991,7 @@ class ResSim_Results(object):
         dates, vals = self.get_Timeseries(metric, xy=[x, y])
         return dates, vals
 
-    def find_computed_station_cell(self, easting, northing):
+    def findComputedStationCell(self, easting, northing):
         '''
         finds subdomains that are closest to observed station coordinates
         TODO: add some kind of tolerance or max distance?
@@ -1013,7 +1013,7 @@ class ResSim_Results(object):
                 nearest_dist = min_dist
         return data_index, data_subdomain
 
-    def load_computed_time(self):
+    def loadComputedTime(self):
         '''
         loads computed time values, replacing 24 hr date values with 0000 the next day
         grabs all values instead of user defined, if none are defined
