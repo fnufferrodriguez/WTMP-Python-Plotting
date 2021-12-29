@@ -383,8 +383,6 @@ def calcNSE(data1, data2):
     data1, data2 = removeNaNs(data1, data2, flag='values')
     dcheck1 = checkData(data1, flag='values')
     dcheck2 = checkData(data2, flag='values')
-    print('DATA1:', data1['values'])
-    print('DATA2:', data2['values'])
     if not dcheck1 or not dcheck2:
         return np.nan
     # nash = nse(data1['values'], data2['values'])
@@ -400,7 +398,6 @@ def calcNSE(data1, data2):
     #         / np.sum((data2['values'] - np.mean(data2['values'])) ** 2, dtype=np.float64)
     # )
 
-    print('NSE:', nse_)
     return nse_
 
 def getCount(data1):
