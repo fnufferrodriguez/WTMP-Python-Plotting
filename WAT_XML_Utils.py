@@ -16,14 +16,14 @@ class XMLReport(object):
         '''
 
         self.XML_fn = XML_fn
-        self.MakeXML()
-        self.PrimeCounters()
+        self.makeXML()
+        self.primeCounters()
 
 #########################################################################################
                             #Main functions#
 #########################################################################################
 
-    def MakeXML(self):
+    def makeXML(self):
         '''
         creates and writes a fresh XML file for report
         '''
@@ -32,7 +32,7 @@ class XMLReport(object):
             XML.write('<?xml version="1.0" encoding="UTF-8"?>\n')
             XML.write('<USBR_Automated_Report>\n')
 
-    def PrimeCounters(self):
+    def primeCounters(self):
         '''
         sets up counters for figures tables and sections. Some start at 0, some start at 1
         '''
