@@ -20,6 +20,8 @@ import re
 from collections import Counter
 import shutil
 from scipy import interpolate
+from functools import reduce
+
 
 import WAT_DataReader as WDR
 import WAT_Functions as WF
@@ -298,18 +300,21 @@ class MakeAutomatedReport(object):
                         lw=line_settings['linewidth'], ls=line_settings['linestylepattern'],
                         marker=line_settings['symboltype'], markerfacecolor=line_settings['pointfillcolor'],
                         markeredgecolor=line_settings['pointlinecolor'], markersize=float(line_settings['symbolsize']),
-                        markevery=int(line_settings['numptsskip']), zorder=float(line_settings['zorder']))
+                        markevery=int(line_settings['numptsskip']), zorder=float(line_settings['zorder']),
+                        alpha=float(line_settings['alpha']))
 
             elif line_settings['drawline'].lower() == 'true':
                 ax.plot(dates, values, label=line_settings['label'], c=line_settings['linecolor'],
                         lw=line_settings['linewidth'], ls=line_settings['linestylepattern'],
-                        zorder=float(line_settings['zorder']))
+                        zorder=float(line_settings['zorder']),
+                        alpha=float(line_settings['alpha']))
 
             elif line_settings['drawpoints'].lower() == 'true':
                 ax.scatter(dates[::int(line_settings['numptsskip'])], values[::int(line_settings['numptsskip'])],
                            marker=line_settings['symboltype'], facecolor=line_settings['pointfillcolor'],
                            edgecolor=line_settings['pointlinecolor'], s=float(line_settings['symbolsize']),
-                           label=line_settings['label'], zorder=float(line_settings['zorder']))
+                           label=line_settings['label'], zorder=float(line_settings['zorder']),
+                           alpha=float(line_settings['alpha']))
 
 
             self.addLogEntry({'type': line_settings['label'] + '_TimeSeries' if line_settings['label'] != '' else 'Timeseries',
@@ -421,6 +426,8 @@ class MakeAutomatedReport(object):
 
         default_settings = self.loadDefaultPlotObject('profilestatisticstable')
         object_settings = self.replaceDefaults(default_settings, object_settings)
+        object_settings['datakey'] = 'datapaths'
+        object_settings['usedepth'] = 'true'
 
         ################# Get timestamps #################
         object_settings['datessource_flag'] = self.getDateSourceFlag(object_settings)
@@ -430,7 +437,7 @@ class MakeAutomatedReport(object):
         object_settings['plot_parameter'] = self.getPlotParameter(object_settings)
 
         ################# Get data #################
-        object_settings['linedata'] = self.getProfileLines(object_settings)
+        object_settings['linedata'] = self.getProfileData(object_settings)
 
         ################# Get plot units #################
         object_settings = self.convertProfileDataUnits(object_settings)
@@ -439,6 +446,8 @@ class MakeAutomatedReport(object):
         object_settings = self.updateFlaggedValues(object_settings, '%%units%%', object_settings['plot_units'])
 
         object_settings['resolution'] = self.getProfileInterpResolution(object_settings)
+        object_settings = self.filterProfileData(object_settings)
+
 
         object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = self.getPlotYears(object_settings)
 
@@ -493,6 +502,8 @@ class MakeAutomatedReport(object):
 
         default_settings = self.loadDefaultPlotObject('profileplot')
         object_settings = self.replaceDefaults(default_settings, object_settings)
+        object_settings['datakey'] = 'lines'
+
         obj_desc = self.updateFlaggedValues(object_settings['description'], '%%year%%', self.years_str)
         self.XML.writeProfilePlotStart(obj_desc)
 
@@ -504,7 +515,7 @@ class MakeAutomatedReport(object):
         object_settings['plot_parameter'] = self.getPlotParameter(object_settings)
 
         ################# Get data #################
-        object_settings['linedata'] = self.getProfileLines(object_settings)
+        object_settings['linedata'] = self.getProfileData(object_settings)
 
         ################# Get plot units #################
         object_settings = self.convertProfileDataUnits(object_settings)
@@ -516,6 +527,7 @@ class MakeAutomatedReport(object):
         object_settings = self.convertDepthsToElevations(object_settings)
 
         self.commitProfileDataToMemory(object_settings)
+        object_settings = self.filterProfileData(object_settings)
 
         object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = self.getPlotYears(object_settings)
 
@@ -583,18 +595,21 @@ class MakeAutomatedReport(object):
                                     lw=current_ls['linewidth'], ls=current_ls['linestylepattern'],
                                     marker=current_ls['symboltype'], markerfacecolor=current_ls['pointfillcolor'],
                                     markeredgecolor=current_ls['pointlinecolor'], markersize=float(current_ls['symbolsize']),
-                                    markevery=int(current_ls['numptsskip']), zorder=int(current_ls['zorder']))
+                                    markevery=int(current_ls['numptsskip']), zorder=int(current_ls['zorder']),
+                                    alpha=float(current_ls['alpha']))
 
                         elif current_ls['drawline'].lower() == 'true':
                             ax.plot(values, levels, label=current_ls['label'], c=current_ls['linecolor'],
                                     lw=current_ls['linewidth'], ls=current_ls['linestylepattern'],
-                                    zorder=int(current_ls['zorder']))
+                                    zorder=int(current_ls['zorder']),
+                                    alpha=float(current_ls['alpha']))
 
                         elif current_ls['drawpoints'].lower() == 'true':
                             ax.scatter(values[::int(current_ls['numptsskip'])], levels[::int(current_ls['numptsskip'])],
                                        marker=current_ls['symboltype'], facecolor=current_ls['pointfillcolor'],
                                        edgecolor=current_ls['pointlinecolor'], s=float(current_ls['symbolsize']),
-                                       label=current_ls['label'], zorder=int(current_ls['zorder']))
+                                       label=current_ls['label'], zorder=int(current_ls['zorder']),
+                                       alpha=float(current_ls['alpha']))
 
                     show_xlabel, show_ylabel = self.getPlotLabelMasks(i, len(pgi), subplot_cols)
 
@@ -1008,18 +1023,21 @@ class MakeAutomatedReport(object):
                                lw=line_settings['linewidth'], ls=line_settings['linestylepattern'],
                                marker=line_settings['symboltype'], markerfacecolor=line_settings['pointfillcolor'],
                                markeredgecolor=line_settings['pointlinecolor'], markersize=float(line_settings['symbolsize']),
-                               markevery=int(line_settings['numptsskip']), zorder=int(line_settings['zorder']))
+                               markevery=int(line_settings['numptsskip']), zorder=int(line_settings['zorder']),
+                               alpha=float(line_settings['alpha']))
 
                 elif line_settings['drawline'].lower() == 'true':
                     curax.plot(dates, values, label=line_settings['label'], c=line_settings['linecolor'],
                                lw=line_settings['linewidth'], ls=line_settings['linestylepattern'],
-                               zorder=int(line_settings['zorder']))
+                               zorder=int(line_settings['zorder']),
+                               alpha=float(line_settings['alpha']))
 
                 elif line_settings['drawpoints'].lower() == 'true':
                     curax.scatter(dates[::int(line_settings['numptsskip'])], values[::int(line_settings['numptsskip'])],
                                   marker=line_settings['symboltype'], facecolor=line_settings['pointfillcolor'],
                                   edgecolor=line_settings['pointlinecolor'], s=float(line_settings['symbolsize']),
-                                  label=line_settings['label'], zorder=int(line_settings['zorder']))
+                                  label=line_settings['label'], zorder=int(line_settings['zorder']),
+                                  alpha=float(line_settings['alpha']))
 
                 self.addLogEntry({'type': line_settings['label'] + '_BuzzPlot' if line_settings['label'] != '' else 'BuzzPlot',
                                   'name': self.ChapterRegion,
@@ -1404,7 +1422,7 @@ class MakeAutomatedReport(object):
 
         #unless explicitly stated, look for key identifiers to draw lines or not
         LineVars = ['linecolor', 'linestylepattern', 'linewidth']
-        PointVars = ['pointfillcolor', 'pointlinecolor', 'symboltype', 'symbolsize', 'numptsskip']
+        PointVars = ['pointfillcolor', 'pointlinecolor', 'symboltype', 'symbolsize', 'numptsskip', 'markersize']
 
         if 'drawline' not in LineSettings.keys():
             for var in LineVars:
@@ -1437,7 +1455,7 @@ class MakeAutomatedReport(object):
 
         if i >= len(self.def_colors):
             i = i - len(self.def_colors)
-        return {'linewidth': 2, 'linecolor': self.def_colors[i], 'linestyle': 'solid'}
+        return {'linewidth': 2, 'linecolor': self.def_colors[i], 'linestyle': 'solid', 'alpha': 1.0}
 
     def getDefaultDefaultPointStyles(self, i):
         '''
@@ -1450,7 +1468,7 @@ class MakeAutomatedReport(object):
         if i >= len(self.def_colors):
             i = i - len(self.def_colors)
         return {'pointfillcolor': self.def_colors[i], 'pointlinecolor': self.def_colors[i], 'symboltype': 1,
-                'symbolsize': 5, 'numptsskip': 0}
+                'symbolsize': 5, 'numptsskip': 0, 'alpha': 1.0}
 
     def getLineSettings(self, LineSettings, Flag):
         '''
@@ -1623,7 +1641,7 @@ class MakeAutomatedReport(object):
         most_common_interval = occurence_count.most_common(1)[0][0]
         return most_common_interval
 
-    def getProfileData(self, Line_info, timesteps):
+    def getProfileValues(self, Line_info, timesteps):
         '''
         reads in profile data from various sources for profile plots at given timesteps
         attempts to get elevations if possible
@@ -1651,16 +1669,17 @@ class MakeAutomatedReport(object):
         print('Line:', Line_info)
         return [], [], [], [], None
 
-    def getProfileLines(self, object_settings):
+    def getProfileData(self, object_settings):
         '''
         Gets profile line data from defined data sources in XML files
         :param object_settings: currently selected object settings dictionary
+        :param keyval: determines what key to iterate over for data
         :return: dictionary containing data and information about each data set
         '''
 
         linedata = {}
-        for line in object_settings['lines']:
-            vals, elevations, depths, times, flag = self.getProfileData(line, object_settings['timestamps']) #Test this speed for grabbing all profiles and then choosing
+        for line in object_settings[object_settings['datakey']]:
+            vals, elevations, depths, times, flag = self.getProfileValues(line, object_settings['timestamps']) #Test this speed for grabbing all profiles and then choosing
             datamem_key = self.buildDataMemoryKey(line)
             if 'units' in line.keys():
                 units = line['units']
@@ -1673,6 +1692,10 @@ class MakeAutomatedReport(object):
                               'times': times,
                               'units': units,
                               'logoutputfilename': datamem_key}
+
+            for key in line.keys():
+                if key not in linedata[flag].keys():
+                    linedata[flag][key] = line[key]
 
         return linedata
 
@@ -1876,7 +1899,7 @@ class MakeAutomatedReport(object):
         '''
 
         if isinstance(object_settings['datessource_flag'], str):
-            for line in object_settings['lines']:
+            for line in object_settings[object_settings['datakey']]:
                 if line['flag'] == object_settings['datessource_flag']:
                     timestamps = self.getProfileDates(line)
         elif isinstance(object_settings['datessource_flag'], dict): #single date instance..
@@ -2094,6 +2117,7 @@ class MakeAutomatedReport(object):
                           '%%plugin%%': self.plugin,
                           '%%modelAltName%%': self.modelAltName,
                           '%%SimulationName%%': self.SimulationName,
+                          '%%SimulationDir%%': self.simulationDir,
                           '%%baseSimulationName%%': self.baseSimulationName,
                           '%%starttime%%': self.StartTimeStr,
                           '%%endtime%%': self.EndTimeStr,
@@ -2443,14 +2467,14 @@ class MakeAutomatedReport(object):
         for flag in flags:
             out_data[flag] = {}
             #interpolate over all values and then get interp values
-            try:
-                f_interp = interpolate.interp1d(data[flag]['depths'][index], data[flag]['values'][index])
-                out_data[flag]['depths'] = output_interp_elevations
-                out_data[flag]['values'] = f_interp(output_interp_elevations)
-            except ValueError:
-                print('Cannot interpolate depths for', flag)
-                out_data[flag]['depths'] = output_interp_elevations
-                out_data[flag]['values'] = np.full(len(output_interp_elevations), np.nan)
+            # try:
+            f_interp = interpolate.interp1d(data[flag]['depths'][index], data[flag]['values'][index], fill_value='extrapolate')
+            out_data[flag]['depths'] = output_interp_elevations
+            out_data[flag]['values'] = f_interp(output_interp_elevations)
+            # except ValueError:
+            #     print('Cannot interpolate depths for', flag)
+            #     out_data[flag]['depths'] = output_interp_elevations
+            #     out_data[flag]['values'] = np.full(len(output_interp_elevations), np.nan)
 
         return out_data
 
@@ -3277,6 +3301,83 @@ class MakeAutomatedReport(object):
         if year == 'ALLYEARS':
             return timestamps
         return [n for n in timestamps if n.year == year]
+
+    def filterProfileData(self, object_settings):
+        xmax = None
+        xmin = None
+        ymax = None
+        ymin = None
+
+        if 'usedepth' in object_settings.keys():
+            if object_settings['usedepth'].lower() == 'true':
+                yflag = 'depths'
+            else:
+                yflag = 'elevations'
+        else:
+            print('UseDepth flag not set. Cannot filter properly.')
+            return object_settings
+
+        if 'xlims' in object_settings.keys():
+            if 'max' in object_settings['xlims'].keys():
+                xmax = float(object_settings['xlims']['max'])
+            if 'min' in object_settings['xlims'].keys():
+                xmin = float(object_settings['xlims']['min'])
+
+        if 'ylims' in object_settings.keys():
+            if 'max' in object_settings['ylims'].keys():
+                ymax = float(object_settings['ylims']['max'])
+            if 'min' in object_settings['ylims'].keys():
+                ymin = float(object_settings['ylims']['min'])
+
+        # Find Index of ALL acceptable values.
+        for lineflag in object_settings['linedata'].keys():
+            line = object_settings['linedata'][lineflag]
+
+            filtbylims = False
+            if 'filterbylimits' in line.keys():
+                if line['filterbylimits'].lower() == 'true':
+                    filtbylims = True
+
+            if 'omitvalue' in line.keys():
+                omitvalue = float(line['omitvalue'])
+            else:
+                omitvalue = None
+
+            for pi, profile in enumerate(line['values']):
+                ydata = line[yflag][pi]
+
+                if xmax != None and filtbylims:
+                    xmax_filt = np.where(profile <= xmax)
+                else:
+                    xmax_filt = np.arange(len(profile))
+
+                if xmin != None and filtbylims:
+                    xmin_filt = np.where(profile >= xmin)
+                else:
+                    xmin_filt = np.arange(len(profile))
+
+                if ymax != None and filtbylims:
+                    ymax_filt = np.where(ydata <= ymax)
+                else:
+                    ymax_filt = np.arange(len(ydata))
+
+                if ymin != None and filtbylims:
+                    ymin_filt = np.where(ydata >= ymin)
+                else:
+                    ymin_filt = np.arange(len(ydata))
+
+                if omitvalue != None:
+                    omitval_filt = np.where(profile != omitvalue)
+                else:
+                    omitval_filt = np.arange(len(profile))
+
+                master_filter = reduce(np.intersect1d, (xmax_filt, xmin_filt, ymax_filt, ymin_filt, omitval_filt))
+
+                object_settings['linedata'][lineflag]['values'][pi] = profile[master_filter]
+                object_settings['linedata'][lineflag][yflag][pi] = ydata[master_filter]
+
+        return object_settings
+
 
     def updateFlaggedValues(self, settings, flaggedvalue, replacevalue):
         '''
