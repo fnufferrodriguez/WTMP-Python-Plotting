@@ -203,7 +203,8 @@ def readTextProfile(observed_data_filename, timestamps):
     d_profile = []
     hold_dt = dt.datetime(1933, 10, 15) #https://www.onthisday.com/date/1933/october/15 sorry Steve
     if not os.path.exists(observed_data_filename):
-        return [], []
+        print('Observed data at {0} does not exist.'.format(observed_data_filename))
+        return [], [], []
     with open(observed_data_filename, 'r') as odf:
         for j, line in enumerate(odf):
             if j == 0:
