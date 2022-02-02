@@ -19,15 +19,14 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import xml.etree.ElementTree as ET
-import copy
 import calendar
-import dateutil.parser
 import re
 from collections import Counter
 import shutil
 from scipy import interpolate
 from functools import reduce
-
+import pickle
+import pendulum
 
 import WAT_DataReader as WDR
 import WAT_Functions as WF
@@ -549,7 +548,7 @@ class MakeAutomatedReport(object):
             prof_indices = [np.where(object_settings['timestamps'] == n)[0][0] for n in t_stmps]
             n = int(object_settings['profilesperrow']) * int(object_settings['rowsperpage']) #Get number of plots on page
             page_indices = [prof_indices[i * n:(i + 1) * n] for i in range((len(prof_indices) + n - 1) // n)]
-            cur_obj_settings = copy.deepcopy(object_settings)
+            cur_obj_settings = pickle.loads(pickle.dumps(object_settings, -1))
 
             for page_i, pgi in enumerate(page_indices):
 
@@ -1090,7 +1089,6 @@ class MakeAutomatedReport(object):
 
         if 'yticksize' in object_settings.keys():
             yticksize = float(object_settings['yticksize'])
-        elif 'fontsize' in object_settings.keys():
             yticksize = float(object_settings['fontsize'])
         else:
             yticksize = 10
@@ -1486,7 +1484,7 @@ class MakeAutomatedReport(object):
 
         for line in LineSettings:
             if Flag == line['flag']:
-                return copy.deepcopy(line)
+                return pickle.loads(pickle.dumps(line, -1))
 
     def getPlotLabelMasks(self, idx, nprofiles, cols):
         '''
@@ -1523,15 +1521,16 @@ class MakeAutomatedReport(object):
                 datamem_key = self.buildDataMemoryKey(Line_info)
                 if datamem_key in self.Data_Memory.keys():
                     print('Reading {0} from memory'.format(datamem_key))
-                    times = copy.deepcopy(self.Data_Memory[datamem_key]['times'])
-                    values = copy.deepcopy(self.Data_Memory[datamem_key]['values'])
-                    units = copy.deepcopy(self.Data_Memory[datamem_key]['units'])
+                    times = pickle.loads(pickle.dumps(self.Data_Memory[datamem_key]['times'], -1))
+                    values = pickle.loads(pickle.dumps(self.Data_Memory[datamem_key]['values'], -1))
+                    units = pickle.loads(pickle.dumps(self.Data_Memory[datamem_key]['units'], -1))
                 else:
                     times, values, units = WDR.readDSSData(Line_info['dss_filename'], Line_info['dss_path'],
                                                            self.StartTime, self.EndTime)
-                    self.Data_Memory[datamem_key] = {'times': copy.deepcopy(times),
-                                                     'values': copy.deepcopy(values),
-                                                     'units': copy.deepcopy(units)}
+
+                    self.Data_Memory[datamem_key] = {'times': pickle.loads(pickle.dumps(times, -1)),
+                                                     'values': pickle.loads(pickle.dumps(values -1)),
+                                                     'units': pickle.loads(pickle.dumps(units, -1))}
 
                 if np.any(values == None):
                     return [], [], None
@@ -1542,9 +1541,9 @@ class MakeAutomatedReport(object):
             datamem_key = self.buildDataMemoryKey(Line_info)
             if datamem_key in self.Data_Memory.keys():
                 print('READING {0} FROM MEMORY'.format(datamem_key))
-                times = copy.deepcopy(self.Data_Memory[datamem_key]['times'])
-                values = copy.deepcopy(self.Data_Memory[datamem_key]['values'])
-                units = copy.deepcopy(self.Data_Memory[datamem_key]['units'])
+                times = pickle.loads(pickle.dumps(self.Data_Memory[datamem_key]['times'], -1))
+                values = pickle.loads(pickle.dumps(self.Data_Memory[datamem_key]['values'], -1))
+                units = pickle.loads(pickle.dumps(self.Data_Memory[datamem_key]['units'], -1))
 
             else:
                 if 'structurenumbers' in Line_info.keys():
@@ -1557,17 +1556,17 @@ class MakeAutomatedReport(object):
                 else:
                     units = None
 
-                self.Data_Memory[datamem_key] = {'times': copy.deepcopy(times),
-                                                 'values': copy.deepcopy(values),
-                                                 'units': copy.deepcopy(units)}
+                self.Data_Memory[datamem_key] = {'times': pickle.loads(pickle.dumps(times, -1)),
+                                                 'values': pickle.loads(pickle.dumps(values, -1)),
+                                                 'units': pickle.loads(pickle.dumps(units, -1))}
 
         elif 'easting' in Line_info.keys() and 'northing' in Line_info.keys():
             datamem_key = self.buildDataMemoryKey(Line_info)
             if datamem_key in self.Data_Memory.keys():
                 print('READING {0} FROM MEMORY'.format(datamem_key))
-                times = copy.deepcopy(self.Data_Memory[datamem_key]['times'])
-                values = copy.deepcopy(self.Data_Memory[datamem_key]['values'])
-                units = copy.deepcopy(self.Data_Memory[datamem_key]['units'])
+                times = pickle.loads(pickle.dumps(self.Data_Memory[datamem_key]['times'], -1))
+                values = pickle.loads(pickle.dumps(self.Data_Memory[datamem_key]['values'], -1))
+                units = pickle.loads(pickle.dumps(self.Data_Memory[datamem_key]['units'], -1))
             else:
                 times, values = self.ModelAlt.readTimeSeries(Line_info['parameter'],
                                                              float(Line_info['easting']),
@@ -1577,9 +1576,9 @@ class MakeAutomatedReport(object):
                 else:
                     units = None
 
-                self.Data_Memory[datamem_key] = {'times': copy.deepcopy(times),
-                                                 'values': copy.deepcopy(values),
-                                                 'units': copy.deepcopy(units)}
+                self.Data_Memory[datamem_key] = {'times': pickle.loads(pickle.dumps(times, -1)),
+                                                 'values': pickle.loads(pickle.dumps(values, -1)),
+                                                 'units': pickle.loads(pickle.dumps(units, -1))}
 
         else:
             print('No Data Defined for line')
@@ -2037,8 +2036,8 @@ class MakeAutomatedReport(object):
             default_settings: dictionary of user and default settings
         '''
 
-        default_settings = copy.deepcopy(self.replaceflaggedValues(default_settings))
-        object_settings = copy.deepcopy(self.replaceflaggedValues(object_settings))
+        default_settings = pickle.loads(pickle.dumps(self.replaceflaggedValues(default_settings), -1))
+        object_settings = pickle.loads(pickle.dumps(self.replaceflaggedValues(object_settings), -1))
 
         for key in object_settings.keys():
             if key not in default_settings.keys(): #if defaults doesnt have key
@@ -2234,55 +2233,64 @@ class MakeAutomatedReport(object):
         '''
 
         if dateformat.lower() == 'datetime': #if want datetime
-            if not isinstance(lim, dt.datetime):
+            if isinstance(lim, dt.datetime):
+                return lim
+            else:
                 try:
-                    lim_frmt = dateutil.parser.parse(lim) #try simple date formatting.
+                    # lim_frmt = dateutil.parser.parse(lim) #try simple date formatting.
+                    lim_frmt = pendulum.parse(lim, strict=False).replace(tzinfo=None)#try simple date formatting.
                     if not self.StartTime <= lim_frmt <= self.EndTime: #check for false negative
-                        print('Xlim of {0} not between start and endtime {1} - {2}'.format(lim_frmt, self.StartTime,
-                                                                                           self.EndTime))
-                        raise Exception
+                        raise IndexError
+                    return lim_frmt
+                except IndexError:
+                    print('Xlim of {0} not between start and endtime {1} - {2}'.format(lim_frmt, self.StartTime,
+                                                                                       self.EndTime))
                 except:
                     print('Error Reading Limit: {0} as a dt.datetime object.'.format(lim))
                     print('If this is wrong, try format: Apr 2014 1 12:00')
-                    print('Trying as Jdate..')
-                    try:
-                        lim_frmt = float(lim)
-                        lim_frmt = self.JDateToDatetime(lim_frmt)
-                        print('JDate {0} as {1} Accepted!'.format(lim, lim_frmt))
-                    except:
-                        print('Limit value of {0} also invalid as jdate.'.format(lim))
-                        print('Setting to fallback {0}.'.format(fallback))
-                        lim_frmt = fallback
 
-                return lim_frmt
+                print('Trying as Jdate..')
+                try:
+                    lim_frmt = float(lim)
+                    lim_frmt = self.JDateToDatetime(lim_frmt)
+                    print('JDate {0} as {1} Accepted!'.format(lim, lim_frmt))
+                    return lim_frmt
+                except:
+                    print('Limit value of {0} also invalid as jdate.'.format(lim))
+
+                if fallback != None and fallback != '':
+                    print('Setting to fallback {0}.'.format(fallback))
+                else:
+                    print('Setting to fallback.')
+                return fallback
 
         elif dateformat.lower() == 'jdate':
             try:
-                lim_frmt = float(lim) #try simple date formatting.
+                return float(lim)
             except:
                 print('Error Reading Limit: {0} as a jdate.'.format(lim))
                 print('If this is wrong, try format: 180')
                 print('Trying as Datetime..')
-                try:
-                    if not isinstance(lim, dt.datetime):
-                        lim_frmt = dateutil.parser.parse(lim)
+                if isinstance(lim, dt.datetime):
+                    try:
+                        lim_frmt = pendulum.parse(lim, strict=False).replace(tzinfo=None)
+                        print('Datetime {0} as {1} Accepted!'.format(lim, lim_frmt))
+                        print('converting to jdate..')
+                        lim_frmt = self.DatetimeToJDate(lim_frmt)
+                        print('Converted to jdate!', lim_frmt)
+                        return lim_frmt
+                    except:
+                        print('Error Reading Limit: {0} as a dt.datetime object.'.format(lim))
+                        print('If this is wrong, try format: Apr 2014 1 12:00')
+
+
+                    fallback = self.DatetimeToJDate(fallback)
+
+                    if fallback != None and fallback != '':
+                        print('Setting to fallback {0}.'.format(fallback))
                     else:
-                        lim_frmt = lim
-                    lim_frmt = self.DatetimeToJDate(lim_frmt)
-                    print('Datetime {0} as {1} Accepted!'.format(lim, lim_frmt))
-                except:
-                    print('Limit value of {0} also invalid as datetime.'.format(lim))
-                    print('Setting to fallback {0}.'.format(fallback))
-                    lim_frmt = self.DatetimeToJDate(fallback)
-            return lim_frmt
-
-        else:
-            print('Invalid dateformat of {0}'.format(dateformat))
-            print('Using fallback in dt form.')
-            lim_frmt = fallback
-            return lim_frmt
-
-        return lim
+                        print('Setting to fallback.')
+                    return fallback
 
     def translateUnits(self, units):
         '''
@@ -2379,7 +2387,8 @@ class MakeAutomatedReport(object):
         :return: new row value
         '''
 
-        data = copy.deepcopy(data_dict)
+        data = pickle.loads(pickle.dumps(data_dict, -1))
+
         rrow = row.replace('%%', '')
         s_row = rrow.split('.')
         sr_month = ''
@@ -2438,7 +2447,7 @@ class MakeAutomatedReport(object):
             out_data: dictionary containing values and depths/elevations
         '''
 
-        data = copy.deepcopy(data_dict)
+        data = pickle.loads(pickle.dumps(data_dict, -1))
         rrow = row.replace('%%', '')
         s_row = rrow.split('.')
         flags = []
@@ -2767,17 +2776,18 @@ class MakeAutomatedReport(object):
                 section_header = section['header']
                 self.XML.writeSectionHeader(section_header)
                 for object in section['objects']:
-                    if object['type'] == 'TimeSeriesPlot':
+                    objtype = object['type']
+                    if objtype == 'TimeSeriesPlot':
                         self.makeTimeSeriesPlot(object)
-                    elif object['type'] == 'ProfilePlot':
+                    elif objtype == 'ProfilePlot':
                         self.makeProfilePlot(object)
-                    elif object['type'] == 'ErrorStatisticsTable':
+                    elif objtype == 'ErrorStatisticsTable':
                         self.makeErrorStatisticsTable(object)
-                    elif object['type'] == 'MonthlyStatisticsTable':
+                    elif objtype == 'MonthlyStatisticsTable':
                         self.makeMonthlyStatisticsTable(object)
-                    elif object['type'] == 'BuzzPlot':
+                    elif objtype == 'BuzzPlot':
                         self.makeBuzzPlot(object)
-                    elif object['type'] == 'ProfileStatisticsTable':
+                    elif objtype == 'ProfileStatisticsTable':
                         self.makeProfileStatisticsTable(object)
                     else:
                         print('Section Type {0} not identified.'.format(section['type']))
@@ -3028,13 +3038,13 @@ class MakeAutomatedReport(object):
 
     def loadDefaultPlotObject(self, plotobject):
         '''
-        loads the graphic default options. Uses deepcopy so residual settings are not carried over
+        loads the graphic default options.
         :param plotobject: string specifying the default graphics object
         :return:
             plot_info: dict of object settings
         '''
 
-        plot_info = copy.deepcopy(self.graphicsDefault[plotobject])
+        plot_info = pickle.loads(pickle.dumps(self.graphicsDefault[plotobject], -1))
         return plot_info
 
     def DatetimeToJDate(self, dates):
@@ -3567,10 +3577,10 @@ class MakeAutomatedReport(object):
             depths = object_settings['linedata'][line]['depths']
             elevations = object_settings['linedata'][line]['elevations']
             datamem_key = object_settings['linedata'][line]['logoutputfilename']
-            self.Data_Memory[datamem_key] = {'times': copy.deepcopy(object_settings['timestamps']),
-                                             'values': copy.deepcopy(values),
-                                             'elevations': copy.deepcopy(elevations),
-                                             'depths': copy.deepcopy(depths),
+            self.Data_Memory[datamem_key] = {'times': pickle.loads(pickle.dumps(object_settings['timestamps'], -1)),
+                                             'values': pickle.loads(pickle.dumps(values, -1)),
+                                             'elevations': pickle.loads(pickle.dumps(elevations, -1)),
+                                             'depths': pickle.loads(pickle.dumps(depths, -1)),
                                              'units': object_settings['plot_units'],
                                              'isprofile': True}
 
