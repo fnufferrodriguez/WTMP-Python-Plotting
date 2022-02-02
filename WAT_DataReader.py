@@ -17,12 +17,12 @@ import pandas as pd
 import datetime as dt
 import h5py
 from scipy.interpolate import interp1d
-import dateutil.parser
 from collections import Counter
 from pydsstools.heclib.dss import HecDss
 import xml.etree.ElementTree as ET
 import linecache
 import WAT_Functions as WF
+import pendulum
 
 def definedVarCheck(Block, flags):
     '''
@@ -207,6 +207,8 @@ def readTextProfile(observed_data_filename, timestamps):
     t_profile = []
     wt_profile = []
     d_profile = []
+    last_dtstr = ''
+    last_dt = dt.datetime(1933, 10, 15)
     hold_dt = dt.datetime(1933, 10, 15) #https://www.onthisday.com/date/1933/october/15 sorry Steve
     if not os.path.exists(observed_data_filename):
         print('Observed data at {0} does not exist.'.format(observed_data_filename))
@@ -217,8 +219,15 @@ def readTextProfile(observed_data_filename, timestamps):
                 continue
             sline = line.split(',')
             dt_str = sline[0]
-            dt_tmp = dateutil.parser.parse(dt_str)
-            if (dt_tmp.year != hold_dt.year or dt_tmp.month != hold_dt.month or dt_tmp.day != hold_dt.day):
+            if dt_str == last_dtstr:
+                dt_tmp = last_dt
+            else:
+                # dt_tmp = dateutil.parser.parse(dt_str)
+                dt_tmp = pendulum.parse(dt_str, strict=False).replace(tzinfo=None)
+                last_dtstr = dt_str
+                last_dt = dt_tmp
+            # if (dt_tmp.year != hold_dt.year or dt_tmp.month != hold_dt.month or dt_tmp.day != hold_dt.day): #if its a new date
+            if (dt_tmp != hold_dt): #if its a new date
                 if len(t_profile) != 0 and len(wt_profile) != 0 and len(d_profile) != 0:
                     t.append(np.array(t_profile))
                     wt.append(np.array(wt_profile))
@@ -272,7 +281,8 @@ def getTextProfileDates(observed_data_filename, starttime, endtime):
                 continue
             sline = line.split(',')
             dt_str = sline[0]
-            dt_tmp = dateutil.parser.parse(dt_str) #trying this to see if it will work
+            # dt_tmp = dateutil.parser.parse(dt_str) #trying this to see if it will work
+            dt_tmp = pendulum.parse(dt_str, strict=False).replace(tzinfo=None) #trying this to see if it will work
             if starttime <= dt_tmp <= endtime: #get time window
                 if dt_tmp not in t:
                     t.append(dt_tmp)
