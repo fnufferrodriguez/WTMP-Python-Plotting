@@ -1,4 +1,10 @@
 '''
+* Copyright 2022 United States Bureau of Reclamation (USBR).
+* United States Department of the Interior
+* All Rights Reserved. USBR PROPRIETARY/CONFIDENTIAL.
+* Source may not be released without written approval
+* from USBR
+
 Created on 7/15/2021
 @author: scott
 @organization: Resource Management Associates
@@ -1685,7 +1691,6 @@ class MakeAutomatedReport(object):
                 units = line['units']
             else:
                 units = None
-
             linedata[flag] = {'values': vals,
                               'elevations': elevations,
                               'depths': depths,
@@ -2825,7 +2830,7 @@ class MakeAutomatedReport(object):
                     allelevs = self.Data_Memory[key]['elevations']
                     alldepths = self.Data_Memory[key]['depths']
                     if len(allelevs) == 0: #elevations may not always fall out
-                        allelevs = self.matcharrays('', alldepths)
+                        allelevs = self.matcharrays(allelevs, alldepths)
                     units = self.Data_Memory[key]['units']
                     values = self.getListItems(allvalues)
                     times = self.getListItems(alltimes)
@@ -2875,6 +2880,7 @@ class MakeAutomatedReport(object):
                 '''
                 either ['Date1', 'Date2'], ['1,2,3'] OR ['Date1'], [1,2,3] OR ['DATE1'], [[1,2,3], [1,2,3,4]]
                  OR ['Date1', 'Date2'], [[1,2,3], [2,4,5],[6,
+                 or [], [1,2,3]
                 scenario 1: shouldnt ever happen
                 scenario 2: do Date1 for each item in array2
                 scenario 3: do date1 for each value in each subarray in 2 '''
@@ -2884,6 +2890,12 @@ class MakeAutomatedReport(object):
                     for subarray2 in array2:
                         new_array1.append(self.matcharrays(array1[0], subarray2))
                     return new_array1
+                elif len(array1) == 0: #no data
+                    new_array1 = []
+                    for subarray2 in array2:
+                        new_array1.append(self.matcharrays('', subarray2))
+                    return new_array1
+
                 else:
                     print('ERROR') #If the Len of the arrays are offset, then there should only ever be 1 date
             elif len(array1) == len(array2):
@@ -2895,7 +2907,10 @@ class MakeAutomatedReport(object):
                 print('Array 1 is bigger than array2')
                 print(len(array1))
                 print(len(array2))
-                return array1
+                new_array1 = []
+                for i in enumerate(array2):
+                    new_array1.append(array1[i])
+                return new_array1
 
         #GOAL LOOP
         elif isinstance(array1, (str, dt.datetime, int, float)) and isinstance(array2, (list, np.ndarray)):

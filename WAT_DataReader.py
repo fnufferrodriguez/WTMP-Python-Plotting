@@ -1,4 +1,10 @@
 '''
+* Copyright 2022 United States Bureau of Reclamation (USBR).
+* United States Department of the Interior
+* All Rights Reserved. USBR PROPRIETARY/CONFIDENTIAL.
+* Source may not be released without written approval
+* from USBR
+
 Created on 7/15/2021
 @author: scott
 @organization: Resource Management Associates
@@ -203,7 +209,8 @@ def readTextProfile(observed_data_filename, timestamps):
     d_profile = []
     hold_dt = dt.datetime(1933, 10, 15) #https://www.onthisday.com/date/1933/october/15 sorry Steve
     if not os.path.exists(observed_data_filename):
-        return [], []
+        print('Observed data at {0} does not exist.'.format(observed_data_filename))
+        return [], [], []
     with open(observed_data_filename, 'r') as odf:
         for j, line in enumerate(odf):
             if j == 0:
@@ -543,6 +550,7 @@ class W2_Results(object):
         '''
 
         unique_times = timesteps
+        print('Num unique times:', len(unique_times))
 
         self.get_tempprofile_layers() #get the output layers. out at 2m depths
         self.getOutputFileName() #get the W2 sanctioned output file name convention
@@ -551,12 +559,14 @@ class W2_Results(object):
         WS_Elev = np.full((len(self.jd_dates), len(self.layers)), np.nan)
 
         for i in range(1,len(self.layers)+1):
+            # print('{0} of {1}'.format(i, len(self.layers)+1))
             ofn = '{0}_{1}_seg{2}.{3}'.format(self.output_file_name.split('.')[0],
                                               i,
                                               seg,
                                               self.output_file_name.split('.')[1])
             ofn_path = os.path.join(self.run_path, ofn)
             if not os.path.exists(ofn_path):
+                print('File {0} not found'.format(ofn_path))
                 continue
             op_file = pd.read_csv(ofn_path, header=0)
             op_file.columns = op_file.columns.str.lower()
@@ -570,24 +580,37 @@ class W2_Results(object):
                     except ValueError:
                         continue
 
-        select_wt = np.full((len(unique_times), len(self.layers)), np.nan)
+        # select_wt = np.full((len(unique_times), len(self.layers)), np.nan)
+        select_wt = []
         elevations = []
         depths = []
         times = []
         for t, time in enumerate(unique_times):
+            # print('{0} of {1}'.format(t, len(unique_times)))
             e = []
             timestep = WF.getIdxForTimestamp(self.jd_dates, time, self.t_offset)
-            if timestep > -1:
-                WSE = WS_Elev[timestep] #Meters
-                if not WF.checkData(WSE):
+            if timestep > -1:#timestep in model
+                WSE = WS_Elev[timestep] #Meters #get WSE
+                if not WF.checkData(WSE): #if WSE is bad, skip usually first timestep...
+                    elevations.append(np.array([]))
+                    depths.append(np.array([]))
+                    select_wt.append(np.array([]))
+                    times.append(time)
                     continue
-                WSE = WSE[np.where(~np.isnan(WSE))][0]
-                for depth in self.layers:
+                WSE = WSE[np.where(~np.isnan(WSE))][0] #otherwise find valid
+                for depth in self.layers: #get all depths
                     e.append((WSE - depth) * 3.28) #conv to feet
-                select_wt[t] = wt[timestep][:]
-            elevations.append(np.asarray(e))
-            depths.append(self.layers * 3.28)
-            # times.append(times)
+                # select_wt[t] = wt[timestep][:] #find WTs
+                select_wt.append(wt[timestep][:]) #find WTs
+
+            else: #if timestep NOT in model, add empties
+                select_wt.append(np.array([])) #find WTs
+                elevations.append(np.array([]))
+                depths.append(np.array([]))
+                times.append(time)
+            elevations.append(np.asarray(e)) #then append for timestep
+            depths.append(self.layers * 3.28) #append dpeths
+            times.append(time) #get time
         select_wt, elevations, depths = self.matchProfileLengths(select_wt, elevations, depths)
         # return select_wt, elevations, np.asarray(depths), np.asarray(times)
 
