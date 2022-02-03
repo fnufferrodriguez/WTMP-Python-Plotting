@@ -1529,7 +1529,7 @@ class MakeAutomatedReport(object):
                                                            self.StartTime, self.EndTime)
 
                     self.Data_Memory[datamem_key] = {'times': pickle.loads(pickle.dumps(times, -1)),
-                                                     'values': pickle.loads(pickle.dumps(values -1)),
+                                                     'values': pickle.loads(pickle.dumps(values, -1)),
                                                      'units': pickle.loads(pickle.dumps(units, -1))}
 
                 if np.any(values == None):
