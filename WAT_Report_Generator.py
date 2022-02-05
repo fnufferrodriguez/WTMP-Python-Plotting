@@ -183,11 +183,13 @@ class MakeAutomatedReport(object):
         '''
         sets up a list of default colors to use in the event that colors are not set up in the graphics default file
         for a line
+        Color Changes based off of bureau of Rec Identification program pdf
         :return: class variable
                     self.def_colors
         '''
 
-        self.def_colors = ['darkgreen', 'red', 'blue', 'orange', 'darkcyan', 'darkmagenta', 'gray', 'black']
+        self.def_colors = ['#003E51', '#FF671F', '#007396', '#215732', '#C69214', '#4C12A1', '#DDCBA4', '#9A3324']
+        #                     blue       orange    l blue     green      mustard     purple     tan      dark red
 
     def defineUnits(self):
         '''
@@ -254,7 +256,7 @@ class MakeAutomatedReport(object):
             if units == None:
                 if parameter != None:
                     try:
-                        units = self.units[parameter.lower()]
+                        units = self.units[parameter]
                     except KeyError:
                         units = None
 
@@ -1370,8 +1372,8 @@ class MakeAutomatedReport(object):
             LineSettings: dictionary containing keys describing how the line/points are drawn
         '''
 
-        if param != None:
-            param = param.lower()
+        # if param != 'unknown':
+        #     param = param.lower()
         LineSettings = self.getDrawFlags(LineSettings)
         if LineSettings['drawline'] == 'true':
             if param in self.defaultLineStyles.keys():
@@ -2001,7 +2003,7 @@ class MakeAutomatedReport(object):
             param_count = object_settings['param_count']
 
         if 'parameter' in line.keys():
-            param = line['parameter']
+            param = line['parameter'].lower()
         else:
             param = None
         if param not in param_count.keys():
