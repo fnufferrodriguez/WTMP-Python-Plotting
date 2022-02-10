@@ -450,6 +450,7 @@ class MakeAutomatedReport(object):
         object_settings = self.convertProfileDataUnits(object_settings)
         object_settings['units_list'] = self.getUnitsList(object_settings)
         object_settings['plot_units'] = self.getPlotUnits(object_settings)
+
         object_settings = self.updateFlaggedValues(object_settings, '%%units%%', object_settings['plot_units'])
 
         object_settings['resolution'] = self.getProfileInterpResolution(object_settings)
@@ -464,6 +465,7 @@ class MakeAutomatedReport(object):
                 yearstr = str(year)
             else:
                 yearstr = object_settings['yearstr']
+
 
             object_desc = self.updateFlaggedValues(object_settings['description'], '%%year%%', yearstr)
             self.XML.writeTableStart(object_desc, 'Statistics')
@@ -558,7 +560,7 @@ class MakeAutomatedReport(object):
                 n_nrow_active = np.ceil(len(pgi) / subplot_cols)
                 fig = plt.figure(figsize=(7, 1 + 3 * n_nrow_active))
 
-                current_object_settings = self.updateFlaggedValues(cur_obj_settings, '%%year%%', yearstr)
+                current_object_settings = self.updateFlaggedValues(cur_obj_settings, '%%year%%', yearstr) #TODO: reudce the settings
 
                 for i, j in enumerate(pgi):
                     ax = fig.add_subplot(int(subplot_rows), int(subplot_cols), i + 1)
@@ -1523,9 +1525,10 @@ class MakeAutomatedReport(object):
                 datamem_key = self.buildDataMemoryKey(Line_info)
                 if datamem_key in self.Data_Memory.keys():
                     print('Reading {0} from memory'.format(datamem_key))
-                    times = pickle.loads(pickle.dumps(self.Data_Memory[datamem_key]['times'], -1))
-                    values = pickle.loads(pickle.dumps(self.Data_Memory[datamem_key]['values'], -1))
-                    units = pickle.loads(pickle.dumps(self.Data_Memory[datamem_key]['units'], -1))
+                    datamementry = pickle.loads(pickle.dumps(self.Data_Memory[datamem_key], -1))
+                    times = datamementry['times']
+                    values = datamementry['values']
+                    units = datamementry['units']
                 else:
                     times, values, units = WDR.readDSSData(Line_info['dss_filename'], Line_info['dss_path'],
                                                            self.StartTime, self.EndTime)
@@ -1543,9 +1546,13 @@ class MakeAutomatedReport(object):
             datamem_key = self.buildDataMemoryKey(Line_info)
             if datamem_key in self.Data_Memory.keys():
                 print('READING {0} FROM MEMORY'.format(datamem_key))
-                times = pickle.loads(pickle.dumps(self.Data_Memory[datamem_key]['times'], -1))
-                values = pickle.loads(pickle.dumps(self.Data_Memory[datamem_key]['values'], -1))
-                units = pickle.loads(pickle.dumps(self.Data_Memory[datamem_key]['units'], -1))
+                datamementry = pickle.loads(pickle.dumps(self.Data_Memory[datamem_key], -1))
+                times = datamementry['times']
+                values = datamementry['values']
+                units = datamementry['units']
+                # times = pickle.loads(pickle.dumps(self.Data_Memory[datamem_key]['times'], -1))
+                # values = pickle.loads(pickle.dumps(self.Data_Memory[datamem_key]['values'], -1))
+                # units = pickle.loads(pickle.dumps(self.Data_Memory[datamem_key]['units'], -1))
 
             else:
                 if 'structurenumbers' in Line_info.keys():
@@ -1566,9 +1573,13 @@ class MakeAutomatedReport(object):
             datamem_key = self.buildDataMemoryKey(Line_info)
             if datamem_key in self.Data_Memory.keys():
                 print('READING {0} FROM MEMORY'.format(datamem_key))
-                times = pickle.loads(pickle.dumps(self.Data_Memory[datamem_key]['times'], -1))
-                values = pickle.loads(pickle.dumps(self.Data_Memory[datamem_key]['values'], -1))
-                units = pickle.loads(pickle.dumps(self.Data_Memory[datamem_key]['units'], -1))
+                datamementry = pickle.loads(pickle.dumps(self.Data_Memory[datamem_key], -1))
+                times = datamementry['times']
+                values = datamementry['values']
+                units = datamementry['units']
+                # times = pickle.loads(pickle.dumps(self.Data_Memory[datamem_key]['times'], -1))
+                # values = pickle.loads(pickle.dumps(self.Data_Memory[datamem_key]['values'], -1))
+                # units = pickle.loads(pickle.dumps(self.Data_Memory[datamem_key]['units'], -1))
             else:
                 times, values = self.ModelAlt.readTimeSeries(Line_info['parameter'],
                                                              float(Line_info['easting']),
@@ -1592,6 +1603,7 @@ class MakeAutomatedReport(object):
 
         if 'interval' in Line_info.keys():
             times, values = self.changeTimeSeriesInterval(times, values, Line_info)
+
         return times, values, units
 
     def getTimeIntervalSeconds(self, interval):
@@ -2389,18 +2401,19 @@ class MakeAutomatedReport(object):
         :return: new row value
         '''
 
-        data = pickle.loads(pickle.dumps(data_dict, -1))
+        data = {}
 
         rrow = row.replace('%%', '')
         s_row = rrow.split('.')
         sr_month = ''
-        flags = []
+        # flags = []
         for sr in s_row:
             if sr in data_dict.keys():
                 curflag = sr
-                curvalues = np.array(data[sr]['values'])
-                curdates = np.array(data[sr]['dates'])
-                flags.append(sr)
+                curvalues = np.array(data_dict[sr]['values'])
+                curdates = np.array(data_dict[sr]['dates'])
+                data[curflag] = {'values': curvalues, 'dates': curdates}
+                # flags.append(sr)
             else:
                 if '=' in sr:
                     sr_spl = sr.split('=')
@@ -2417,19 +2430,14 @@ class MakeAutomatedReport(object):
                                 print('Ex: MONTH=1 or MONTH=JAN')
                                 continue
 
-                        msk = [i for i, n in enumerate(curdates) if n.month == sr_month]
+                        # msk = [i for i, n in enumerate(curdates) if n.month == sr_month]
+                        months = [n.month for n in curdates]
+                        msk = np.where(months==sr_month)
                         data[curflag]['values'] = curvalues[msk]
                         data[curflag]['dates'] = curdates[msk]
 
-        popflags = []
-        for df in data.keys():
-            if df not in flags:
-                popflags.append(df)
-        for flag in popflags:
-            data.pop(flag)
-
         if year != 'ALL':
-            for flag in flags:
+            for flag in data.keys():
                 msk = [i for i, n in enumerate(data[flag]['dates']) if n.year == year]
                 data[flag]['values'] = np.asarray(data[flag]['values'])[msk]
                 data[flag]['dates'] = np.asarray(data[flag]['dates'])[msk]
@@ -2449,19 +2457,19 @@ class MakeAutomatedReport(object):
             out_data: dictionary containing values and depths/elevations
         '''
 
-        data = pickle.loads(pickle.dumps(data_dict, -1))
+        # data = pickle.loads(pickle.dumps(data_dict, -1))
         rrow = row.replace('%%', '')
         s_row = rrow.split('.')
         flags = []
         out_data = {}
         for sr in s_row:
-            if sr in data.keys():
+            if sr in data_dict.keys():
                 flags.append(sr)
         top = None
         bottom = None
         for flag in flags:
             #get elevs
-            depths = data[flag]['depths'][index]
+            depths = data_dict[flag]['depths'][index]
             if len(depths) > 0:
                 top_depth = np.min(depths)
                 bottom_depth = np.max(depths)
@@ -2484,7 +2492,7 @@ class MakeAutomatedReport(object):
             out_data[flag] = {}
             #interpolate over all values and then get interp values
             # try:
-            f_interp = interpolate.interp1d(data[flag]['depths'][index], data[flag]['values'][index], fill_value='extrapolate')
+            f_interp = interpolate.interp1d(data_dict[flag]['depths'][index], data_dict[flag]['values'][index], fill_value='extrapolate')
             out_data[flag]['depths'] = output_interp_elevations
             out_data[flag]['values'] = f_interp(output_interp_elevations)
             # except ValueError:
@@ -2778,18 +2786,18 @@ class MakeAutomatedReport(object):
                 section_header = section['header']
                 self.XML.writeSectionHeader(section_header)
                 for object in section['objects']:
-                    objtype = object['type']
-                    if objtype == 'TimeSeriesPlot':
+                    objtype = object['type'].lower()
+                    if objtype == 'timeseriesplot':
                         self.makeTimeSeriesPlot(object)
-                    elif objtype == 'ProfilePlot':
+                    elif objtype == 'profileplot':
                         self.makeProfilePlot(object)
-                    elif objtype == 'ErrorStatisticsTable':
+                    elif objtype == 'errorstatisticstable':
                         self.makeErrorStatisticsTable(object)
-                    elif objtype == 'MonthlyStatisticsTable':
+                    elif objtype == 'monthlystatisticstable':
                         self.makeMonthlyStatisticsTable(object)
-                    elif objtype == 'BuzzPlot':
+                    elif objtype == 'buzzplot':
                         self.makeBuzzPlot(object)
-                    elif objtype == 'ProfileStatisticsTable':
+                    elif objtype == 'profilestatisticstable':
                         self.makeProfileStatisticsTable(object)
                     else:
                         print('Section Type {0} not identified.'.format(section['type']))
@@ -3364,6 +3372,11 @@ class MakeAutomatedReport(object):
             if 'filterbylimits' in line.keys():
                 if line['filterbylimits'].lower() == 'true':
                     filtbylims = True
+            else:
+                if 'filterbylimits' in object_settings.keys():
+                    if object_settings['filterbylimits'].lower() == 'true':
+                        filtbylims = True
+
 
             if 'omitvalue' in line.keys():
                 omitvalue = float(line['omitvalue'])
@@ -3492,14 +3505,14 @@ class MakeAutomatedReport(object):
                 #at the point in time, find intervals and use values
                 df = pd.DataFrame({'times': times, 'values': values})
                 df = df.set_index('times')
-                df = df.resample(pd_interval).asfreq().fillna(method='bfill')
+                df = df.resample(pd_interval, origin='end_day').asfreq().fillna(method='bfill')
                 new_values = df['values'].to_numpy()
                 new_times = df.index.to_pydatetime()
 
             elif avgtype == 'INST-CUM':
                 df = pd.DataFrame({'times': times, 'values': values})
                 df = df.set_index('times')
-                df = df.cumsum(skipna=True).resample(pd_interval).asfreq().fillna(method='bfill')
+                df = df.cumsum(skipna=True).resample(pd_interval, origin='end_day').asfreq().fillna(method='bfill')
                 new_values = df['values'].to_numpy()
                 new_times = df.index.to_pydatetime()
 
@@ -3508,7 +3521,7 @@ class MakeAutomatedReport(object):
                 #average over the period
                 df = pd.DataFrame({'times': times, 'values': values})
                 df = df.set_index('times')
-                df = df.resample(pd_interval).mean().fillna(method='bfill')
+                df = df.resample(pd_interval, origin='end_day').mean().fillna(method='bfill')
                 new_values = df['values'].to_numpy()
                 new_times = df.index.to_pydatetime()
 
@@ -3516,7 +3529,7 @@ class MakeAutomatedReport(object):
                 #cum over the period
                 df = pd.DataFrame({'times': times, 'values': values})
                 df = df.set_index('times')
-                df = df.resample(pd_interval).sum().fillna(method='bfill')
+                df = df.resample(pd_interval, origin='end_day').sum().fillna(method='bfill')
                 new_values = df['values'].to_numpy()
                 new_times = df.index.to_pydatetime()
 
@@ -3573,17 +3586,23 @@ class MakeAutomatedReport(object):
         commits updated data to data memory dictionary that keeps track of data
         :param object_settings:  dicitonary of user defined settings for current object
         '''
-
-        for line in object_settings['linedata'].keys():
-            values = object_settings['linedata'][line]['values']
-            depths = object_settings['linedata'][line]['depths']
-            elevations = object_settings['linedata'][line]['elevations']
-            datamem_key = object_settings['linedata'][line]['logoutputfilename']
-            self.Data_Memory[datamem_key] = {'times': pickle.loads(pickle.dumps(object_settings['timestamps'], -1)),
-                                             'values': pickle.loads(pickle.dumps(values, -1)),
-                                             'elevations': pickle.loads(pickle.dumps(elevations, -1)),
-                                             'depths': pickle.loads(pickle.dumps(depths, -1)),
-                                             'units': object_settings['plot_units'],
+        copied_object_settings = pickle.loads(pickle.dumps(object_settings, -1))
+        for line in copied_object_settings['linedata'].keys():
+            values = copied_object_settings['linedata'][line]['values']
+            depths = copied_object_settings['linedata'][line]['depths']
+            elevations = copied_object_settings['linedata'][line]['elevations']
+            datamem_key = copied_object_settings['linedata'][line]['logoutputfilename']
+            # self.Data_Memory[datamem_key] = {'times': pickle.loads(pickle.dumps(object_settings['timestamps'], -1)),
+            #                                  'values': pickle.loads(pickle.dumps(values, -1)),
+            #                                  'elevations': pickle.loads(pickle.dumps(elevations, -1)),
+            #                                  'depths': pickle.loads(pickle.dumps(depths, -1)),
+            #                                  'units': object_settings['plot_units'],
+            #                                  'isprofile': True}
+            self.Data_Memory[datamem_key] = {'times': copied_object_settings['timestamps'],
+                                             'values': values,
+                                             'elevations': elevations,
+                                             'depths': depths,
+                                             'units': copied_object_settings['plot_units'],
                                              'isprofile': True}
 
     def configureUnits(self, object_settings, line, units):
@@ -3612,7 +3631,7 @@ class MakeAutomatedReport(object):
 if __name__ == '__main__':
     rundir = sys.argv[0]
     simInfoFile = sys.argv[1]
-    # import cProfile
-    # ar = cProfile.run('MakeAutomatedReport(simInfoFile, rundir)')
-    MakeAutomatedReport(simInfoFile, rundir)
+    import cProfile
+    ar = cProfile.run('MakeAutomatedReport(simInfoFile, rundir)')
+    # MakeAutomatedReport(simInfoFile, rundir)
 
