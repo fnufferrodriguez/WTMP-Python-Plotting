@@ -165,7 +165,6 @@ def readDSSData(dss_file, pathname, startdate, enddate):
     if ts.dtype == 'Regular TimeSeries':
         interval_seconds = ts.interval
         times = []
-
         current_time = startdate
         while current_time <= enddate:
             times.append(current_time)
@@ -175,7 +174,8 @@ def readDSSData(dss_file, pathname, startdate, enddate):
 
     if not made_ts:
         times = np.asarray(ts.pytimes)
-
+        print('Irregular DSS detected with {0} in {1}'.format(pathname, dss_file))
+        print('Recommend changing to regular time series for speed increases.')
     units = ts.units
 
     return times, values, units
@@ -509,7 +509,8 @@ class W2_Results(object):
 
         return sections
 
-    def getControlVariable(self, lines_sections, variable, pref_output_type=np.str):
+    # def getControlVariable(self, lines_sections, variable, pref_output_type=np.str):
+    def getControlVariable(self, lines_sections, variable, pref_output_type=np.str_):
         '''
         Parses the split control file sections from self.format_cf_lines() for a wanted card. Cards usually preface
         headers in the contro file, see docuemntation. For the give example below...
@@ -947,9 +948,11 @@ class ResSim_Results(object):
         this_subdomain = self.subdomain_name if alt_subdomain_name is None else alt_subdomain_name
         cell_center_xy = self.h['Geometry/Subdomains/' + this_subdomain + '/Cell Center Coordinate']
         self.ncells = (np.shape(cell_center_xy))[0]
-        self.elev = np.array([cell_center_xy[i][2] for i in range(self.ncells)])
+        # self.elev = np.array([cell_center_xy[i][2] for i in range(self.ncells)])
+        self.elev = np.array(cell_center_xy[:self.ncells, 2])
         elev_ts = self.h['Results/Subdomains/' + this_subdomain + '/Water Surface Elevation']
-        self.elev_ts = np.array([elev_ts[i] for i in range(self.nt)])
+        # self.elev_ts = np.array([elev_ts[i] for i in range(self.nt)])
+        self.elev_ts = np.array(elev_ts[:self.nt])
 
 
     def loadResults(self, t_in, metrc, alt_subdomain_name=None):

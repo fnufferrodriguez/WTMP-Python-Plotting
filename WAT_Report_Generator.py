@@ -20,6 +20,7 @@ import numpy as np
 import pandas as pd
 import xml.etree.ElementTree as ET
 import calendar
+from dateutil.relativedelta import relativedelta
 import re
 from collections import Counter
 import shutil
@@ -444,18 +445,18 @@ class MakeAutomatedReport(object):
         object_settings['plot_parameter'] = self.getPlotParameter(object_settings)
 
         ################# Get data #################
-        object_settings['linedata'] = self.getProfileData(object_settings)
+        # object_settings['linedata'] = self.getProfileData(object_settings)
+        linedata = self.getProfileData(object_settings)
 
         ################# Get plot units #################
-        object_settings = self.convertProfileDataUnits(object_settings)
-        object_settings['units_list'] = self.getUnitsList(object_settings)
+        linedata = self.convertProfileDataUnits(object_settings, linedata)
+        object_settings['units_list'] = self.getUnitsList(linedata)
         object_settings['plot_units'] = self.getPlotUnits(object_settings)
 
         object_settings = self.updateFlaggedValues(object_settings, '%%units%%', object_settings['plot_units'])
 
         object_settings['resolution'] = self.getProfileInterpResolution(object_settings)
-        object_settings = self.filterProfileData(object_settings)
-
+        linedata, object_settings = self.filterProfileData(linedata, object_settings)
 
         object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = self.getPlotYears(object_settings)
 
@@ -479,8 +480,7 @@ class MakeAutomatedReport(object):
                     rowname = s_row[0]
                     row_val = s_row[1]
                     if '%%' in row_val:
-                        data = self.formatStatsProfileLineData(row, object_settings['linedata'],
-                                                               object_settings['resolution'], i)
+                        data = self.formatStatsProfileLineData(row, linedata, object_settings['resolution'], i)
                         row_val, stat = self.getStatsLine(row_val, data)
                         self.addLogEntry({'type': 'ProfileTableStatistic',
                                           'name': ' '.join([self.ChapterRegion, header, stat]),
@@ -490,7 +490,7 @@ class MakeAutomatedReport(object):
                                           'units': object_settings['plot_units'],
                                           'value_start_date': header,
                                           'value_end_date': header,
-                                          'logoutputfilename': ', '.join([object_settings['linedata'][flag]['logoutputfilename'] for flag in object_settings['linedata']])
+                                          'logoutputfilename': ', '.join([linedata[flag]['logoutputfilename'] for flag in linedata])
                                           },
                                          isdata=True)
                     header = '' if header == None else header
@@ -524,19 +524,19 @@ class MakeAutomatedReport(object):
         object_settings['plot_parameter'] = self.getPlotParameter(object_settings)
 
         ################# Get data #################
-        object_settings['linedata'] = self.getProfileData(object_settings)
+        linedata = self.getProfileData(object_settings)
 
         ################# Get plot units #################
-        object_settings = self.convertProfileDataUnits(object_settings)
-        object_settings['units_list'] = self.getUnitsList(object_settings)
+        linedata = self.convertProfileDataUnits(object_settings, linedata)
+        object_settings['units_list'] = self.getUnitsList(linedata)
         object_settings['plot_units'] = self.getPlotUnits(object_settings)
         object_settings = self.updateFlaggedValues(object_settings, '%%units%%', object_settings['plot_units'])
 
         ################ convert Elevs ################
-        object_settings = self.convertDepthsToElevations(object_settings)
+        linedata, object_settings = self.convertDepthsToElevations(linedata, object_settings)
 
-        self.commitProfileDataToMemory(object_settings)
-        object_settings = self.filterProfileData(object_settings)
+        self.commitProfileDataToMemory(linedata, object_settings)
+        linedata, object_settings = self.filterProfileData(linedata, object_settings)
 
         object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = self.getPlotYears(object_settings)
 
@@ -553,6 +553,7 @@ class MakeAutomatedReport(object):
             n = int(object_settings['profilesperrow']) * int(object_settings['rowsperpage']) #Get number of plots on page
             page_indices = [prof_indices[i * n:(i + 1) * n] for i in range((len(prof_indices) + n - 1) // n)]
             cur_obj_settings = pickle.loads(pickle.dumps(object_settings, -1))
+            current_object_settings = self.updateFlaggedValues(cur_obj_settings, '%%year%%', yearstr) #TODO: reudce the settings
 
             for page_i, pgi in enumerate(page_indices):
 
@@ -560,18 +561,16 @@ class MakeAutomatedReport(object):
                 n_nrow_active = np.ceil(len(pgi) / subplot_cols)
                 fig = plt.figure(figsize=(7, 1 + 3 * n_nrow_active))
 
-                current_object_settings = self.updateFlaggedValues(cur_obj_settings, '%%year%%', yearstr) #TODO: reudce the settings
-
                 for i, j in enumerate(pgi):
                     ax = fig.add_subplot(int(subplot_rows), int(subplot_cols), i + 1)
 
                     if object_settings['usedepth'].lower() == 'true':
                         ax.invert_yaxis()
 
-                    for li, line in enumerate(object_settings['linedata'].keys()):
+                    for li, line in enumerate(linedata.keys()):
 
                         try:
-                            values = object_settings['linedata'][line]['values'][j]
+                            values = linedata[line]['values'][j]
                             if len(values) == 0:
                                 print('No values for {0} on {1}'.format(line, object_settings['timestamps'][j]))
                                 continue
@@ -583,9 +582,9 @@ class MakeAutomatedReport(object):
 
                         try:
                             if object_settings['usedepth'].lower() == 'true':
-                                levels = object_settings['linedata'][line]['depths'][j][msk]
+                                levels = linedata[line]['depths'][j][msk]
                             else:
-                                levels = object_settings['linedata'][line]['elevations'][j][msk]
+                                levels = linedata[line]['elevations'][j][msk]
                             if not WF.checkData(levels):
                                 print('Non Viable depths/elevations for {0} on {1}'.format(line, object_settings['timestamps'][j]))
                                 continue
@@ -709,7 +708,7 @@ class MakeAutomatedReport(object):
 
                             ncolumns = 3
 
-                            n_legends_row = np.ceil(len(object_settings['linedata'].keys()) / ncolumns) * .65
+                            n_legends_row = np.ceil(len(linedata.keys()) / ncolumns) * .65
                             if n_legends_row < 1:
                                 n_legends_row = 1
                             plt.subplots_adjust(bottom=(.3/n_nrow_active)*n_legends_row)
@@ -738,7 +737,7 @@ class MakeAutomatedReport(object):
                                                                                'datetime', '').strftime('%d %b %Y'),
                                   'value_end_date': self.translateDateFormat(object_settings['timestamps'][pgi[-1]],
                                                                              'datetime', '').strftime('%d %b %Y'),
-                                  'logoutputfilename': ', '.join([object_settings['linedata'][flag]['logoutputfilename'] for flag in object_settings['linedata']])
+                                  'logoutputfilename': ', '.join([linedata[flag]['logoutputfilename'] for flag in linedata])
                                   },
                                  isdata=True)
 
@@ -762,7 +761,7 @@ class MakeAutomatedReport(object):
 
         object_settings['unitslist'] = []
 
-        object_settings['data'], object_settings['units_list'] = self.getTableData(object_settings)
+        data, object_settings['units_list'] = self.getTableData(object_settings)
 
         plotunits = self.getPlotUnits(object_settings)
         object_settings = self.updateFlaggedValues(object_settings, '%%units%%', plotunits)
@@ -785,7 +784,7 @@ class MakeAutomatedReport(object):
                 rowname = s_row[0]
                 row_val = s_row[i+1]
                 if '%%' in row_val:
-                    rowdata, sr_month = self.getStatsLineData(row_val, object_settings['data'], year=year)
+                    rowdata, sr_month = self.getStatsLineData(row_val, data, year=year)
                     row_val, stat = self.getStatsLine(row_val, rowdata)
 
                     data_start_date, data_end_date = self.getTableDates(year, object_settings)
@@ -797,7 +796,7 @@ class MakeAutomatedReport(object):
                                       'units': plotunits,
                                       'value_start_date': self.translateDateFormat(data_start_date, 'datetime', ''),
                                       'value_end_date': self.translateDateFormat(data_end_date, 'datetime', ''),
-                                      'logoutputfilename': ', '.join([object_settings['data'][flag]['logoutputfilename'] for flag in object_settings['data']])
+                                      'logoutputfilename': ', '.join([data[flag]['logoutputfilename'] for flag in data])
                                       },
                                      isdata=True)
 
@@ -823,7 +822,7 @@ class MakeAutomatedReport(object):
 
         object_settings['unitslist'] = []
 
-        object_settings['data'], object_settings['units_list'] = self.getTableData(object_settings)
+        data, object_settings['units_list'] = self.getTableData(object_settings)
 
         plotunits = self.getPlotUnits(object_settings)
         object_settings = self.updateFlaggedValues(object_settings, '%%units%%', plotunits)
@@ -841,7 +840,7 @@ class MakeAutomatedReport(object):
                 rowname = s_row[0]
                 row_val = s_row[i+1]
                 if '%%' in row_val:
-                    rowdata, sr_month = self.getStatsLineData(row_val, object_settings['data'], year=year)
+                    rowdata, sr_month = self.getStatsLineData(row_val, data, year=year)
 
                     row_val, stat = self.getStatsLine(row_val, rowdata)
 
@@ -854,7 +853,7 @@ class MakeAutomatedReport(object):
                                       'function': stat,
                                       'value_start_date': self.translateDateFormat(data_start_date, 'datetime', ''),
                                       'value_end_date': self.translateDateFormat(data_end_date, 'datetime', ''),
-                                      'logoutputfilename': ', '.join([object_settings['data'][flag]['logoutputfilename'] for flag in object_settings['data']])
+                                      'logoutputfilename': ', '.join([data[flag]['logoutputfilename'] for flag in data])
                                       },
                                      isdata=True)
 
@@ -2025,7 +2024,7 @@ class MakeAutomatedReport(object):
 
         return param, param_count
 
-    def getUnitsList(self, object_settings):
+    def getUnitsList(self, linedata):
         '''
         creates a list of units from defined lines in user defined settings
         :param object_settings: currently selected object settings dictionary
@@ -2033,8 +2032,8 @@ class MakeAutomatedReport(object):
         '''
 
         units_list = []
-        for flag in object_settings['linedata'].keys():
-            units = object_settings['linedata'][flag]['units']
+        for flag in linedata.keys():
+            units = linedata[flag]['units']
             if units != None:
                 units_list.append(units)
         return units_list
@@ -2431,16 +2430,22 @@ class MakeAutomatedReport(object):
                                 continue
 
                         # msk = [i for i, n in enumerate(curdates) if n.month == sr_month]
-                        months = [n.month for n in curdates]
+
+                        months = np.array([n.month for n in curdates])
                         msk = np.where(months==sr_month)
+
                         data[curflag]['values'] = curvalues[msk]
                         data[curflag]['dates'] = curdates[msk]
 
+
         if year != 'ALL':
             for flag in data.keys():
-                msk = [i for i, n in enumerate(data[flag]['dates']) if n.year == year]
-                data[flag]['values'] = np.asarray(data[flag]['values'])[msk]
-                data[flag]['dates'] = np.asarray(data[flag]['dates'])[msk]
+                # msk = [i for i, n in enumerate(data[flag]['dates']) if n.year == year]
+                years = np.array([n.year for n in data[flag]['dates']])
+                msk = np.where(years==year)
+
+                data[flag]['values'] = data[flag]['values'][msk]
+                data[flag]['dates'] = data[flag]['dates'][msk]
 
         return data, sr_month
 
@@ -3258,7 +3263,7 @@ class MakeAutomatedReport(object):
 
         return new_headers
 
-    def convertProfileDataUnits(self, object_settings):
+    def convertProfileDataUnits(self, object_settings, linedata):
         '''
         converts the units of profile data if unitsystem is defined
         :param object_settings: user defined settings for current object
@@ -3267,18 +3272,18 @@ class MakeAutomatedReport(object):
 
         if 'unitsystem' not in object_settings.keys():
             print('Unit system not defined.')
-            return object_settings
-        for flag in object_settings['linedata'].keys():
-            if object_settings['linedata'][flag]['units'] == None:
+            return linedata
+        for flag in linedata.keys():
+            if linedata[flag]['units'] == None:
                 continue
             else:
-                profiles = object_settings['linedata'][flag]['values']
-                profileunits = object_settings['linedata'][flag]['units']
+                profiles = linedata[flag]['values']
+                profileunits = linedata[flag]['units']
                 for pi, profile in enumerate(profiles):
                     profile, newunits = self.convertUnitSystem(profile, profileunits, object_settings['unitsystem'])
                     profiles[pi] = profile
-                object_settings['linedata'][flag]['units'] = newunits
-        return object_settings
+                linedata[flag]['units'] = newunits
+        return linedata
 
     def buildRowsByYear(self, object_settings, years, split_by_year):
         '''
@@ -3337,7 +3342,7 @@ class MakeAutomatedReport(object):
             return timestamps
         return [n for n in timestamps if n.year == year]
 
-    def filterProfileData(self, object_settings):
+    def filterProfileData(self, linedata, object_settings):
         xmax = None
         xmin = None
         ymax = None
@@ -3365,8 +3370,8 @@ class MakeAutomatedReport(object):
                 ymin = float(object_settings['ylims']['min'])
 
         # Find Index of ALL acceptable values.
-        for lineflag in object_settings['linedata'].keys():
-            line = object_settings['linedata'][lineflag]
+        for lineflag in linedata.keys():
+            line = linedata[lineflag]
 
             filtbylims = False
             if 'filterbylimits' in line.keys():
@@ -3413,10 +3418,10 @@ class MakeAutomatedReport(object):
 
                 master_filter = reduce(np.intersect1d, (xmax_filt, xmin_filt, ymax_filt, ymin_filt, omitval_filt))
 
-                object_settings['linedata'][lineflag]['values'][pi] = profile[master_filter]
-                object_settings['linedata'][lineflag][yflag][pi] = ydata[master_filter]
+                linedata[lineflag]['values'][pi] = profile[master_filter]
+                linedata[lineflag][yflag][pi] = ydata[master_filter]
 
-        return object_settings
+        return linedata, object_settings
 
 
     def updateFlaggedValues(self, settings, flaggedvalue, replacevalue):
@@ -3557,7 +3562,7 @@ class MakeAutomatedReport(object):
             cur_date += dt.timedelta(days=days)
         return np.asarray(timesteps)
 
-    def convertDepthsToElevations(self, object_settings):
+    def convertDepthsToElevations(self, linedata, object_settings):
         '''
         handles data to convert depths into elevations for observed data
         :param object_settings: dicitonary of user defined settings for current object
@@ -3566,43 +3571,37 @@ class MakeAutomatedReport(object):
 
         elev_flag = 'NOVALID'
         if object_settings['usedepth'].lower() == 'false':
-            for ld in object_settings['linedata'].keys():
-                if object_settings['linedata'][ld]['elevations'] == []:
+            for ld in linedata.keys():
+                if linedata[ld]['elevations'] == []:
                     noelev_flag = ld
-                    for old in object_settings['linedata'].keys():
-                        if len(object_settings['linedata'][old]['elevations']) > 0:
+                    for old in linedata.keys():
+                        if len(linedata[old]['elevations']) > 0:
                             elev_flag = old
                             break
 
                     if elev_flag != 'NOVALID':
-                        object_settings['linedata'][noelev_flag]['elevations'] = WF.convertObsDepths2Elevations(object_settings['linedata'][noelev_flag]['depths'],
-                                                                                                       object_settings['linedata'][elev_flag]['elevations'])
+                        linedata[noelev_flag]['elevations'] = WF.convertObsDepths2Elevations(linedata[noelev_flag]['depths'],
+                                                                                             linedata[elev_flag]['elevations'])
                     else:
                         object_settings['usedepth'] = 'true'
-        return object_settings
+        return linedata, object_settings
 
-    def commitProfileDataToMemory(self, object_settings):
+    def commitProfileDataToMemory(self, linedata, object_settings):
         '''
         commits updated data to data memory dictionary that keeps track of data
         :param object_settings:  dicitonary of user defined settings for current object
         '''
-        copied_object_settings = pickle.loads(pickle.dumps(object_settings, -1))
-        for line in copied_object_settings['linedata'].keys():
-            values = copied_object_settings['linedata'][line]['values']
-            depths = copied_object_settings['linedata'][line]['depths']
-            elevations = copied_object_settings['linedata'][line]['elevations']
-            datamem_key = copied_object_settings['linedata'][line]['logoutputfilename']
-            # self.Data_Memory[datamem_key] = {'times': pickle.loads(pickle.dumps(object_settings['timestamps'], -1)),
-            #                                  'values': pickle.loads(pickle.dumps(values, -1)),
-            #                                  'elevations': pickle.loads(pickle.dumps(elevations, -1)),
-            #                                  'depths': pickle.loads(pickle.dumps(depths, -1)),
-            #                                  'units': object_settings['plot_units'],
-            #                                  'isprofile': True}
-            self.Data_Memory[datamem_key] = {'times': copied_object_settings['timestamps'],
+        # copied_object_settings = pickle.loads(pickle.dumps(object_settings, -1))
+        for line in linedata.keys():
+            values = linedata[line]['values']
+            depths = linedata[line]['depths']
+            elevations = linedata[line]['elevations']
+            datamem_key = linedata[line]['logoutputfilename']
+            self.Data_Memory[datamem_key] = {'times': object_settings['timestamps'],
                                              'values': values,
                                              'elevations': elevations,
                                              'depths': depths,
-                                             'units': copied_object_settings['plot_units'],
+                                             'units': object_settings['plot_units'],
                                              'isprofile': True}
 
     def configureUnits(self, object_settings, line, units):
