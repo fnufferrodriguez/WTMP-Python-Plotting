@@ -618,8 +618,8 @@ class W2_Results(object):
                 Elev_interp = interp1d(op_file['jday'], op_file['elws(m)'])
                 for j, jd in enumerate(self.jd_dates):
                     try:
-                        wt[j][i] = WT_interp(jd)
-                        WS_Elev[j][i] = Elev_interp(jd)
+                        wt[j][i-1] = WT_interp(jd)
+                        WS_Elev[j][i-1] = Elev_interp(jd)
                     except ValueError:
                         continue
 

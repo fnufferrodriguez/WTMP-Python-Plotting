@@ -3630,7 +3630,7 @@ class MakeAutomatedReport(object):
 if __name__ == '__main__':
     rundir = sys.argv[0]
     simInfoFile = sys.argv[1]
-    import cProfile
-    ar = cProfile.run('MakeAutomatedReport(simInfoFile, rundir)')
-    # MakeAutomatedReport(simInfoFile, rundir)
+    # import cProfile
+    # ar = cProfile.run('MakeAutomatedReport(simInfoFile, rundir)')
+    MakeAutomatedReport(simInfoFile, rundir)
 
