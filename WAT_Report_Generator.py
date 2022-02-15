@@ -435,7 +435,7 @@ class MakeAutomatedReport(object):
         default_settings = self.loadDefaultPlotObject('profilestatisticstable')
         object_settings = self.replaceDefaults(default_settings, object_settings)
         object_settings['datakey'] = 'datapaths'
-        object_settings['usedepth'] = 'true'
+        # object_settings['usedepth'] = 'true'
 
         ################# Get timestamps #################
         object_settings['datessource_flag'] = self.getDateSourceFlag(object_settings)
@@ -448,6 +448,10 @@ class MakeAutomatedReport(object):
         # object_settings['linedata'] = self.getProfileData(object_settings)
         linedata = self.getProfileData(object_settings)
 
+        ################ reformat data ###################
+        linedata, object_settings = self.convertDepthsToElevations(linedata, object_settings)
+        linedata, object_settings = self.filterProfileData(linedata, object_settings)
+
         ################# Get plot units #################
         linedata = self.convertProfileDataUnits(object_settings, linedata)
         object_settings['units_list'] = self.getUnitsList(linedata)
@@ -456,7 +460,6 @@ class MakeAutomatedReport(object):
         object_settings = self.updateFlaggedValues(object_settings, '%%units%%', object_settings['plot_units'])
 
         object_settings['resolution'] = self.getProfileInterpResolution(object_settings)
-        linedata, object_settings = self.filterProfileData(linedata, object_settings)
 
         object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = self.getPlotYears(object_settings)
 
@@ -480,7 +483,8 @@ class MakeAutomatedReport(object):
                     rowname = s_row[0]
                     row_val = s_row[1]
                     if '%%' in row_val:
-                        data = self.formatStatsProfileLineData(row, linedata, object_settings['resolution'], i)
+                        data = self.formatStatsProfileLineData(row, linedata, object_settings['resolution'],
+                                                               object_settings['usedepth'], i)
                         row_val, stat = self.getStatsLine(row_val, data)
                         self.addLogEntry({'type': 'ProfileTableStatistic',
                                           'name': ' '.join([self.ChapterRegion, header, stat]),
@@ -2449,7 +2453,7 @@ class MakeAutomatedReport(object):
 
         return data, sr_month
 
-    def formatStatsProfileLineData(self, row, data_dict, resolution, index):
+    def formatStatsProfileLineData(self, row, data_dict, resolution, usedepth, index):
         '''
         formats Profile line statistics for table using user inputs
         finds the highest and lowest overlapping profile points and uses them as end points, then interpolates
@@ -2457,6 +2461,7 @@ class MakeAutomatedReport(object):
         :param data_dict: dictionary containing available line data to be used
         :param resolution: number of values to interpolate to. this way each dataset has values at the same levels
                             and there is enough data to do stats over.
+        :param usedepth: string bool for using depth or elevation fields
         :param index: date index for profile to use
         :return:
             out_data: dictionary containing values and depths/elevations
@@ -2474,36 +2479,59 @@ class MakeAutomatedReport(object):
         bottom = None
         for flag in flags:
             #get elevs
-            depths = data_dict[flag]['depths'][index]
-            if len(depths) > 0:
-                top_depth = np.min(depths)
-                bottom_depth = np.max(depths)
-                #find limits comparing flags so we can be sure to interpolate over the same data
-                if top == None:
-                    top = top_depth
-                else:
-                    if top_depth > top:
+            if usedepth.lower() == 'true':
+                depths = data_dict[flag]['depths'][index]
+                if len(depths) > 0:
+                    top_depth = np.min(depths)
+                    bottom_depth = np.max(depths)
+                    #find limits comparing flags so we can be sure to interpolate over the same data
+                    if top == None:
                         top = top_depth
+                    else:
+                        if top_depth > top:
+                            top = top_depth
 
-                if bottom == None:
-                    bottom = bottom_depth
-                else:
-                    if bottom_depth < bottom:
+                    if bottom == None:
                         bottom = bottom_depth
-        #build elev profiles
-        output_interp_elevations = np.arange(top, bottom, (bottom-top)/float(resolution))
+                    else:
+                        if bottom_depth < bottom:
+                            bottom = bottom_depth
+
+            else:
+                elevs = data_dict[flag]['elevations'][index]
+                if len(elevs) > 0:
+                    top_elev = np.max(elevs)
+                    bottom_elev = np.min(elevs)
+                    #find limits comparing flags so we can be sure to interpolate over the same data
+                    if top == None:
+                        top = top_elev
+                    else:
+                        if top_elev > top:
+                            top = top_elev
+
+                    if bottom == None:
+                        bottom = bottom_elev
+                    else:
+                        if bottom_elev < bottom:
+                            bottom = bottom_elev
+
+        if usedepth.lower() == 'true':
+            #build elev profiles
+            output_interp_depths = np.arange(top, bottom, (bottom-top)/float(resolution))
+        else:
+            output_interp_elevations = np.arange(bottom, top, (top-bottom)/float(resolution))
 
         for flag in flags:
             out_data[flag] = {}
             #interpolate over all values and then get interp values
-            # try:
-            f_interp = interpolate.interp1d(data_dict[flag]['depths'][index], data_dict[flag]['values'][index], fill_value='extrapolate')
-            out_data[flag]['depths'] = output_interp_elevations
-            out_data[flag]['values'] = f_interp(output_interp_elevations)
-            # except ValueError:
-            #     print('Cannot interpolate depths for', flag)
-            #     out_data[flag]['depths'] = output_interp_elevations
-            #     out_data[flag]['values'] = np.full(len(output_interp_elevations), np.nan)
+            if usedepth.lower() == 'true':
+                f_interp = interpolate.interp1d(data_dict[flag]['depths'][index], data_dict[flag]['values'][index], fill_value='extrapolate')
+                out_data[flag]['depths'] = output_interp_depths
+                out_data[flag]['values'] = f_interp(output_interp_depths)
+            else:
+                f_interp = interpolate.interp1d(data_dict[flag]['elevations'][index], data_dict[flag]['values'][index], fill_value='extrapolate')
+                out_data[flag]['elevations'] = output_interp_elevations
+                out_data[flag]['values'] = f_interp(output_interp_elevations)
 
         return out_data
 
@@ -2517,25 +2545,34 @@ class MakeAutomatedReport(object):
             stat: string name for stat
         '''
 
-        flags = [n for n in data.keys()]
+        flags = list(data.keys())
+
+        if 'Computed' in flags:
+            flag1 = 'Computed'
+            if len(flags) >= 2:
+                flag2 = [n for n in flags if n != flag1][0] #not computed
+        else:
+            flag1 = flags[0]
+            if len(flags) >= 2:
+                flag2 = flags[1]
 
         if row.lower().startswith('%%meanbias'):
-            out_stat = WF.calcMeanBias(data[flags[0]], data[flags[1]])
+            out_stat = WF.calcMeanBias(data[flag1], data[flag2])
             stat = 'meanbias'
         elif row.lower().startswith('%%mae'):
-            out_stat = WF.calcMAE(data[flags[0]], data[flags[1]])
+            out_stat = WF.calcMAE(data[flag1], data[flag2])
             stat = 'mae'
         elif row.lower().startswith('%%rmse'):
-            out_stat = WF.calcRMSE(data[flags[0]], data[flags[1]])
+            out_stat = WF.calcRMSE(data[flag1], data[flag2])
             stat = 'rmse'
         elif row.lower().startswith('%%nse'):
-            out_stat = WF.calcNSE(data[flags[0]], data[flags[1]])
+            out_stat = WF.calcNSE(data[flag1], data[flag2])
             stat = 'nse'
         elif row.lower().startswith('%%count'):
-            out_stat = WF.getCount(data[flags[0]])
+            out_stat = WF.getCount(data[flag1])
             stat = 'count'
         elif row.lower().startswith('%%mean'):
-            out_stat = WF.calcMean(data[flags[0]])
+            out_stat = WF.calcMean(data[flag1])
             stat = 'mean'
         else:
             if '%%' in row:
