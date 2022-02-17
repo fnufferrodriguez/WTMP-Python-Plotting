@@ -473,18 +473,19 @@ class MakeAutomatedReport(object):
 
             object_desc = self.updateFlaggedValues(object_settings['description'], '%%year%%', yearstr)
             self.XML.writeTableStart(object_desc, 'Statistics')
-            yrheaders = self.buildHeadersByTimestamps(object_settings['timestamps'], year=year)
+            yrheaders, yrheaders_i = self.buildHeadersByTimestamps(object_settings['timestamps'], year=year)
             yrheaders = self.convertHeaderFormats(yrheaders, object_settings)
 
             for i, header in enumerate(yrheaders):
                 frmt_rows = []
+                header_i = yrheaders_i[i]
                 for row in object_settings['rows']:
                     s_row = row.split('|')
                     rowname = s_row[0]
                     row_val = s_row[1]
                     if '%%' in row_val:
                         data = self.formatStatsProfileLineData(row, linedata, object_settings['resolution'],
-                                                               object_settings['usedepth'], i)
+                                                               object_settings['usedepth'], header_i)
                         row_val, stat = self.getStatsLine(row_val, data)
                         self.addLogEntry({'type': 'ProfileTableStatistic',
                                           'name': ' '.join([self.ChapterRegion, header, stat]),
@@ -563,10 +564,25 @@ class MakeAutomatedReport(object):
 
                 subplot_rows, subplot_cols = WF.getSubplotConfig(len(pgi), int(cur_obj_settings['profilesperrow']))
                 n_nrow_active = np.ceil(len(pgi) / subplot_cols)
-                fig = plt.figure(figsize=(7, 1 + 3 * n_nrow_active))
+                # fig = plt.figure(figsize=(7, 1 + 3 * n_nrow_active))
+                # fig = plt.figure(figsize=(7, 10))
+                fig, axs = plt.subplots(nrows=int(object_settings['rowsperpage']), ncols=int(object_settings['profilesperrow']), figsize=(7,10))
 
-                for i, j in enumerate(pgi):
-                    ax = fig.add_subplot(int(subplot_rows), int(subplot_cols), i + 1)
+                # for i, j in enumerate(pgi):
+                for i in range(n):
+
+                    current_row = i // int(object_settings['rowsperpage'])
+                    current_col = i % int(object_settings['rowsperpage'])
+                    # ax = fig.add_subplot(int(subplot_rows), int(subplot_cols), i + 1)
+                    # ax = fig.add_subplot(int(object_settings['profilesperrow']), int(object_settings['rowsperpage']), i + 1)
+                    ax = axs[current_row, current_col]
+                    if i+1 > len(pgi):
+                        ax.axis('off')
+                        plot_data = False
+                        continue
+                    else:
+                        plot_data = True
+                        j = pgi[i]
 
                     if object_settings['usedepth'].lower() == 'true':
                         ax.invert_yaxis()
@@ -702,7 +718,20 @@ class MakeAutomatedReport(object):
 
                 if 'legend' in current_object_settings.keys():
                     if current_object_settings['legend'].lower() == 'true':
-                        if len(ax.get_legend_handles_labels()[1]) > 0:
+                        leg_labels = []
+                        leg_handles = []
+                        for ax in axs:
+                            for subax in ax:
+                                # labels = subax.get_legend_handles_labels()[1]
+                                # handles = subax.get_legend_handles_labels()[0]
+                                leg_handle_labels = subax.get_legend_handles_labels()
+                                for li in range(len(leg_handle_labels[1])):
+                                    if leg_handle_labels[1][li] not in leg_labels:
+                                        leg_labels.append(leg_handle_labels[1][li])
+                                        leg_handles.append(leg_handle_labels[0][li])
+
+                        # if len(axs[0,0].get_legend_handles_labels()[1]) > 0:
+                        if len(leg_labels) > 0:
                             if 'legendsize' in current_object_settings.keys():
                                 legsize = float(current_object_settings['legendsize'])
                             elif 'fontsize' in current_object_settings.keys():
@@ -715,9 +744,16 @@ class MakeAutomatedReport(object):
                             n_legends_row = np.ceil(len(linedata.keys()) / ncolumns) * .65
                             if n_legends_row < 1:
                                 n_legends_row = 1
-                            plt.subplots_adjust(bottom=(.3/n_nrow_active)*n_legends_row)
-                            plt.legend(bbox_to_anchor=(.5,0), loc="lower center", fontsize=legsize,
-                                       bbox_transform=fig.transFigure, ncol=ncolumns)
+                            # plt.subplots_adjust(bottom=(.3/n_nrow_active)*n_legends_row)
+                            plt.subplots_adjust(bottom=.1*n_legends_row)
+                            fig_ratio = (axs[int(n_nrow_active)-1,0].bbox.extents[1] - (fig.bbox.height * (.1 * n_legends_row))) / fig.bbox.height
+                            plt.legend(bbox_to_anchor=(.5,fig_ratio), loc="lower center", fontsize=legsize,
+                                       bbox_transform=fig.transFigure, ncol=ncolumns, handles=leg_handles,
+                                       labels=leg_labels)
+
+
+                            # plt.legend(bbox_to_anchor=(.5,0), loc="lower center", fontsize=legsize,
+                            #            bbox_transform=fig.transFigure, ncol=ncolumns)
 
                 # plt.tight_layout()
                 figname = 'ProfilePlot_{0}_{1}_{2}_{3}_{4}.png'.format(self.ChapterName, yearstr,
@@ -2506,13 +2542,13 @@ class MakeAutomatedReport(object):
                     if top == None:
                         top = top_elev
                     else:
-                        if top_elev > top:
+                        if top_elev < top:
                             top = top_elev
 
                     if bottom == None:
                         bottom = bottom_elev
                     else:
-                        if bottom_elev < bottom:
+                        if bottom_elev > bottom:
                             bottom = bottom_elev
 
         if usedepth.lower() == 'true':
@@ -2711,23 +2747,29 @@ class MakeAutomatedReport(object):
         '''
 
         headers = []
-        for timestamp in timestamps:
+        headers_i = []
+        for ti, timestamp in enumerate(timestamps):
 
             if isinstance(timestamp, dt.datetime):
                 if year != 'ALLYEARS':
                     if year == timestamp.year:
                         headers.append(timestamp)
+                        headers_i.append(ti)
                 else:
                     headers.append(timestamp)
+                    headers_i.append(ti)
 
             elif isinstance(timestamp, float):
                 ts_dt = self.JDateToDatetime(timestamp)
                 if year != 'ALLYEARS':
                     if year == ts_dt.year:
                         headers.append(str(timestamp))
+                        headers_i.append(ti)
                 else:
                     headers.append(str(timestamp))
-        return headers
+                    headers_i.append(ti)
+
+        return headers, headers_i
 
     def equalizeLog(self):
         '''

@@ -268,9 +268,10 @@ def readTextProfile(observed_data_filename, timestamps):
                 wt_profile = []
                 d_profile = []
             else:
-                t_profile.append(dt_tmp)
-                wt_profile.append(float(sline[1]))
-                d_profile.append(float(sline[2]))
+                if float(sline[2]) not in d_profile:
+                    t_profile.append(dt_tmp)
+                    wt_profile.append(float(sline[1]))
+                    d_profile.append(float(sline[2]))
             hold_dt = dt_tmp
 
     if len(t_profile) != 0 and len(wt_profile) != 0 and len(d_profile) != 0:
@@ -623,7 +624,6 @@ class W2_Results(object):
                     except ValueError:
                         continue
 
-        # select_wt = np.full((len(unique_times), len(self.layers)), np.nan)
         select_wt = []
         elevations = []
         depths = []
