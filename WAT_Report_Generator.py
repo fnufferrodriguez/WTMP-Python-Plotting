@@ -240,185 +240,203 @@ class MakeAutomatedReport(object):
         default_settings = self.loadDefaultPlotObject('timeseriesplot') #get default TS plot items
         object_settings = self.replaceDefaults(default_settings, object_settings) #overwrite the defaults with chapter file
 
-        object_settings = self.updateFlaggedValues(object_settings, '%%year%%', self.years_str)
+        # object_settings = self.updateFlaggedValues(object_settings, '%%year%%', self.years_str)
+        # data = self.getTimeseriesData(object_settings)
 
-        fig = plt.figure(figsize=(12, 6))
-        ax = fig.add_subplot()
-        unitslist = []
-        for line in object_settings['lines']:
+        object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = self.getPlotYears(object_settings)
 
-            parameter, object_settings['param_count'] = self.getParameterCount(line, object_settings)
-            i = object_settings['param_count'][parameter]
+        for yi, year in enumerate(object_settings['years']):
+            cur_obj_settings = pickle.loads(pickle.dumps(object_settings, -1))
+            if object_settings['split_by_year']:
+                yearstr = str(year)
+            else:
+                yearstr = object_settings['yearstr']
 
-            line['logoutputfilename'] = self.buildFileName(line)
+            cur_obj_settings = self.setTimeSeriesXlims(cur_obj_settings, yearstr, object_settings['years'])
+            # cur_obj_settings = self.updateFlaggedValues(cur_obj_settings, '%%year%%', yearstr)
 
-            dates, values, units = self.getTimeSeries(line)
+            fig = plt.figure(figsize=(12, 6))
+            ax = fig.add_subplot()
+            unitslist = []
+            data = self.getTimeseriesData(object_settings)
+            linedata = self.filterTimeSeriesByYear(data, year)
 
-            if units == None:
-                if parameter != None:
-                    try:
-                        units = self.units[parameter]
-                    except KeyError:
+            for line in linedata:
+                curline = linedata[line]
+                parameter, cur_obj_settings['param_count'] = self.getParameterCount(curline, cur_obj_settings)
+                i = cur_obj_settings['param_count'][parameter]
+
+                # line['logoutputfilename'] = self.buildFileName(line)
+                values = curline['values']
+                dates = curline['dates']
+                units = curline['units']
+
+                if units == None:
+                    if parameter != None:
+                        try:
+                            units = self.units[parameter]
+                        except KeyError:
+                            units = None
+
+                if isinstance(units, dict):
+                    if 'unitsystem' in cur_obj_settings.keys():
+                        units = units[cur_obj_settings['unitsystem'].lower()]
+                    else:
                         units = None
 
-            if isinstance(units, dict):
-                if 'unitsystem' in object_settings.keys():
-                    units = units[object_settings['unitsystem'].lower()]
+                if 'unitsystem' in cur_obj_settings.keys():
+                    values, units = self.convertUnitSystem(values, units, cur_obj_settings['unitsystem'])
+
+                chkvals = WF.checkData(values)
+                if not chkvals:
+                    print('Invalid Data settings for line:', line)
+                    continue
+
+                if 'dateformat' in cur_obj_settings.keys():
+                    if cur_obj_settings['dateformat'].lower() == 'jdate':
+                        if isinstance(dates[0], dt.datetime):
+                            dates = self.DatetimeToJDate(dates)
+                    elif cur_obj_settings['dateformat'].lower() == 'datetime':
+                        if isinstance(dates[0], (int,float)):
+                            dates = self.JDateToDatetime(dates)
+
+                if units != '' and units != None:
+                    unitslist.append(units)
+
+                line_settings = self.getDefaultLineSettings(curline, parameter, i)
+
+                if 'zorder' not in line_settings.keys():
+                    line_settings['zorder'] = 4
+
+                if 'label' not in line_settings.keys():
+                    line_settings['label'] = ''
+
+                if 'filterbylimits' not in line_settings.keys():
+                    line_settings['filterbylimits'] = 'true' #set default
+
+                if line_settings['filterbylimits'].lower() == 'true':
+                    if 'xlims' in object_settings.keys():
+                        dates, values = self.limitXdata(dates, values, object_settings['xlims'])
+                    if 'ylims' in object_settings.keys():
+                        dates, values = self.limitYdata(dates, values, object_settings['ylims'])
+
+                if line_settings['drawline'].lower() == 'true' and line_settings['drawpoints'].lower() == 'true':
+                    ax.plot(dates, values, label=line_settings['label'], c=line_settings['linecolor'],
+                            lw=line_settings['linewidth'], ls=line_settings['linestylepattern'],
+                            marker=line_settings['symboltype'], markerfacecolor=line_settings['pointfillcolor'],
+                            markeredgecolor=line_settings['pointlinecolor'], markersize=float(line_settings['symbolsize']),
+                            markevery=int(line_settings['numptsskip']), zorder=float(line_settings['zorder']),
+                            alpha=float(line_settings['alpha']))
+
+                elif line_settings['drawline'].lower() == 'true':
+                    ax.plot(dates, values, label=line_settings['label'], c=line_settings['linecolor'],
+                            lw=line_settings['linewidth'], ls=line_settings['linestylepattern'],
+                            zorder=float(line_settings['zorder']),
+                            alpha=float(line_settings['alpha']))
+
+                elif line_settings['drawpoints'].lower() == 'true':
+                    ax.scatter(dates[::int(line_settings['numptsskip'])], values[::int(line_settings['numptsskip'])],
+                               marker=line_settings['symboltype'], facecolor=line_settings['pointfillcolor'],
+                               edgecolor=line_settings['pointlinecolor'], s=float(line_settings['symbolsize']),
+                               label=line_settings['label'], zorder=float(line_settings['zorder']),
+                               alpha=float(line_settings['alpha']))
+
+
+                self.addLogEntry({'type': line_settings['label'] + '_TimeSeries' if line_settings['label'] != '' else 'Timeseries',
+                                  'name': self.ChapterRegion+'_'+yearstr,
+                                  'description': cur_obj_settings['description'],
+                                  'units': units,
+                                  'value_start_date': self.translateDateFormat(dates[0], 'datetime', '').strftime('%d %b %Y'),
+                                  'value_end_date': self.translateDateFormat(dates[-1], 'datetime', '').strftime('%d %b %Y'),
+                                  'logoutputfilename': curline['logoutputfilename']
+                                  },
+                                 isdata=True)
+
+            cur_obj_settings['units_list'] = unitslist
+            plotunits = self.getPlotUnits(cur_obj_settings)
+            cur_obj_settings = self.updateFlaggedValues(cur_obj_settings, '%%units%%', plotunits)
+
+            if 'title' in cur_obj_settings.keys():
+                if 'titlesize' in cur_obj_settings.keys():
+                    titlesize = float(object_settings['titlesize'])
+                elif 'fontsize' in cur_obj_settings.keys():
+                    titlesize = float(object_settings['fontsize'])
                 else:
-                    units = None
+                    titlesize = 15
+                plt.title(cur_obj_settings['title'], fontsize=titlesize)
 
-            if 'unitsystem' in object_settings.keys():
-                values, units = self.convertUnitSystem(values, units, object_settings['unitsystem'])
+            if 'gridlines' in cur_obj_settings.keys():
+                if cur_obj_settings['gridlines'].lower() == 'true':
+                    plt.grid(True)
 
-            chkvals = WF.checkData(values)
-            if not chkvals:
-                print('Invalid Data settings for line:', line)
-                continue
-
-            if 'dateformat' in object_settings.keys():
-                if object_settings['dateformat'].lower() == 'jdate':
-                    if isinstance(dates[0], dt.datetime):
-                        dates = self.DatetimeToJDate(dates)
-                elif object_settings['dateformat'].lower() == 'datetime':
-                    if isinstance(dates[0], (int,float)):
-                        dates = self.JDateToDatetime(dates)
-
-            if units != '' and units != None:
-                unitslist.append(units)
-
-            line_settings = self.getDefaultLineSettings(line, parameter, i)
-
-            if 'zorder' not in line_settings.keys():
-                line_settings['zorder'] = 4
-
-            if 'label' not in line_settings.keys():
-                line_settings['label'] = ''
-
-            if 'filterbylimits' not in line_settings.keys():
-                line_settings['filterbylimits'] = 'true' #set default
-
-            if line_settings['filterbylimits'].lower() == 'true':
-                if 'xlims' in object_settings.keys():
-                    dates, values = self.limitXdata(dates, values, object_settings['xlims'])
-                if 'ylims' in object_settings.keys():
-                    dates, values = self.limitYdata(dates, values, object_settings['ylims'])
-
-            if line_settings['drawline'].lower() == 'true' and line_settings['drawpoints'].lower() == 'true':
-                ax.plot(dates, values, label=line_settings['label'], c=line_settings['linecolor'],
-                        lw=line_settings['linewidth'], ls=line_settings['linestylepattern'],
-                        marker=line_settings['symboltype'], markerfacecolor=line_settings['pointfillcolor'],
-                        markeredgecolor=line_settings['pointlinecolor'], markersize=float(line_settings['symbolsize']),
-                        markevery=int(line_settings['numptsskip']), zorder=float(line_settings['zorder']),
-                        alpha=float(line_settings['alpha']))
-
-            elif line_settings['drawline'].lower() == 'true':
-                ax.plot(dates, values, label=line_settings['label'], c=line_settings['linecolor'],
-                        lw=line_settings['linewidth'], ls=line_settings['linestylepattern'],
-                        zorder=float(line_settings['zorder']),
-                        alpha=float(line_settings['alpha']))
-
-            elif line_settings['drawpoints'].lower() == 'true':
-                ax.scatter(dates[::int(line_settings['numptsskip'])], values[::int(line_settings['numptsskip'])],
-                           marker=line_settings['symboltype'], facecolor=line_settings['pointfillcolor'],
-                           edgecolor=line_settings['pointlinecolor'], s=float(line_settings['symbolsize']),
-                           label=line_settings['label'], zorder=float(line_settings['zorder']),
-                           alpha=float(line_settings['alpha']))
-
-
-            self.addLogEntry({'type': line_settings['label'] + '_TimeSeries' if line_settings['label'] != '' else 'Timeseries',
-                              'name': self.ChapterRegion,
-                              'description': object_settings['description'],
-                              'units': units,
-                              'value_start_date': self.translateDateFormat(dates[0], 'datetime', '').strftime('%d %b %Y'),
-                              'value_end_date': self.translateDateFormat(dates[-1], 'datetime', '').strftime('%d %b %Y'),
-                              'logoutputfilename': line['logoutputfilename']
-                              },
-                             isdata=True)
-
-        object_settings['units_list'] = unitslist
-        plotunits = self.getPlotUnits(object_settings)
-        object_settings = self.updateFlaggedValues(object_settings, '%%units%%', plotunits)
-
-        if 'title' in object_settings.keys():
-            if 'titlesize' in object_settings.keys():
-                titlesize = float(object_settings['titlesize'])
-            elif 'fontsize' in object_settings.keys():
-                titlesize = float(object_settings['fontsize'])
-            else:
-                titlesize = 15
-            plt.title(object_settings['title'], fontsize=titlesize)
-
-        if 'gridlines' in object_settings.keys():
-            if object_settings['gridlines'].lower() == 'true':
-                plt.grid(True)
-
-        if 'ylabel' in object_settings.keys():
-            if 'ylabelsize' in object_settings.keys():
-                ylabsize = float(object_settings['ylabelsize'])
-            elif 'fontsize' in object_settings.keys():
-                ylabsize = float(object_settings['fontsize'])
-            else:
-                ylabsize = 12
-            plt.ylabel(object_settings['ylabel'], fontsize=ylabsize)
-
-        if 'xlabel' in object_settings.keys():
-            if 'xlabelsize' in object_settings.keys():
-                xlabsize = float(object_settings['xlabelsize'])
-            elif 'fontsize' in object_settings.keys():
-                xlabsize = float(object_settings['fontsize'])
-            else:
-                xlabsize = 12
-            plt.xlabel(object_settings['xlabel'], fontsize=xlabsize)
-
-        if 'legend' in object_settings.keys():
-            if object_settings['legend'].lower() == 'true':
-                if 'legendsize' in object_settings.keys():
-                    legsize = float(object_settings['legendsize'])
-                elif 'fontsize' in object_settings.keys():
-                    legsize = float(object_settings['fontsize'])
+            if 'ylabel' in cur_obj_settings.keys():
+                if 'ylabelsize' in cur_obj_settings.keys():
+                    ylabsize = float(cur_obj_settings['ylabelsize'])
+                elif 'fontsize' in cur_obj_settings.keys():
+                    ylabsize = float(cur_obj_settings['fontsize'])
                 else:
-                    legsize = 12
-                plt.legend(fontsize=legsize)
+                    ylabsize = 12
+                plt.ylabel(cur_obj_settings['ylabel'], fontsize=ylabsize)
 
-        self.formatDateXAxis(ax, object_settings)
+            if 'xlabel' in cur_obj_settings.keys():
+                if 'xlabelsize' in cur_obj_settings.keys():
+                    xlabsize = float(cur_obj_settings['xlabelsize'])
+                elif 'fontsize' in cur_obj_settings.keys():
+                    xlabsize = float(cur_obj_settings['fontsize'])
+                else:
+                    xlabsize = 12
+                plt.xlabel(cur_obj_settings['xlabel'], fontsize=xlabsize)
 
-        if 'ylims' in object_settings.keys():
-            if 'min' in object_settings['ylims']:
-                ax.set_ylim(bottom=float(object_settings['ylims']['min']))
-            if 'max' in object_settings['ylims']:
-                ax.set_ylim(top=float(object_settings['ylims']['max']))
+            if 'legend' in cur_obj_settings.keys():
+                if cur_obj_settings['legend'].lower() == 'true':
+                    if 'legendsize' in cur_obj_settings.keys():
+                        legsize = float(cur_obj_settings['legendsize'])
+                    elif 'fontsize' in cur_obj_settings.keys():
+                        legsize = float(cur_obj_settings['fontsize'])
+                    else:
+                        legsize = 12
+                    plt.legend(fontsize=legsize)
 
-        if 'xticksize' in object_settings.keys():
-            xticksize = float(object_settings['xticksize'])
-        elif 'fontsize' in object_settings.keys():
-            xticksize = float(object_settings['fontsize'])
-        else:
-            xticksize = 10
-        ax.tick_params(axis='x', labelsize=xticksize)
+            self.formatDateXAxis(ax, cur_obj_settings)
 
-        if 'yticksize' in object_settings.keys():
-            yticksize = float(object_settings['yticksize'])
-        elif 'fontsize' in object_settings.keys():
-            yticksize = float(object_settings['fontsize'])
-        else:
-            yticksize = 10
-        ax.tick_params(axis='y', labelsize=yticksize)
+            if 'ylims' in cur_obj_settings.keys():
+                if 'min' in cur_obj_settings['ylims']:
+                    ax.set_ylim(bottom=float(cur_obj_settings['ylims']['min']))
+                if 'max' in cur_obj_settings['ylims']:
+                    ax.set_ylim(top=float(cur_obj_settings['ylims']['max']))
 
-        basefigname = os.path.join(self.images_path, 'TimeSeriesPlot' + '_' + self.ChapterRegion.replace(' ','_'))
-        exists = True
-        tempnum = 1
-        tfn = basefigname
-        while exists:
-            if os.path.exists(tfn + '.png'):
-                tfn = basefigname + '_{0}'.format(tempnum)
-                tempnum += 1
+            if 'xticksize' in cur_obj_settings.keys():
+                xticksize = float(cur_obj_settings['xticksize'])
+            elif 'fontsize' in cur_obj_settings.keys():
+                xticksize = float(cur_obj_settings['fontsize'])
             else:
-                exists = False
-        figname = tfn + '.png'
-        plt.savefig(figname, bbox_inches='tight')
-        plt.close('all')
+                xticksize = 10
+            ax.tick_params(axis='x', labelsize=xticksize)
 
-        self.XML.writeTimeSeriesPlot(os.path.basename(figname), object_settings['description'])
+            if 'yticksize' in cur_obj_settings.keys():
+                yticksize = float(cur_obj_settings['yticksize'])
+            elif 'fontsize' in cur_obj_settings.keys():
+                yticksize = float(cur_obj_settings['fontsize'])
+            else:
+                yticksize = 10
+            ax.tick_params(axis='y', labelsize=yticksize)
+
+            basefigname = os.path.join(self.images_path, 'TimeSeriesPlot' + '_' + self.ChapterRegion.replace(' ','_')
+                                       + '_' + yearstr)
+            exists = True
+            tempnum = 1
+            tfn = basefigname
+            while exists:
+                if os.path.exists(tfn + '.png'):
+                    tfn = basefigname + '_{0}'.format(tempnum)
+                    tempnum += 1
+                else:
+                    exists = False
+            figname = tfn + '.png'
+            plt.savefig(figname, bbox_inches='tight')
+            plt.close('all')
+
+            self.XML.writeTimeSeriesPlot(os.path.basename(figname), cur_obj_settings['description'])
 
     def makeProfileStatisticsTable(self, object_settings):
         '''
@@ -1371,6 +1389,20 @@ class MakeAutomatedReport(object):
         self.ModelAlternatives = simulation['modelalternatives']
         self.setSimulationDateTimes()
 
+    def setTimeSeriesXlims(self, cur_obj_settings, yearstr, years):
+        if 'ALLYEARS' not in years:
+            cur_obj_settings = self.updateFlaggedValues(cur_obj_settings, '%%year%%', yearstr)
+        else:
+            if 'xlims' in cur_obj_settings.keys():
+                if 'min' in cur_obj_settings['xlims']:
+                    cur_obj_settings['xlims']['min'] = self.updateFlaggedValues(cur_obj_settings['xlims']['min'],
+                                                                '%%year%%', str(self.years[0]))
+                if 'max' in cur_obj_settings['xlims']:
+                    cur_obj_settings['xlims']['max'] = self.updateFlaggedValues(cur_obj_settings['xlims']['max'],
+                                                                '%%year%%', str(self.years[-1]))
+            cur_obj_settings = self.updateFlaggedValues(cur_obj_settings, '%%year%%', yearstr)
+        return cur_obj_settings
+
     def getPandasTimeFreq(self, intervalstring):
         '''
         Reads in the DSS formatted time intervals and translates them to a format pandas.resample() understands
@@ -1747,6 +1779,34 @@ class MakeAutomatedReport(object):
                               'elevations': elevations,
                               'depths': depths,
                               'times': times,
+                              'units': units,
+                              'logoutputfilename': datamem_key}
+
+            for key in line.keys():
+                if key not in linedata[flag].keys():
+                    linedata[flag][key] = line[key]
+
+        return linedata
+
+    def getTimeseriesData(self, object_settings):
+        '''
+        Gets profile line data from defined data sources in XML files
+        :param object_settings: currently selected object settings dictionary
+        :param keyval: determines what key to iterate over for data
+        :return: dictionary containing data and information about each data set
+        '''
+
+        linedata = {}
+        for line in object_settings['lines']:
+            dates, values, units = self.getTimeSeries(line)
+            flag = line['flag']
+            datamem_key = self.buildDataMemoryKey(line)
+            if 'units' in line.keys():
+                units = line['units']
+            else:
+                units = None
+            linedata[flag] = {'values': values,
+                              'dates': dates,
                               'units': units,
                               'logoutputfilename': datamem_key}
 
@@ -2370,6 +2430,17 @@ class MakeAutomatedReport(object):
 
         print('Units Undefined:', units)
         return units
+
+    def filterTimeSeriesByYear(self, data, year):
+        if year != 'ALLYEARS':
+            for flag in data.keys():
+                # msk = [i for i, n in enumerate(data[flag]['dates']) if n.year == year]
+                years = np.array([n.year for n in data[flag]['dates']])
+                msk = np.where(years==year)
+
+                data[flag]['values'] = data[flag]['values'][msk]
+                data[flag]['dates'] = data[flag]['dates'][msk]
+        return data
 
     def formatDateXAxis(self, curax, object_settings, twin=False):
         '''
