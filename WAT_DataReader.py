@@ -19,6 +19,8 @@ import h5py
 from scipy.interpolate import interp1d
 from collections import Counter
 from pydsstools.heclib.dss import HecDss
+# from pydsstools.heclib.utils import dss_logging
+# dss_logging.config(level="None")
 import xml.etree.ElementTree as ET
 import linecache
 import WAT_Functions as WF
@@ -48,6 +50,7 @@ def readSimulationFile(simulation_name, studyfolder):
     '''
 
     simulation_file = os.path.join(studyfolder, 'reports', '{0}.csv'.format(simulation_name.replace(' ', '_')))
+    print('Attempting to read {0}'.format(simulation_file))
     if not os.path.exists(simulation_file):
         print('ERROR: no Simulation CSV file for simulation:', simulation_name)
         sys.exit()
@@ -125,6 +128,7 @@ def readChapterDefFile(CD_file):
 
     return Chapters
 
+
 def readDSSData(dss_file, pathname, startdate, enddate):
     '''
     calls pydsstools from https://github.com/gyanz/pydsstools to read dss data
@@ -141,25 +145,53 @@ def readDSSData(dss_file, pathname, startdate, enddate):
     # endDate = "15AUG2019 19:00:00"
     '''
 
-    startDate = startdate.strftime('%d%b%Y %H:%M:%S')
-    endDate = enddate.strftime('%d%b%Y %H:%M:%S')
+    startDatestr = startdate.strftime('%d%b%Y %H:%M:%S')
+    endDatestr = enddate.strftime('%d%b%Y %H:%M:%S')
 
     if not os.path.exists(dss_file):
         print('DSS file not found!', dss_file)
         return [], [], None
 
     fid = HecDss.Open(dss_file)
-    ts = fid.read_ts(pathname,window=(startDate,endDate),regular=True,trim_missing=True)
-    # ts = fid.read_ts(pathname,regular=False)
+    ts = fid.read_ts(pathname,window=(startDatestr,endDatestr),regular=True,trim_missing=False)
     if ts.empty: #if empty, it must be the path or time window. DSS record must exist
-        print('Invalid Timeseries record path of {0} or time window of {1} - {2}'.format(pathname, startDate, endDate))
+        print('Invalid Timeseries record path of {0} or time window of {1} - {2}'.format(pathname, startDatestr, endDatestr))
         print('Please check these parameters and rerun.')
         return [], [], None
-    times = np.array(ts.pytimes)
     values = np.array(ts.values)
+    values[ts.nodata] = np.nan
+
+    made_ts = False
+    if ts.dtype == 'Regular TimeSeries':
+        interval_seconds = ts.interval
+        times = []
+        current_time = startdate
+        while current_time <= enddate:
+            times.append(current_time)
+            current_time += dt.timedelta(seconds=interval_seconds)
+        if len(times) == len(values):
+            made_ts = True
+
+    if not made_ts:
+        times = np.asarray(ts.pytimes)
+        print('Irregular DSS detected with {0} in {1}'.format(pathname, dss_file))
+        print('Recommend changing to regular time series for speed increases.')
     units = ts.units
 
     return times, values, units
+
+def formatPyDSSToolsDates(datestring):
+    try:
+        ts_stime = dt.datetime.strptime(datestring, '%d%b%Y %H:%M:%S')
+    except ValueError:
+        ts_stime_splt = datestring.split(' ')
+        if ts_stime_splt[1][:2] == '24':
+            ts_stime_splt[1] = '00' + ts_stime_splt[1][2:]
+            datestring = ' '.join(ts_stime_splt)
+            ts_stime = dt.datetime.strptime(datestring, '%d%b%Y %H:%M:%S')
+            ts_stime += dt.timedelta(days=1)
+    return ts_stime
+
 
 def readW2ResultsFile(output_file_name, jd_dates, run_path, targetfieldidx=1):
     '''
@@ -236,9 +268,10 @@ def readTextProfile(observed_data_filename, timestamps):
                 wt_profile = []
                 d_profile = []
             else:
-                t_profile.append(dt_tmp)
-                wt_profile.append(float(sline[1]))
-                d_profile.append(float(sline[2]))
+                if float(sline[2]) not in d_profile:
+                    t_profile.append(dt_tmp)
+                    wt_profile.append(float(sline[1]))
+                    d_profile.append(float(sline[2]))
             hold_dt = dt_tmp
 
     if len(t_profile) != 0 and len(wt_profile) != 0 and len(d_profile) != 0:
@@ -477,7 +510,8 @@ class W2_Results(object):
 
         return sections
 
-    def getControlVariable(self, lines_sections, variable, pref_output_type=np.str):
+    # def getControlVariable(self, lines_sections, variable, pref_output_type=np.str):
+    def getControlVariable(self, lines_sections, variable, pref_output_type=np.str_):
         '''
         Parses the split control file sections from self.format_cf_lines() for a wanted card. Cards usually preface
         headers in the contro file, see docuemntation. For the give example below...
@@ -585,12 +619,11 @@ class W2_Results(object):
                 Elev_interp = interp1d(op_file['jday'], op_file['elws(m)'])
                 for j, jd in enumerate(self.jd_dates):
                     try:
-                        wt[j][i] = WT_interp(jd)
-                        WS_Elev[j][i] = Elev_interp(jd)
+                        wt[j][i-1] = WT_interp(jd)
+                        WS_Elev[j][i-1] = Elev_interp(jd)
                     except ValueError:
                         continue
 
-        # select_wt = np.full((len(unique_times), len(self.layers)), np.nan)
         select_wt = []
         elevations = []
         depths = []
@@ -915,9 +948,11 @@ class ResSim_Results(object):
         this_subdomain = self.subdomain_name if alt_subdomain_name is None else alt_subdomain_name
         cell_center_xy = self.h['Geometry/Subdomains/' + this_subdomain + '/Cell Center Coordinate']
         self.ncells = (np.shape(cell_center_xy))[0]
-        self.elev = np.array([cell_center_xy[i][2] for i in range(self.ncells)])
+        # self.elev = np.array([cell_center_xy[i][2] for i in range(self.ncells)])
+        self.elev = np.array(cell_center_xy[:self.ncells, 2])
         elev_ts = self.h['Results/Subdomains/' + this_subdomain + '/Water Surface Elevation']
-        self.elev_ts = np.array([elev_ts[i] for i in range(self.nt)])
+        # self.elev_ts = np.array([elev_ts[i] for i in range(self.nt)])
+        self.elev_ts = np.array(elev_ts[:self.nt])
 
 
     def loadResults(self, t_in, metrc, alt_subdomain_name=None):
