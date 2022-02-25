@@ -316,9 +316,9 @@ class MakeAutomatedReport(object):
 
                 if line_settings['filterbylimits'].lower() == 'true':
                     if 'xlims' in object_settings.keys():
-                        dates, values = self.limitXdata(dates, values, object_settings['xlims'])
+                        dates, values = self.limitXdata(dates, values, cur_obj_settings['xlims'])
                     if 'ylims' in object_settings.keys():
-                        dates, values = self.limitYdata(dates, values, object_settings['ylims'])
+                        dates, values = self.limitYdata(dates, values, cur_obj_settings['ylims'])
 
                 if line_settings['drawline'].lower() == 'true' and line_settings['drawpoints'].lower() == 'true':
                     ax.plot(dates, values, label=line_settings['label'], c=line_settings['linecolor'],
@@ -1801,10 +1801,10 @@ class MakeAutomatedReport(object):
             dates, values, units = self.getTimeSeries(line)
             flag = line['flag']
             datamem_key = self.buildDataMemoryKey(line)
-            if 'units' in line.keys():
+            if 'units' in line.keys() and units == None:
                 units = line['units']
-            else:
-                units = None
+            # else:
+            #     units = None
             linedata[flag] = {'values': values,
                               'dates': dates,
                               'units': units,
@@ -2384,10 +2384,13 @@ class MakeAutomatedReport(object):
                 print('Error Reading Limit: {0} as a jdate.'.format(lim))
                 print('If this is wrong, try format: 180')
                 print('Trying as Datetime..')
-                if isinstance(lim, dt.datetime):
+                if isinstance(lim, (dt.datetime, str)):
                     try:
-                        lim_frmt = pendulum.parse(lim, strict=False).replace(tzinfo=None)
-                        print('Datetime {0} as {1} Accepted!'.format(lim, lim_frmt))
+                        if isinstance(lim, str):
+                            lim_frmt = pendulum.parse(lim, strict=False).replace(tzinfo=None)
+                            print('Datetime {0} as {1} Accepted!'.format(lim, lim_frmt))
+                        else:
+                            lim_frmt = lim
                         print('converting to jdate..')
                         lim_frmt = self.DatetimeToJDate(lim_frmt)
                         print('Converted to jdate!', lim_frmt)
@@ -2395,7 +2398,6 @@ class MakeAutomatedReport(object):
                     except:
                         print('Error Reading Limit: {0} as a dt.datetime object.'.format(lim))
                         print('If this is wrong, try format: Apr 2014 1 12:00')
-
 
                     fallback = self.DatetimeToJDate(fallback)
 
@@ -2631,14 +2633,21 @@ class MakeAutomatedReport(object):
         for flag in flags:
             out_data[flag] = {}
             #interpolate over all values and then get interp values
-            if usedepth.lower() == 'true':
-                f_interp = interpolate.interp1d(data_dict[flag]['depths'][index], data_dict[flag]['values'][index], fill_value='extrapolate')
-                out_data[flag]['depths'] = output_interp_depths
-                out_data[flag]['values'] = f_interp(output_interp_depths)
+
+            if len(data_dict[flag]['values'][index]) < 2:
+                print('Insufficient data points with current bounds for {0}'.format(flag))
+                out_data[flag]['values'] = []
+                out_data[flag]['depths'] = []
+                out_data[flag]['elevations'] = []
             else:
-                f_interp = interpolate.interp1d(data_dict[flag]['elevations'][index], data_dict[flag]['values'][index], fill_value='extrapolate')
-                out_data[flag]['elevations'] = output_interp_elevations
-                out_data[flag]['values'] = f_interp(output_interp_elevations)
+                if usedepth.lower() == 'true':
+                    f_interp = interpolate.interp1d(data_dict[flag]['depths'][index], data_dict[flag]['values'][index], fill_value='extrapolate')
+                    out_data[flag]['depths'] = output_interp_depths
+                    out_data[flag]['values'] = f_interp(output_interp_depths)
+                else:
+                    f_interp = interpolate.interp1d(data_dict[flag]['elevations'][index], data_dict[flag]['values'][index], fill_value='extrapolate')
+                    out_data[flag]['elevations'] = output_interp_elevations
+                    out_data[flag]['values'] = f_interp(output_interp_elevations)
 
         return out_data
 
