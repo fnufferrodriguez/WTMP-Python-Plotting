@@ -176,6 +176,9 @@ def readDSSData(dss_file, pathname, startdate, enddate):
         times = np.asarray(ts.pytimes)
         print('Irregular DSS detected with {0} in {1}'.format(pathname, dss_file))
         print('Recommend changing to regular time series for speed increases.')
+    else:
+        times = np.asarray(times)
+
     units = ts.units
 
     return times, values, units
