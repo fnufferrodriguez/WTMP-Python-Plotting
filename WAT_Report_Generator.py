@@ -240,9 +240,6 @@ class MakeAutomatedReport(object):
         default_settings = self.loadDefaultPlotObject('timeseriesplot') #get default TS plot items
         object_settings = self.replaceDefaults(default_settings, object_settings) #overwrite the defaults with chapter file
 
-        # object_settings = self.updateFlaggedValues(object_settings, '%%year%%', self.years_str)
-        # data = self.getTimeseriesData(object_settings)
-
         object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = self.getPlotYears(object_settings)
 
         for yi, year in enumerate(object_settings['years']):
@@ -253,7 +250,6 @@ class MakeAutomatedReport(object):
                 yearstr = object_settings['yearstr']
 
             cur_obj_settings = self.setTimeSeriesXlims(cur_obj_settings, yearstr, object_settings['years'])
-            # cur_obj_settings = self.updateFlaggedValues(cur_obj_settings, '%%year%%', yearstr)
 
             fig = plt.figure(figsize=(12, 6))
             ax = fig.add_subplot()
@@ -266,7 +262,6 @@ class MakeAutomatedReport(object):
                 parameter, cur_obj_settings['param_count'] = self.getParameterCount(curline, cur_obj_settings)
                 i = cur_obj_settings['param_count'][parameter]
 
-                # line['logoutputfilename'] = self.buildFileName(line)
                 values = curline['values']
                 dates = curline['dates']
                 units = curline['units']
@@ -453,7 +448,6 @@ class MakeAutomatedReport(object):
         default_settings = self.loadDefaultPlotObject('profilestatisticstable')
         object_settings = self.replaceDefaults(default_settings, object_settings)
         object_settings['datakey'] = 'datapaths'
-        # object_settings['usedepth'] = 'true'
 
         ################# Get timestamps #################
         object_settings['datessource_flag'] = self.getDateSourceFlag(object_settings)
@@ -463,7 +457,6 @@ class MakeAutomatedReport(object):
         object_settings['plot_parameter'] = self.getPlotParameter(object_settings)
 
         ################# Get data #################
-        # object_settings['linedata'] = self.getProfileData(object_settings)
         linedata = self.getProfileData(object_settings)
 
         ################ reformat data ###################
@@ -582,24 +575,18 @@ class MakeAutomatedReport(object):
 
                 subplot_rows, subplot_cols = WF.getSubplotConfig(len(pgi), int(cur_obj_settings['profilesperrow']))
                 n_nrow_active = np.ceil(len(pgi) / subplot_cols)
-                # fig = plt.figure(figsize=(7, 1 + 3 * n_nrow_active))
-                # fig = plt.figure(figsize=(7, 10))
+
                 fig, axs = plt.subplots(nrows=int(object_settings['rowsperpage']), ncols=int(object_settings['profilesperrow']), figsize=(7,10))
 
-                # for i, j in enumerate(pgi):
                 for i in range(n):
 
                     current_row = i // int(object_settings['rowsperpage'])
                     current_col = i % int(object_settings['rowsperpage'])
-                    # ax = fig.add_subplot(int(subplot_rows), int(subplot_cols), i + 1)
-                    # ax = fig.add_subplot(int(object_settings['profilesperrow']), int(object_settings['rowsperpage']), i + 1)
                     ax = axs[current_row, current_col]
                     if i+1 > len(pgi):
                         ax.axis('off')
-                        plot_data = False
                         continue
                     else:
-                        plot_data = True
                         j = pgi[i]
 
                     if object_settings['usedepth'].lower() == 'true':
@@ -740,15 +727,12 @@ class MakeAutomatedReport(object):
                         leg_handles = []
                         for ax in axs:
                             for subax in ax:
-                                # labels = subax.get_legend_handles_labels()[1]
-                                # handles = subax.get_legend_handles_labels()[0]
                                 leg_handle_labels = subax.get_legend_handles_labels()
                                 for li in range(len(leg_handle_labels[1])):
                                     if leg_handle_labels[1][li] not in leg_labels:
                                         leg_labels.append(leg_handle_labels[1][li])
                                         leg_handles.append(leg_handle_labels[0][li])
 
-                        # if len(axs[0,0].get_legend_handles_labels()[1]) > 0:
                         if len(leg_labels) > 0:
                             if 'legendsize' in current_object_settings.keys():
                                 legsize = float(current_object_settings['legendsize'])
@@ -762,7 +746,7 @@ class MakeAutomatedReport(object):
                             n_legends_row = np.ceil(len(linedata.keys()) / ncolumns) * .65
                             if n_legends_row < 1:
                                 n_legends_row = 1
-                            # plt.subplots_adjust(bottom=(.3/n_nrow_active)*n_legends_row)
+
                             plt.subplots_adjust(bottom=.1*n_legends_row)
                             fig_ratio = (axs[int(n_nrow_active)-1,0].bbox.extents[1] - (fig.bbox.height * (.1 * n_legends_row))) / fig.bbox.height
                             plt.legend(bbox_to_anchor=(.5,fig_ratio), loc="lower center", fontsize=legsize,
@@ -770,15 +754,10 @@ class MakeAutomatedReport(object):
                                        labels=leg_labels)
 
 
-                            # plt.legend(bbox_to_anchor=(.5,0), loc="lower center", fontsize=legsize,
-                            #            bbox_transform=fig.transFigure, ncol=ncolumns)
-
-                # plt.tight_layout()
                 figname = 'ProfilePlot_{0}_{1}_{2}_{3}_{4}.png'.format(self.ChapterName, yearstr,
                                                                        object_settings['plot_parameter'], self.plugin,
                                                                        page_i)
 
-                # plt.savefig(os.path.join(self.images_path, figname), dpi=600)
                 plt.savefig(os.path.join(self.images_path, figname))
                 plt.close('all')
 
@@ -1445,8 +1424,6 @@ class MakeAutomatedReport(object):
             LineSettings: dictionary containing keys describing how the line/points are drawn
         '''
 
-        # if param != 'unknown':
-        #     param = param.lower()
         LineSettings = self.getDrawFlags(LineSettings)
         if LineSettings['drawline'] == 'true':
             if param in self.defaultLineStyles.keys():
@@ -1621,9 +1598,7 @@ class MakeAutomatedReport(object):
                 times = datamementry['times']
                 values = datamementry['values']
                 units = datamementry['units']
-                # times = pickle.loads(pickle.dumps(self.Data_Memory[datamem_key]['times'], -1))
-                # values = pickle.loads(pickle.dumps(self.Data_Memory[datamem_key]['values'], -1))
-                # units = pickle.loads(pickle.dumps(self.Data_Memory[datamem_key]['units'], -1))
+
 
             else:
                 if 'structurenumbers' in Line_info.keys():
@@ -1648,9 +1623,7 @@ class MakeAutomatedReport(object):
                 times = datamementry['times']
                 values = datamementry['values']
                 units = datamementry['units']
-                # times = pickle.loads(pickle.dumps(self.Data_Memory[datamem_key]['times'], -1))
-                # values = pickle.loads(pickle.dumps(self.Data_Memory[datamem_key]['values'], -1))
-                # units = pickle.loads(pickle.dumps(self.Data_Memory[datamem_key]['units'], -1))
+
             else:
                 times, values = self.ModelAlt.readTimeSeries(Line_info['parameter'],
                                                              float(Line_info['easting']),
@@ -1743,7 +1716,6 @@ class MakeAutomatedReport(object):
         if 'filename' in Line_info.keys(): #Get data from Observed
             filename = Line_info['filename']
             values, depths, times = WDR.readTextProfile(filename, timesteps)
-            # times = WDR.getTextProfileDates(filename, self.StartTime, self.EndTime)
             return values, [], depths, times, Line_info['flag']
 
         elif 'w2_segment' in Line_info.keys():
@@ -1800,11 +1772,17 @@ class MakeAutomatedReport(object):
         for line in object_settings['lines']:
             dates, values, units = self.getTimeSeries(line)
             flag = line['flag']
+            if flag in linedata.keys():
+                count = 1
+                newflag = flag + '_{0}'.format(count)
+                while newflag in linedata.keys():
+                    count += 1
+                    newflag = flag + '_{0}'.format(count)
+                flag = newflag
+                print('The new flag is {0}'.format(newflag))
             datamem_key = self.buildDataMemoryKey(line)
             if 'units' in line.keys() and units == None:
                 units = line['units']
-            # else:
-            #     units = None
             linedata[flag] = {'values': values,
                               'dates': dates,
                               'units': units,
@@ -2350,7 +2328,6 @@ class MakeAutomatedReport(object):
                 return lim
             else:
                 try:
-                    # lim_frmt = dateutil.parser.parse(lim) #try simple date formatting.
                     lim_frmt = pendulum.parse(lim, strict=False).replace(tzinfo=None)#try simple date formatting.
                     if not self.StartTime <= lim_frmt <= self.EndTime: #check for false negative
                         raise IndexError
@@ -2436,7 +2413,6 @@ class MakeAutomatedReport(object):
     def filterTimeSeriesByYear(self, data, year):
         if year != 'ALLYEARS':
             for flag in data.keys():
-                # msk = [i for i, n in enumerate(data[flag]['dates']) if n.year == year]
                 years = np.array([n.year for n in data[flag]['dates']])
                 msk = np.where(years==year)
 
@@ -2518,14 +2494,12 @@ class MakeAutomatedReport(object):
         rrow = row.replace('%%', '')
         s_row = rrow.split('.')
         sr_month = ''
-        # flags = []
         for sr in s_row:
             if sr in data_dict.keys():
                 curflag = sr
                 curvalues = np.array(data_dict[sr]['values'])
                 curdates = np.array(data_dict[sr]['dates'])
                 data[curflag] = {'values': curvalues, 'dates': curdates}
-                # flags.append(sr)
             else:
                 if '=' in sr:
                     sr_spl = sr.split('=')
@@ -2542,8 +2516,6 @@ class MakeAutomatedReport(object):
                                 print('Ex: MONTH=1 or MONTH=JAN')
                                 continue
 
-                        # msk = [i for i, n in enumerate(curdates) if n.month == sr_month]
-
                         months = np.array([n.month for n in curdates])
                         msk = np.where(months==sr_month)
 
@@ -2553,7 +2525,6 @@ class MakeAutomatedReport(object):
 
         if year != 'ALL':
             for flag in data.keys():
-                # msk = [i for i, n in enumerate(data[flag]['dates']) if n.year == year]
                 years = np.array([n.year for n in data[flag]['dates']])
                 msk = np.where(years==year)
 
@@ -2576,7 +2547,6 @@ class MakeAutomatedReport(object):
             out_data: dictionary containing values and depths/elevations
         '''
 
-        # data = pickle.loads(pickle.dumps(data_dict, -1))
         rrow = row.replace('%%', '')
         s_row = rrow.split('.')
         flags = []
@@ -2996,7 +2966,6 @@ class MakeAutomatedReport(object):
                            'value_end_date': self.Log['value_end_date'],
                            'CSVOutputFilename': self.Log['logoutputfilename']})
 
-        # df = pd.DataFrame(data, columns=columns)
         df.to_csv(os.path.join(self.images_path, 'Log.csv'), index=False)
 
     def writeDataFiles(self):
@@ -3159,7 +3128,6 @@ class MakeAutomatedReport(object):
                     self.XML
         '''
 
-        # new_xml = 'USBRAutomatedReportOutput.xml' #required name for file
         new_xml = os.path.join(self.studyDir, 'reports', 'Datasources', 'USBRAutomatedReportOutput.xml') #required name for file
         self.XML = XML_Utils.XMLReport(new_xml)
         self.XML.writeCover('DRAFT Temperature Validation Summary Report')
@@ -3232,11 +3200,9 @@ class MakeAutomatedReport(object):
         '''
 
         if isinstance(dates, (float, int)):
-            # print('Dates already in JDate form.')
             return dates
         elif isinstance(dates, (list, np.ndarray)):
             if isinstance(dates[0], (float, int)):
-                # print('Dates already in JDate form.')
                 return dates
             jdates = np.asarray([(WF.datetime2Ordinal(n) - self.ModelAlt.t_offset) + 1 for n in dates])
             return jdates
@@ -3244,7 +3210,6 @@ class MakeAutomatedReport(object):
             jdate = (WF.datetime2Ordinal(dates) - self.ModelAlt.t_offset) + 1
             return jdate
         else:
-            # print('Unable to convert type {0} to JDates'.format(type(dates)))
             return dates
 
     def JDateToDatetime(self, dates):
@@ -3260,11 +3225,9 @@ class MakeAutomatedReport(object):
         first_year_Date = dt.datetime(self.ModelAlt.dt_dates[0].year, 1, 1, 0, 0)
 
         if isinstance(dates, dt.datetime):
-            # print('Dates already in Datetime form.')
             return dates
         elif isinstance(dates, (list, np.ndarray)):
             if isinstance(dates[0], dt.datetime):
-                # print('Dates already in Datetime form.')
                 return dates
             dtimes = np.asarray([first_year_Date + dt.timedelta(days=n) for n in dates])
             return dtimes
@@ -3272,7 +3235,6 @@ class MakeAutomatedReport(object):
             dtime = first_year_Date + dt.timedelta(days=dates)
             return dtime
         else:
-            # print('Unable to convert type {0} to datetime'.format(type(dates)))
             return dates
 
     def pickByParameter(self, values, line):
@@ -3750,7 +3712,6 @@ class MakeAutomatedReport(object):
         commits updated data to data memory dictionary that keeps track of data
         :param object_settings:  dicitonary of user defined settings for current object
         '''
-        # copied_object_settings = pickle.loads(pickle.dumps(object_settings, -1))
         for line in linedata.keys():
             values = linedata[line]['values']
             depths = linedata[line]['depths']
