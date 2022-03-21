@@ -16,6 +16,7 @@ import datetime as dt
 import os
 import sys
 import matplotlib.pyplot as plt
+from matplotlib.colors import is_color_like
 import numpy as np
 import pandas as pd
 import xml.etree.ElementTree as ET
@@ -251,170 +252,501 @@ class MakeAutomatedReport(object):
 
             cur_obj_settings = self.setTimeSeriesXlims(cur_obj_settings, yearstr, object_settings['years'])
 
-            fig = plt.figure(figsize=(12, 6))
-            ax = fig.add_subplot()
-            unitslist = []
-            data = self.getTimeseriesData(object_settings)
-            linedata = self.filterTimeSeriesByYear(data, year)
+            # fig = plt.figure(figsize=(12, 6))
+            if len(cur_obj_settings['axs']) == 1:
+                figsize=(12, 6)
+                pageformat = 'half'
+            else:
+                figsize=(12,18)
+                pageformat = 'full'
 
-            for line in linedata:
-                curline = linedata[line]
-                parameter, cur_obj_settings['param_count'] = self.getParameterCount(curline, cur_obj_settings)
-                i = cur_obj_settings['param_count'][parameter]
+            axis_weight = []
+            for ax_settings in cur_obj_settings['axs']:
+                if 'weight' in ax_settings.keys():
+                    axis_weight.append(float(ax_settings['weight']))
+                else:
+                    axis_weight.append(1)
 
-                values = curline['values']
-                dates = curline['dates']
-                units = curline['units']
 
-                if units == None:
-                    if parameter != None:
-                        try:
-                            units = self.units[parameter]
-                        except KeyError:
+            if cur_obj_settings['sharex'].lower() == 'true':
+                fig, axes = plt.subplots(nrows=len(cur_obj_settings['axs']), sharex=True, figsize=figsize,
+                                         gridspec_kw={'height_ratios': axis_weight})
+            else:
+                fig, axes = plt.subplots(ncols=1, nrows=len(cur_obj_settings['axs']), figsize=figsize,
+                                         gridspec_kw={'height_ratios': axis_weight})
+
+            plt.subplots_adjust(wspace=0, hspace=0)
+
+            legend_left = False
+            left_sided_axes = []
+            legend_right = False
+            right_sided_axes = []
+
+
+            for axi, ax_settings in enumerate(cur_obj_settings['axs']):
+
+                ax_settings = self.copyObjectSettingsToAxSetting(ax_settings, cur_obj_settings, ignore=['axs'])
+
+                if len(cur_obj_settings['axs']) == 1:
+                    ax = axes
+                else:
+                    ax = axes[axi]
+
+                ### Make Twin axis ###
+                _usetwinx = False
+                if 'twinx' in ax_settings.keys():
+                    if ax_settings['twinx'].lower() == 'true':
+                        _usetwinx = True
+
+                if _usetwinx:
+                    ax2 = ax.twinx()
+
+                unitslist = []
+                linedata = self.getTimeseriesData(ax_settings)
+                gatedata = self.getGateData(ax_settings)
+                linedata = self.filterTimeSeriesByYear(linedata, year)
+                gatedata = self.filterTimeSeriesByYear(gatedata, year)
+
+                # LINE DATA #
+                for line in linedata:
+                    curline = linedata[line]
+                    parameter, ax_settings['param_count'] = self.getParameterCount(curline, ax_settings)
+                    i = ax_settings['param_count'][parameter]
+
+                    values = curline['values']
+                    dates = curline['dates']
+                    units = curline['units']
+
+                    if units == None:
+                        if parameter != None:
+                            try:
+                                units = self.units[parameter]
+                            except KeyError:
+                                units = None
+
+                    if isinstance(units, dict):
+                        if 'unitsystem' in cur_obj_settings.keys():
+                            units = units[cur_obj_settings['unitsystem'].lower()]
+                        else:
                             units = None
 
-                if isinstance(units, dict):
                     if 'unitsystem' in cur_obj_settings.keys():
-                        units = units[cur_obj_settings['unitsystem'].lower()]
+                        values, units = self.convertUnitSystem(values, units, cur_obj_settings['unitsystem'])
+
+                    chkvals = WF.checkData(values)
+                    if not chkvals:
+                        print('Invalid Data settings for line:', line)
+                        continue
+
+                    if 'dateformat' in cur_obj_settings.keys():
+                        if cur_obj_settings['dateformat'].lower() == 'jdate':
+                            if isinstance(dates[0], dt.datetime):
+                                dates = self.DatetimeToJDate(dates)
+                        elif cur_obj_settings['dateformat'].lower() == 'datetime':
+                            if isinstance(dates[0], (int,float)):
+                                dates = self.JDateToDatetime(dates)
+
+                    if units != '' and units != None:
+                        unitslist.append(units)
+
+                    line_settings = self.getDefaultLineSettings(curline, parameter, i)
+
+                    if 'zorder' not in line_settings.keys():
+                        line_settings['zorder'] = 4
+
+                    if 'label' not in line_settings.keys():
+                        line_settings['label'] = ''
+
+                    if 'filterbylimits' not in line_settings.keys():
+                        line_settings['filterbylimits'] = 'true' #set default
+
+                    if line_settings['filterbylimits'].lower() == 'true':
+                        if 'xlims' in object_settings.keys():
+                            dates, values = self.limitXdata(dates, values, cur_obj_settings['xlims'])
+                        if 'ylims' in object_settings.keys():
+                            dates, values = self.limitYdata(dates, values, cur_obj_settings['ylims'])
+
+                    curax = ax
+                    if _usetwinx:
+                        if 'yaxis' in line_settings.keys():
+                            if line_settings['yaxis'].lower() == 'right':
+                                curax = ax2
+
+                    if line_settings['drawline'].lower() == 'true' and line_settings['drawpoints'].lower() == 'true':
+                        curax.plot(dates, values, label=line_settings['label'], c=line_settings['linecolor'],
+                                   lw=line_settings['linewidth'], ls=line_settings['linestylepattern'],
+                                   marker=line_settings['symboltype'], markerfacecolor=line_settings['pointfillcolor'],
+                                   markeredgecolor=line_settings['pointlinecolor'], markersize=float(line_settings['symbolsize']),
+                                   markevery=int(line_settings['numptsskip']), zorder=float(line_settings['zorder']),
+                                   alpha=float(line_settings['alpha']))
+
+                    elif line_settings['drawline'].lower() == 'true':
+                        curax.plot(dates, values, label=line_settings['label'], c=line_settings['linecolor'],
+                                   lw=line_settings['linewidth'], ls=line_settings['linestylepattern'],
+                                   zorder=float(line_settings['zorder']),
+                                   alpha=float(line_settings['alpha']))
+
+                    elif line_settings['drawpoints'].lower() == 'true':
+                        curax.scatter(dates[::int(line_settings['numptsskip'])], values[::int(line_settings['numptsskip'])],
+                                      marker=line_settings['symboltype'], facecolor=line_settings['pointfillcolor'],
+                                      edgecolor=line_settings['pointlinecolor'], s=float(line_settings['symbolsize']),
+                                      label=line_settings['label'], zorder=float(line_settings['zorder']),
+                                      alpha=float(line_settings['alpha']))
+
+
+                    self.addLogEntry({'type': line_settings['label'] + '_TimeSeries' if line_settings['label'] != '' else 'Timeseries',
+                                      'name': self.ChapterRegion+'_'+yearstr,
+                                      'description': cur_obj_settings['description'],
+                                      'units': units,
+                                      'value_start_date': self.translateDateFormat(dates[0], 'datetime', '').strftime('%d %b %Y'),
+                                      'value_end_date': self.translateDateFormat(dates[-1], 'datetime', '').strftime('%d %b %Y'),
+                                      'logoutputfilename': curline['logoutputfilename']
+                                      },
+                                     isdata=True)
+                # GATE DATA #
+                if 'gatespacing' in ax_settings.keys():
+                    gatespacing = float(ax_settings['gatespacing'])
+                else:
+                    gatespacing = 3
+                gate_placement = gatespacing
+
+                gategroups = []
+                gategroup_labels = []
+                gatelabels_positions = []
+                for gate in gatedata.keys():
+                    if gatedata[gate]['gategroup'] not in gategroups:
+                        gategroups.append(gatedata[gate]['gategroup'])
+                gategroups.reverse()
+                for gategroup in gategroups:
+                    for gateop in ax_settings['gateops']:
+                        if gateop['flag'] == gategroup:
+                            gategroup_labels.append(gateop['label'].replace('\\n', '\n'))
+
+                print('GATEGROUPS:', gategroups)
+                for ggi, gategroup in enumerate(gategroups):
+                    # gate_placement += ggi*gatespacing
+                    gate_count = 0 #keep track of gate number in group
+                    gatelines_positions = []
+                    for gate in gatedata.keys():
+                        if gatedata[gate]['gategroup'] == gategroup:
+
+                            curgate = gatedata[gate]
+
+                            values = curgate['values']
+                            dates = curgate['dates']
+
+                            if 'dateformat' in cur_obj_settings.keys():
+                                if cur_obj_settings['dateformat'].lower() == 'jdate':
+                                    if isinstance(dates[0], dt.datetime):
+                                        dates = self.DatetimeToJDate(dates)
+                                elif cur_obj_settings['dateformat'].lower() == 'datetime':
+                                    if isinstance(dates[0], (int,float)):
+                                        dates = self.JDateToDatetime(dates)
+
+                            gate_line_settings = self.getDefaultGateLineSettings(curgate, gate_count)
+
+                            if 'zorder' not in gate_line_settings.keys():
+                                gate_line_settings['zorder'] = 4
+
+                            if 'label' not in gate_line_settings.keys():
+                                gate_line_settings['label'] = '{0}_{1}'.format(gategroup, gate_count)
+
+                            if 'filterbylimits' not in gate_line_settings.keys():
+                                gate_line_settings['filterbylimits'] = 'true' #set default
+
+                            if gate_line_settings['filterbylimits'].lower() == 'true':
+                                if 'xlims' in cur_obj_settings.keys():
+                                    dates, values = self.limitXdata(dates, values, cur_obj_settings['xlims'])
+
+                            if 'placement' in gate_line_settings.keys():
+                                line_placement = float(gate_line_settings['placement'])
+                            else:
+                                line_placement = gate_placement
+
+                            values *= line_placement
+                            gatelines_positions.append(line_placement)
+                            print('line_placement', line_placement)
+                            print('gatelines_positions', gatelines_positions)
+
+                            curax = ax
+                            if _usetwinx:
+                                if 'xaxis' in line_settings.keys():
+                                    if 'xaxis'.lower() == 'right':
+                                        curax = ax2
+
+                            if gate_line_settings['drawline'].lower() == 'true' and gate_line_settings['drawpoints'].lower() == 'true':
+                                curax.plot(dates, values, label=gate_line_settings['label'], c=gate_line_settings['linecolor'],
+                                           lw=gate_line_settings['linewidth'], ls=gate_line_settings['linestylepattern'],
+                                           marker=gate_line_settings['symboltype'], markerfacecolor=gate_line_settings['pointfillcolor'],
+                                           markeredgecolor=gate_line_settings['pointlinecolor'], markersize=float(gate_line_settings['symbolsize']),
+                                           markevery=int(gate_line_settings['numptsskip']), zorder=float(gate_line_settings['zorder']),
+                                           alpha=float(gate_line_settings['alpha']))
+
+                            elif gate_line_settings['drawline'].lower() == 'true':
+                                curax.plot(dates, values, label=gate_line_settings['label'], c=gate_line_settings['linecolor'],
+                                           lw=gate_line_settings['linewidth'], ls=gate_line_settings['linestylepattern'],
+                                           zorder=float(gate_line_settings['zorder']),
+                                           alpha=float(gate_line_settings['alpha']))
+
+                            elif gate_line_settings['drawpoints'].lower() == 'true':
+                                curax.scatter(dates[::int(gate_line_settings['numptsskip'])], values[::int(gate_line_settings['numptsskip'])],
+                                              marker=gate_line_settings['symboltype'], facecolor=gate_line_settings['pointfillcolor'],
+                                              edgecolor=gate_line_settings['pointlinecolor'], s=float(gate_line_settings['symbolsize']),
+                                              label=gate_line_settings['label'], zorder=float(gate_line_settings['zorder']),
+                                              alpha=float(gate_line_settings['alpha']))
+
+                            gate_count += 1 #keep track of gate number in group
+                            gate_placement += 1 #keep track of gate palcement in space
+                            self.addLogEntry({'type': gate_line_settings['label'] + '_GateTimeSeries' if gate_line_settings['label'] != '' else 'GateTimeseries',
+                                              'name': self.ChapterRegion+'_'+yearstr,
+                                              'description': cur_obj_settings['description'],
+                                              'units': 'BINARY',
+                                              'value_start_date': self.translateDateFormat(dates[0], 'datetime', '').strftime('%d %b %Y'),
+                                              'value_end_date': self.translateDateFormat(dates[-1], 'datetime', '').strftime('%d %b %Y'),
+                                              'logoutputfilename': curgate['logoutputfilename']
+                                              },
+                                             isdata=True)
+
+                    print('all gatelines_positions', gatelines_positions)
+                    gatelabels_positions.append(np.average(gatelines_positions))
+                    print('gatelabels_positions', gatelabels_positions)
+                    gate_placement += gatespacing
+
+                ### VERTICAL LINES ###
+                if 'vlines' in ax_settings.keys():
+                    for vline in ax_settings['vlines']:
+                        vline_settings = self.getDefaultStriaghtLineSettings(vline)
+                        try:
+                            vline_settings['value'] = float(vline_settings['value'])
+                        except:
+                            vline_settings['value'] = self.translateDateFormat(vline_settings['value'], 'datetime', '')
+                        if 'dateformat' in cur_obj_settings.keys():
+                            if cur_obj_settings['dateformat'].lower() == 'jdate':
+                                if isinstance(vline_settings['value'], dt.datetime):
+                                    vline_settings['value'] = self.DatetimeToJDate(vline_settings['value'])
+                                elif isinstance(vline_settings['value'], str):
+                                    try:
+                                        vline_settings['value'] = float(vline_settings['value'])
+                                    except:
+                                        vline_settings['value'] = self.translateDateFormat(vline_settings['value'], 'datetime', '')
+                                        vline_settings['value'] = self.DatetimeToJDate(vline_settings['value'])
+                            elif cur_obj_settings['dateformat'].lower() == 'datetime':
+                                if isinstance(vline_settings['value'], (int,float)):
+                                    vline_settings['value'] = self.JDateToDatetime(vline_settings['value'])
+                                elif isinstance(vline_settings['value'], str):
+                                    vline_settings['value'] = self.translateDateFormat(vline_settings['value'], 'datetime', '')
+                        else:
+                            vline_settings['value'] = self.translateDateFormat(vline_settings['value'], 'datetime', '')
+
+                        if 'label' not in vline_settings.keys():
+                            vline_settings['label'] = None
+                        if 'zorder' not in vline_settings.keys():
+                            vline_settings['zorder'] = 3
+
+                        ax.axvline(vline_settings['value'], label=vline_settings['label'], c=vline_settings['linecolor'],
+                                   lw=vline_settings['linewidth'], ls=vline_settings['linestylepattern'],
+                                   zorder=float(vline_settings['zorder']),
+                                   alpha=float(vline_settings['alpha']))
+                            
+                ### Horizontal LINES ###
+                if 'hlines' in ax_settings.keys():
+                    for hline in ax_settings['hlines']:
+                        hline_settings = self.getDefaultStriaghtLineSettings(hline)
+                        if 'label' not in hline_settings.keys():
+                            hline_settings['label'] = None
+                        if 'zorder' not in hline_settings.keys():
+                            hline_settings['zorder'] = 3
+                        hline_settings['value'] = float(hline_settings['value'])
+
+                        ax.axhline(hline_settings['value'], label=hline_settings['label'], c=hline_settings['linecolor'],
+                                   lw=hline_settings['linewidth'], ls=hline_settings['linestylepattern'],
+                                   zorder=float(hline_settings['zorder']),
+                                   alpha=float(hline_settings['alpha']))
+
+                ax_settings['units_list'] = unitslist
+                plotunits = self.getPlotUnits(ax_settings)
+                ax_settings = self.updateFlaggedValues(ax_settings, '%%units%%', plotunits)
+                cur_obj_settings = self.updateFlaggedValues(cur_obj_settings, '%%units%%', plotunits)
+
+                if axi == 0:
+                    if 'title' in cur_obj_settings.keys():
+                        if 'titlesize' in cur_obj_settings.keys():
+                            titlesize = float(object_settings['titlesize'])
+                        elif 'fontsize' in cur_obj_settings.keys():
+                            titlesize = float(object_settings['fontsize'])
+                        else:
+                            titlesize = 15
+                        ax.set_title(cur_obj_settings['title'], fontsize=titlesize)
+
+                if 'gridlines' in ax_settings.keys():
+                    if ax_settings['gridlines'].lower() == 'true':
+                        ax.grid(True)
+
+                if 'ylabel' in ax_settings.keys():
+                    if 'ylabelsize' in ax_settings.keys():
+                        ylabsize = float(ax_settings['ylabelsize'])
+                    elif 'fontsize' in ax_settings.keys():
+                        ylabsize = float(ax_settings['fontsize'])
                     else:
-                        units = None
+                        ylabsize = 12
+                    ax.set_ylabel(ax_settings['ylabel'].replace("\\n", "\n"), fontsize=ylabsize)
 
-                if 'unitsystem' in cur_obj_settings.keys():
-                    values, units = self.convertUnitSystem(values, units, cur_obj_settings['unitsystem'])
-
-                chkvals = WF.checkData(values)
-                if not chkvals:
-                    print('Invalid Data settings for line:', line)
-                    continue
-
-                if 'dateformat' in cur_obj_settings.keys():
-                    if cur_obj_settings['dateformat'].lower() == 'jdate':
-                        if isinstance(dates[0], dt.datetime):
-                            dates = self.DatetimeToJDate(dates)
-                    elif cur_obj_settings['dateformat'].lower() == 'datetime':
-                        if isinstance(dates[0], (int,float)):
-                            dates = self.JDateToDatetime(dates)
-
-                if units != '' and units != None:
-                    unitslist.append(units)
-
-                line_settings = self.getDefaultLineSettings(curline, parameter, i)
-
-                if 'zorder' not in line_settings.keys():
-                    line_settings['zorder'] = 4
-
-                if 'label' not in line_settings.keys():
-                    line_settings['label'] = ''
-
-                if 'filterbylimits' not in line_settings.keys():
-                    line_settings['filterbylimits'] = 'true' #set default
-
-                if line_settings['filterbylimits'].lower() == 'true':
-                    if 'xlims' in object_settings.keys():
-                        dates, values = self.limitXdata(dates, values, cur_obj_settings['xlims'])
-                    if 'ylims' in object_settings.keys():
-                        dates, values = self.limitYdata(dates, values, cur_obj_settings['ylims'])
-
-                if line_settings['drawline'].lower() == 'true' and line_settings['drawpoints'].lower() == 'true':
-                    ax.plot(dates, values, label=line_settings['label'], c=line_settings['linecolor'],
-                            lw=line_settings['linewidth'], ls=line_settings['linestylepattern'],
-                            marker=line_settings['symboltype'], markerfacecolor=line_settings['pointfillcolor'],
-                            markeredgecolor=line_settings['pointlinecolor'], markersize=float(line_settings['symbolsize']),
-                            markevery=int(line_settings['numptsskip']), zorder=float(line_settings['zorder']),
-                            alpha=float(line_settings['alpha']))
-
-                elif line_settings['drawline'].lower() == 'true':
-                    ax.plot(dates, values, label=line_settings['label'], c=line_settings['linecolor'],
-                            lw=line_settings['linewidth'], ls=line_settings['linestylepattern'],
-                            zorder=float(line_settings['zorder']),
-                            alpha=float(line_settings['alpha']))
-
-                elif line_settings['drawpoints'].lower() == 'true':
-                    ax.scatter(dates[::int(line_settings['numptsskip'])], values[::int(line_settings['numptsskip'])],
-                               marker=line_settings['symboltype'], facecolor=line_settings['pointfillcolor'],
-                               edgecolor=line_settings['pointlinecolor'], s=float(line_settings['symbolsize']),
-                               label=line_settings['label'], zorder=float(line_settings['zorder']),
-                               alpha=float(line_settings['alpha']))
-
-
-                self.addLogEntry({'type': line_settings['label'] + '_TimeSeries' if line_settings['label'] != '' else 'Timeseries',
-                                  'name': self.ChapterRegion+'_'+yearstr,
-                                  'description': cur_obj_settings['description'],
-                                  'units': units,
-                                  'value_start_date': self.translateDateFormat(dates[0], 'datetime', '').strftime('%d %b %Y'),
-                                  'value_end_date': self.translateDateFormat(dates[-1], 'datetime', '').strftime('%d %b %Y'),
-                                  'logoutputfilename': curline['logoutputfilename']
-                                  },
-                                 isdata=True)
-
-            cur_obj_settings['units_list'] = unitslist
-            plotunits = self.getPlotUnits(cur_obj_settings)
-            cur_obj_settings = self.updateFlaggedValues(cur_obj_settings, '%%units%%', plotunits)
-
-            if 'title' in cur_obj_settings.keys():
-                if 'titlesize' in cur_obj_settings.keys():
-                    titlesize = float(object_settings['titlesize'])
-                elif 'fontsize' in cur_obj_settings.keys():
-                    titlesize = float(object_settings['fontsize'])
-                else:
-                    titlesize = 15
-                plt.title(cur_obj_settings['title'], fontsize=titlesize)
-
-            if 'gridlines' in cur_obj_settings.keys():
-                if cur_obj_settings['gridlines'].lower() == 'true':
-                    plt.grid(True)
-
-            if 'ylabel' in cur_obj_settings.keys():
-                if 'ylabelsize' in cur_obj_settings.keys():
-                    ylabsize = float(cur_obj_settings['ylabelsize'])
-                elif 'fontsize' in cur_obj_settings.keys():
-                    ylabsize = float(cur_obj_settings['fontsize'])
-                else:
-                    ylabsize = 12
-                plt.ylabel(cur_obj_settings['ylabel'], fontsize=ylabsize)
-
-            if 'xlabel' in cur_obj_settings.keys():
-                if 'xlabelsize' in cur_obj_settings.keys():
-                    xlabsize = float(cur_obj_settings['xlabelsize'])
-                elif 'fontsize' in cur_obj_settings.keys():
-                    xlabsize = float(cur_obj_settings['fontsize'])
-                else:
-                    xlabsize = 12
-                plt.xlabel(cur_obj_settings['xlabel'], fontsize=xlabsize)
-
-            if 'legend' in cur_obj_settings.keys():
-                if cur_obj_settings['legend'].lower() == 'true':
-                    if 'legendsize' in cur_obj_settings.keys():
-                        legsize = float(cur_obj_settings['legendsize'])
-                    elif 'fontsize' in cur_obj_settings.keys():
-                        legsize = float(cur_obj_settings['fontsize'])
+                if 'xlabel' in ax_settings.keys():
+                    if 'xlabelsize' in ax_settings.keys():
+                        xlabsize = float(ax_settings['xlabelsize'])
+                    elif 'fontsize' in ax_settings.keys():
+                        xlabsize = float(ax_settings['fontsize'])
                     else:
-                        legsize = 12
-                    plt.legend(fontsize=legsize)
+                        xlabsize = 12
+                    ax.set_xlabel(ax_settings['xlabel'].replace("\\n", "\n"), fontsize=xlabsize)
 
-            self.formatDateXAxis(ax, cur_obj_settings)
+                if 'legend' in ax_settings.keys():
+                    if ax_settings['legend'].lower() == 'true':
+                        if 'legendsize' in ax_settings.keys():
+                            legsize = float(ax_settings['legendsize'])
+                        elif 'fontsize' in ax_settings.keys():
+                            legsize = float(ax_settings['fontsize'])
+                        else:
+                            legsize = 12
+                        if ax_settings['legend_outside'].lower() == 'true':
+                            if _usetwinx:
+                                legend_left = True
+                                left_sided_axes.append(ax)
+                                left_offset = ax.get_window_extent().x0 / ax.get_window_extent().width
+                                ax.legend(loc='center left', bbox_to_anchor=(-left_offset, 0.5), ncol=1,fontsize=legsize)
+                            else:
+                                legend_right = True
+                                right_sided_axes.append(ax)
+                                ax.legend(loc='center left', bbox_to_anchor=(1, 0.5), ncol=1,fontsize=legsize)
+                        else:
+                            ax.legend(fontsize=legsize)
 
-            if 'ylims' in cur_obj_settings.keys():
-                if 'min' in cur_obj_settings['ylims']:
-                    ax.set_ylim(bottom=float(cur_obj_settings['ylims']['min']))
-                if 'max' in cur_obj_settings['ylims']:
-                    ax.set_ylim(top=float(cur_obj_settings['ylims']['max']))
+                self.formatDateXAxis(ax, ax_settings)
 
-            if 'xticksize' in cur_obj_settings.keys():
-                xticksize = float(cur_obj_settings['xticksize'])
-            elif 'fontsize' in cur_obj_settings.keys():
-                xticksize = float(cur_obj_settings['fontsize'])
-            else:
-                xticksize = 10
-            ax.tick_params(axis='x', labelsize=xticksize)
+                if 'ylims' in ax_settings.keys():
+                    if 'min' in ax_settings['ylims']:
+                        ax.set_ylim(bottom=float(ax_settings['ylims']['min']))
+                    else:
+                        if len(gategroups) != 0:
+                            ax.set_ylim(bottom=0)
+                    if 'max' in ax_settings['ylims']:
+                        ax.set_ylim(top=float(ax_settings['ylims']['max']))
+                    else:
+                        if len(gategroups) != 0:
+                            ax.set_ylim(top=gate_placement)
+                else:
+                    if len(gategroups) != 0:
+                        ax.set_ylim(bottom=0, top=gate_placement)
 
-            if 'yticksize' in cur_obj_settings.keys():
-                yticksize = float(cur_obj_settings['yticksize'])
-            elif 'fontsize' in cur_obj_settings.keys():
-                yticksize = float(cur_obj_settings['fontsize'])
-            else:
-                yticksize = 10
-            ax.tick_params(axis='y', labelsize=yticksize)
+                if 'xticksize' in ax_settings.keys():
+                    xticksize = float(ax_settings['xticksize'])
+                elif 'fontsize' in ax_settings.keys():
+                    xticksize = float(ax_settings['fontsize'])
+                else:
+                    xticksize = 10
+                ax.tick_params(axis='x', labelsize=xticksize)
+
+                if 'yticksize' in ax_settings.keys():
+                    yticksize = float(ax_settings['yticksize'])
+                elif 'fontsize' in ax_settings.keys():
+                    yticksize = float(ax_settings['fontsize'])
+                else:
+                    yticksize = 10
+                ax.tick_params(axis='y', labelsize=yticksize)
+
+                if len(gatelabels_positions) > 0:
+                    ax.set_yticks(gatelabels_positions)
+                    ax.set_yticklabels(gategroup_labels, rotation=90, va='center', ha='center')
+                    ax.tick_params(axis='both', which='both',color='w')
+
+                if _usetwinx:
+                    if 'ylabel2' in ax_settings.keys():
+                        if 'ylabelsize2' in ax_settings.keys():
+                            ylabsize2 = float(ax_settings['ylabelsize2'])
+                        elif 'fontsize' in cur_obj_settings.keys():
+                            ylabsize2 = float(ax_settings['fontsize'])
+                        else:
+                            ylabsize2 = 12
+                        ax2.set_ylabel(ax_settings['ylabel2'].replace("\\n", "\n"), fontsize=ylabsize2)
+
+                    if 'ylims2' in ax_settings.keys():
+                        if 'min' in ax_settings['ylims2']:
+                            ax2.set_ylim(bottom=float(ax_settings['ylims2']['min']))
+                        if 'max' in ax_settings['ylims2']:
+                            ax2.set_ylim(top=float(ax_settings['ylims2']['max']))
+
+                    if 'yticksize2' in ax_settings.keys():
+                        yticksize2 = float(ax_settings['yticksize2'])
+                    elif 'fontsize' in ax_settings.keys():
+                        yticksize2 = float(ax_settings['fontsize'])
+                    else:
+                        yticksize2 = 10
+                    ax2.tick_params(axis='y', labelsize=yticksize2)
+
+                    if 'legend2' in ax_settings.keys():
+                        if ax_settings['legend2'].lower() == 'true':
+                            if 'legendsize' in ax_settings.keys():
+                                legsize = float(ax_settings['legendsize'])
+                            elif 'legendsize2' in ax_settings.keys():
+                                legsize = float(ax_settings['legendsize'])
+                            elif 'fontsize' in ax_settings.keys():
+                                legsize = float(ax_settings['fontsize'])
+                            else:
+                                legsize = 12
+                            if ax_settings['legend_outside'].lower() == 'true':
+                                legend_right = True
+                                right_sided_axes.append(ax2)
+                                right_offset = ax.get_window_extent().x0 / ax.get_window_extent().width
+                                ax2.legend(loc='center left', bbox_to_anchor=(1+right_offset/2, 0.5), ncol=1,fontsize=legsize)
+                            else:
+                                ax2.legend(fontsize=legsize)
+
+                    ax2.grid(False)
+                    ax.set_zorder(ax2.get_zorder()+1) #axis called second will always be on top unless this
+                    ax.patch.set_visible(False)
+
+            plt.gcf().canvas.draw() #refresh so we can get legend stuff
+            left_mod = 0
+            for lax in left_sided_axes:
+                lax_leg = lax.get_legend()
+                lax_leg.get_window_extent()
+                # lax_leg_width_ratio = lax_leg.get_window_extent().width / lax.get_window_extent().width
+                lax_leg_width_ratio = lax_leg.get_window_extent().x1 / lax.get_window_extent().width
+                if lax_leg_width_ratio > left_mod:
+                    left_mod = lax_leg_width_ratio
+
+            right_mod = 0
+            for rax in right_sided_axes:
+                rax_leg = rax.get_legend()
+                rax_leg.get_window_extent()
+                rax_leg_width_ratio = rax_leg.get_window_extent().width / rax.get_window_extent().width
+                if rax_leg_width_ratio > right_mod:
+                    right_mod = rax_leg_width_ratio
+
+            print(left_mod, right_mod)
+
+            # for axi in range(len(cur_obj_settings['axs'])):
+            #     if len(cur_obj_settings['axs']) == 1:
+            #         ax = axes
+            #     else:
+            #         ax = axes[axi]
+            #
+            #     #right and left
+            #     if legend_right and legend_left:
+            #         print('both')
+            #         box = ax.get_position()
+            #         ax.set_position([box.x0 * (1+(left_mod*2)), box.y0, box.width * (1-(right_mod)), box.height])
+            #         #ax.get_legend().handlelength
+            #
+            #     elif legend_right:
+            #         print('right')
+            #         box = ax.get_position()
+            #         ax.set_position([box.x0, box.y0, box.width * (1-right_mod), box.height])
+            #
+            #     elif legend_left:
+            #         print('left')
+            #         box = ax.get_position()
+            #         ax.set_position([box.x0 * (1+left_mod), box.y0, box.width, box.height])
 
             basefigname = os.path.join(self.images_path, 'TimeSeriesPlot' + '_' + self.ChapterRegion.replace(' ','_')
                                        + '_' + yearstr)
@@ -431,8 +763,14 @@ class MakeAutomatedReport(object):
             plt.savefig(figname, bbox_inches='tight')
             plt.close('all')
 
-            self.XML.writeTimeSeriesPlot(os.path.basename(figname), cur_obj_settings['description'])
+            print('Page format:', pageformat)
 
+            if pageformat == 'half':
+                self.XML.writeHalfPagePlot(os.path.basename(figname), cur_obj_settings['description'])
+            if pageformat == 'full':
+                self.XML.writeFullPagePlot(os.path.basename(figname), cur_obj_settings['description'])
+            
+            
     def makeProfileStatisticsTable(self, object_settings):
         '''
         Makes a table to compute stats based off of profile lines. Data is interpolated over a series of points
@@ -1439,7 +1777,8 @@ class MakeAutomatedReport(object):
                 if key not in LineSettings.keys():
                     LineSettings[key] = default_default_lines[key]
 
-            LineSettings = self.translateLineStylePatterns(LineSettings) #TODO: convert colors?
+            LineSettings['linecolor'] = self.confirmColor(LineSettings['linecolor'], default_default_lines['linecolor'])
+            LineSettings = self.translateLineStylePatterns(LineSettings)
 
         if LineSettings['drawpoints'] == 'true':
             if param in self.defaultLineStyles.keys():
@@ -1455,6 +1794,10 @@ class MakeAutomatedReport(object):
             for key in default_default_points.keys():
                 if key not in LineSettings.keys():
                     LineSettings[key] = default_default_points[key]
+
+            LineSettings['pointfillcolor'] = self.confirmColor(LineSettings['pointfillcolor'], default_default_points['pointfillcolor'])
+            LineSettings['pointlinecolor'] = self.confirmColor(LineSettings['pointlinecolor'], default_default_points['pointlinecolor'])
+
             try:
                 if int(LineSettings['numptsskip']) == 0:
                     LineSettings['numptsskip'] = 1
@@ -1463,7 +1806,69 @@ class MakeAutomatedReport(object):
                 print('defaulting to 25')
                 LineSettings['numptsskip'] = 25
 
-            LineSettings = self.translatePointStylePatterns(LineSettings) #TODO: convert colors?
+            LineSettings = self.translatePointStylePatterns(LineSettings)
+
+        return LineSettings
+
+    def getDefaultGateLineSettings(self, GateLineSettings, i):
+        '''
+        gets line settings and adds missing needed settings with defaults. Then translates java style inputs to
+        python commands. Gets colors and styles.
+        :param LineSettings: dictionary object containing settings and flags for lines/points
+        :param param: parameter of data in order to grab default
+        :param i: number of line on the plot in order to get the right sequential color
+        :return:
+            LineSettings: dictionary containing keys describing how the line/points are drawn
+        '''
+
+        GateLineSettings = self.getDrawFlags(GateLineSettings)
+        if GateLineSettings['drawline'] == 'true':
+            default_default_lines = self.getDefaultDefaultLineStyles(i)
+            for key in default_default_lines.keys():
+                if key not in GateLineSettings.keys():
+                    GateLineSettings[key] = default_default_lines[key]
+
+            GateLineSettings = self.translateLineStylePatterns(GateLineSettings)
+            GateLineSettings['linecolor'] = self.confirmColor(GateLineSettings['linecolor'], default_default_lines['linecolor'])
+
+
+        if GateLineSettings['drawpoints'] == 'true':
+            default_default_points = self.getDefaultDefaultPointStyles(i)
+            for key in default_default_points.keys():
+                if key not in GateLineSettings.keys():
+                    GateLineSettings[key] = default_default_points[key]
+            try:
+                if int(GateLineSettings['numptsskip']) == 0:
+                    GateLineSettings['numptsskip'] = 1
+            except ValueError:
+                print('Invalid setting for numptsskip.', GateLineSettings['numptsskip'])
+                print('defaulting to 25')
+                GateLineSettings['numptsskip'] = 25
+
+            GateLineSettings['pointlinecolor'] = self.confirmColor(GateLineSettings['pointlinecolor'], default_default_lines['pointlinecolor'])
+            GateLineSettings['pointfillcolor'] = self.confirmColor(GateLineSettings['pointfillcolor'], default_default_lines['pointfillcolor'])
+            GateLineSettings = self.translatePointStylePatterns(GateLineSettings)
+
+        return GateLineSettings
+
+    def getDefaultStriaghtLineSettings(self, LineSettings):
+        '''
+        gets line settings and adds missing needed settings with defaults. Then translates java style inputs to
+        python commands. Gets colors and styles.
+        :param LineSettings: dictionary object containing settings and flags for lines/points
+        :param param: parameter of data in order to grab default
+        :return:
+            LineSettings: dictionary containing keys describing how the line/points are drawn
+        '''
+
+        default_default_lines = self.getDefaultDefaultLineStyles(0)
+        default_default_lines['linecolor'] = 'black' #don't need different colors by default..
+        for key in default_default_lines.keys():
+            if key not in LineSettings.keys():
+                LineSettings[key] = default_default_lines[key]
+
+        LineSettings = self.translateLineStylePatterns(LineSettings)
+        LineSettings['linecolor'] = self.confirmColor(LineSettings['linecolor'], default_default_lines['linecolor'])
 
         return LineSettings
 
@@ -1768,31 +2173,71 @@ class MakeAutomatedReport(object):
         :return: dictionary containing data and information about each data set
         '''
 
-        linedata = {}
-        for line in object_settings['lines']:
-            dates, values, units = self.getTimeSeries(line)
-            flag = line['flag']
-            if flag in linedata.keys():
-                count = 1
-                newflag = flag + '_{0}'.format(count)
-                while newflag in linedata.keys():
-                    count += 1
+        data = {}
+        if 'lines' in object_settings.keys():
+            for line in object_settings['lines']:
+                dates, values, units = self.getTimeSeries(line)
+                flag = line['flag']
+                if flag in data.keys():
+                    count = 1
                     newflag = flag + '_{0}'.format(count)
-                flag = newflag
-                print('The new flag is {0}'.format(newflag))
-            datamem_key = self.buildDataMemoryKey(line)
-            if 'units' in line.keys() and units == None:
-                units = line['units']
-            linedata[flag] = {'values': values,
+                    while newflag in data.keys():
+                        count += 1
+                        newflag = flag + '_{0}'.format(count)
+                    flag = newflag
+                    print('The new flag is {0}'.format(newflag))
+                datamem_key = self.buildDataMemoryKey(line)
+                if 'units' in line.keys() and units == None:
+                    units = line['units']
+                data[flag] = {'values': values,
                               'dates': dates,
                               'units': units,
                               'logoutputfilename': datamem_key}
 
-            for key in line.keys():
-                if key not in linedata[flag].keys():
-                    linedata[flag][key] = line[key]
+                for key in line.keys():
+                    if key not in data[flag].keys():
+                        data[flag][key] = line[key]
+        return data
 
-        return linedata
+    def getGateData(self, object_settings):
+        '''
+        Gets profile line data from defined data sources in XML files
+        :param object_settings: currently selected object settings dictionary
+        :param keyval: determines what key to iterate over for data
+        :return: dictionary containing data and information about each data set
+        '''
+
+        data = {}
+        if 'gateops' in object_settings.keys():
+            for gi, gateop in enumerate(object_settings['gateops']):
+                for gate in gateop['gates']:
+                    dates, values, _ = self.getTimeSeries(gate)
+                    flag = gate['flag']
+                    if flag in data.keys():
+                        count = 1
+                        newflag = flag + '_{0}'.format(count)
+                        while newflag in data.keys():
+                            count += 1
+                            newflag = flag + '_{0}'.format(count)
+                        flag = newflag
+                        print('The new flag is {0}'.format(newflag))
+                    datamem_key = self.buildDataMemoryKey(gate)
+                    value_msk = np.where(values==0)
+                    values[value_msk] = np.nan
+                    if 'flag' in gateop.keys():
+                        gategroup = gateop['flag']
+                    else:
+                        gategroup = 'gategroup_{0}'.format(gi)
+                    data[flag] = {'values': values,
+                                  'dates': dates,
+                                  'logoutputfilename': datamem_key,
+                                  'gategroup': gategroup}
+
+                    for key in gate.keys():
+                        if key not in data[flag].keys():
+                            data[flag][key] = gate[key]
+
+        return data
 
     def getProfileDates(self, Line_info):
         '''
@@ -2934,7 +3379,7 @@ class MakeAutomatedReport(object):
                     elif objtype == 'profilestatisticstable':
                         self.makeProfileStatisticsTable(object)
                     else:
-                        print('Section Type {0} not identified.'.format(section['type']))
+                        print('Section Type {0} not identified.'.format(objtype))
                         print('Skipping Section..')
                 self.XML.writeSectionHeaderEnd()
             print('\n################################')
@@ -3177,6 +3622,13 @@ class MakeAutomatedReport(object):
                 if not os.path.exists(new_file_path):
                     shutil.copyfile(old_file_path, new_file_path)
                     print('Successfully copied to', new_file_path)
+
+    def copyObjectSettingsToAxSetting(self, to_dict, from_dict, ignore=[]):
+        for key in from_dict.keys():
+            if key not in ignore:
+                if key not in to_dict.keys():
+                    to_dict[key] = from_dict[key]
+        return to_dict
 
     def loadDefaultPlotObject(self, plotobject):
         '''
@@ -3746,6 +4198,20 @@ class MakeAutomatedReport(object):
             else:
                 units = None
         return units
+
+    def confirmColor(self, user_color, default_color):
+
+        if not is_color_like(user_color):
+            if not is_color_like(user_color.replace(' ', '')):
+                print('Invalid pointfillcolor with {0}'.format(user_color))
+                print('Replacing with default color')
+                return default_color
+            else:
+                print('Misspelling in pointfillcolor with {0}'.format(user_color))
+                print('Replacing with {0}'.format(user_color.replace(' ', '')))
+                return user_color.replace(' ', '')
+        else:
+            return user_color
 
 if __name__ == '__main__':
     rundir = sys.argv[0]

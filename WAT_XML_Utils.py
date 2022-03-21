@@ -135,7 +135,7 @@ class XMLReport(object):
         with open(self.XML_fn, 'a') as XML:
             XML.write('</Report_Subgroup>\n')
 
-    def writeTimeSeriesPlot(self, figname, figdesc):
+    def writeHalfPagePlot(self, figname, figdesc):
         '''
         writes a time series plot png
         :param figname: name of the figure
@@ -147,6 +147,23 @@ class XMLReport(object):
             XML.write('<Output_Temp_Flow Location="{0}">\n'.format(figdesc))
             XML.write('<Output_Image FigureNumber="{0}" FigureDescription="{1}">{2}</Output_Image>\n'.format(self.current_fig_num ,figdesc, figname))
             XML.write('</Output_Temp_Flow>\n')
+            XML.write('</Report_Element>\n')
+
+        self.current_reportelem_num += 1
+        self.current_fig_num += 1
+
+    def writeFullPagePlot(self, figname, figdesc):
+        '''
+        writes a time series plot png
+        :param figname: name of the figure
+        :param figdesc: description of the figure
+        '''
+
+        with open(self.XML_fn, 'a') as XML:
+            XML.write('<Report_Element ReportElementOrder="{0}" Element="Reservoir_Profile">\n'.format(self.current_reportelem_num))
+            XML.write('<Reservoir_Profiles Reservoir="{0}">\n'.format(figdesc))
+            XML.write('<Profile_Image FigureNumber="{0}" FigureDescription="{1}">{2}</Profile_Image>\n'.format(self.current_fig_num ,figdesc, figname))
+            XML.write('</Reservoir_Profiles>\n')
             XML.write('</Report_Element>\n')
 
         self.current_reportelem_num += 1
