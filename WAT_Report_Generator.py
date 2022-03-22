@@ -422,7 +422,6 @@ class MakeAutomatedReport(object):
                         if gateop['flag'] == gategroup:
                             gategroup_labels.append(gateop['label'].replace('\\n', '\n'))
 
-                print('GATEGROUPS:', gategroups)
                 for ggi, gategroup in enumerate(gategroups):
                     # gate_placement += ggi*gatespacing
                     gate_count = 0 #keep track of gate number in group
@@ -465,8 +464,6 @@ class MakeAutomatedReport(object):
 
                             values *= line_placement
                             gatelines_positions.append(line_placement)
-                            print('line_placement', line_placement)
-                            print('gatelines_positions', gatelines_positions)
 
                             curax = ax
                             if _usetwinx:
@@ -507,9 +504,7 @@ class MakeAutomatedReport(object):
                                               },
                                              isdata=True)
 
-                    print('all gatelines_positions', gatelines_positions)
                     gatelabels_positions.append(np.average(gatelines_positions))
-                    print('gatelabels_positions', gatelabels_positions)
                     gate_placement += gatespacing
 
                 ### VERTICAL LINES ###
@@ -723,31 +718,6 @@ class MakeAutomatedReport(object):
                 if rax_leg_width_ratio > right_mod:
                     right_mod = rax_leg_width_ratio
 
-            print(left_mod, right_mod)
-
-            # for axi in range(len(cur_obj_settings['axs'])):
-            #     if len(cur_obj_settings['axs']) == 1:
-            #         ax = axes
-            #     else:
-            #         ax = axes[axi]
-            #
-            #     #right and left
-            #     if legend_right and legend_left:
-            #         print('both')
-            #         box = ax.get_position()
-            #         ax.set_position([box.x0 * (1+(left_mod*2)), box.y0, box.width * (1-(right_mod)), box.height])
-            #         #ax.get_legend().handlelength
-            #
-            #     elif legend_right:
-            #         print('right')
-            #         box = ax.get_position()
-            #         ax.set_position([box.x0, box.y0, box.width * (1-right_mod), box.height])
-            #
-            #     elif legend_left:
-            #         print('left')
-            #         box = ax.get_position()
-            #         ax.set_position([box.x0 * (1+left_mod), box.y0, box.width, box.height])
-
             basefigname = os.path.join(self.images_path, 'TimeSeriesPlot' + '_' + self.ChapterRegion.replace(' ','_')
                                        + '_' + yearstr)
             exists = True
@@ -762,8 +732,6 @@ class MakeAutomatedReport(object):
             figname = tfn + '.png'
             plt.savefig(figname, bbox_inches='tight')
             plt.close('all')
-
-            print('Page format:', pageformat)
 
             if pageformat == 'half':
                 self.XML.writeHalfPagePlot(os.path.basename(figname), cur_obj_settings['description'])
@@ -879,6 +847,7 @@ class MakeAutomatedReport(object):
 
         ################# Get data #################
         linedata = self.getProfileData(object_settings)
+        gatedata = self.getGateData(object_settings)
 
         ################# Get plot units #################
         linedata = self.convertProfileDataUnits(object_settings, linedata)
@@ -907,7 +876,7 @@ class MakeAutomatedReport(object):
             n = int(object_settings['profilesperrow']) * int(object_settings['rowsperpage']) #Get number of plots on page
             page_indices = [prof_indices[i * n:(i + 1) * n] for i in range((len(prof_indices) + n - 1) // n)]
             cur_obj_settings = pickle.loads(pickle.dumps(object_settings, -1))
-            current_object_settings = self.updateFlaggedValues(cur_obj_settings, '%%year%%', yearstr) #TODO: reudce the settings
+            cur_obj_settings = self.updateFlaggedValues(cur_obj_settings, '%%year%%', yearstr) #TODO: reudce the settings
 
             for page_i, pgi in enumerate(page_indices):
 
@@ -982,30 +951,46 @@ class MakeAutomatedReport(object):
                                        label=current_ls['label'], zorder=int(current_ls['zorder']),
                                        alpha=float(current_ls['alpha']))
 
-                    show_xlabel, show_ylabel = self.getPlotLabelMasks(i, len(pgi), subplot_cols)
-
-                    if current_object_settings['gridlines'].lower() == 'true':
-                        ax.grid(zorder=0)
-
-                    if show_ylabel:
-                        if 'ylabel' in current_object_settings.keys():
-                            if 'ylabelsize' in object_settings.keys():
-                                ylabsize = float(object_settings['ylabelsize'])
-                            elif 'fontsize' in object_settings.keys():
-                                ylabsize = float(object_settings['fontsize'])
+                    ### HLINES ###
+                    if 'hlines' in cur_obj_settings.keys():
+                        for hline_settings in cur_obj_settings['hlines']:
+                            if 'value' in hline_settings.keys():
+                                value = float(hline_settings['value'])
+                                units = None
                             else:
-                                ylabsize = 12
-                            ax.set_ylabel(current_object_settings['ylabel'], fontsize=ylabsize)
+                                dates, values, units = self.getTimeSeries(hline_settings)
+                                hline_idx = np.where(object_settings['timestamps'][j] == dates)
+                                value = values[hline_idx]
 
-                    if show_xlabel:
-                        if 'xlabel' in current_object_settings.keys():
-                            if 'xlabelsize' in object_settings.keys():
-                                xlabsize = float(object_settings['xlabelsize'])
-                            elif 'fontsize' in object_settings.keys():
-                                xlabsize = float(object_settings['fontsize'])
-                            else:
-                                xlabsize = 12
-                            ax.set_xlabel(current_object_settings['xlabel'], fontsize=xlabsize)
+                            if 'parameter' in hline_settings:
+                                if object_settings['usedepth'].lower() == 'true':
+                                    if hline_settings['parameter'].lower() == 'elevation':
+                                        value = 0 #top of the water, should always be 0
+                                elif object_settings['usedepth'].lower() == 'false':
+                                    if hline_settings['parameter'].lower() == 'depth':
+                                        valueconv = self.convertDepthsToElevations({'hline': {'depths': [value],
+                                                                                              'elevations': []}})
+                                        value = valueconv['hline']['elevation'][0]
+
+                            #currently cant convert these units..
+                            # if units != None:
+                            #     valueconv, units = self.convertUnitSystem(value, units, object_settings['unitsystem'])
+                            #     value = valueconv[0]
+
+                            ### instead, use scalar to be manual
+                            if 'scalar' in hline_settings.keys():
+                                value *= float(hline_settings['scalar'])
+
+                            hline_settings = self.getDefaultStriaghtLineSettings(hline_settings)
+                            if 'label' not in hline_settings.keys():
+                                hline_settings['label'] = None
+                            if 'zorder' not in hline_settings.keys():
+                                hline_settings['zorder'] = 3
+
+                            ax.axhline(value, label=hline_settings['label'], c=hline_settings['linecolor'],
+                                       lw=hline_settings['linewidth'], ls=hline_settings['linestylepattern'],
+                                       zorder=float(hline_settings['zorder']),
+                                       alpha=float(hline_settings['alpha']))
 
                     if 'xlims' in object_settings.keys():
                         if 'min' in object_settings['xlims']:
@@ -1017,6 +1002,136 @@ class MakeAutomatedReport(object):
                             ax.set_ylim(bottom=float(object_settings['ylims']['min']))
                         if 'max' in object_settings['ylims']:
                             ax.set_ylim(top=float(object_settings['ylims']['max']))
+
+                    ### GATES ###
+                    gategroups = {}
+                    gateconfig = {}
+                    if len(gatedata.keys()) > 0:
+                        for gate in gatedata.keys():
+                            if gatedata[gate]['gategroup'] not in gategroups.keys():
+                                gategroups[gatedata[gate]['gategroup']] = 1
+                            else:
+                                gategroups[gatedata[gate]['gategroup']] += 1
+
+                        gateops_settings = {}
+                        for gateop in cur_obj_settings['gateops']:
+                            if gateop['flag'] not in gateops_settings.keys():
+                                gateops_settings[gateop['flag']] = gateop
+
+                        print('GATEGROUPS:', gategroups)
+                        for ggi, gategroup in enumerate(gategroups):
+                            gatetop = None
+                            gatebottom = None
+                            gatemiddle = None
+                            gateop_has_value = False
+                            gate_count = 0 #keep track of gate number in group
+                            numgates = gategroups[gategroup]
+                            gatepoint_xpositions = np.linspace(ax.get_xlim()[0], ax.get_xlim()[1],numgates+2)[1:-1] #+2 for start and end
+
+                            cur_gateop = gateops_settings[gategroup]
+
+                            if 'top' in cur_gateop.keys():
+                                gatetop = float(cur_gateop['top'])
+
+                            if 'bottom' in cur_gateop.keys():
+                                gatebottom = float(cur_gateop['bottom'])
+
+                            if 'middle' in cur_gateop.keys():
+                                gatemiddle = float(cur_gateop['middle'])
+                            elif gatetop != None and gatebottom != None:
+                                gatemiddle = np.mean([gatetop, gatebottom])
+
+                            if gatetop == None and gatebottom != None and gatemiddle == None: #bottom no top/middle
+                                gatetop = gatebottom + float(object_settings['defaultgateenvelope'])
+                                gatemiddle = gatebottom + float(object_settings['defaultgateenvelope'])/2
+                            elif gatetop != None and gatebottom == None and gatemiddle == None: #top no bottom/middle
+                                gatebottom = gatetop - float(object_settings['defaultgateenvelope'])
+                                gatemiddle = gatetop - float(object_settings['defaultgateenvelope'])/2
+                            elif gatetop == None and gatebottom == None and gatemiddle != None: #only middle
+                                gatebottom = gatemiddle - float(object_settings['defaultgateenvelope'])/2
+                                gatetop = gatemiddle + float(object_settings['defaultgateenvelope'])/2
+
+                            for gate in gatedata.keys():
+                                if gatedata[gate]['gategroup'] == gategroup:
+
+                                    curgate = gatedata[gate]
+
+                                    values = curgate['values']
+                                    dates = curgate['dates']
+
+                                    if 'dateformat' in cur_obj_settings.keys():
+
+                                        if cur_obj_settings['dateformat'].lower() == 'datetime':
+                                            if isinstance(dates[0], (int,float)):
+                                                dates = self.JDateToDatetime(dates)
+
+                                    gatemsk = np.where(object_settings['timestamps'][j] == dates)
+                                    value = values[gatemsk][0]
+                                    xpos = gatepoint_xpositions[gate_count]
+                                    if gategroup not in gateconfig.keys():
+                                        gateconfig[gategroup] = {gate_count: value}
+                                    else:
+                                        gateconfig[gategroup][gate_count] = value
+
+
+                                    if not np.isnan(value):
+                                        gateop_has_value = True
+                                        if cur_gateop['showgates'].lower() == 'true':
+                                            ax.scatter(xpos, gatemiddle, edgecolor='black', facecolor='black', marker='o')
+
+                                    gate_count += 1 #keep track of gate number in group
+                                    self.addLogEntry({'type': gate + '_GateTimeSeries' if gate != '' else 'GateTimeseries',
+                                                      'name': self.ChapterRegion+'_'+yearstr,
+                                                      'description': cur_obj_settings['description'],
+                                                      'units': 'BINARY',
+                                                      'value_start_date': self.translateDateFormat(dates[0], 'datetime', '').strftime('%d %b %Y'),
+                                                      'value_end_date': self.translateDateFormat(dates[-1], 'datetime', '').strftime('%d %b %Y'),
+                                                      'logoutputfilename': curgate['logoutputfilename']
+                                                      },
+                                                     isdata=True)
+
+                            if 'color' in cur_gateop.keys():
+                                color = cur_gateop['color']
+                                default_color = self.def_colors[ggi]
+                                color = self.confirmColor(color, default_color)
+                            if 'top' in cur_gateop.keys():
+                                ax.axhline(gatetop, color=color, zorder=-7)
+                            if 'bottom' in cur_gateop.keys():
+                                ax.axhline(gatebottom, color=color, zorder=-7)
+                            if 'middle' in cur_gateop.keys():
+                                ax.axhline(gatemiddle, color=color, zorder=-7)
+
+                            if gateop_has_value:
+                                ax.axhspan(gatebottom,gatetop, alpha=0.5, color=color, zorder=-8)
+
+                    show_xlabel, show_ylabel = self.getPlotLabelMasks(i, len(pgi), subplot_cols)
+
+                    if cur_obj_settings['gridlines'].lower() == 'true':
+                        ax.grid(zorder=-9)
+
+                    if show_ylabel:
+                        if 'ylabel' in cur_obj_settings.keys():
+                            if 'ylabelsize' in object_settings.keys():
+                                ylabsize = float(object_settings['ylabelsize'])
+                            elif 'fontsize' in object_settings.keys():
+                                ylabsize = float(object_settings['fontsize'])
+                            else:
+                                ylabsize = 12
+                            ax.set_ylabel(cur_obj_settings['ylabel'], fontsize=ylabsize)
+
+                    if show_xlabel:
+                        if 'xlabel' in cur_obj_settings.keys():
+                            if 'xlabelsize' in object_settings.keys():
+                                xlabsize = float(object_settings['xlabelsize'])
+                            elif 'fontsize' in object_settings.keys():
+                                xlabsize = float(object_settings['fontsize'])
+                            else:
+                                xlabsize = 12
+                            if 'bottomtext' in cur_obj_settings:
+                                labelpad = 12
+                            else:
+                                labelpad = 0
+                            ax.set_xlabel(cur_obj_settings['xlabel'], fontsize=xlabsize, labelpad=labelpad)
 
                     if 'xticksize' in object_settings.keys():
                         xticksize = float(object_settings['xticksize'])
@@ -1047,20 +1162,42 @@ class MakeAutomatedReport(object):
                     else:
                         ttl_str = object_settings['timestamps'][j].strftime('%d %b %Y') #should get set to datetime anyways..
 
-                    xbufr = 0.05
-                    ybufr = 0.05
-                    xl = ax.get_xlim()
-                    yl = ax.get_ylim()
-                    xtext = xl[0] + xbufr * (xl[1] - xl[0])
-                    ytext = yl[1] - ybufr * (yl[1] - yl[0])
-                    ax.text(xtext, ytext, ttl_str, ha='left', va='top', size=10, #TODO: make this variable
-                            bbox=dict(boxstyle='round',facecolor='w', alpha=0.35),
-                            zorder=10)
+                    if 'datetext' in cur_obj_settings.keys():
+                        if cur_obj_settings['datetext'].lower() == 'true':
+                            xbufr = 0.05
+                            ybufr = 0.05
+                            xl = ax.get_xlim()
+                            yl = ax.get_ylim()
+                            xtext = xl[0] + xbufr * (xl[1] - xl[0])
+                            ytext = yl[1] - ybufr * (yl[1] - yl[0])
+                            ax.text(xtext, ytext, ttl_str, ha='left', va='top', size=10, #TODO: make this variable
+                                    bbox=dict(boxstyle='round',facecolor='w', alpha=0.35),
+                                    zorder=10)
+
+                    if 'bottomtext' in cur_obj_settings.keys():
+                        bottomtext_str = []
+                        for text in cur_obj_settings['bottomtext']:
+                            if text.lower() == 'date':
+                                bottomtext_str.append(object_settings['timestamps'][j].strftime('%m/%d/%Y'))
+                            elif text.lower() == 'gateconfiguration':
+                                gateconfignum = self.getGateConfigurationDays(gateconfig, gatedata, object_settings['timestamps'][j])
+                                bottomtext_str.append(str(gateconfignum))
+                            elif text.lower() == 'gateblend':
+                                gateblendnum = self.getGateBlendDays(gateconfig, gatedata, object_settings['timestamps'][j])
+                                bottomtext_str.append(str(gateblendnum))
+                            else:
+                                bottomtext_str.append(text)
+                        bottomtext = ', '.join(bottomtext_str)
+                        # plt.text(0.02, -0.2, bottomtext, fontsize=8, color='red', transform=ax.transFigure)
+                        # if show_xlabel:
+                        #     ax.annotate(bottomtext, xy=(0.02, -40), fontsize=6, color='red', xycoords='axes points')
+                        # else:
+                        ax.annotate(bottomtext, xy=(0.02, -22), fontsize=6, color='red', xycoords='axes points')
 
                 plt.tight_layout()
 
-                if 'legend' in current_object_settings.keys():
-                    if current_object_settings['legend'].lower() == 'true':
+                if 'legend' in cur_obj_settings.keys():
+                    if cur_obj_settings['legend'].lower() == 'true':
                         leg_labels = []
                         leg_handles = []
                         for ax in axs:
@@ -1072,10 +1209,10 @@ class MakeAutomatedReport(object):
                                         leg_handles.append(leg_handle_labels[0][li])
 
                         if len(leg_labels) > 0:
-                            if 'legendsize' in current_object_settings.keys():
-                                legsize = float(current_object_settings['legendsize'])
-                            elif 'fontsize' in current_object_settings.keys():
-                                legsize = float(current_object_settings['fontsize'])
+                            if 'legendsize' in cur_obj_settings.keys():
+                                legsize = float(cur_obj_settings['legendsize'])
+                            elif 'fontsize' in cur_obj_settings.keys():
+                                legsize = float(cur_obj_settings['fontsize'])
                             else:
                                 legsize = 12
 
@@ -2212,7 +2349,10 @@ class MakeAutomatedReport(object):
             for gi, gateop in enumerate(object_settings['gateops']):
                 for gate in gateop['gates']:
                     dates, values, _ = self.getTimeSeries(gate)
-                    flag = gate['flag']
+                    if 'flag' in gate.keys():
+                        flag = gate['flag']
+                    else:
+                        flag = 'gate'
                     if flag in data.keys():
                         count = 1
                         newflag = flag + '_{0}'.format(count)
@@ -2560,6 +2700,70 @@ class MakeAutomatedReport(object):
             if units != None:
                 units_list.append(units)
         return units_list
+
+    def getGateConfigurationDays(self, gateconfig, gatedata, timestamp):
+        gate_vals = {}
+        time_interval = None
+        for gate in gatedata.keys():
+            if gatedata[gate]['gategroup'] not in gate_vals:
+                gate_vals[gatedata[gate]['gategroup']] = {}
+                gatecount = 0
+            else:
+                gatecount = max(list(gate_vals[gatedata[gate]['gategroup']].keys())) + 1
+            datamsk = np.where(gatedata[gate]['dates'] == timestamp)
+            if len(datamsk) == 0:
+                continue
+            else:
+                datamsk = datamsk[0][0]
+            values = gatedata[gate]['values'][:datamsk]
+            if time_interval == None:
+                time_interval = gatedata[gate]['dates'][1] - gatedata[gate]['dates'][0]
+            vmsk = np.where(values==1)
+            gate_vals[gatedata[gate]['gategroup']][gatecount] = vmsk
+        operation_idx = [] #indicies where gate ops are the same as given config
+        for gateop in gateconfig:
+            for gate in gateconfig[gateop].keys():
+                if not np.isnan(gateconfig[gateop][gate]):
+                    operation_idx.append(gate_vals[gateop][gate][0].tolist())
+
+        correct_config = len(set.intersection(*map(set,operation_idx)))
+        return round((time_interval * correct_config).days + ((time_interval * correct_config).seconds / 86400), 3)
+
+    def getGateBlendDays(self, gateconfig, gatedata, timestamp):
+        time_interval = None
+        gateconfig_activegateop = {}
+        alldays_activeop = {}
+        for gateop in gateconfig.keys():
+            gateconfig_activegateop[gateop] = False
+            for gate in gateconfig[gateop].keys():
+                if not np.isnan(gateconfig[gateop][gate]):
+                    gateconfig_activegateop[gateop] = True
+                    break
+
+            for gate in gatedata.keys():
+                if gatedata[gate]['gategroup'] == gateop:
+                    datamsk = np.where(gatedata[gate]['dates'] == timestamp)
+                    if len(datamsk) == 0:
+                        continue
+                    else:
+                        datamsk = datamsk[0][0]
+                    if gateop not in alldays_activeop.keys():
+                        alldays_activeop[gateop] = np.full(datamsk, False)
+                    idx_active = np.where(~np.isnan(gatedata[gate]['values'][:datamsk]))
+                    alldays_activeop[gateop][idx_active] = True
+                    if time_interval == None:
+                        time_interval = gatedata[gate]['dates'][1] - gatedata[gate]['dates'][0]
+
+        idx_count = 0
+        for i in range(datamsk):
+            valid = True
+            for gateop in alldays_activeop.keys():
+                if alldays_activeop[gateop][i] != gateconfig_activegateop[gateop]:
+                    valid = False
+            if valid:
+                idx_count += 1
+
+        return round((time_interval * idx_count).days + ((time_interval * idx_count).seconds / 86400), 3)
 
     def replaceDefaults(self, default_settings, object_settings):
         '''
