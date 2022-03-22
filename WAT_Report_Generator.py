@@ -331,19 +331,19 @@ class MakeAutomatedReport(object):
                         else:
                             units = None
 
-                    if 'unitsystem' in cur_obj_settings.keys():
-                        values, units = self.convertUnitSystem(values, units, cur_obj_settings['unitsystem'])
+                    if 'unitsystem' in ax_settings.keys():
+                        values, units = self.convertUnitSystem(values, units, ax_settings['unitsystem'])
 
                     chkvals = WF.checkData(values)
                     if not chkvals:
                         print('Invalid Data settings for line:', line)
                         continue
 
-                    if 'dateformat' in cur_obj_settings.keys():
-                        if cur_obj_settings['dateformat'].lower() == 'jdate':
+                    if 'dateformat' in ax_settings.keys():
+                        if ax_settings['dateformat'].lower() == 'jdate':
                             if isinstance(dates[0], dt.datetime):
                                 dates = self.DatetimeToJDate(dates)
-                        elif cur_obj_settings['dateformat'].lower() == 'datetime':
+                        elif ax_settings['dateformat'].lower() == 'datetime':
                             if isinstance(dates[0], (int,float)):
                                 dates = self.JDateToDatetime(dates)
 
@@ -405,7 +405,7 @@ class MakeAutomatedReport(object):
 
                     self.addLogEntry({'type': line_settings['label'] + '_TimeSeries' if line_settings['label'] != '' else 'Timeseries',
                                       'name': self.ChapterRegion+'_'+yearstr,
-                                      'description': cur_obj_settings['description'],
+                                      'description': ax_settings['description'],
                                       'units': units,
                                       'value_start_date': self.translateDateFormat(dates[0], 'datetime', '').strftime('%d %b %Y'),
                                       'value_end_date': self.translateDateFormat(dates[-1], 'datetime', '').strftime('%d %b %Y'),
