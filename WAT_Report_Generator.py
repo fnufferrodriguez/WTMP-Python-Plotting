@@ -302,6 +302,7 @@ class MakeAutomatedReport(object):
                     ax2 = ax.twinx()
 
                 unitslist = []
+                unitslist2 = []
                 linedata = self.getTimeseriesData(ax_settings)
                 gatedata = self.getGateData(ax_settings)
                 linedata = self.filterTimeSeriesByYear(linedata, year)
@@ -346,9 +347,6 @@ class MakeAutomatedReport(object):
                             if isinstance(dates[0], (int,float)):
                                 dates = self.JDateToDatetime(dates)
 
-                    if units != '' and units != None:
-                        unitslist.append(units)
-
                     line_settings = self.getDefaultLineSettings(curline, parameter, i)
 
                     if 'zorder' not in line_settings.keys():
@@ -366,11 +364,22 @@ class MakeAutomatedReport(object):
                         if 'ylims' in object_settings.keys():
                             dates, values = self.limitYdata(dates, values, cur_obj_settings['ylims'])
 
+                    # if units != '' and units != None:
+                    #     unitslist.append(units)
+
                     curax = ax
+                    axis2 = False
                     if _usetwinx:
                         if 'yaxis' in line_settings.keys():
                             if line_settings['yaxis'].lower() == 'right':
                                 curax = ax2
+                                axis2 = True
+
+                    if units != '' and units != None:
+                        if axis2:
+                            unitslist2.append(units)
+                        else:
+                            unitslist.append(units)
 
                     if line_settings['drawline'].lower() == 'true' and line_settings['drawpoints'].lower() == 'true':
                         curax.plot(dates, values, label=line_settings['label'], c=line_settings['linecolor'],
@@ -558,20 +567,23 @@ class MakeAutomatedReport(object):
                                    zorder=float(hline_settings['zorder']),
                                    alpha=float(hline_settings['alpha']))
 
-                ax_settings['units_list'] = unitslist
-                plotunits = self.getPlotUnits(ax_settings)
+                # ax_settings['units_list'] = unitslist
+                # ax_settings['units_list2'] = unitslist2
+                plotunits = self.getPlotUnits(unitslist, ax_settings)
+                plotunits2 = self.getPlotUnits(unitslist2, ax_settings)
                 ax_settings = self.updateFlaggedValues(ax_settings, '%%units%%', plotunits)
-                cur_obj_settings = self.updateFlaggedValues(cur_obj_settings, '%%units%%', plotunits)
+                ax_settings = self.updateFlaggedValues(ax_settings, '%%units2%%', plotunits2)
+                # cur_obj_settings = self.updateFlaggedValues(cur_obj_settings, '%%units%%', plotunits)
 
                 if axi == 0:
-                    if 'title' in cur_obj_settings.keys():
-                        if 'titlesize' in cur_obj_settings.keys():
-                            titlesize = float(object_settings['titlesize'])
-                        elif 'fontsize' in cur_obj_settings.keys():
-                            titlesize = float(object_settings['fontsize'])
+                    if 'title' in ax_settings.keys():
+                        if 'titlesize' in ax_settings.keys():
+                            titlesize = float(ax_settings['titlesize'])
+                        elif 'fontsize' in ax_settings.keys():
+                            titlesize = float(ax_settings['fontsize'])
                         else:
                             titlesize = 15
-                        ax.set_title(cur_obj_settings['title'], fontsize=titlesize)
+                        ax.set_title(ax_settings['title'], fontsize=titlesize)
 
                 if 'gridlines' in ax_settings.keys():
                     if ax_settings['gridlines'].lower() == 'true':
@@ -772,7 +784,7 @@ class MakeAutomatedReport(object):
         ################# Get plot units #################
         linedata = self.convertProfileDataUnits(object_settings, linedata)
         object_settings['units_list'] = self.getUnitsList(linedata)
-        object_settings['plot_units'] = self.getPlotUnits(object_settings)
+        object_settings['plot_units'] = self.getPlotUnits(object_settings['units_list'], object_settings)
 
         object_settings = self.updateFlaggedValues(object_settings, '%%units%%', object_settings['plot_units'])
 
@@ -852,7 +864,7 @@ class MakeAutomatedReport(object):
         ################# Get plot units #################
         linedata = self.convertProfileDataUnits(object_settings, linedata)
         object_settings['units_list'] = self.getUnitsList(linedata)
-        object_settings['plot_units'] = self.getPlotUnits(object_settings)
+        object_settings['plot_units'] = self.getPlotUnits(object_settings['units_list'], object_settings)
         object_settings = self.updateFlaggedValues(object_settings, '%%units%%', object_settings['plot_units'])
 
         ################ convert Elevs ################
@@ -1298,7 +1310,7 @@ class MakeAutomatedReport(object):
 
         data, object_settings['units_list'] = self.getTableData(object_settings)
 
-        plotunits = self.getPlotUnits(object_settings)
+        plotunits = self.getPlotUnits(object_settings['unitslist'], object_settings)
         object_settings = self.updateFlaggedValues(object_settings, '%%units%%', plotunits)
 
         headings = self.buildHeadersByYear(object_settings, object_settings['years'], object_settings['split_by_year'])
@@ -1357,9 +1369,9 @@ class MakeAutomatedReport(object):
 
         object_settings['unitslist'] = []
 
-        data, object_settings['units_list'] = self.getTableData(object_settings)
+        data, unitslist = self.getTableData(object_settings)
 
-        plotunits = self.getPlotUnits(object_settings)
+        plotunits = self.getPlotUnits(object_settings['unitslist'], object_settings)
         object_settings = self.updateFlaggedValues(object_settings, '%%units%%', plotunits)
 
         headings = self.buildHeadersByYear(object_settings, object_settings['years'], object_settings['split_by_year'])
@@ -2416,7 +2428,7 @@ class MakeAutomatedReport(object):
         print('Illegal Dates selection. ')
         return []
 
-    def getPlotUnits(self, object_settings):
+    def getPlotUnits(self, unitslist, object_settings):
         '''
         gets units for the plot. Either looks at data already plotted units, or if there are no defined units
         in the plotted data, look for a parameter flag
@@ -2424,8 +2436,8 @@ class MakeAutomatedReport(object):
         :return: string units value
         '''
 
-        if len(object_settings['units_list']) > 0:
-            plotunits = self.getMostCommon(object_settings['units_list'])
+        if len(unitslist) > 0:
+            plotunits = self.getMostCommon(unitslist)
         elif 'parameter' in object_settings.keys():
             try:
                 plotunits = self.units[object_settings['parameter'].lower()]
