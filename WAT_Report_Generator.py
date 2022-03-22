@@ -992,6 +992,28 @@ class MakeAutomatedReport(object):
                                        zorder=float(hline_settings['zorder']),
                                        alpha=float(hline_settings['alpha']))
 
+                    ### VERTICAL LINES ###
+                    if 'vlines' in cur_obj_settings.keys():
+                        for vline in cur_obj_settings['vlines']:
+                            vline_settings = self.getDefaultStriaghtLineSettings(vline)
+                            if 'value' in vline_settings.keys():
+                                value = float(vline_settings['value'])
+                                units = None
+                            else:
+                                dates, values, units = self.getTimeSeries(vline_settings)
+                                vline_idx = np.where(object_settings['timestamps'][j] == dates)
+                                value = values[vline_idx]
+
+                            if 'label' not in vline_settings.keys():
+                                vline_settings['label'] = None
+                            if 'zorder' not in vline_settings.keys():
+                                vline_settings['zorder'] = 3
+
+                            ax.axvline(value, label=vline_settings['label'], c=vline_settings['linecolor'],
+                                       lw=vline_settings['linewidth'], ls=vline_settings['linestylepattern'],
+                                       zorder=float(vline_settings['zorder']),
+                                       alpha=float(vline_settings['alpha']))
+
                     if 'xlims' in object_settings.keys():
                         if 'min' in object_settings['xlims']:
                             ax.set_xlim(left=float(object_settings['xlims']['min']))
@@ -1218,12 +1240,14 @@ class MakeAutomatedReport(object):
 
                             ncolumns = 3
 
-                            n_legends_row = np.ceil(len(linedata.keys()) / ncolumns) * .65
+                            # n_legends_row = np.ceil(len(linedata.keys()) / ncolumns) * .65
+                            n_legends_row = np.ceil(len(leg_handles) / ncolumns) * .65
                             if n_legends_row < 1:
                                 n_legends_row = 1
 
                             plt.subplots_adjust(bottom=.1*n_legends_row)
-                            fig_ratio = (axs[int(n_nrow_active)-1,0].bbox.extents[1] - (fig.bbox.height * (.1 * n_legends_row))) / fig.bbox.height
+                            fig_ratio = (axs[int(n_nrow_active)-1,0].bbox.extents[1] - (fig.bbox.height * (.1025 * n_legends_row))) / fig.bbox.height
+
                             plt.legend(bbox_to_anchor=(.5,fig_ratio), loc="lower center", fontsize=legsize,
                                        bbox_transform=fig.transFigure, ncol=ncolumns, handles=leg_handles,
                                        labels=leg_labels)
