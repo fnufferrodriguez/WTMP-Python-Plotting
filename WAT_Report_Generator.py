@@ -1040,7 +1040,6 @@ class MakeAutomatedReport(object):
                             if gateop['flag'] not in gateops_settings.keys():
                                 gateops_settings[gateop['flag']] = gateop
 
-                        print('GATEGROUPS:', gategroups)
                         for ggi, gategroup in enumerate(gategroups):
                             gatetop = None
                             gatebottom = None
