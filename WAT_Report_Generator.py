@@ -306,7 +306,8 @@ class MakeAutomatedReport(object):
                 linedata = self.getTimeseriesData(ax_settings)
                 gatedata = self.getGateData(ax_settings)
                 linedata = self.filterTimeSeriesByYear(linedata, year)
-                gatedata = self.filterTimeSeriesByYear(gatedata, year)
+                for gateop in gatedata.keys():
+                    gatedata[gateop] = self.filterTimeSeriesByYear(gatedata[gateop], year)
 
                 if 'relative' in ax_settings.keys():
                     if ax_settings['relative'].lower() == 'true':
@@ -432,102 +433,141 @@ class MakeAutomatedReport(object):
                     gatespacing = 3
                 gate_placement = gatespacing
 
-                gategroups = []
                 gategroup_labels = []
                 gatelabels_positions = []
-                for gate in gatedata.keys():
-                    if gatedata[gate]['gategroup'] not in gategroups:
-                        gategroups.append(gatedata[gate]['gategroup'])
-                gategroups.reverse()
-                for gategroup in gategroups:
-                    for gateop in ax_settings['gateops']:
-                        if gateop['flag'] == gategroup:
-                            gategroup_labels.append(gateop['label'].replace('\\n', '\n'))
-
-                for ggi, gategroup in enumerate(gategroups):
+                gateop_rev = list(gatedata.keys())
+                if len(gateop_rev) > 1:
+                    gateop_rev.reverse()
+                for ggi, gateop in enumerate(gateop_rev):
                     # gate_placement += ggi*gatespacing
                     gate_count = 0 #keep track of gate number in group
+                    if 'label' in gatedata[gateop]:
+                        gategroup_labels.append(gatedata[gateop]['label'].replace('\\n', '\n'))
+                    elif 'flag' in gatedata[gateop]:
+                        gategroup_labels.append(gatedata[gateop]['flag'].replace('\\n', '\n'))
+                    else:
+                        gategroup_labels.append(gateop)
+
                     gatelines_positions = []
-                    for gate in gatedata.keys():
-                        if gatedata[gate]['gategroup'] == gategroup:
+                    for gate in gatedata[gateop]['gates'].keys():
 
-                            curgate = gatedata[gate]
+                        curgate = gatedata[gateop]['gates'][gate]
+                        values = curgate['values']
+                        dates = curgate['dates']
 
-                            values = curgate['values']
-                            dates = curgate['dates']
+                        if 'dateformat' in ax_settings.keys():
+                            if ax_settings['dateformat'].lower() == 'jdate':
+                                if isinstance(dates[0], dt.datetime):
+                                    dates = self.DatetimeToJDate(dates)
+                            elif ax_settings['dateformat'].lower() == 'datetime':
+                                if isinstance(dates[0], (int,float)):
+                                    dates = self.JDateToDatetime(dates)
 
-                            if 'dateformat' in cur_obj_settings.keys():
-                                if cur_obj_settings['dateformat'].lower() == 'jdate':
-                                    if isinstance(dates[0], dt.datetime):
-                                        dates = self.DatetimeToJDate(dates)
-                                elif cur_obj_settings['dateformat'].lower() == 'datetime':
-                                    if isinstance(dates[0], (int,float)):
-                                        dates = self.JDateToDatetime(dates)
+                        gate_line_settings = self.getDefaultGateLineSettings(curgate, gate_count)
 
-                            gate_line_settings = self.getDefaultGateLineSettings(curgate, gate_count)
+                        if 'zorder' not in gate_line_settings.keys():
+                            gate_line_settings['zorder'] = 4
 
-                            if 'zorder' not in gate_line_settings.keys():
-                                gate_line_settings['zorder'] = 4
+                        if 'label' not in gate_line_settings.keys():
+                            gate_line_settings['label'] = '{0}_{1}'.format(gateop['label'], gate_count)
 
-                            if 'label' not in gate_line_settings.keys():
-                                gate_line_settings['label'] = '{0}_{1}'.format(gategroup, gate_count)
+                        if 'filterbylimits' not in gate_line_settings.keys():
+                            gate_line_settings['filterbylimits'] = 'true' #set default
 
-                            if 'filterbylimits' not in gate_line_settings.keys():
-                                gate_line_settings['filterbylimits'] = 'true' #set default
+                        if gate_line_settings['filterbylimits'].lower() == 'true':
+                            if 'xlims' in ax_settings.keys():
+                                dates, values = self.limitXdata(dates, values, ax_settings['xlims'])
 
-                            if gate_line_settings['filterbylimits'].lower() == 'true':
-                                if 'xlims' in cur_obj_settings.keys():
-                                    dates, values = self.limitXdata(dates, values, cur_obj_settings['xlims'])
+                        if 'placement' in gate_line_settings.keys():
+                            line_placement = float(gate_line_settings['placement'])
+                        else:
+                            line_placement = gate_placement
 
-                            if 'placement' in gate_line_settings.keys():
-                                line_placement = float(gate_line_settings['placement'])
-                            else:
-                                line_placement = gate_placement
+                        values *= line_placement
+                        gatelines_positions.append(line_placement)
 
-                            values *= line_placement
-                            gatelines_positions.append(line_placement)
+                        curax = ax
+                        if _usetwinx:
+                            if 'xaxis' in line_settings.keys():
+                                if 'xaxis'.lower() == 'right':
+                                    curax = ax2
 
-                            curax = ax
-                            if _usetwinx:
-                                if 'xaxis' in line_settings.keys():
-                                    if 'xaxis'.lower() == 'right':
-                                        curax = ax2
+                        if gate_line_settings['drawline'].lower() == 'true' and gate_line_settings['drawpoints'].lower() == 'true':
+                            curax.plot(dates, values, label=gate_line_settings['label'], c=gate_line_settings['linecolor'],
+                                       lw=gate_line_settings['linewidth'], ls=gate_line_settings['linestylepattern'],
+                                       marker=gate_line_settings['symboltype'], markerfacecolor=gate_line_settings['pointfillcolor'],
+                                       markeredgecolor=gate_line_settings['pointlinecolor'], markersize=float(gate_line_settings['symbolsize']),
+                                       markevery=int(gate_line_settings['numptsskip']), zorder=float(gate_line_settings['zorder']),
+                                       alpha=float(gate_line_settings['alpha']))
 
-                            if gate_line_settings['drawline'].lower() == 'true' and gate_line_settings['drawpoints'].lower() == 'true':
-                                curax.plot(dates, values, label=gate_line_settings['label'], c=gate_line_settings['linecolor'],
-                                           lw=gate_line_settings['linewidth'], ls=gate_line_settings['linestylepattern'],
-                                           marker=gate_line_settings['symboltype'], markerfacecolor=gate_line_settings['pointfillcolor'],
-                                           markeredgecolor=gate_line_settings['pointlinecolor'], markersize=float(gate_line_settings['symbolsize']),
-                                           markevery=int(gate_line_settings['numptsskip']), zorder=float(gate_line_settings['zorder']),
-                                           alpha=float(gate_line_settings['alpha']))
+                        elif gate_line_settings['drawline'].lower() == 'true':
+                            curax.plot(dates, values, label=gate_line_settings['label'], c=gate_line_settings['linecolor'],
+                                       lw=gate_line_settings['linewidth'], ls=gate_line_settings['linestylepattern'],
+                                       zorder=float(gate_line_settings['zorder']),
+                                       alpha=float(gate_line_settings['alpha']))
 
-                            elif gate_line_settings['drawline'].lower() == 'true':
-                                curax.plot(dates, values, label=gate_line_settings['label'], c=gate_line_settings['linecolor'],
-                                           lw=gate_line_settings['linewidth'], ls=gate_line_settings['linestylepattern'],
-                                           zorder=float(gate_line_settings['zorder']),
-                                           alpha=float(gate_line_settings['alpha']))
+                        elif gate_line_settings['drawpoints'].lower() == 'true':
+                            curax.scatter(dates[::int(gate_line_settings['numptsskip'])], values[::int(gate_line_settings['numptsskip'])],
+                                          marker=gate_line_settings['symboltype'], facecolor=gate_line_settings['pointfillcolor'],
+                                          edgecolor=gate_line_settings['pointlinecolor'], s=float(gate_line_settings['symbolsize']),
+                                          label=gate_line_settings['label'], zorder=float(gate_line_settings['zorder']),
+                                          alpha=float(gate_line_settings['alpha']))
 
-                            elif gate_line_settings['drawpoints'].lower() == 'true':
-                                curax.scatter(dates[::int(gate_line_settings['numptsskip'])], values[::int(gate_line_settings['numptsskip'])],
-                                              marker=gate_line_settings['symboltype'], facecolor=gate_line_settings['pointfillcolor'],
-                                              edgecolor=gate_line_settings['pointlinecolor'], s=float(gate_line_settings['symbolsize']),
-                                              label=gate_line_settings['label'], zorder=float(gate_line_settings['zorder']),
-                                              alpha=float(gate_line_settings['alpha']))
-
-                            gate_count += 1 #keep track of gate number in group
-                            gate_placement += 1 #keep track of gate palcement in space
-                            self.addLogEntry({'type': gate_line_settings['label'] + '_GateTimeSeries' if gate_line_settings['label'] != '' else 'GateTimeseries',
-                                              'name': self.ChapterRegion+'_'+yearstr,
-                                              'description': cur_obj_settings['description'],
-                                              'units': 'BINARY',
-                                              'value_start_date': self.translateDateFormat(dates[0], 'datetime', '').strftime('%d %b %Y'),
-                                              'value_end_date': self.translateDateFormat(dates[-1], 'datetime', '').strftime('%d %b %Y'),
-                                              'logoutputfilename': curgate['logoutputfilename']
-                                              },
-                                             isdata=True)
+                        gate_count += 1 #keep track of gate number in group
+                        gate_placement += 1 #keep track of gate palcement in space
+                        self.addLogEntry({'type': gate_line_settings['label'] + '_GateTimeSeries' if gate_line_settings['label'] != '' else 'GateTimeseries',
+                                          'name': self.ChapterRegion+'_'+yearstr,
+                                          'description': ax_settings['description'],
+                                          'units': 'BINARY',
+                                          'value_start_date': self.translateDateFormat(dates[0], 'datetime', '').strftime('%d %b %Y'),
+                                          'value_end_date': self.translateDateFormat(dates[-1], 'datetime', '').strftime('%d %b %Y'),
+                                          'logoutputfilename': curgate['logoutputfilename']
+                                          },
+                                         isdata=True)
 
                     gatelabels_positions.append(np.average(gatelines_positions))
                     gate_placement += gatespacing
+
+                    if 'operationlines' in ax_settings.keys():
+                        operationtimes = self.getGateOperationTimes(gatedata)
+                        axs_to_add_line = [ax]
+                        if 'allaxis' in ax_settings['operationlines'].keys():
+                            if ax_settings['operationlines']['allaxis'].lower() == 'true':
+                                axs_to_add_line = axes
+
+                        opline_settings = self.getDefaultStriaghtLineSettings(ax_settings['operationlines'])
+
+                        for ax_to_add_line in axs_to_add_line:
+                            for operationTime in operationtimes:
+                                if 'dateformat' in ax_settings.keys():
+                                    if ax_settings['dateformat'].lower() == 'jdate':
+                                        if isinstance(operationTime, dt.datetime):
+                                            operationTime = self.DatetimeToJDate(operationTime)
+                                        elif isinstance(operationTime, str):
+                                            try:
+                                                operationTime = float(operationTime)
+                                            except:
+                                                operationTime = self.translateDateFormat(operationTime, 'datetime', '')
+                                                operationTime = self.DatetimeToJDate(operationTime)
+                                    elif ax_settings['dateformat'].lower() == 'datetime':
+                                        if isinstance(operationTime, (int,float)):
+                                            operationTime = self.JDateToDatetime(operationTime)
+                                        elif isinstance(operationTime, str):
+                                            operationTime = self.translateDateFormat(operationTime, 'datetime', '')
+                                else:
+                                    operationTime = self.translateDateFormat(operationTime, 'datetime', '')
+
+                                if 'zorder' not in opline_settings.keys():
+                                    opline_settings['zorder'] = 3
+
+                                ax_to_add_line.axvline(operationTime, c=opline_settings['linecolor'],
+                                                       lw=opline_settings['linewidth'], ls=opline_settings['linestylepattern'],
+                                                       zorder=float(opline_settings['zorder']),
+                                                       alpha=float(opline_settings['alpha']))
+
+
+
+
 
                 ### VERTICAL LINES ###
                 if 'vlines' in ax_settings.keys():
@@ -537,8 +577,8 @@ class MakeAutomatedReport(object):
                             vline_settings['value'] = float(vline_settings['value'])
                         except:
                             vline_settings['value'] = self.translateDateFormat(vline_settings['value'], 'datetime', '')
-                        if 'dateformat' in cur_obj_settings.keys():
-                            if cur_obj_settings['dateformat'].lower() == 'jdate':
+                        if 'dateformat' in ax_settings.keys():
+                            if ax_settings['dateformat'].lower() == 'jdate':
                                 if isinstance(vline_settings['value'], dt.datetime):
                                     vline_settings['value'] = self.DatetimeToJDate(vline_settings['value'])
                                 elif isinstance(vline_settings['value'], str):
@@ -547,7 +587,7 @@ class MakeAutomatedReport(object):
                                     except:
                                         vline_settings['value'] = self.translateDateFormat(vline_settings['value'], 'datetime', '')
                                         vline_settings['value'] = self.DatetimeToJDate(vline_settings['value'])
-                            elif cur_obj_settings['dateformat'].lower() == 'datetime':
+                            elif ax_settings['dateformat'].lower() == 'datetime':
                                 if isinstance(vline_settings['value'], (int,float)):
                                     vline_settings['value'] = self.JDateToDatetime(vline_settings['value'])
                                 elif isinstance(vline_settings['value'], str):
@@ -647,15 +687,15 @@ class MakeAutomatedReport(object):
                     if 'min' in ax_settings['ylims']:
                         ax.set_ylim(bottom=float(ax_settings['ylims']['min']))
                     else:
-                        if len(gategroups) != 0:
+                        if len(gatedata.keys()) != 0:
                             ax.set_ylim(bottom=0)
                     if 'max' in ax_settings['ylims']:
                         ax.set_ylim(top=float(ax_settings['ylims']['max']))
                     else:
-                        if len(gategroups) != 0:
+                        if len(gatedata.keys()) != 0:
                             ax.set_ylim(top=gate_placement)
                 else:
-                    if len(gategroups) != 0:
+                    if len(gatedata.keys()) != 0:
                         ax.set_ylim(bottom=0, top=gate_placement)
 
                 if 'xticksize' in ax_settings.keys():
@@ -1051,30 +1091,20 @@ class MakeAutomatedReport(object):
                             ax.set_ylim(top=float(object_settings['ylims']['max']))
 
                     ### GATES ###
-                    gategroups = {}
+                    # gategroups = {}
                     gateconfig = {}
                     if len(gatedata.keys()) > 0:
-                        for gate in gatedata.keys():
-                            if gatedata[gate]['gategroup'] not in gategroups.keys():
-                                gategroups[gatedata[gate]['gategroup']] = 1
-                            else:
-                                gategroups[gatedata[gate]['gategroup']] += 1
 
-                        gateops_settings = {}
-                        for gateop in cur_obj_settings['gateops']:
-                            if gateop['flag'] not in gateops_settings.keys():
-                                gateops_settings[gateop['flag']] = gateop
-
-                        for ggi, gategroup in enumerate(gategroups):
+                        for ggi, gategroup in enumerate(gatedata.keys()):
                             gatetop = None
                             gatebottom = None
                             gatemiddle = None
                             gateop_has_value = False
                             gate_count = 0 #keep track of gate number in group
-                            numgates = gategroups[gategroup]
+                            numgates = len(gatedata[gategroup]['gates'])
                             gatepoint_xpositions = np.linspace(ax.get_xlim()[0], ax.get_xlim()[1],numgates+2)[1:-1] #+2 for start and end
 
-                            cur_gateop = gateops_settings[gategroup]
+                            cur_gateop = gatedata[gategroup]
 
                             if 'top' in cur_gateop.keys():
                                 gatetop = float(cur_gateop['top'])
@@ -1097,44 +1127,42 @@ class MakeAutomatedReport(object):
                                 gatebottom = gatemiddle - float(object_settings['defaultgateenvelope'])/2
                                 gatetop = gatemiddle + float(object_settings['defaultgateenvelope'])/2
 
-                            for gate in gatedata.keys():
-                                if gatedata[gate]['gategroup'] == gategroup:
+                            for gate in cur_gateop['gates'].keys():
 
-                                    curgate = gatedata[gate]
+                                curgate = cur_gateop['gates'][gate]
 
-                                    values = curgate['values']
-                                    dates = curgate['dates']
+                                values = curgate['values']
+                                dates = curgate['dates']
 
-                                    if 'dateformat' in cur_obj_settings.keys():
+                                if 'dateformat' in cur_obj_settings.keys():
+                                    if cur_obj_settings['dateformat'].lower() == 'datetime':
+                                        if isinstance(dates[0], (int,float)):
+                                            dates = self.JDateToDatetime(dates)
 
-                                        if cur_obj_settings['dateformat'].lower() == 'datetime':
-                                            if isinstance(dates[0], (int,float)):
-                                                dates = self.JDateToDatetime(dates)
-
-                                    gatemsk = np.where(object_settings['timestamps'][j] == dates)
-                                    value = values[gatemsk][0]
-                                    xpos = gatepoint_xpositions[gate_count]
-                                    if gategroup not in gateconfig.keys():
-                                        gateconfig[gategroup] = {gate_count: value}
-                                    else:
-                                        gateconfig[gategroup][gate_count] = value
+                                gatemsk = np.where(object_settings['timestamps'][j] == dates)
+                                value = values[gatemsk][0]
+                                xpos = gatepoint_xpositions[gate_count]
+                                if gategroup not in gateconfig.keys():
+                                    gateconfig[gategroup] = {gate_count: value}
+                                else:
+                                    gateconfig[gategroup][gate_count] = value
 
 
-                                    if not np.isnan(value):
-                                        gateop_has_value = True
-                                        if cur_gateop['showgates'].lower() == 'true':
-                                            ax.scatter(xpos, gatemiddle, edgecolor='black', facecolor='black', marker='o')
+                                if not np.isnan(value):
+                                    gateop_has_value = True
+                                    if cur_gateop['showgates'].lower() == 'true':
+                                        ax.scatter(xpos, gatemiddle, edgecolor='black', facecolor='black', marker='o')
 
-                                    gate_count += 1 #keep track of gate number in group
-                                    self.addLogEntry({'type': gate + '_GateTimeSeries' if gate != '' else 'GateTimeseries',
-                                                      'name': self.ChapterRegion+'_'+yearstr,
-                                                      'description': cur_obj_settings['description'],
-                                                      'units': 'BINARY',
-                                                      'value_start_date': self.translateDateFormat(dates[0], 'datetime', '').strftime('%d %b %Y'),
-                                                      'value_end_date': self.translateDateFormat(dates[-1], 'datetime', '').strftime('%d %b %Y'),
-                                                      'logoutputfilename': curgate['logoutputfilename']
-                                                      },
-                                                     isdata=True)
+                                gate_count += 1 #keep track of gate number in group
+                                self.addLogEntry({'type': gate + '_GateTimeSeries' if gate != '' else 'GateTimeseries',
+                                                  'name': self.ChapterRegion+'_'+yearstr,
+                                                  'description': cur_obj_settings['description'],
+                                                  'units': 'BINARY',
+                                                  'value_start_date': self.translateDateFormat(dates[0], 'datetime', '').strftime('%d %b %Y'),
+                                                  'value_end_date': self.translateDateFormat(dates[-1], 'datetime', '').strftime('%d %b %Y'),
+                                                  'logoutputfilename': curgate['logoutputfilename']
+                                                  },
+                                                 isdata=True)
 
                             if 'color' in cur_gateop.keys():
                                 color = cur_gateop['color']
@@ -2101,7 +2129,7 @@ class MakeAutomatedReport(object):
 
         if i >= len(self.def_colors):
             i = i - len(self.def_colors)
-        return {'linewidth': 2, 'linecolor': self.def_colors[i], 'linestyle': 'solid', 'alpha': 1.0}
+        return {'linewidth': 2, 'linecolor': self.def_colors[i], 'linestylepattern': 'solid', 'alpha': 1.0}
 
     def getDefaultDefaultPointStyles(self, i):
         '''
@@ -2395,20 +2423,34 @@ class MakeAutomatedReport(object):
         data = {}
         if 'gateops' in object_settings.keys():
             for gi, gateop in enumerate(object_settings['gateops']):
+
+                if 'flag' in gateop.keys():
+                    if gateop['flag'] not in data.keys():
+                        data[gateop['flag']] = {}
+                        gateopkey = gateop['flag']
+                elif 'label' in gateop.keys():
+                    if gateop['label'] not in data.keys():
+                        data[gateop['label']] = {}
+                        gateopkey = gateop['label']
+                else:
+                    if 'GATEOP_{0}'.format(gi) not in data.keys():
+                        gateopkey = 'GATEOP_{0}'.format(gi)
+                        data[gateopkey] = {}
+
+                data[gateopkey]['gates'] = {}
                 for gate in gateop['gates']:
                     dates, values, _ = self.getTimeSeries(gate)
                     if 'flag' in gate.keys():
                         flag = gate['flag']
                     else:
                         flag = 'gate'
-                    if flag in data.keys():
+                    if flag in data[gateopkey]['gates'].keys():
                         count = 1
                         newflag = flag + '_{0}'.format(count)
-                        while newflag in data.keys():
+                        while newflag in data[gateopkey]['gates'].keys():
                             count += 1
                             newflag = flag + '_{0}'.format(count)
                         flag = newflag
-                        print('The new flag is {0}'.format(newflag))
                     datamem_key = self.buildDataMemoryKey(gate)
                     value_msk = np.where(values==0)
                     values[value_msk] = np.nan
@@ -2416,14 +2458,18 @@ class MakeAutomatedReport(object):
                         gategroup = gateop['flag']
                     else:
                         gategroup = 'gategroup_{0}'.format(gi)
-                    data[flag] = {'values': values,
-                                  'dates': dates,
-                                  'logoutputfilename': datamem_key,
-                                  'gategroup': gategroup}
+                    data[gateopkey]['gates'][flag] = {'values': values,
+                                                      'dates': dates,
+                                                      'logoutputfilename': datamem_key,
+                                                      'gategroup': gategroup}
 
                     for key in gate.keys():
-                        if key not in data[flag].keys():
-                            data[flag][key] = gate[key]
+                        if key not in data[gateopkey]['gates'][flag].keys():
+                            data[gateopkey]['gates'][flag][key] = gate[key]
+
+                for key in gateop.keys():
+                    if key not in data[gateopkey].keys():
+                        data[gateopkey][key] = gateop[key]
 
         return data
 
@@ -2752,24 +2798,25 @@ class MakeAutomatedReport(object):
     def getGateConfigurationDays(self, gateconfig, gatedata, timestamp):
         gate_vals = {}
         time_interval = None
-        for gate in gatedata.keys():
-            if gatedata[gate]['gategroup'] not in gate_vals:
-                gate_vals[gatedata[gate]['gategroup']] = {}
-                gatecount = 0
-            else:
-                gatecount = max(list(gate_vals[gatedata[gate]['gategroup']].keys())) + 1
-            datamsk = np.where(gatedata[gate]['dates'] == timestamp)
-            if len(datamsk) == 0:
-                continue
-            else:
-                datamsk = datamsk[0][0]
-            values = gatedata[gate]['values'][:datamsk]
-            if time_interval == None:
-                time_interval = gatedata[gate]['dates'][1] - gatedata[gate]['dates'][0]
-            vmsk = np.where(values==1)
-            gate_vals[gatedata[gate]['gategroup']][gatecount] = vmsk
+        for gateop in gatedata.keys():
+            if gateop not in gate_vals:
+                gate_vals[gateop] = {}
+            # else:
+            #     gatecount = max(list(gate_vals[gatedata[gate]['gategroup']].keys())) + 1
+            for gi, gate in enumerate(gatedata[gateop]['gates'].keys()):
+                curgate = gatedata[gateop]['gates'][gate]
+                datamsk = np.where(curgate['dates'] == timestamp)
+                if len(datamsk) == 0:
+                    continue
+                else:
+                    datamsk = datamsk[0][0]
+                values = curgate['values'][:datamsk]
+                if time_interval == None:
+                    time_interval = curgate['dates'][1] - curgate['dates'][0]
+                vmsk = np.where(values==1)
+                gate_vals[gateop][gi] = vmsk
         operation_idx = [] #indicies where gate ops are the same as given config
-        for gateop in gateconfig:
+        for gateop in gateconfig.keys():
             for gate in gateconfig[gateop].keys():
                 if not np.isnan(gateconfig[gateop][gate]):
                     operation_idx.append(gate_vals[gateop][gate][0].tolist())
@@ -2787,20 +2834,21 @@ class MakeAutomatedReport(object):
                 if not np.isnan(gateconfig[gateop][gate]):
                     gateconfig_activegateop[gateop] = True
                     break
-
-            for gate in gatedata.keys():
-                if gatedata[gate]['gategroup'] == gateop:
-                    datamsk = np.where(gatedata[gate]['dates'] == timestamp)
-                    if len(datamsk) == 0:
-                        continue
-                    else:
-                        datamsk = datamsk[0][0]
-                    if gateop not in alldays_activeop.keys():
-                        alldays_activeop[gateop] = np.full(datamsk, False)
-                    idx_active = np.where(~np.isnan(gatedata[gate]['values'][:datamsk]))
-                    alldays_activeop[gateop][idx_active] = True
-                    if time_interval == None:
-                        time_interval = gatedata[gate]['dates'][1] - gatedata[gate]['dates'][0]
+            for gateop in gatedata.keys():
+                for gate in gatedata[gateop]['gates'].keys():
+                    curgate = gatedata[gateop]['gates'][gate]
+                    if curgate['gategroup'] == gateop:
+                        datamsk = np.where(curgate['dates'] == timestamp)
+                        if len(datamsk) == 0:
+                            continue
+                        else:
+                            datamsk = datamsk[0][0]
+                        if gateop not in alldays_activeop.keys():
+                            alldays_activeop[gateop] = np.full(datamsk, False)
+                        idx_active = np.where(~np.isnan(curgate['values'][:datamsk]))
+                        alldays_activeop[gateop][idx_active] = True
+                        if time_interval == None:
+                            time_interval = curgate['dates'][1] - curgate['dates'][0]
 
         idx_count = 0
         for i in range(datamsk):
@@ -2859,6 +2907,22 @@ class MakeAutomatedReport(object):
         RelativeLineSettings['units'] = self.getMostCommon(units)
 
         return RelativeMasterSet, RelativeLineSettings
+
+    def getGateOperationTimes(self, gatedata):
+        operationTimes = []
+        for gateop in gatedata.keys():
+            gateop_ops = np.array([])
+            for gi, gate in enumerate(gatedata[gateop]['gates']):
+                curgate = gatedata[gateop]['gates'][gate]
+                gateop_ops = np.append(gateop_ops, np.where(~np.isnan(curgate['values'])))#TODO: make sure gate dates are same length?
+            gateop_ops = list(set(gateop_ops.tolist()))
+            for gateop_op in gateop_ops: #idx where data IS valid, i.e. A gate is in
+                if gateop_op != 0 and gateop_op != len(curgate['values'])-1:
+                    if gateop_op + 1 not in gateop_ops or gateop_op - 1 not in gateop_ops:#gate was in, then taken out
+                        operationTimes.append(curgate['dates'][int(gateop_op)])
+
+        return operationTimes
+
 
     def replaceDefaults(self, default_settings, object_settings):
         '''
