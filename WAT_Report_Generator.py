@@ -308,6 +308,13 @@ class MakeAutomatedReport(object):
                 linedata = self.filterTimeSeriesByYear(linedata, year)
                 gatedata = self.filterTimeSeriesByYear(gatedata, year)
 
+                if 'relative' in ax_settings.keys():
+                    if ax_settings['relative'].lower() == 'true':
+                        RelativeMasterSet, RelativeLineSettings = self.getRelativeMasterSet(linedata)
+                        if 'unitsystem' in ax_settings.keys():
+                            RelativeMasterSet, RelativeLineSettings['units'] = self.convertUnitSystem(RelativeMasterSet,
+                                                                                                      RelativeLineSettings['units'],
+                                                                                                      ax_settings['unitsystem'])
                 # LINE DATA #
                 for line in linedata:
                     curline = linedata[line]
@@ -326,8 +333,8 @@ class MakeAutomatedReport(object):
                                 units = None
 
                     if isinstance(units, dict):
-                        if 'unitsystem' in cur_obj_settings.keys():
-                            units = units[cur_obj_settings['unitsystem'].lower()]
+                        if 'unitsystem' in ax_settings.keys():
+                            units = units[ax_settings['unitsystem'].lower()]
                         else:
                             units = None
 
@@ -380,6 +387,12 @@ class MakeAutomatedReport(object):
                             unitslist2.append(units)
                         else:
                             unitslist.append(units)
+
+                    if 'relative' in ax_settings:
+                        if ax_settings['relative'].lower() == 'true':
+                            if RelativeLineSettings['interval'] != None:
+                                dates, values = self.changeTimeSeriesInterval(dates, values, RelativeLineSettings)
+                            values = values/RelativeMasterSet
 
                     if line_settings['drawline'].lower() == 'true' and line_settings['drawpoints'].lower() == 'true':
                         curax.plot(dates, values, label=line_settings['label'], c=line_settings['linecolor'],
@@ -2799,6 +2812,53 @@ class MakeAutomatedReport(object):
                 idx_count += 1
 
         return round((time_interval * idx_count).days + ((time_interval * idx_count).seconds / 86400), 3)
+
+    def getRelativeMasterSet(self, linedata):
+        #add all thje data together. then we cna use this when plotting it to get %
+        #TODO: deal with irregular intervals
+        intervals = {}
+        biggest_interval = None
+        type = 'INST-VAL'
+        for line in linedata.keys():
+            if 'interval' in linedata[line].keys():
+                td = self.getTimeInterval(linedata[line]['dates'])
+                if linedata[line]['interval'].upper() not in intervals.keys():
+                    intervals[linedata[line]['interval'].upper()] = td
+                if biggest_interval == None:
+                    biggest_interval = linedata[line]['interval'].upper()
+                    if 'type' in linedata[line].keys():
+                        type = linedata[line]['type'].upper()
+                else:
+                    if td > intervals[biggest_interval]:
+                        biggest_interval = linedata[line]['interval'].upper()
+                        if linedata[line]['type'] in line.keys():
+                            type = linedata[line]['type'].upper()
+
+        RelativeLineSettings = {'interval': biggest_interval,
+                                'type': type}
+        RelativeMasterSet = []
+        units = []
+        for li, line in enumerate(linedata.keys()):
+            curline = pickle.loads(pickle.dumps(linedata[line], -1))
+            curline['values'], curline['units'] = self.convertUnitSystem(curline['values'], curline['units'], 'metric') #just make everything metric..
+            units.append(curline['units'])
+            if li == 0:
+                if biggest_interval != None:
+                    _, RelativeMasterSet = self.changeTimeSeriesInterval(curline['dates'], curline['values'], RelativeLineSettings)
+                else:
+                    RelativeMasterSet = curline['values']
+            else:
+                if biggest_interval != None:
+                    curline['interval'] = biggest_interval
+                    curline['type'] = type
+                    _, newvals = self.changeTimeSeriesInterval(curline['dates'], curline['values'], RelativeLineSettings)
+                    RelativeMasterSet += newvals
+                else:
+                    RelativeMasterSet += curline['values']
+
+        RelativeLineSettings['units'] = self.getMostCommon(units)
+
+        return RelativeMasterSet, RelativeLineSettings
 
     def replaceDefaults(self, default_settings, object_settings):
         '''
