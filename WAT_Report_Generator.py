@@ -307,7 +307,7 @@ class MakeAutomatedReport(object):
                 gatedata = self.getGateData(ax_settings)
                 linedata = self.filterTimeSeriesByYear(linedata, year)
                 for gateop in gatedata.keys():
-                    gatedata[gateop] = self.filterTimeSeriesByYear(gatedata[gateop], year)
+                    gatedata[gateop]['gates'] = self.filterTimeSeriesByYear(gatedata[gateop]['gates'], year)
 
                 if 'relative' in ax_settings.keys():
                     if ax_settings['relative'].lower() == 'true':
@@ -2186,7 +2186,7 @@ class MakeAutomatedReport(object):
         if 'dss_path' in Line_info.keys(): #Get data from DSS record
             if 'dss_filename' not in Line_info.keys():
                 print('DSS_Filename not set for Line: {0}'.format(Line_info))
-                return [], [], None
+                return np.array([]), np.array([]), None
             else:
                 datamem_key = self.buildDataMemoryKey(Line_info)
                 if datamem_key in self.Data_Memory.keys():
@@ -2204,9 +2204,9 @@ class MakeAutomatedReport(object):
                                                      'units': pickle.loads(pickle.dumps(units, -1))}
 
                 if np.any(values == None):
-                    return [], [], None
+                    return np.array([]), np.array([]), None
                 elif len(values) == 0:
-                    return [], [], None
+                    return np.array([]), np.array([]), None
 
         elif 'w2_file' in Line_info.keys():
             datamem_key = self.buildDataMemoryKey(Line_info)
@@ -2257,7 +2257,7 @@ class MakeAutomatedReport(object):
 
         else:
             print('No Data Defined for line')
-            return [], [], None
+            return np.array([]), np.array([]), None
 
         if 'omitvalue' in Line_info.keys():
             omitval = float(Line_info['omitvalue'])
