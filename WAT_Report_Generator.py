@@ -528,46 +528,42 @@ class MakeAutomatedReport(object):
                     gatelabels_positions.append(np.average(gatelines_positions))
                     gate_placement += gatespacing
 
-                    if 'operationlines' in ax_settings.keys():
-                        operationtimes = self.getGateOperationTimes(gatedata)
-                        axs_to_add_line = [ax]
-                        if 'allaxis' in ax_settings['operationlines'].keys():
-                            if ax_settings['operationlines']['allaxis'].lower() == 'true':
-                                axs_to_add_line = axes
+                if 'operationlines' in ax_settings.keys():
+                    operationtimes = self.getGateOperationTimes(gatedata)
+                    axs_to_add_line = [ax]
+                    if 'allaxis' in ax_settings['operationlines'].keys():
+                        if ax_settings['operationlines']['allaxis'].lower() == 'true':
+                            axs_to_add_line = axes
 
-                        opline_settings = self.getDefaultStriaghtLineSettings(ax_settings['operationlines'])
+                    opline_settings = self.getDefaultStriaghtLineSettings(ax_settings['operationlines'])
 
-                        for ax_to_add_line in axs_to_add_line:
-                            for operationTime in operationtimes:
-                                if 'dateformat' in ax_settings.keys():
-                                    if ax_settings['dateformat'].lower() == 'jdate':
-                                        if isinstance(operationTime, dt.datetime):
-                                            operationTime = self.DatetimeToJDate(operationTime)
-                                        elif isinstance(operationTime, str):
-                                            try:
-                                                operationTime = float(operationTime)
-                                            except:
-                                                operationTime = self.translateDateFormat(operationTime, 'datetime', '')
-                                                operationTime = self.DatetimeToJDate(operationTime)
-                                    elif ax_settings['dateformat'].lower() == 'datetime':
-                                        if isinstance(operationTime, (int,float)):
-                                            operationTime = self.JDateToDatetime(operationTime)
-                                        elif isinstance(operationTime, str):
+                    for ax_to_add_line in axs_to_add_line:
+                        for operationTime in operationtimes:
+                            if 'dateformat' in ax_settings.keys():
+                                if ax_settings['dateformat'].lower() == 'jdate':
+                                    if isinstance(operationTime, dt.datetime):
+                                        operationTime = self.DatetimeToJDate(operationTime)
+                                    elif isinstance(operationTime, str):
+                                        try:
+                                            operationTime = float(operationTime)
+                                        except:
                                             operationTime = self.translateDateFormat(operationTime, 'datetime', '')
-                                else:
-                                    operationTime = self.translateDateFormat(operationTime, 'datetime', '')
+                                            operationTime = self.DatetimeToJDate(operationTime)
+                                elif ax_settings['dateformat'].lower() == 'datetime':
+                                    if isinstance(operationTime, (int,float)):
+                                        operationTime = self.JDateToDatetime(operationTime)
+                                    elif isinstance(operationTime, str):
+                                        operationTime = self.translateDateFormat(operationTime, 'datetime', '')
+                            else:
+                                operationTime = self.translateDateFormat(operationTime, 'datetime', '')
 
-                                if 'zorder' not in opline_settings.keys():
-                                    opline_settings['zorder'] = 3
+                            if 'zorder' not in opline_settings.keys():
+                                opline_settings['zorder'] = 3
 
-                                ax_to_add_line.axvline(operationTime, c=opline_settings['linecolor'],
-                                                       lw=opline_settings['linewidth'], ls=opline_settings['linestylepattern'],
-                                                       zorder=float(opline_settings['zorder']),
+                            ax_to_add_line.axvline(operationTime, c=opline_settings['linecolor'],
+                                                   lw=opline_settings['linewidth'], ls=opline_settings['linestylepattern'],
+                                                   zorder=float(opline_settings['zorder']),
                                                        alpha=float(opline_settings['alpha']))
-
-
-
-
 
                 ### VERTICAL LINES ###
                 if 'vlines' in ax_settings.keys():
@@ -1143,9 +1139,9 @@ class MakeAutomatedReport(object):
                                 value = values[gatemsk][0]
                                 xpos = gatepoint_xpositions[gate_count]
                                 if gategroup not in gateconfig.keys():
-                                    gateconfig[gategroup] = {gate_count: value}
+                                    gateconfig[gategroup] = {gate: value}
                                 else:
-                                    gateconfig[gategroup][gate_count] = value
+                                    gateconfig[gategroup][gate] = value
 
 
                                 if not np.isnan(value):
@@ -2796,30 +2792,24 @@ class MakeAutomatedReport(object):
         return units_list
 
     def getGateConfigurationDays(self, gateconfig, gatedata, timestamp):
-        gate_vals = {}
         time_interval = None
+        operation_idx = []
         for gateop in gatedata.keys():
-            if gateop not in gate_vals:
-                gate_vals[gateop] = {}
-            # else:
-            #     gatecount = max(list(gate_vals[gatedata[gate]['gategroup']].keys())) + 1
             for gi, gate in enumerate(gatedata[gateop]['gates'].keys()):
                 curgate = gatedata[gateop]['gates'][gate]
                 datamsk = np.where(curgate['dates'] == timestamp)
                 if len(datamsk) == 0:
                     continue
                 else:
-                    datamsk = datamsk[0][0]
-                values = curgate['values'][:datamsk]
+                    datamsk = datamsk[0][0] + 1
                 if time_interval == None:
                     time_interval = curgate['dates'][1] - curgate['dates'][0]
-                vmsk = np.where(values==1)
-                gate_vals[gateop][gi] = vmsk
-        operation_idx = [] #indicies where gate ops are the same as given config
-        for gateop in gateconfig.keys():
-            for gate in gateconfig[gateop].keys():
-                if not np.isnan(gateconfig[gateop][gate]):
-                    operation_idx.append(gate_vals[gateop][gate][0].tolist())
+                if np.isnan(gateconfig[gateop][gate]):
+                    correct_ops_idx = np.where(curgate['values'][:datamsk] != 1)[0].tolist()
+                else:
+                    correct_ops_idx = np.where(curgate['values'][:datamsk] == 1)[0].tolist()
+
+                operation_idx.append(correct_ops_idx)
 
         correct_config = len(set.intersection(*map(set,operation_idx)))
         return round((time_interval * correct_config).days + ((time_interval * correct_config).seconds / 86400), 3)
@@ -2842,7 +2832,7 @@ class MakeAutomatedReport(object):
                         if len(datamsk) == 0:
                             continue
                         else:
-                            datamsk = datamsk[0][0]
+                            datamsk = datamsk[0][0]+1
                         if gateop not in alldays_activeop.keys():
                             alldays_activeop[gateop] = np.full(datamsk, False)
                         idx_active = np.where(~np.isnan(curgate['values'][:datamsk]))
@@ -2852,10 +2842,10 @@ class MakeAutomatedReport(object):
 
         idx_count = 0
         for i in range(datamsk):
-            valid = True
-            for gateop in alldays_activeop.keys():
-                if alldays_activeop[gateop][i] != gateconfig_activegateop[gateop]:
-                    valid = False
+            valid = True #assume all is well
+            for gateop in alldays_activeop.keys(): #for each gate on this timestamp
+                if alldays_activeop[gateop][i] != gateconfig_activegateop[gateop]: #if the gate operation is not what it should be
+                    valid = False #thenwe cannot count
             if valid:
                 idx_count += 1
 
