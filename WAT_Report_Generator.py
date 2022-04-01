@@ -243,6 +243,8 @@ class MakeAutomatedReport(object):
 
         object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = self.getPlotYears(object_settings)
 
+        object_settings = self.confirm_axis(object_settings)
+
         for yi, year in enumerate(object_settings['years']):
             cur_obj_settings = pickle.loads(pickle.dumps(object_settings, -1))
             if object_settings['split_by_year']:
@@ -250,7 +252,7 @@ class MakeAutomatedReport(object):
             else:
                 yearstr = object_settings['yearstr']
 
-            cur_obj_settings = self.setTimeSeriesXlims(cur_obj_settings, yearstr, object_settings['years'])
+            # cur_obj_settings = self.setTimeSeriesXlims(cur_obj_settings, yearstr, object_settings['years'])
 
             # fig = plt.figure(figsize=(12, 6))
             if len(cur_obj_settings['axs']) == 1:
@@ -291,6 +293,8 @@ class MakeAutomatedReport(object):
                     ax = axes
                 else:
                     ax = axes[axi]
+
+                ax_settings = self.setTimeSeriesXlims(ax_settings, yearstr, object_settings['years'])
 
                 ### Make Twin axis ###
                 _usetwinx = False
@@ -4565,6 +4569,11 @@ class MakeAutomatedReport(object):
                 return user_color.replace(' ', '')
         else:
             return user_color
+
+    def confirm_axis(self, object_settings):
+        if 'axs' not in object_settings.keys():
+            object_settings['axs'] = [{}] #empty axis object
+        return object_settings
 
 if __name__ == '__main__':
     rundir = sys.argv[0]
