@@ -282,9 +282,6 @@ class MakeAutomatedReport(object):
             else:
                 yearstr = object_settings['yearstr']
 
-            # cur_obj_settings = self.setTimeSeriesXlims(cur_obj_settings, yearstr, object_settings['years'])
-
-            # fig = plt.figure(figsize=(12, 6))
             if len(cur_obj_settings['axs']) == 1:
                 figsize=(12, 6)
                 pageformat = 'half'
@@ -409,9 +406,6 @@ class MakeAutomatedReport(object):
                             dates, values = self.limitXdata(dates, values, cur_obj_settings['xlims'])
                         if 'ylims' in object_settings.keys():
                             dates, values = self.limitYdata(dates, values, cur_obj_settings['ylims'])
-
-                    # if units != '' and units != None:
-                    #     unitslist.append(units)
 
                     curax = ax
                     axis2 = False
@@ -654,13 +648,10 @@ class MakeAutomatedReport(object):
                                    zorder=float(hline_settings['zorder']),
                                    alpha=float(hline_settings['alpha']))
 
-                # ax_settings['units_list'] = unitslist
-                # ax_settings['units_list2'] = unitslist2
                 plotunits = self.getPlotUnits(unitslist, ax_settings)
                 plotunits2 = self.getPlotUnits(unitslist2, ax_settings)
                 ax_settings = self.updateFlaggedValues(ax_settings, '%%units%%', plotunits)
                 ax_settings = self.updateFlaggedValues(ax_settings, '%%units2%%', plotunits2)
-                # cur_obj_settings = self.updateFlaggedValues(cur_obj_settings, '%%units%%', plotunits)
 
                 if axi == 0:
                     if 'title' in ax_settings.keys():
@@ -875,6 +866,7 @@ class MakeAutomatedReport(object):
         object_settings['units_list'] = self.getUnitsList(line_settings)
         object_settings['plot_units'] = self.getPlotUnits(object_settings['units_list'], object_settings)
         object_settings = self.updateFlaggedValues(object_settings, '%%units%%', object_settings['plot_units'])
+        table_blueprint = self.updateFlaggedValues(table_blueprint, '%%units%%', object_settings['plot_units'])
 
         self.commitProfileDataToMemory(data, line_settings, object_settings)
         data, object_settings = self.filterProfileData(data, line_settings, object_settings)
@@ -883,11 +875,6 @@ class MakeAutomatedReport(object):
 
         object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = self.getPlotYears(object_settings)
 
-
-
-        #get date headers for each timestamp
-        #build rows depending on available runs (comparison runs need headers)
-        #iterate over headers and build table
 
         yrheaders, yrheaders_i = self.buildHeadersByTimestamps(object_settings['timestamps'], self.years)
         yrheaders = self.convertHeaderFormats(yrheaders, object_settings)
