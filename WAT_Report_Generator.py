@@ -281,6 +281,7 @@ class MakeAutomatedReport(object):
                 yearstr = str(year)
             else:
                 yearstr = object_settings['yearstr']
+            cur_obj_settings = self.updateFlaggedValues(cur_obj_settings, '%%year%%', yearstr)
 
             if len(cur_obj_settings['axs']) == 1:
                 figsize=(12, 6)
@@ -296,6 +297,8 @@ class MakeAutomatedReport(object):
                 else:
                     axis_weight.append(1)
 
+            if 'sharex' not in cur_obj_settings:
+                cur_obj_settings['sharex'] == 'false'
 
             if cur_obj_settings['sharex'].lower() == 'true':
                 fig, axes = plt.subplots(nrows=len(cur_obj_settings['axs']), sharex=True, figsize=figsize,
@@ -866,6 +869,8 @@ class MakeAutomatedReport(object):
         object_settings['units_list'] = self.getUnitsList(line_settings)
         object_settings['plot_units'] = self.getPlotUnits(object_settings['units_list'], object_settings)
         object_settings = self.updateFlaggedValues(object_settings, '%%units%%', object_settings['plot_units'])
+        # table_blueprint = pickle.loads(pickle.dumps(object_settings, -1))
+
         table_blueprint = self.updateFlaggedValues(table_blueprint, '%%units%%', object_settings['plot_units'])
 
         self.commitProfileDataToMemory(data, line_settings, object_settings)
@@ -875,14 +880,13 @@ class MakeAutomatedReport(object):
 
         object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = self.getPlotYears(object_settings)
 
-
         yrheaders, yrheaders_i = self.buildHeadersByTimestamps(object_settings['timestamps'], self.years)
         yrheaders = self.convertHeaderFormats(yrheaders, object_settings)
         if not object_settings['split_by_year']: #if we dont want to split by year, just make a big ass list
             yrheaders = [list(itertools.chain.from_iterable(yrheaders))]
             yrheaders_i = [list(itertools.chain.from_iterable(yrheaders_i))]
         for yi, year in enumerate(self.years):
-            yearstr = self.years_str[yi]
+            yearstr = object_settings['yearstr'][yi]
             object_desc = self.updateFlaggedValues(object_settings['description'], '%%year%%', yearstr)
             if self.iscomp:
                 self.XML.writeDateControlledTableStart(object_desc, 'Statistics')
@@ -893,7 +897,7 @@ class MakeAutomatedReport(object):
                     #if a comparison, write the date column. Otherwise, this will be our header
                     self.XML.writeDateColumn(yrheader)
                 header_i = yrheaders_i[yi][yhi]
-                headings, rows = self.buildTable(table_blueprint, [yrheaders[yi][yhi]], object_settings['split_by_year'], line_settings)
+                headings, rows = self.buildProfileStatsTable(table_blueprint, yrheaders[yi][yhi], line_settings)
                 for hi,heading in enumerate(headings):
                     frmt_rows = []
                     for row in rows:
@@ -901,95 +905,27 @@ class MakeAutomatedReport(object):
                         rowname = s_row[0]
                         row_val = s_row[hi+1]
                         if '%%' in row_val:
-                            if self.iscomp:
-                                rowheader = heading[1]
-                            else:
-                                rowheader = yrheader
+
                             stats_data = self.formatStatsProfileLineData(row_val, data, object_settings['resolution'],
                                                                          object_settings['usedepth'], header_i)
                             row_val, stat = self.getStatsLine(row_val, stats_data)
                             self.addLogEntry({'type': 'ProfileTableStatistic',
-                                              'name': ' '.join([self.ChapterRegion, rowheader, stat]),
+                                              'name': ' '.join([self.ChapterRegion, heading, stat]),
                                               'description': object_desc,
                                               'value': row_val,
                                               'function': stat,
                                               'units': object_settings['plot_units'],
-                                              'value_start_date': rowheader,
-                                              'value_end_date': rowheader,
+                                              'value_start_date': yrheader,
+                                              'value_end_date': yrheader,
                                               'logoutputfilename': ', '.join([line_settings[flag]['logoutputfilename'] for flag in line_settings])
                                               },
                                              isdata=True)
 
                         frmt_rows.append('{0}|{1}'.format(rowname, row_val))
-                    self.XML.writeTableColumn(rowheader, frmt_rows)
+                    self.XML.writeTableColumn(heading, frmt_rows)
                 if self.iscomp:
                     self.XML.writeDateColumnEnd()
             self.XML.writeTableEnd()
-
-
-
-
-
-
-
-
-
-
-
-
-        # #start data loop
-        # for yi, year in enumerate(object_settings['years']):
-        #     if object_settings['split_by_year']:
-        #         yearstr = str(year)
-        #     else:
-        #         yearstr = object_settings['yearstr']
-        #
-        #     object_desc = self.updateFlaggedValues(object_settings['description'], '%%year%%', yearstr)
-        #     if self.iscomp:
-        #         self.XML.writeDateControlledTableStart(object_desc, 'Statistics')
-        #     else:
-        #         self.XML.writeTableStart(object_desc, 'Statistics')
-        #     yrheaders, yrheaders_i = self.buildHeadersByTimestamps(object_settings['timestamps'], year=year)
-        #     yrheaders = self.convertHeaderFormats(yrheaders, object_settings)
-        #
-        #     if self.iscomp:
-        #         headings, rows = self.buildTable(object_settings, [year], object_settings['split_by_year'], line_settings)
-        #         headings = [n[1] for n in headings]
-        #     else:
-        #         #no mods needed
-        #         rows = object_settings['rows']
-        #
-        #     for i, header in enumerate(yrheaders):
-        #         frmt_rows = []
-        #         header_i = yrheaders_i[i]
-        #         if self.iscomp:
-        #             self.XML.writeDateColumn(header)
-        #         for row in object_settings['rows']:
-        #             s_row = row.split('|')
-        #             rowname = s_row[0]
-        #             row_val = s_row[1]
-        #             if self.iscomp:
-        #                 row_header = self.getRowHeader(row_val, line_settings)
-        #                 header = row_header
-        #             if '%%' in row_val:
-        #                 stats_data = self.formatStatsProfileLineData(row, data, object_settings['resolution'],
-        #                                                             object_settings['usedepth'], header_i)
-        #                 row_val, stat = self.getStatsLine(row_val, stats_data)
-        #                 self.addLogEntry({'type': 'ProfileTableStatistic',
-        #                                   'name': ' '.join([self.ChapterRegion, header, stat]),
-        #                                   'description': object_desc,
-        #                                   'value': row_val,
-        #                                   'function': stat,
-        #                                   'units': object_settings['plot_units'],
-        #                                   'value_start_date': header,
-        #                                   'value_end_date': header,
-        #                                   'logoutputfilename': ', '.join([line_settings[flag]['logoutputfilename'] for flag in line_settings])
-        #                                   },
-        #                                  isdata=True)
-        #             header = '' if header == None else header
-        #             frmt_rows.append('{0}|{1}'.format(rowname, row_val))
-        #         self.XML.writeTableColumn(header, frmt_rows)
-        #     self.XML.writeTableEnd()
 
     def makeProfilePlot(self, object_settings):
         '''
@@ -1101,11 +1037,9 @@ class MakeAutomatedReport(object):
                         if not WF.checkData(values):
                             continue
 
-                        # current_ls = self.getLineSettings(object_settings['lines'], line)
                         current_ls = line_settings[line] #we have all the settings we need..
                         current_ls = self.getDefaultLineSettings(current_ls, object_settings['plot_parameter'], li)
                         current_ls = self.fixDuplicateColors(current_ls) #used the line, used param, then double up so subtract 1
-
 
                         if current_ls['drawline'].lower() == 'true' and current_ls['drawpoints'].lower() == 'true':
                             ax.plot(values, levels, label=current_ls['label'], c=current_ls['linecolor'],
@@ -1461,7 +1395,7 @@ class MakeAutomatedReport(object):
 
         data = self.getTableData(object_settings)
 
-        headings, rows = self.buildTable(object_settings, object_settings['years'], object_settings['split_by_year'], data)
+        headings, rows = self.buildTable(object_settings, object_settings['split_by_year'], data)
 
         object_settings = self.configureSettingsForID('base', object_settings)
 
@@ -1491,20 +1425,23 @@ class MakeAutomatedReport(object):
                 row_val = s_row[i+1]
                 if '%%' in row_val:
                     rowdata, sr_month = self.getStatsLineData(row_val, data, year=year)
-                    row_val, stat = self.getStatsLine(row_val, rowdata)
+                    if len(rowdata) == 0:
+                        row_val = None
+                    else:
+                        row_val, stat = self.getStatsLine(row_val, rowdata)
 
-                    data_start_date, data_end_date = self.getTableDates(year, object_settings)
-                    self.addLogEntry({'type': 'Statistic',
-                                      'name': ' '.join([self.ChapterRegion, header, stat]),
-                                      'description': desc,
-                                      'value': row_val,
-                                      'function': stat,
-                                      'units': object_settings['plot_units'],
-                                      'value_start_date': self.translateDateFormat(data_start_date, 'datetime', ''),
-                                      'value_end_date': self.translateDateFormat(data_end_date, 'datetime', ''),
-                                      'logoutputfilename': ', '.join([data[flag]['logoutputfilename'] for flag in data])
-                                      },
-                                     isdata=True)
+                        data_start_date, data_end_date = self.getTableDates(year, object_settings)
+                        self.addLogEntry({'type': 'Statistic',
+                                          'name': ' '.join([self.ChapterRegion, header, stat]),
+                                          'description': desc,
+                                          'value': row_val,
+                                          'function': stat,
+                                          'units': object_settings['plot_units'],
+                                          'value_start_date': self.translateDateFormat(data_start_date, 'datetime', ''),
+                                          'value_end_date': self.translateDateFormat(data_end_date, 'datetime', ''),
+                                          'logoutputfilename': ', '.join([data[flag]['logoutputfilename'] for flag in data])
+                                          },
+                                         isdata=True)
 
                 header = '' if header == None else header
                 frmt_rows.append('{0}|{1}'.format(rowname, row_val))
@@ -1528,7 +1465,7 @@ class MakeAutomatedReport(object):
 
         data = self.getTableData(object_settings)
 
-        headings, rows = self.buildTable(object_settings, object_settings['years'], object_settings['split_by_year'], data)
+        headings, rows = self.buildTable(object_settings, object_settings['split_by_year'], data)
 
         object_settings= self.configureSettingsForID('base', object_settings)
         object_settings['units_list'] = self.getUnitsList(data)
@@ -1550,21 +1487,24 @@ class MakeAutomatedReport(object):
                 row_val = s_row[i+1]
                 if '%%' in row_val:
                     rowdata, sr_month = self.getStatsLineData(row_val, data, year=year)
+                    if len(rowdata) == 0:
+                        row_val = None
+                    else:
 
-                    row_val, stat = self.getStatsLine(row_val, rowdata)
+                        row_val, stat = self.getStatsLine(row_val, rowdata)
 
-                    data_start_date, data_end_date = self.getTableDates(year, object_settings, month=sr_month)
-                    self.addLogEntry({'type': 'Statistic',
-                                      'name': ' '.join([self.ChapterRegion, header, stat]),
-                                      'description': object_settings['description'],
-                                      'value': row_val,
-                                      'units': object_settings['units_list'],
-                                      'function': stat,
-                                      'value_start_date': self.translateDateFormat(data_start_date, 'datetime', ''),
-                                      'value_end_date': self.translateDateFormat(data_end_date, 'datetime', ''),
-                                      'logoutputfilename': ', '.join([data[flag]['logoutputfilename'] for flag in data])
-                                      },
-                                     isdata=True)
+                        data_start_date, data_end_date = self.getTableDates(year, object_settings, month=sr_month)
+                        self.addLogEntry({'type': 'Statistic',
+                                          'name': ' '.join([self.ChapterRegion, header, stat]),
+                                          'description': object_settings['description'],
+                                          'value': row_val,
+                                          'units': object_settings['units_list'],
+                                          'function': stat,
+                                          'value_start_date': self.translateDateFormat(data_start_date, 'datetime', ''),
+                                          'value_end_date': self.translateDateFormat(data_end_date, 'datetime', ''),
+                                          'logoutputfilename': ', '.join([data[flag]['logoutputfilename'] for flag in data])
+                                          },
+                                         isdata=True)
 
                 header = '' if header == None else header
                 frmt_rows.append('{0}|{1}'.format(rowname, row_val))
@@ -1933,10 +1873,11 @@ class MakeAutomatedReport(object):
                               'lastcomputed': simulation.find('LastComputed').text
                               }
 
-            if self.iscomp: #TODO: remove this when we implement for real
+            try:
                 simulationInfo['ID'] = simulation.find('ID').text
-            else:
+            except AttributeError:
                 simulationInfo['ID'] = 'base'
+
 
             modelAlternatives = []
             for modelAlt in simulation.find('ModelAlternatives'):
@@ -1958,9 +1899,21 @@ class MakeAutomatedReport(object):
         self.SimulationCSV = WDR.readSimulationFile(self.baseSimulationName, self.studyDir)
 
     def readComparisonSimulationsCSV(self):
+        '''
+        Reads in the simulation CSV but for comparison plots. Comparison plots have '_comparison' appended to the end of them,
+        but are built in general the same as regular Simulation CSV files.
+        :return:
+        '''
         self.SimulationCSV = WDR.readSimulationFile(self.SimulationVariables['base']['baseSimulationName'], self.studyDir, iscomp=self.iscomp)
 
     def recordTimeSeriesData(self, data, line):
+        '''
+        organizes line information and places it into a data dictionary
+        :param data: dictionary containing line data
+        :param line: dictionary containing line settings
+        :return: updated data dictionary
+        '''
+
         #TODO: split into 2 like profiles
         dates, values, units = self.getTimeSeries(line)
         if WF.checkData(values):
@@ -1988,6 +1941,15 @@ class MakeAutomatedReport(object):
         return data
 
     def recordProfileData(self, data, line_settings, line, timestamps):
+        '''
+        organizes line information and places it into a data dictionary
+        :param data: dictionary containing data
+        :param line_settings: dictionary containing all line settings
+        :param line: dictionary containing line settings
+        :param timestamps: list of dates to get data
+        :return: updated data dictionary, updated line_settings dictionary
+        '''
+
         vals, elevations, depths, times, flag = self.getProfileValues(line, timestamps) #Test this speed for grabbing all profiles and then choosing
         if len(vals) > 0:
             datamem_key = self.buildDataMemoryKey(line)
@@ -2124,17 +2086,26 @@ class MakeAutomatedReport(object):
         self.setSimulationDateTimes(ID)
 
     def setTimeSeriesXlims(self, cur_obj_settings, yearstr, years):
+        '''
+        gets the xlimits for time series. This can be dependent on year, so needs to be looped over.
+        :param cur_obj_settings: current plotting object settings dictionary
+        :param yearstr: current year string
+        :param years: list of years
+        :return: updated cur_obj_settings dict
+        '''
+
         if 'ALLYEARS' not in years:
             cur_obj_settings = self.updateFlaggedValues(cur_obj_settings, '%%year%%', yearstr)
         else:
             if 'xlims' in cur_obj_settings.keys():
                 if 'min' in cur_obj_settings['xlims']:
                     cur_obj_settings['xlims']['min'] = self.updateFlaggedValues(cur_obj_settings['xlims']['min'],
-                                                                '%%year%%', str(self.years[0]))
+                                                                                '%%year%%', str(self.years[0]))
                 if 'max' in cur_obj_settings['xlims']:
                     cur_obj_settings['xlims']['max'] = self.updateFlaggedValues(cur_obj_settings['xlims']['max'],
-                                                                '%%year%%', str(self.years[-1]))
+                                                                                '%%year%%', str(self.years[-1]))
             cur_obj_settings = self.updateFlaggedValues(cur_obj_settings, '%%year%%', yearstr)
+
         return cur_obj_settings
 
     def setMultiRunStartEndYears(self):
@@ -3552,6 +3523,7 @@ class MakeAutomatedReport(object):
         rrow = row.replace('%%', '')
         s_row = rrow.split('.')
         sr_month = ''
+        curflag = None
         for sr in s_row:
             if sr in data_dict.keys():
                 curflag = sr
@@ -3573,7 +3545,12 @@ class MakeAutomatedReport(object):
                                 print('Try using interger values or 3 letter monthly code.')
                                 print('Ex: MONTH=1 or MONTH=JAN')
                                 continue
-
+                        if curflag == None:
+                            print('Invalid Table row for {0}'.format(row))
+                            print('Data Key not contained within {0}'.format(data_dict.keys()))
+                            print('Please check Datapaths in the XML file, or modify the rows to have the correct flags'
+                                  ' for the data present')
+                            return data, ''
                         months = np.array([n.month for n in curdates])
                         msk = np.where(months==sr_month)
 
@@ -3725,72 +3702,116 @@ class MakeAutomatedReport(object):
 
         return out_stat, stat
 
-    def buildTable(self, object_settings, years, split_by_year, data):
-        headers = []
-        rows = []
-
-        #prime rows
-        for row in object_settings['rows']:
-            rows.append(row.split('|')[0])
+    def buildTable(self, object_settings, split_by_year, data):
+        headers = {}
+        rows = {}
+        outputyears = [n for n in self.years] #this is usually a range or ALLYEARS
+        outputyears.append('ALL') #do this last
+        for year in outputyears:
+            headers[year] = []
+            rows[year] = {}
+            for ri, row in enumerate(object_settings['rows']):
+                rows[year][ri] = []
 
         for i, header in enumerate(object_settings['headers']):
             if isinstance(object_settings['headers'], dict):
                 header = object_settings['headers']['header'] #single headers come as dict objs TODO fix this eventually...
             curheader = pickle.loads(pickle.dumps(header, -1))
-            for year in years:
-                if self.iscomp: #comp run
-                    isused = False
-                    for datakey in data.keys():
-                        if '%%{0}%%'.format(data[datakey]['flag']) in curheader: #found data specific flag
-                            isused = True
-                            if 'ID' in data[datakey].keys():
-                                ID = data[datakey]['ID']
-                                tmpheader = self.configureSettingsForID(ID, curheader)
-                            else:
-                                tmpheader = curheader
-                            tmpheader = tmpheader.replace('%%{0}%%'.format(data[datakey]['flag']), '')
-                            # if split_by_year and '%%year%%' in tmpheader:
-                            #     headeryear = year
-                            #     tmpheader = self.updateFlaggedValues(tmpheader, '%%year%%', str(year))
-                            # else:
-                            #     headeryear = 'ALL'
-                            #     tmpheader = self.updateFlaggedValues(tmpheader, '%%year%%', self.years_str)
-                            if split_by_year:
-                                headeryear = year
-                                tmpheader = self.updateFlaggedValues(tmpheader, '%%year%%', str(year))
-                            else:
-                                headeryear = 'ALL'
-                                tmpheader = self.updateFlaggedValues(tmpheader, '%%year%%', self.years_str)
-                            headers.append([headeryear, tmpheader])
+            if self.iscomp: #comp run
+                isused = False
+                for datakey in data.keys():
+                    if '%%{0}%%'.format(data[datakey]['flag']) in curheader: #found data specific flag
+                        isused = True
+                        if 'ID' in data[datakey].keys():
+                            ID = data[datakey]['ID']
+                            tmpheader = self.configureSettingsForID(ID, curheader)
+                        else:
+                            tmpheader = pickle.loads(pickle.dumps(curheader, -1))
+                        tmpheader = tmpheader.replace('%%{0}%%'.format(data[datakey]['flag']), '')
+                        if split_by_year and '%%year%%' in curheader:
+                            for year in self.years:
+                                headers[year].append(tmpheader)
+                                for ri, row in enumerate(object_settings['rows']):
+                                    srow = row.split('|')[1:][i]
+                                    rows[year][ri].append(srow.replace(data[datakey]['flag'], datakey))
+                        else:
+                            headers['ALL'].append(tmpheader)
                             for ri, row in enumerate(object_settings['rows']):
                                 srow = row.split('|')[1:][i]
-                                rows[ri] +='|{0}'.format(srow.replace(data[datakey]['flag'], datakey))
-                    if not isused:
-                        if split_by_year and '%%year%%' in curheader:
-                            headeryear = year
-                            curheader = self.updateFlaggedValues(curheader, '%%year%%', str(year))
-                        else:
-                            headeryear = 'ALL'
-                            curheader = self.updateFlaggedValues(curheader, '%%year%%', self.years_str)
-                        headers.append([headeryear, curheader])
+                                rows['ALL'][ri].append(srow.replace(data[datakey]['flag'], datakey))
+
+                if not isused: #if a header doesnt get used, probably something observed and not needing replacing.
+                    if split_by_year and '%%year%%' in curheader:
+                        for year in self.years:
+                            headers[year].append(curheader)
+                            for ri, row in enumerate(object_settings['rows']):
+                                srow = row.split('|')[1:][i]
+                                rows[year][ri].append(srow)
+
+                    else:
+                        headers['ALL'].append(curheader)
                         for ri, row in enumerate(object_settings['rows']):
                             srow = row.split('|')[1:][i]
-                            rows[ri] +='|{0}'.format(srow)
+                            rows['ALL'][ri].append(srow)
 
-                else: #single run
-                    if split_by_year and '%%year%%' in curheader:
-                        headeryear = year
-                        curheader = self.updateFlaggedValues(curheader, '%%year%%', str(year))
-                    else:
-                        headeryear = 'ALL'
-                        curheader = self.updateFlaggedValues(curheader, '%%year%%', self.years_str)
-                    headers.append([headeryear, curheader])
+            else: #single run
+                if split_by_year and '%%year%%' in curheader:
+                    for year in self.years:
+                        headers[year].append(curheader)
+                        for ri, row in enumerate(object_settings['rows']):
+                            srow = row.split('|')[1:][i]
+                            rows[year][ri].append(srow)
+
+                else:
+                    headers['ALL'].append(curheader)
                     for ri, row in enumerate(object_settings['rows']):
                         srow = row.split('|')[1:][i]
-                        rows[ri] +='|{0}'.format(srow)
+                        rows['ALL'][ri].append(srow)
+        
+
+        organizedheaders = []
+        organizedrows = []
+        for row in object_settings['rows']:
+            organizedrows.append(row.split('|')[0])
+        for year in outputyears:
+            yrstr = str(year) if split_by_year and year != 'ALL' else self.years_str
+            for hdr in headers[year]:
+                organizedheaders.append([year, self.updateFlaggedValues(hdr, '%%year%%', yrstr)])
+            for ri in rows[year].keys():
+                for rw in rows[year][ri]:
+                    organizedrows[ri] += '|{0}'.format(rw)
+
+        return organizedheaders, organizedrows
+
+    def buildProfileStatsTable(self, object_settings, timestamp, data):
+        headers = []
+        rows = []
+        for ri, row in enumerate(object_settings['rows']):
+            rows.append(row.split('|')[0])
+
+        if self.iscomp: #comp run
+            for i, header in enumerate(object_settings['headers']):
+                if isinstance(object_settings['headers'], dict):
+                    header = object_settings['headers']['header'] #single headers come as dict objs TODO fix this eventually...
+                curheader = pickle.loads(pickle.dumps(header, -1))
+                for datakey in data.keys():
+                    if '%%{0}%%'.format(data[datakey]['flag']) in curheader: #found data specific flag
+                        if 'ID' in data[datakey].keys():
+                            ID = data[datakey]['ID']
+                            tmpheader = self.configureSettingsForID(ID, curheader)
+                        else:
+                            tmpheader = pickle.loads(pickle.dumps(curheader, -1))
+                        tmpheader = tmpheader.replace('%%{0}%%'.format(data[datakey]['flag']), '')
+                        headers.append(tmpheader)
+                        for ri, row in enumerate(object_settings['rows']):
+                            srow = row.split('|')[1:][i]
+                            rows[ri] += '|{0}'.format(srow.replace(data[datakey]['flag'], datakey))
+
+        else: #single run
+            headers = [timestamp]
+            rows = object_settings['rows']
 
         return headers, rows
-
 
 
     def buildHeadersByYear(self, object_settings, years, split_by_year):
