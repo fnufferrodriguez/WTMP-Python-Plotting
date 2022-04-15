@@ -338,6 +338,7 @@ class MakeAutomatedReport(object):
                 unitslist = []
                 unitslist2 = []
                 linedata = self.getTimeseriesData(ax_settings)
+                linedata = self.mergeLines(linedata, ax_settings)
                 ax_settings = self.configureSettingsForID('base', ax_settings)
                 gatedata = self.getGateData(ax_settings)
                 linedata = self.filterTimeSeriesByYear(linedata, year)
@@ -1196,7 +1197,12 @@ class MakeAutomatedReport(object):
 
                                 if not np.isnan(value):
                                     gateop_has_value = True
-                                    if cur_gateop['showgates'].lower() == 'true':
+                                    showgate = False
+                                    if 'showgates' in cur_gateop.keys():
+                                        if cur_gateop['showgates'].lower() == 'true':
+                                            showgate = True
+
+                                    if showgate:
                                         ax.scatter(xpos, gatemiddle, edgecolor='black', facecolor='black', marker='o')
 
                                 gate_count += 1 #keep track of gate number in group
@@ -1394,6 +1400,7 @@ class MakeAutomatedReport(object):
         object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = self.getPlotYears(object_settings)
 
         data = self.getTableData(object_settings)
+        data = self.mergeLines(data, object_settings)
 
         headings, rows = self.buildTable(object_settings, object_settings['split_by_year'], data)
 
@@ -1464,6 +1471,7 @@ class MakeAutomatedReport(object):
         object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = self.getPlotYears(object_settings)
 
         data = self.getTableData(object_settings)
+        data = self.mergeLines(data, object_settings)
 
         headings, rows = self.buildTable(object_settings, object_settings['split_by_year'], data)
 
@@ -1573,6 +1581,7 @@ class MakeAutomatedReport(object):
         ### Plot Lines ###
         stackplots = {}
         data = self.getTimeseriesData(object_settings)
+        data = self.mergeLines(data, object_settings)
 
         object_settings = self.configureSettingsForID('base', object_settings)
 
@@ -4223,6 +4232,56 @@ class MakeAutomatedReport(object):
 
         else:
             return array1
+
+    def mergeLines(self, data, settings):
+        removekeys = []
+        if 'mergelines' in settings.keys():
+            for mergeline in settings['mergelines']:
+                dataflags = mergeline['flags']
+                if 'controller' in mergeline.keys():
+                    controller = mergeline['controller']
+                    if controller not in data.keys():
+                        controller = dataflags[0]
+                else:
+                    controller = dataflags[0]
+                otherflags = [n for n in dataflags if n != controller]
+                if controller not in data.keys():
+                    print('Mergeline Controller {0} not found in data {1}'.format(controller, data.keys()))
+                    continue
+                flagnotfound = False
+                for OF in otherflags:
+                    if OF not in data.keys():
+                        print('Mergeline flag {0} not found in data {1}'.format(OF, data.keys()))
+                        flagnotfound = True
+                if flagnotfound:
+                    continue
+                if 'math' in mergeline.keys():
+                    math = mergeline['math'].lower()
+                else:
+                    math = 'add'
+                baseunits = data[controller]['units']
+                for flag in otherflags:
+                    if data[flag]['units'] != baseunits:
+                        print('WARNING: Attempting to merge lines with differing units')
+                        print('{0}: {1} and {2}: {3}'.format(flag, data[flag]['units'], controller, baseunits))
+                        print('If incorrect, please modify/append input settings to ensure lines '
+                              'are converted prior to merging.')
+                    data[controller], data[flag] = WF.matchData(data[controller], data[flag])
+                    if math == 'add':
+                        data[controller]['values'] += data[flag]['values']
+                    elif math == 'multiply':
+                        data[controller]['values'] *= data[flag]['values']
+                    elif math == 'divide':
+                        data[controller]['values'] /= data[flag]['values']
+                    elif math == 'subtract':
+                        data[controller]['values'] -= data[flag]['values']
+                if 'keeplines' in mergeline.keys():
+                    if mergeline['keeplines'].lower() == 'false':
+                        for flag in otherflags:
+                            removekeys.append(flag)
+            for flag in removekeys:
+                data.pop(flag)
+        return data
 
     def cleanOutputDirs(self):
         '''
