@@ -38,6 +38,19 @@ class XMLReport(object):
             XML.write('<?xml version="1.0" encoding="UTF-8"?>\n')
             XML.write('<USBR_Automated_Report>\n')
 
+    def replaceinXML(self, StringToReplace, StringReplacing):
+        xml_text = []
+        with open(self.XML_fn, 'r') as XML:
+            for line in XML:
+                if StringToReplace in line:
+                    xml_text.append(line.replace(StringToReplace, StringReplacing))
+                else:
+                    xml_text.append(line)
+
+        with open(self.XML_fn, 'w') as XML:
+            for line in xml_text:
+                XML.write(line)
+
     def primeCounters(self):
         '''
         sets up counters for figures tables and sections. Some start at 0, some start at 1
@@ -217,6 +230,17 @@ class XMLReport(object):
         self.current_table_num += 1
         self.column_order = 0
 
+    def writeDateControlledTableStart(self, desc, type):
+        with open(self.XML_fn, 'a') as XML:
+            XML.write('<Report_Element ReportElementOrder="{0}" Element="DateControlledTable">\n'.format(self.current_reportelem_num))
+            XML.write('<Output_Temp_Flow Location="{0}">\n'.format(desc))
+            XML.write('<Output_Table TableNumber="{0}" TableDescription="{1}" TableType="{2}">\n'.format(self.current_table_num, desc, type))
+
+        self.current_reportelem_num += 1
+        self.current_table_num += 1
+        self.column_order = 0
+        self.datecolumn_order = 0
+
     def writeTableColumn(self, header, rows):
         '''
         writes a full column of a table
@@ -233,6 +257,15 @@ class XMLReport(object):
                 XML.write('<Row Row_Order="{0}" Row_name="{1}">{2}</Row>\n'.format(i, rowname, rowval))
             XML.write('</Column>\n')
         self.column_order += 1
+
+    def writeDateColumn(self, header):
+        with open(self.XML_fn, 'a') as XML:
+            XML.write('<DateColumn DateColumn_Order="{0}" DateColumn_Name="{1}">\n'.format(self.datecolumn_order, header))
+        self.datecolumn_order += 1
+
+    def writeDateColumnEnd(self):
+        with open(self.XML_fn, 'a') as XML:
+            XML.write('</DateColumn>\n')
 
     def writeTableEnd(self):
         '''

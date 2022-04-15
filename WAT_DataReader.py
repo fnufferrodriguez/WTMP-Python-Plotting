@@ -40,7 +40,7 @@ def definedVarCheck(Block, flags):
             return False
     return True
 
-def readSimulationFile(simulation_name, studyfolder):
+def readSimulationFile(simulation_name, studyfolder, iscomp=False):
     '''
        Read the right csv file, and determine what region you are working with.
        Simulation CSV files are named after the simulation, and consist of plugin, model alter name, and then region(s)
@@ -49,21 +49,27 @@ def readSimulationFile(simulation_name, studyfolder):
        :returns: dictionary containing information from file
     '''
 
-    simulation_file = os.path.join(studyfolder, 'reports', '{0}.csv'.format(simulation_name.replace(' ', '_')))
+    if iscomp:
+        simulation_file = os.path.join(studyfolder, 'reports', '{0}_comparison.csv'.format(simulation_name.replace(' ', '_')))
+    else:
+        simulation_file = os.path.join(studyfolder, 'reports', '{0}.csv'.format(simulation_name.replace(' ', '_')))
     print('Attempting to read {0}'.format(simulation_file))
     if not os.path.exists(simulation_file):
-        print('ERROR: no Simulation CSV file for simulation:', simulation_name)
+        print('ERROR: no Simulation CSV file {0}.csv for simulation: {1}'.format(simulation_name.replace(' ', '_'), simulation_name))
         sys.exit()
     sim_info = {}
     with open(simulation_file, 'r') as sf:
         for i, line in enumerate(sf):
             sline = line.strip().split(',')
-            plugin = sline[0].strip()
-            modelAltName = sline[1].strip()
-            defFile = sline[2].strip()
-            sim_info[i] = {'plugin': plugin,
-                           'modelaltname': modelAltName,
-                           'deffile': defFile}
+            sim_info[i] = {'deffile': sline[-1].strip()} #comparison reports always put xml last
+            sline = sline[:-1]
+            sim_info[i]['plugins'] = []
+            sim_info[i]['modelaltnames'] = []
+            for si, s in enumerate(sline):
+                if si % 2 == 0: #even
+                    sim_info[i]['plugins'].append(s.strip())
+                else: #odd
+                    sim_info[i]['modelaltnames'].append(s.strip())
     return sim_info
 
 def readGraphicsDefaults(GD_file):
@@ -440,6 +446,7 @@ class W2_Results(object):
         self.readControlFile()
         # dates are output irregular, so we need to build a regular time series to interpolate to
         self.jd_dates, self.dt_dates, self.t_offset = self.buildTimes(self.starttime, self.endtime, self.interval_min)
+        self.getOutputFileName() #get the W2 sanctioned output file name convention
 
     def readControlFile(self):
         '''
@@ -600,10 +607,15 @@ class W2_Results(object):
         print('Num unique times:', len(unique_times))
 
         self.get_tempprofile_layers() #get the output layers. out at 2m depths
-        self.getOutputFileName() #get the W2 sanctioned output file name convention
+        # self.getOutputFileName() #get the W2 sanctioned output file name convention
 
-        wt = np.full((len(self.jd_dates), len(self.layers)), np.nan)
-        WS_Elev = np.full((len(self.jd_dates), len(self.layers)), np.nan)
+        # wt = np.full((len(self.jd_dates), len(self.layers)), np.nan)
+        # WS_Elev = np.full((len(self.jd_dates), len(self.layers)), np.nan)
+
+        # wt = []
+        # WS_Elev = []
+        wt = np.full((len(self.layers), len(self.jd_dates)), np.nan)
+        WS_Elev = np.full((len(self.layers), len(self.jd_dates)), np.nan)
 
         for i in range(1,len(self.layers)+1):
             # print('{0} of {1}'.format(i, len(self.layers)+1))
@@ -620,12 +632,28 @@ class W2_Results(object):
             if len(op_file['jday']) > 1:
                 WT_interp = interp1d(op_file['jday'], op_file['t2(c)'])
                 Elev_interp = interp1d(op_file['jday'], op_file['elws(m)'])
-                for j, jd in enumerate(self.jd_dates):
-                    try:
-                        wt[j][i-1] = WT_interp(jd)
-                        WS_Elev[j][i-1] = Elev_interp(jd)
-                    except ValueError:
-                        continue
+                jdate_minmask = np.where(min(op_file['jday']) <= self.jd_dates)
+                jdate_maxmask = np.where(max(op_file['jday']) >= self.jd_dates)
+                jdate_msk = np.intersect1d(jdate_maxmask, jdate_minmask)
+                wt_ts_Vals = np.full(len(self.jd_dates), np.nan)
+                wsElev_ts_Vals = np.full(len(self.jd_dates), np.nan)
+                wt_ts_Vals[jdate_msk] = WT_interp(self.jd_dates[jdate_msk])
+                wsElev_ts_Vals[jdate_msk] = Elev_interp(self.jd_dates[jdate_msk])
+                wt[i-1] = wt_ts_Vals
+                WS_Elev[i-1] = wsElev_ts_Vals
+                # wt.append(wt_ts_Vals)
+                # WS_Elev.append(wsElev_ts_Vals)
+                # wt.append(WT_interp(self.jd_dates[jdate_msk]))
+                # WS_Elev.append(Elev_interp(self.jd_dates[jdate_msk]))
+                # for j, jd in enumerate(self.jd_dates):
+                #     try:
+                #         wt[j][i-1] = WT_interp(jd)
+                #         WS_Elev[j][i-1] = Elev_interp(jd)
+                #     except ValueError:
+                #         continue
+
+        wt = np.asarray(wt).T
+        WS_Elev = np.asarray(WS_Elev).T
 
         select_wt = []
         elevations = []
@@ -644,8 +672,10 @@ class W2_Results(object):
                     times.append(time)
                     continue
                 WSE = WSE[np.where(~np.isnan(WSE))][0] #otherwise find valid
-                for depth in self.layers: #get all depths
-                    e.append((WSE - depth) * 3.28) #conv to feet
+                WSE_array = np.full((self.layers.shape), WSE)
+                e = (WSE_array - self.layers) * 3.28
+                # for depth in self.layers: #get all depths
+                #     e.append((WSE - depth) * 3.28) #conv to feet
                 # select_wt[t] = wt[timestep][:] #find WTs
                 select_wt.append(wt[timestep][:]) #find WTs
 
@@ -753,7 +783,8 @@ class W2_Results(object):
         min_len = min((len_val, len_elev, len_depth))
         return select_val[:min_len], elevations[:min_len], depths[:min_len]
 
-    def readTimeSeries(self, output_file_name, column=1, skiprows=3, **args):
+    # def readTimeSeries(self, output_file_name, column=1, skiprows=3, **args):
+    def readTimeSeries(self, output_file_name, column=1, skiprows=3, **kwargs):
         '''
         get the output time series for W2 at a specified location. Like the temperature profiles, output freq is
         variable so we'll interpolate over a regular time series
