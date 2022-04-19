@@ -832,6 +832,70 @@ class W2_Results(object):
 
         return self.dt_dates, out_vals
 
+    def readSegment(self, filename, parameter):
+        read_param = self.getParameterFileStr(parameter)
+        if read_param == None:
+            return [], [], []
+        ofn_path = os.path.join(self.run_path, filename)
+
+        output_values = np.array([])
+        segments = []
+        dates = []
+        checkForVar = False
+        record_vals = False
+        gotvalues = True
+        with open(ofn_path, 'r') as otf:
+            for line in otf:
+                if checkForVar and line.strip() != '':
+                    if parameter in line.lower():
+                        recordVals = True
+                        sline = line.lower().split(parameter).split()
+                        month = sline[0]
+                        day = sline[1]
+                        year = sline[2]
+                        time = sline[8]
+                        hours = time.split('.')[0]
+                        minutes = time.split('.')[1]
+                        date = '{0} {1}, {2} {3}:{4}'.format(month, day, year, hours, minutes)
+                        dates.append(dt.datetime.strptime(sline[0].strip(), '%B %d, %Y %H:%M'))
+                # elif record_vals == True:
+                #     if line.startswith(' Layer'):
+                #         sline = line.split()
+                #         for segnum in sline[2:]:
+                #             if segnum not in output_values:
+
+                elif line.startswith(' Model run at'):
+                    checkForVar = True
+
+
+        print('stp')
+
+        # otf.split('\n')
+
+
+    def getParameterFileStr(self, parameter):
+        #input:output
+        fileparams = {'temperature': 'Temperature',
+                      'density': 'Density',
+                      'vertical eddy viscosity': 'Vertical eddy viscosity',
+                      'velocity shear stress': 'Velocity shear stress',
+                      'internal shear': 'Internal shear',
+                      'bottom shear': 'Bottom shear',
+                      'longitudinal momentum': 'Longitudinal momentum',
+                      'horizontal density gradient': 'Horizontal density gradient',
+                      'vertical momentum': 'Vertical momentum',
+                      'horizontal pressure gradient': 'Horizontal pressure gradient',
+                      'gravity term channel slope': 'Gravity term channel slope',
+                      'horizontal velocity': 'Horizontal velocity',
+                      'vertical velocity': 'Vertical velocity'}
+
+        if parameter.lower() not in fileparams:
+            print('Parameter {0} not in acceptable parameters.'.format(parameter))
+            return None
+        else:
+            return fileparams[parameter.lower()]
+
+
 class ResSim_Results(object):
 
     def __init__(self, simulationPath, alternativeName, starttime, endtime):
@@ -1080,6 +1144,50 @@ class ResSim_Results(object):
         iend = -1
         return self.t_computed[istart:iend], v[istart:iend]
 
+    def readSubdomain(self, metric, subdomain_name):
+
+        if metric.lower() == 'flow':
+            dataset_name = 'Cell flow'
+            dataset = self.h['Results/Subdomains/{0}/{1}'.format(subdomain_name, dataset_name)]
+            v = np.array(dataset[:])
+            v = WF.cleanComputed(v)
+        elif metric.lower() == 'elevation':
+            dataset_name = 'Water Surface Elevation'
+            dataset = self.h['Results/Subdomains/{0}/{1}'.format(subdomain_name, dataset_name)]
+            v = np.array(dataset[:])
+            v = WF.cleanComputed(v)
+        elif metric.lower() == 'temperature':
+            dataset_name = 'Water Temperature'
+            dataset = self.h['Results/Subdomains/{0}/{1}'.format(subdomain_name, dataset_name)]
+            v = np.array(dataset[:])
+            v = WF.cleanComputed(v)
+        elif metric.lower() == 'do':
+            dataset_name = 'Dissolved Oxygen'
+            dataset = self.h['Results/Subdomains/{0}/{1}'.format(subdomain_name, dataset_name)]
+            v = np.array(dataset[:])
+            v = WF.cleanComputed(v)
+        elif metric.lower() == 'do_sat':
+            dataset_name = 'Water Temperature'
+            dataset = self.h['Results/Subdomains/{0}/{1}'.format(subdomain_name, dataset_name)]
+            vt = np.array(dataset[:])
+            dataset_name = 'Dissolved Oxygen'
+            dataset = self.h['Results/Subdomains/{0}/{1}'.format(subdomain_name, dataset_name)]
+            vdo = np.array(dataset[:])
+            vt = WF.cleanComputed(vt)
+            vdo = WF.cleanComputed(vdo)
+            v = WF.calcComputedDOSat(vt, vdo)
+
+        distance = self.calcSubdomainDistances(subdomain_name)
+        #add a value at the start and end to compensate for the start and end values
+        v = np.insert(v, 0, v.T[:][0], 1)
+        v = np.insert(v, -1, v.T[:][-1], 1)
+
+        if not hasattr(self, 't_computed'):
+            self.loadComputedTime()
+        istart = 0
+        iend = -1
+        return self.t_computed[istart:iend], v[istart:iend], distance
+
     def readModelTimeseriesData(self, data, metric):
         '''
         function to wrangle data and be universably 'callable' from main script
@@ -1092,6 +1200,41 @@ class ResSim_Results(object):
         y = data['northing']
         dates, vals = self.get_Timeseries(metric, xy=[x, y])
         return dates, vals
+
+    def calcSubdomainDistances(self, subdomain):
+
+        cell_center_xy = self.h['Geometry/Subdomains/{0}/Cell Center Coordinate'.format(subdomain)]
+        firstpoint = cell_center_xy[0]
+        distance = []
+        if 'Geometry/Subdomains/{0}/Cell Length'.format(subdomain) in self.h.keys():
+            distance.append(0)
+            cell_lengths = self.h['Geometry/Subdomains/{0}/Cell Length'.format(subdomain)]
+            for cli, celllen in enumerate(cell_lengths):
+                if cli == 0:
+                    distance.append(celllen.item()/2)# distance from edge to first cell center
+                else:
+                    #half the len of current cell, half the len of last cell to get distnace between cell centers
+                    #then add on the distance we've calc'd
+                    distance.append(celllen.item()/2 + cell_lengths[cli-1].item()/2 + distance[-1])
+                if cli == len(cell_lengths)-1:
+                    #add the distance from the last cell center to the edge
+                    distance.append(celllen.item()/2 + distance[-1])
+            distance = np.asarray(distance)
+        else:
+            for cell in cell_center_xy:
+                d = np.sqrt( (cell[0] - firstpoint[0])**2 +  (cell[1] - firstpoint[1])**2)
+                distance.append(d)
+            #get roughly half the distance between first two cells. This is the closest we can get to half the cell distance
+            first_distance_diff_half = (distance[1] - distance[0]) / 2
+            #shift all distance so the first instance is now the cell center of the first point
+            distance = np.asarray(distance) + first_distance_diff_half
+            #then add 0 to the start, so it starts at 0
+            distance = np.insert(distance, 0, 0)
+            #then do the same for the backend
+            last_distance_diff_half = (distance[-1] - distance[-2]) / 2
+            distance = np.append(distance, distance[-1] + last_distance_diff_half)
+
+        return distance
 
     def findComputedStationCell(self, easting, northing):
         '''

@@ -16,6 +16,7 @@ import datetime as dt
 import os
 import sys
 import matplotlib.pyplot as plt
+import matplotlib as mpl
 from matplotlib.colors import is_color_like
 import numpy as np
 import pandas as pd
@@ -30,6 +31,7 @@ from functools import reduce
 import pickle
 import pendulum
 import itertools
+import traceback
 
 import WAT_DataReader as WDR
 import WAT_Functions as WF
@@ -77,6 +79,7 @@ class MakeAutomatedReport(object):
                     self.setSimulationCSVVars(self.SimulationCSV[simorder])
                     self.readDefinitionsFile(self.SimulationCSV[simorder])
                     self.loadModelAlts(self.SimulationCSV[simorder])
+                    self.loadCurrentModelAltID('base')
                     self.addSimLogEntry()
                     self.writeChapter()
                     self.fixXMLModelIntroduction(simorder)
@@ -97,6 +100,7 @@ class MakeAutomatedReport(object):
                 self.setSimulationCSVVars(self.SimulationCSV[simorder])
                 self.readDefinitionsFile(self.SimulationCSV[simorder])
                 self.loadModelAlts(self.SimulationCSV[simorder])
+                self.loadCurrentModelAltID('base')
                 self.addSimLogEntry()
                 self.writeChapter()
                 self.fixXMLModelIntroduction(simorder)
@@ -341,10 +345,10 @@ class MakeAutomatedReport(object):
                 linedata = self.mergeLines(linedata, ax_settings)
                 ax_settings = self.configureSettingsForID('base', ax_settings)
                 gatedata = self.getGateData(ax_settings)
-                linedata = self.filterTimeSeriesByYear(linedata, year)
+                linedata = self.filterDataByYear(linedata, year)
                 linedata = self.correctDuplicateLabels(linedata)
                 for gateop in gatedata.keys():
-                    gatedata[gateop]['gates'] = self.filterTimeSeriesByYear(gatedata[gateop]['gates'], year)
+                    gatedata[gateop]['gates'] = self.filterDataByYear(gatedata[gateop]['gates'], year)
 
                 if 'relative' in ax_settings.keys():
                     if ax_settings['relative'].lower() == 'true':
@@ -571,7 +575,7 @@ class MakeAutomatedReport(object):
                         if ax_settings['operationlines']['allaxis'].lower() == 'true':
                             axs_to_add_line = axes
 
-                    opline_settings = self.getDefaultStriaghtLineSettings(ax_settings['operationlines'])
+                    opline_settings = self.getDefaultStraightLineSettings(ax_settings['operationlines'])
 
                     for ax_to_add_line in axs_to_add_line:
                         for operationTime in operationtimes:
@@ -604,7 +608,7 @@ class MakeAutomatedReport(object):
                 ### VERTICAL LINES ###
                 if 'vlines' in ax_settings.keys():
                     for vline in ax_settings['vlines']:
-                        vline_settings = self.getDefaultStriaghtLineSettings(vline)
+                        vline_settings = self.getDefaultStraightLineSettings(vline)
                         try:
                             vline_settings['value'] = float(vline_settings['value'])
                         except:
@@ -640,7 +644,7 @@ class MakeAutomatedReport(object):
                 ### Horizontal LINES ###
                 if 'hlines' in ax_settings.keys():
                     for hline in ax_settings['hlines']:
-                        hline_settings = self.getDefaultStriaghtLineSettings(hline)
+                        hline_settings = self.getDefaultStraightLineSettings(hline)
                         if 'label' not in hline_settings.keys():
                             hline_settings['label'] = None
                         if 'zorder' not in hline_settings.keys():
@@ -1093,7 +1097,7 @@ class MakeAutomatedReport(object):
                             if 'scalar' in hline_settings.keys():
                                 value *= float(hline_settings['scalar'])
 
-                            hline_settings = self.getDefaultStriaghtLineSettings(hline_settings)
+                            hline_settings = self.getDefaultStraightLineSettings(hline_settings)
                             if 'label' not in hline_settings.keys():
                                 hline_settings['label'] = None
                             if 'zorder' not in hline_settings.keys():
@@ -1107,7 +1111,7 @@ class MakeAutomatedReport(object):
                     ### VERTICAL LINES ###
                     if 'vlines' in cur_obj_settings.keys():
                         for vline in cur_obj_settings['vlines']:
-                            vline_settings = self.getDefaultStriaghtLineSettings(vline)
+                            vline_settings = self.getDefaultStraightLineSettings(vline)
                             if 'value' in vline_settings.keys():
                                 value = float(vline_settings['value'])
                                 units = None
@@ -1518,6 +1522,335 @@ class MakeAutomatedReport(object):
                 frmt_rows.append('{0}|{1}'.format(rowname, row_val))
             self.XML.writeTableColumn(header, frmt_rows)
         self.XML.writeTableEnd()
+
+    def makeContourPlot(self, object_settings):
+        '''
+        takes in object settings to build contour plot and write to XML
+        :param object_settings: currently selected object settings dictionary
+        :return: creates png in images dir and writes to XML file
+        '''
+
+        print('\n################################')
+        print('Now making Contour Plot.')
+        print('################################\n')
+
+        default_settings = self.loadDefaultPlotObject('contourplot') #get default TS plot items
+        object_settings = self.replaceDefaults(default_settings, object_settings) #overwrite the defaults with chapter file
+
+        object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = self.getPlotYears(object_settings)
+
+        for yi, year in enumerate(object_settings['years']):
+            cur_obj_settings = pickle.loads(pickle.dumps(object_settings, -1))
+            if object_settings['split_by_year']:
+                yearstr = str(year)
+            else:
+                yearstr = object_settings['yearstr']
+
+            cur_obj_settings = self.setTimeSeriesXlims(cur_obj_settings, yearstr, object_settings['years'])
+
+            fig = plt.figure(figsize=(12, 6))
+            ax = fig.add_subplot()
+
+            #NOTES
+            #Data structure:
+            #2D array of dates[distance from source]
+            # array of dates corresponding to the number of the first D of array above
+            # supplementary array for distances corrsponding to the second D of array above
+            #ex
+            #[[1,2,3,5],[2,3,4,2],[5,3,2,5]] #values per date at a distance
+            #[01jan2016, 04Feb2016, 23May2016] #dates
+            #[0, 19, 25, 35] #distances
+
+            contours = self.getContourData(cur_obj_settings)
+            contours = self.filterDataByYear(contours, year)
+            values, dates, distance, transitions = self.stackContours(contours)
+
+            for contourname in contours:
+                contour = contours[contourname]
+                parameter, cur_obj_settings['param_count'] = self.getParameterCount(contour, cur_obj_settings)
+
+            if 'units' in cur_obj_settings.keys():
+                units = cur_obj_settings['units']
+            else:
+                if 'parameter' in cur_obj_settings.keys():
+                    parameter = cur_obj_settings['parameter']
+                else:
+                    parameter = ''
+                    top_count = 0
+                    for key in cur_obj_settings['param_count'].keys():
+                        if cur_obj_settings['param_count'][key] > top_count:
+                            parameter = key
+                try:
+                    units = self.units[parameter]
+                except KeyError:
+                    units = None
+
+            if isinstance(units, dict):
+                if 'unitsystem' in cur_obj_settings.keys():
+                    units = units[cur_obj_settings['unitsystem'].lower()]
+                else:
+                    units = None
+
+            if 'unitsystem' in cur_obj_settings.keys():
+                values, units = self.convertUnitSystem(values, units, cur_obj_settings['unitsystem']) #TODO: confirm
+
+            chkvals = WF.checkData(values)
+            if not chkvals:
+                print('Invalid Data settings for contour plot year {0}'.format(year))
+                continue
+
+            if 'dateformat' in cur_obj_settings.keys():
+                if cur_obj_settings['dateformat'].lower() == 'jdate':
+                    if isinstance(dates[0], dt.datetime):
+                        dates = self.DatetimeToJDate(dates)
+                elif cur_obj_settings['dateformat'].lower() == 'datetime':
+                    if isinstance(dates[0], (int,float)):
+                        dates = self.JDateToDatetime(dates)
+
+            if 'label' not in cur_obj_settings.keys():
+                cur_obj_settings['label'] = ''
+
+            if 'description' not in cur_obj_settings.keys():
+                cur_obj_settings['description'] = ''
+
+            cur_obj_settings = self.getDefaultContourSettings(cur_obj_settings)
+
+            if 'filterbylimits' not in cur_obj_settings.keys():
+                cur_obj_settings['filterbylimits'] = 'true' #set default
+
+            if cur_obj_settings['filterbylimits'].lower() == 'true':
+                if 'xlims' in cur_obj_settings.keys():
+                    dates, values = self.limitXdata(dates, values, cur_obj_settings['xlims'])
+                if 'ylims' in cur_obj_settings.keys():
+                    dates, values = self.limitYdata(dates, values, cur_obj_settings['ylims'], baseOn=distance)
+
+            if 'min' in cur_obj_settings['colorbar']:
+                vmin = float(cur_obj_settings['colorbar']['min'])
+            else:
+                vmin = np.nanmin(values)
+            if 'max' in cur_obj_settings['colorbar']:
+                vmax = float(cur_obj_settings['colorbar']['max'])
+            else:
+                vmax = np.nanmax(values)
+
+            contr = ax.contourf(dates, distance, values.T, cmap=cur_obj_settings['colorbar']['colormap'],
+                                vmin=vmin, vmax=vmax,
+                                levels=np.linspace(vmin, vmax, int(cur_obj_settings['colorbar']['bins'])), #add one to get the desired number..
+                                extend='both') #the .T transposes the array so dates on bottom TODO:make extend variable
+            ax.invert_yaxis()
+
+            self.addLogEntry({'type': cur_obj_settings['label'] + '_ContourPlot' if cur_obj_settings['label'] != '' else 'ContourPlot',
+                              'name': self.ChapterRegion+'_'+yearstr,
+                              'description': cur_obj_settings['description'],
+                              'units': units,
+                              'value_start_date': self.translateDateFormat(dates[0], 'datetime', '').strftime('%d %b %Y'),
+                              'value_end_date': self.translateDateFormat(dates[-1], 'datetime', '').strftime('%d %b %Y'),
+                              'logoutputfilename': contour['logoutputfilename']
+                              },
+                             isdata=True)
+
+            # self.commitContourDataToMemory(values, dates, distance, units, contour['logoutputfilename'])
+
+            cur_obj_settings = self.updateFlaggedValues(cur_obj_settings, '%%units%%', units)
+
+            cbar = plt.colorbar(contr, ax=ax, orientation='horizontal', aspect=50.)
+            locs = np.linspace(vmin, vmax, int(cur_obj_settings['colorbar']['bins']))[::int(cur_obj_settings['colorbar']['skipticks'])]
+            cbar.set_ticks(locs)
+            cbar.set_ticklabels(locs.round(2))
+            if 'label' in cur_obj_settings['colorbar']:
+                if 'labelsize' in cur_obj_settings['colorbar'].keys():
+                    labsize = float(cur_obj_settings['colorbar']['labelsize'])
+                elif 'fontsize' in cur_obj_settings['colorbar'].keys():
+                    labsize = float(cur_obj_settings['colorbar']['fontsize'])
+                else:
+                    labsize = 12
+                cbar.set_label(cur_obj_settings['colorbar']['label'], fontsize=labsize)
+
+            if 'contourlines' in cur_obj_settings.keys():
+                for contourline in cur_obj_settings['contourlines']:
+                    if 'value' in contourline.keys():
+                        val = float(contourline['value'])
+                    else:
+                        print('No Value set for contour line.')
+                        continue
+                    contourline = self.getDefaultContourLineSettings(contourline)
+                    cs = ax.contour(contr, levels=[val], linewidths=[float(contourline['linewidth'])], colors=[contourline['linecolor']],
+                                    linestyles=contourline['linestylepattern'], alpha=float(contourline['alpha']))
+                    if contourline['contourlinetext'].lower() == 'true':
+                        ax.clabel(cs, inline_spacing=contourline['contourlinespacing'],
+                                  fontsize=contourline['fontsize'], inline=contourline['inline'])
+                    if contourline['legend'].lower() == 'true':
+                        if 'label' in contourline.keys():
+                            label = contourline['label']
+                        else:
+                            label = str(val)
+                        cl_leg = ax.plot([], [], c=contourline['linecolor'], ls=contourline['linestylepattern'],
+                                         alpha=float(contourline['alpha']), lw=float(contourline['linewidth']),
+                                         label=label)
+
+                ### VERTICAL LINES ###
+                if 'vlines' in cur_obj_settings.keys():
+                    for vline in cur_obj_settings['vlines']:
+                        vline_settings = self.getDefaultStraightLineSettings(vline)
+                        try:
+                            vline_settings['value'] = float(vline_settings['value'])
+                        except:
+                            vline_settings['value'] = self.translateDateFormat(vline_settings['value'], 'datetime', '')
+                        if 'dateformat' in cur_obj_settings.keys():
+                            if cur_obj_settings['dateformat'].lower() == 'jdate':
+                                if isinstance(vline_settings['value'], dt.datetime):
+                                    vline_settings['value'] = self.DatetimeToJDate(vline_settings['value'])
+                                elif isinstance(vline_settings['value'], str):
+                                    try:
+                                        vline_settings['value'] = float(vline_settings['value'])
+                                    except:
+                                        vline_settings['value'] = self.translateDateFormat(vline_settings['value'], 'datetime', '')
+                                        vline_settings['value'] = self.DatetimeToJDate(vline_settings['value'])
+                            elif cur_obj_settings['dateformat'].lower() == 'datetime':
+                                if isinstance(vline_settings['value'], (int,float)):
+                                    vline_settings['value'] = self.JDateToDatetime(vline_settings['value'])
+                                elif isinstance(vline_settings['value'], str):
+                                    vline_settings['value'] = self.translateDateFormat(vline_settings['value'], 'datetime', '')
+                        else:
+                            vline_settings['value'] = self.translateDateFormat(vline_settings['value'], 'datetime', '')
+
+                        if 'label' not in vline_settings.keys():
+                            vline_settings['label'] = None
+                        if 'zorder' not in vline_settings.keys():
+                            vline_settings['zorder'] = 3
+
+                        ax.axvline(vline_settings['value'], label=vline_settings['label'], c=vline_settings['linecolor'],
+                                   lw=vline_settings['linewidth'], ls=vline_settings['linestylepattern'],
+                                   zorder=float(vline_settings['zorder']),
+                                   alpha=float(vline_settings['alpha']))
+
+                ### Horizontal LINES ###
+                if 'hlines' in cur_obj_settings.keys():
+                    for hline in cur_obj_settings['hlines']:
+                        hline_settings = self.getDefaultStraightLineSettings(hline)
+                        if 'label' not in hline_settings.keys():
+                            hline_settings['label'] = None
+                        if 'zorder' not in hline_settings.keys():
+                            hline_settings['zorder'] = 3
+                        hline_settings['value'] = float(hline_settings['value'])
+
+                        ax.axhline(hline_settings['value'], label=hline_settings['label'], c=hline_settings['linecolor'],
+                                   lw=hline_settings['linewidth'], ls=hline_settings['linestylepattern'],
+                                   zorder=float(hline_settings['zorder']),
+                                   alpha=float(hline_settings['alpha']))
+
+            if 'transitions' in cur_obj_settings.keys():
+                for transkey in transitions.keys():
+                    transition_start = transitions[transkey]
+                    trans_name = None
+                    hline = self.getDefaultStraightLineSettings(cur_obj_settings['transitions'])
+                    ax.axhline(y=transition_start, c=hline['linecolor'], ls=hline['linestylepattern'], alpha=float(hline['alpha']),
+                               lw=float(hline['linewidth']))
+                    if 'name' in cur_obj_settings['transitions'].keys():
+                        trans_flag = cur_obj_settings['transitions']['name'].lower() #blue:pink:white:pink:blue
+                        text_settings = self.getDefaultTextSettings(cur_obj_settings['transitions'])
+
+                        if trans_flag in contours[transkey].keys():
+                            trans_name = contours[transkey][trans_flag]
+                        if trans_name != None:
+
+                            trans_y_ratio = abs(1.0 - (transition_start / max(ax.get_ylim()) + .01)) #dont let user touch this
+
+
+                            fontcolor = self.prioritizeKey(contours[transkey], text_settings, 'fontcolor')
+                            fontsize = self.prioritizeKey(contours[transkey], text_settings, 'fontsize')
+                            horizontalalignment = self.prioritizeKey(contours[transkey], text_settings, 'horizontalalignment')
+                            text_x_pos = self.prioritizeKey(contours[transkey], text_settings, 'text_x_pos', backup=0.001)
+
+                            ax.text(float(text_x_pos), trans_y_ratio, trans_name, c=fontcolor, size=float(fontsize),
+                                    transform=ax.transAxes, horizontalalignment=horizontalalignment,
+                                    verticalalignment='top')
+
+
+
+            if 'title' in cur_obj_settings.keys():
+                if 'titlesize' in cur_obj_settings.keys():
+                    titlesize = float(object_settings['titlesize'])
+                elif 'fontsize' in cur_obj_settings.keys():
+                    titlesize = float(object_settings['fontsize'])
+                else:
+                    titlesize = 15
+                plt.title(cur_obj_settings['title'], fontsize=titlesize)
+
+            if 'gridlines' in cur_obj_settings.keys():
+                if cur_obj_settings['gridlines'].lower() == 'true':
+                    plt.grid(True)
+
+            if 'ylabel' in cur_obj_settings.keys():
+                if 'ylabelsize' in cur_obj_settings.keys():
+                    ylabsize = float(cur_obj_settings['ylabelsize'])
+                elif 'fontsize' in cur_obj_settings.keys():
+                    ylabsize = float(cur_obj_settings['fontsize'])
+                else:
+                    ylabsize = 12
+                plt.ylabel(cur_obj_settings['ylabel'], fontsize=ylabsize)
+
+            if 'xlabel' in cur_obj_settings.keys():
+                if 'xlabelsize' in cur_obj_settings.keys():
+                    xlabsize = float(cur_obj_settings['xlabelsize'])
+                elif 'fontsize' in cur_obj_settings.keys():
+                    xlabsize = float(cur_obj_settings['fontsize'])
+                else:
+                    xlabsize = 12
+                plt.xlabel(cur_obj_settings['xlabel'], fontsize=xlabsize)
+
+            if 'legend' in cur_obj_settings.keys():
+                if cur_obj_settings['legend'].lower() == 'true':
+                    if 'legendsize' in cur_obj_settings.keys():
+                        legsize = float(cur_obj_settings['legendsize'])
+                    elif 'fontsize' in cur_obj_settings.keys():
+                        legsize = float(cur_obj_settings['fontsize'])
+                    else:
+                        legsize = 12
+                    if len(ax.get_legend_handles_labels()[0]) > 0:
+                        plt.legend(fontsize=legsize)
+
+            self.formatDateXAxis(ax, cur_obj_settings)
+
+            if 'ylims' in cur_obj_settings.keys():
+                if 'min' in cur_obj_settings['ylims']:
+                    ax.set_ylim(bottom=float(cur_obj_settings['ylims']['min']))
+                if 'max' in cur_obj_settings['ylims']:
+                    ax.set_ylim(top=float(cur_obj_settings['ylims']['max']))
+
+            if 'xticksize' in cur_obj_settings.keys():
+                xticksize = float(cur_obj_settings['xticksize'])
+            elif 'fontsize' in cur_obj_settings.keys():
+                xticksize = float(cur_obj_settings['fontsize'])
+            else:
+                xticksize = 10
+            ax.tick_params(axis='x', labelsize=xticksize)
+
+            if 'yticksize' in cur_obj_settings.keys():
+                yticksize = float(cur_obj_settings['yticksize'])
+            elif 'fontsize' in cur_obj_settings.keys():
+                yticksize = float(cur_obj_settings['fontsize'])
+            else:
+                yticksize = 10
+            ax.tick_params(axis='y', labelsize=yticksize)
+
+            basefigname = os.path.join(self.images_path, 'ContourPlot' + '_' + self.ChapterRegion.replace(' ','_')
+                                       + '_' + yearstr)
+            exists = True
+            tempnum = 1
+            tfn = basefigname
+            while exists:
+                if os.path.exists(tfn + '.png'):
+                    tfn = basefigname + '_{0}'.format(tempnum)
+                    tempnum += 1
+                else:
+                    exists = False
+            figname = tfn + '.png'
+            plt.savefig(figname, bbox_inches='tight')
+            plt.close('all')
+
+            self.XML.writeHalfPagePlot(os.path.basename(figname), cur_obj_settings['description'])
+
 
     def makeBuzzPlot(self, object_settings):
         '''
@@ -2117,6 +2450,29 @@ class MakeAutomatedReport(object):
 
         return cur_obj_settings
 
+    def stackContours(self, contours):
+        output_values = np.array([])
+        output_dates = np.array([])
+        output_distance = np.array([])
+        transitions = {}
+        for contourname in contours.keys():
+            contour = contours[contourname]
+            if len(output_values) == 0:
+                output_values = pickle.loads(pickle.dumps(contour['values'], -1))
+            else:
+                output_values = np.append(output_values, contour['values'][:,1:], axis=1)
+            if len(output_dates) == 0:
+                output_dates = contour['dates']
+            if len(output_distance) == 0:
+                output_distance = contour['distance']
+                transitions[contourname] = 0
+            else:
+                last_distance = output_distance[-1]
+                current_distances = contour['distance'][1:] + last_distance
+                output_distance = np.append(output_distance, current_distances)
+                transitions[contourname] = current_distances[0]
+        return output_values, output_dates, output_distance, transitions
+
     def setMultiRunStartEndYears(self):
         for simID in self.SimulationVariables.keys():
             if self.SimulationVariables[simID]['StartTime'] > self.StartTime:
@@ -2256,7 +2612,7 @@ class MakeAutomatedReport(object):
 
         return GateLineSettings
 
-    def getDefaultStriaghtLineSettings(self, LineSettings):
+    def getDefaultStraightLineSettings(self, LineSettings):
         '''
         gets line settings and adds missing needed settings with defaults. Then translates java style inputs to
         python commands. Gets colors and styles.
@@ -2276,6 +2632,47 @@ class MakeAutomatedReport(object):
         LineSettings['linecolor'] = self.confirmColor(LineSettings['linecolor'], default_default_lines['linecolor'])
 
         return LineSettings
+
+    def getDefaultTextSettings(self, TextSettings):
+        '''
+        gets text settings and adds missing needed settings with defaults. Then translates java style inputs to
+        python commands. Gets colors and styles.
+        :param TextSettings: dictionary object containing settings and flags for text
+        :return:
+            LineSettings: dictionary containing keys describing how the line/points are drawn
+        '''
+
+        default_default_text = self.getDefaultDefaultTextStyles()
+        for key in default_default_text.keys():
+            if key not in TextSettings.keys():
+                TextSettings[key] = default_default_text[key]
+
+        TextSettings['fontcolor'] = self.confirmColor(TextSettings['fontcolor'], default_default_text['fontcolor'])
+
+        return TextSettings
+
+    def getDefaultContourLineSettings(self, contour_settings):
+        default_contour_settings = {'linecolor': 'grey',
+                                    'linewidth':1,
+                                    'linestylepattern':'solid',
+                                    'alpha': 1,
+                                    'contourlinetext': 'false',
+                                    'fontsize': 10,
+                                    'inline': 'true',
+                                    'legend': 'false'}
+
+        for key in default_contour_settings.keys():
+            if key not in contour_settings:
+                contour_settings[key] = default_contour_settings[key]
+                if key == 'inline':
+                    if contour_settings[key].lower() == 'true':
+                        contour_settings[key] = True
+                    else:
+                        contour_settings[key] = False
+
+        contour_settings = self.translateLineStylePatterns(contour_settings)
+
+        return contour_settings
 
     def getDrawFlags(self, LineSettings):
         '''
@@ -2311,6 +2708,31 @@ class MakeAutomatedReport(object):
 
         return LineSettings
 
+    def getDefaultContourSettings(self, object_settings):
+        defaultColormap = mpl.cm.get_cmap('jet')
+        default_colorbar_settings = {'colormap': defaultColormap,
+                                     'bins':10,
+                                     'skipticks':1}
+
+        if 'colorbar' in object_settings.keys():
+            if 'colormap' in object_settings['colorbar'].keys():
+                try:
+                    usercolormap = mpl.cm.get_cmap(object_settings['colorbar']['colormap'])
+                    object_settings['colormap'] = usercolormap
+                except ValueError:
+                    print('User selected invalid colormap:', object_settings['colorbar']['colormap'])
+                    print('Tip: make sure capitalization is correct!')
+                    print('Defaulting to Jet.')
+                    object_settings['colormap'] = defaultColormap
+        else:
+            object_settings['colorbar'] = {}
+
+        for key in default_colorbar_settings.keys():
+            if key not in object_settings['colorbar']:
+                object_settings['colorbar'][key] = default_colorbar_settings[key]
+
+        return object_settings
+
     def getDefaultDefaultLineStyles(self, i):
         '''
         creates a default line style based off of the number line and default colors
@@ -2322,6 +2744,15 @@ class MakeAutomatedReport(object):
         if i >= len(self.def_colors):
             i = i - len(self.def_colors)
         return {'linewidth': 2, 'linecolor': self.def_colors[i], 'linestylepattern': 'solid', 'alpha': 1.0}
+
+    def getDefaultDefaultTextStyles(self):
+        '''
+        creates a default line style based off of the number line and default colors
+        used if param is undefined or not in defaults file
+        :return: dictionary with line settings
+        '''
+
+        return {'fontsize': 9, 'fontcolor': 'black', 'alpha': 1.0, 'horizontalalignment': 'center'}
 
     def getDefaultDefaultPointStyles(self, i):
         '''
@@ -2871,6 +3302,97 @@ class MakeAutomatedReport(object):
             elif isinstance(indict[key], (list, np.ndarray)):
                 outdict[key] = indict[key]
         return outdict
+
+    def getContourData(self, object_settings):
+        '''
+        Gets Contour line data from defined data sources in XML files
+        :param object_settings: currently selected object settings dictionary
+        :param keyval: determines what key to iterate over for data
+        :return: dictionary containing data and information about each data set
+        '''
+
+        data = {}
+        for reach in object_settings['reaches']:
+            dates, values, units, distance = self.getContours(reach)
+            if 'flag' in reach.keys():
+                flag = reach['flag']
+            elif 'label' in reach.keys():
+                flag = reach['label']
+            else:
+                flag = 'reach'
+            if flag in data.keys():
+                count = 1
+                newflag = flag + '_{0}'.format(count)
+                while newflag in data.keys():
+                    count += 1
+                    newflag = flag + '_{0}'.format(count)
+                flag = newflag
+                print('The new flag is {0}'.format(newflag))
+            datamem_key = self.buildDataMemoryKey(reach)
+
+            if 'units' in reach.keys() and units == None:
+                units = reach['units']
+
+            if 'y_scalar' in object_settings.keys():
+                y_scalar = float(object_settings['y_scalar'])
+                distance *= y_scalar
+
+            data[flag] = {'values': values,
+                          'dates': dates,
+                          'units': units,
+                          'distance': distance,
+                          'logoutputfilename': datamem_key}
+
+            for key in reach.keys():
+                if key not in data[flag].keys():
+                    data[flag][key] = reach[key]
+
+        return data
+
+    def getContours(self, object_settings):
+
+        if 'ressimresname' in object_settings.keys(): #Ressim subdomain
+            datamem_key = self.buildDataMemoryKey(object_settings)
+            if datamem_key in self.Data_Memory.keys():
+                print('READING {0} FROM MEMORY'.format(datamem_key))
+                datamem_entry = pickle.loads(pickle.dumps(self.Data_Memory[datamem_key], -1))
+                times = datamem_entry['dates']
+                values = datamem_entry['values']
+                units = datamem_entry['units']
+                distance = datamem_entry['distance']
+
+            else:
+                times, values, distance = self.ModelAlt.readSubdomain(object_settings['parameter'],
+                                                                      object_settings['ressimresname'])
+
+                if 'units' in object_settings.keys():
+                    units = object_settings['units']
+                else:
+                    units = None
+
+                self.Data_Memory[datamem_key] = {'dates': pickle.loads(pickle.dumps(times, -1)),
+                                                 'values': pickle.loads(pickle.dumps(values, -1)),
+                                                 'units': pickle.loads(pickle.dumps(units, -1)),
+                                                 'distance': pickle.loads(pickle.dumps(distance, -1)),
+                                                 'iscontour': True}
+
+        elif 'w2_file' in object_settings.keys():
+            datamem_key = self.buildDataMemoryKey(object_settings)
+            if datamem_key in self.Data_Memory.keys():
+                print('READING {0} FROM MEMORY'.format(datamem_key))
+                datamementry = pickle.loads(pickle.dumps(self.Data_Memory[datamem_key], -1))
+                times = datamementry['dates']
+                values = datamementry['values']
+                units = datamementry['units']
+                distance = datamementry['distance']
+            else:
+                times, values, distance = self.ModelAlt.readSegment(object_settings['w2_file'],
+                                                                    object_settings['parameter'])
+
+        if 'interval' in object_settings.keys():
+            times, values = self.changeTimeSeriesInterval(times, values, object_settings)
+
+        return times, values, units, distance
 
     def getDateSourceFlag(self, object_settings):
         '''
@@ -3448,7 +3970,7 @@ class MakeAutomatedReport(object):
         print('Units Undefined:', units)
         return units
 
-    def filterTimeSeriesByYear(self, data, year):
+    def filterDataByYear(self, data, year):
         if year != 'ALLYEARS':
             for flag in data.keys():
                 years = np.array([n.year for n in data[flag]['dates']])
@@ -4087,6 +4609,8 @@ class MakeAutomatedReport(object):
                         self.makeBuzzPlot(object)
                     elif objtype == 'profilestatisticstable':
                         self.makeProfileStatisticsTable(object)
+                    elif objtype == 'contourplot':
+                        self.makeContourPlot(object)
                     else:
                         print('Section Type {0} not identified.'.format(objtype))
                         print('Skipping Section..')
@@ -4129,47 +4653,63 @@ class MakeAutomatedReport(object):
 
         for key in self.Data_Memory.keys():
             csv_name = os.path.join(self.CSVPath, '{0}.csv'.format(key))
-            if 'isprofile' in self.Data_Memory[key].keys():
-                if self.Data_Memory[key]['isprofile'] == True:
-                    alltimes = self.Data_Memory[key]['times']
+            try:
+                if 'isprofile' in self.Data_Memory[key].keys():
+                    if self.Data_Memory[key]['isprofile'] == True:
+                        alltimes = self.Data_Memory[key]['times']
+                        allvalues = self.Data_Memory[key]['values']
+                        alltimes = self.matcharrays(alltimes, allvalues)
+                        allelevs = self.Data_Memory[key]['elevations']
+                        alldepths = self.Data_Memory[key]['depths']
+                        if len(allelevs) == 0: #elevations may not always fall out
+                            allelevs = self.matcharrays(allelevs, alldepths)
+                        units = self.Data_Memory[key]['units']
+                        values = self.getListItems(allvalues)
+                        times = self.getListItems(alltimes)
+                        elevs = self.getListItems(allelevs)
+                        depths = self.getListItems(alldepths)
+                        if isinstance(values, (list, np.ndarray)):
+                            df = pd.DataFrame({'Dates': times, 'Values ({0})'.format(units): values, 'Elevations': elevs,
+                                               'Depths': depths})
+                        elif isinstance(values, dict):
+                            colvals = {}
+                            colvals['Dates'] = times
+                            for key in values:
+                                colvals[key] = values[key]
+                                colvals[key] = elevs[key]
+                                colvals[key] = depths[key]
+                            df = pd.DataFrame(colvals)
+                elif 'iscontour' in self.Data_Memory[key].keys():
+                    if self.Data_Memory[key]['iscontour'] == True:
+                        alltimes = self.Data_Memory[key]['dates']
+                        allvalues = self.Data_Memory[key]['values'].T #this gets transposed a few times.. we want distance/date
+                        alldistance = self.Data_Memory[key]['distance']
+                        times = self.matcharrays(alltimes, allvalues)
+                        distances = self.matcharrays(alldistance, allvalues)
+                        values = self.getListItems(allvalues)
+                        units = self.Data_Memory[key]['units']
+                        df = pd.DataFrame({'Dates': times, 'Values ({0})'.format(units): values, 'Distances': distances,
+                                           })
+                else:
                     allvalues = self.Data_Memory[key]['values']
-                    alltimes = self.matcharrays(alltimes, allvalues)
-                    allelevs = self.Data_Memory[key]['elevations']
-                    alldepths = self.Data_Memory[key]['depths']
-                    if len(allelevs) == 0: #elevations may not always fall out
-                        allelevs = self.matcharrays(allelevs, alldepths)
+                    alltimes = self.Data_Memory[key]['times']
                     units = self.Data_Memory[key]['units']
                     values = self.getListItems(allvalues)
                     times = self.getListItems(alltimes)
-                    elevs = self.getListItems(allelevs)
-                    depths = self.getListItems(alldepths)
                     if isinstance(values, (list, np.ndarray)):
-                        df = pd.DataFrame({'Dates': times, 'Values ({0})'.format(units): values, 'Elevations': elevs,
-                                           'Depths': depths})
+                        df = pd.DataFrame({'Dates': times, 'Values ({0})'.format(units): values})
                     elif isinstance(values, dict):
                         colvals = {}
                         colvals['Dates'] = times
                         for key in values:
                             colvals[key] = values[key]
-                            colvals[key] = elevs[key]
-                            colvals[key] = depths[key]
                         df = pd.DataFrame(colvals)
-
-            else:
-                allvalues = self.Data_Memory[key]['values']
-                alltimes = self.Data_Memory[key]['times']
-                units = self.Data_Memory[key]['units']
-                values = self.getListItems(allvalues)
-                times = self.getListItems(alltimes)
-                if isinstance(values, (list, np.ndarray)):
-                    df = pd.DataFrame({'Dates': times, 'Values ({0})'.format(units): values})
-                elif isinstance(values, dict):
-                    colvals = {}
-                    colvals['Dates'] = times
-                    for key in values:
-                        colvals[key] = values[key]
-                    df = pd.DataFrame(colvals)
-            df.to_csv(csv_name, index=False)
+                df.to_csv(csv_name, index=False)
+            except:
+                print('ERROR WRITING CSV FILE')
+                print(traceback.format_exc())
+                with open(csv_name, 'w') as inf:
+                    inf.write('ERROR WRITING FILE.')
 
     def matcharrays(self, array1, array2):
         '''
@@ -4182,8 +4722,13 @@ class MakeAutomatedReport(object):
         '''
 
         if isinstance(array1, (list, np.ndarray)) and isinstance(array2, (list, np.ndarray)):
+            if len(np.asarray(array1).shape) < len(np.asarray(array2).shape):
+                new_array1 = np.array([])
+                for i, ar2 in enumerate(array2):
+                    new_array1 = np.append(new_array1, np.asarray([array1[i]] * len(ar2)))
+                return new_array1
             #if both are lists..
-            if len(array1) < len(array2):
+            elif len(array1) < len(array2):
                 '''
                 either ['Date1', 'Date2'], ['1,2,3'] OR ['Date1'], [1,2,3] OR ['DATE1'], [[1,2,3], [1,2,3,4]]
                  OR ['Date1', 'Date2'], [[1,2,3], [2,4,5],[6,
@@ -4215,7 +4760,7 @@ class MakeAutomatedReport(object):
                 print(len(array1))
                 print(len(array2))
                 new_array1 = []
-                for i in enumerate(array2):
+                for i in range(len(array2)):
                     new_array1.append(array1[i])
                 return new_array1
 
@@ -4563,6 +5108,14 @@ class MakeAutomatedReport(object):
                 p = line['parameter'].lower()
                 param_key = w2_param_dict[p]
                 return values[param_key]
+
+    def prioritizeKey(self, firstchoice, secondchoice, key, backup=None):
+        if key in firstchoice:
+            return firstchoice[key]
+        elif key in secondchoice:
+            return secondchoice[key]
+        else:
+            return backup
 
     def buzzTargetSum(self, dates, values, target):
         '''
@@ -5100,35 +5653,78 @@ class MakeAutomatedReport(object):
 
             if avgtype == 'INST-VAL':
                 #at the point in time, find intervals and use values
-                df = pd.DataFrame({'times': times, 'values': values})
-                df = df.set_index('times')
-                df = df.resample(pd_interval, origin='end_day').asfreq().fillna(method='bfill')
-                new_values = df['values'].to_numpy()
-                new_times = df.index.to_pydatetime()
+                if len(values.shape) == 1:
+                    df = pd.DataFrame({'times': times, 'values': values})
+                    df = df.set_index('times')
+                    df = df.resample(pd_interval, origin='end_day').asfreq().fillna(method='bfill')
+                    new_values = df['values'].to_numpy()
+                    new_times = df.index.to_pydatetime()
+                elif len(values.shape) == 2:
+                    tvals = values.T #transpose so now were [distances, times]
+                    new_values = []
+                    for i in range(tvals.shape[0]):#for each depth profile..
+                        df = pd.DataFrame({'times': times, 'values': tvals[i]})
+                        df = df.set_index('times')
+                        df = df.resample(pd_interval, origin='end_day').asfreq().fillna(method='bfill')
+                        new_values.append(df['values'].to_numpy())
+                        new_times = df.index.to_pydatetime()
+                    new_values = np.asarray(new_values).T #transpose back..
 
             elif avgtype == 'INST-CUM':
-                df = pd.DataFrame({'times': times, 'values': values})
-                df = df.set_index('times')
-                df = df.cumsum(skipna=True).resample(pd_interval, origin='end_day').asfreq().fillna(method='bfill')
-                new_values = df['values'].to_numpy()
-                new_times = df.index.to_pydatetime()
-
+                if len(values.shape) == 1:
+                    df = pd.DataFrame({'times': times, 'values': values})
+                    df = df.set_index('times')
+                    df = df.cumsum(skipna=True).resample(pd_interval, origin='end_day').asfreq().fillna(method='bfill')
+                    new_values = df['values'].to_numpy()
+                    new_times = df.index.to_pydatetime()
+                elif len(values.shape) == 2:
+                    tvals = values.T #transpose so now were [distances, times]
+                    new_values = []
+                    for i in range(tvals.shape[0]):#for each depth profile..
+                        df = pd.DataFrame({'times': times, 'values': tvals[i]})
+                        df = df.set_index('times')
+                        df = df.cumsum(skipna=True).resample(pd_interval, origin='end_day').asfreq().fillna(method='bfill')
+                        new_values.append(df['values'].to_numpy())
+                        new_times = df.index.to_pydatetime()
+                    new_values = np.asarray(new_values).T #transpose back..
 
             elif avgtype == 'PER-AVER':
                 #average over the period
-                df = pd.DataFrame({'times': times, 'values': values})
-                df = df.set_index('times')
-                df = df.resample(pd_interval, origin='end_day').mean().fillna(method='bfill')
-                new_values = df['values'].to_numpy()
-                new_times = df.index.to_pydatetime()
+                if len(values.shape) == 1:
+                    df = pd.DataFrame({'times': times, 'values': values})
+                    df = df.set_index('times')
+                    df = df.resample(pd_interval, origin='end_day').mean().fillna(method='bfill')
+                    new_values = df['values'].to_numpy()
+                    new_times = df.index.to_pydatetime()
+                elif len(values.shape) == 2:
+                    tvals = values.T #transpose so now were [distances, times]
+                    new_values = []
+                    for i in range(tvals.shape[0]):#for each depth profile..
+                        df = pd.DataFrame({'times': times, 'values': tvals[i]})
+                        df = df.set_index('times')
+                        df = df.resample(pd_interval, origin='end_day').mean().fillna(method='bfill')
+                        new_values.append(df['values'].to_numpy())
+                        new_times = df.index.to_pydatetime()
+                    new_values = np.asarray(new_values).T #transpose back..
 
             elif avgtype == 'PER-CUM':
                 #cum over the period
-                df = pd.DataFrame({'times': times, 'values': values})
-                df = df.set_index('times')
-                df = df.resample(pd_interval, origin='end_day').sum().fillna(method='bfill')
-                new_values = df['values'].to_numpy()
-                new_times = df.index.to_pydatetime()
+                if len(values.shape) == 1:
+                    df = pd.DataFrame({'times': times, 'values': values})
+                    df = df.set_index('times')
+                    df = df.resample(pd_interval, origin='end_day').sum().fillna(method='bfill')
+                    new_values = df['values'].to_numpy()
+                    new_times = df.index.to_pydatetime()
+                elif len(values.shape) == 2:
+                    tvals = values.T #transpose so now were [distances, times]
+                    new_values = []
+                    for i in range(tvals.shape[0]):#for each depth profile..
+                        df = pd.DataFrame({'times': times, 'values': tvals[i]})
+                        df = df.set_index('times')
+                        df = df.resample(pd_interval, origin='end_day').sum().fillna(method='bfill')
+                        new_values.append(df['values'].to_numpy())
+                        new_times = df.index.to_pydatetime()
+                    new_values = np.asarray(new_values).T #transpose back..
 
             else:
                 print('INVALID INPUT TYPE DETECTED', avgtype)
@@ -5203,6 +5799,18 @@ class MakeAutomatedReport(object):
                                                  'depths': depths,
                                                  'units': object_settings['plot_units'],
                                                  'isprofile': True}
+
+    def commitContourDataToMemory(self, values, dates, distance, units, datamem_key):
+        '''
+        commits updated data to data memory dictionary that keeps track of data
+        :param object_settings:  dicitonary of user defined settings for current object
+        '''
+
+        self.Data_Memory[datamem_key] = {'times': dates,
+                                         'values': values,
+                                         'distance': distance,
+                                         'units': units,
+                                         'iscontour': True}
 
     def configureUnits(self, object_settings, parameter, units):
         '''
