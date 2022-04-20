@@ -12,6 +12,8 @@ Created on 7/15/2021
 @note:
 '''
 
+VERSIONNUMBER = '4.0'
+
 import datetime as dt
 import os
 import sys
@@ -49,6 +51,7 @@ class MakeAutomatedReport(object):
         organizes input data and generates XML report
         :param simulationInfoFile: full path to simulation information XML file output from WAT.
         '''
+        self.printVersion()
         self.simulationInfoFile = simulationInfoFile
         self.WriteLog = True #TODO we're testing this.
         self.batdir = batdir
@@ -1691,7 +1694,7 @@ class MakeAutomatedReport(object):
                         if contourline['contourlinetext'].lower() == 'true':
                             ax.clabel(cs, inline_spacing=contourline['contourlinespacing'],
                                       fontsize=contourline['fontsize'], inline=contourline['inline'])
-                        if contourline['legend'].lower() == 'true':
+                        if contourline['show_in_legend'].lower() == 'true':
                             if 'label' in contourline.keys():
                                 label = contourline['label']
                             else:
@@ -2795,7 +2798,7 @@ class MakeAutomatedReport(object):
         :return: dictionary with line settings
         '''
 
-        return {'fontsize': 9, 'fontcolor': 'black', 'alpha': 1.0, 'horizontalalignment': 'center'}
+        return {'fontsize': 9, 'fontcolor': 'black', 'alpha': 1.0, 'horizontalalignment': 'left'}
 
     def getDefaultDefaultPointStyles(self, i):
         '''
@@ -4738,6 +4741,7 @@ class MakeAutomatedReport(object):
                                 colvals[key] = depths[key]
                             df = pd.DataFrame(colvals)
                 elif 'iscontour' in self.Data_Memory[key].keys():
+                    continue #were not doing this for now, takes ~ 5 seconds per 3yr reach..
                     if self.Data_Memory[key]['iscontour'] == True:
                         alltimes = self.Data_Memory[key]['dates']
                         allvalues = self.Data_Memory[key]['values'].T #this gets transposed a few times.. we want distance/date
@@ -4746,6 +4750,7 @@ class MakeAutomatedReport(object):
                         distances = self.matcharrays(alldistance, allvalues)
                         values = self.getListItems(allvalues)
                         units = self.Data_Memory[key]['units']
+                        newstime = time.time()
                         df = pd.DataFrame({'Dates': times, 'Values ({0})'.format(units): values, 'Distances': distances,
                                            })
                 else:
@@ -4762,7 +4767,9 @@ class MakeAutomatedReport(object):
                         for key in values:
                             colvals[key] = values[key]
                         df = pd.DataFrame(colvals)
+
                 df.to_csv(csv_name, index=False)
+
             except:
                 print('ERROR WRITING CSV FILE')
                 print(traceback.format_exc())
@@ -5138,6 +5145,9 @@ class MakeAutomatedReport(object):
             return dtime
         else:
             return dates
+
+    def printVersion(self):
+        print('VERSION:', VERSIONNUMBER)
 
     def pickByParameter(self, values, line):
         '''
