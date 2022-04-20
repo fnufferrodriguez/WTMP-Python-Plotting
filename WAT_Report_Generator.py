@@ -1326,6 +1326,7 @@ class MakeAutomatedReport(object):
 
                 plt.tight_layout()
 
+
                 if 'legend' in cur_obj_settings.keys():
                     if cur_obj_settings['legend'].lower() == 'true':
                         leg_labels = []
@@ -1548,9 +1549,6 @@ class MakeAutomatedReport(object):
 
             cur_obj_settings = self.setTimeSeriesXlims(cur_obj_settings, yearstr, object_settings['years'])
 
-            fig = plt.figure(figsize=(12, 6))
-            ax = fig.add_subplot()
-
             #NOTES
             #Data structure:
             #2D array of dates[distance from source]
@@ -1561,143 +1559,157 @@ class MakeAutomatedReport(object):
             #[01jan2016, 04Feb2016, 23May2016] #dates
             #[0, 19, 25, 35] #distances
 
-            contours = self.getContourData(cur_obj_settings)
-            contours = self.filterDataByYear(contours, year)
-            values, dates, distance, transitions = self.stackContours(contours)
+            contoursbyID = self.getContourData(cur_obj_settings)
+            contoursbyID = self.filterDataByYear(contoursbyID, year)
 
-            for contourname in contours:
-                contour = contours[contourname]
-                parameter, cur_obj_settings['param_count'] = self.getParameterCount(contour, cur_obj_settings)
-
-            if 'units' in cur_obj_settings.keys():
-                units = cur_obj_settings['units']
+            if len(contoursbyID.keys()) == 1:
+                figsize=(12, 6)
+                pageformat = 'half'
             else:
-                if 'parameter' in cur_obj_settings.keys():
-                    parameter = cur_obj_settings['parameter']
-                else:
-                    parameter = ''
-                    top_count = 0
-                    for key in cur_obj_settings['param_count'].keys():
-                        if cur_obj_settings['param_count'][key] > top_count:
-                            parameter = key
-                try:
-                    units = self.units[parameter]
-                except KeyError:
-                    units = None
+                figsize=(12,12)
+                pageformat = 'full'
 
-            if isinstance(units, dict):
-                if 'unitsystem' in cur_obj_settings.keys():
-                    units = units[cur_obj_settings['unitsystem'].lower()]
-                else:
-                    units = None
-
-            if 'unitsystem' in cur_obj_settings.keys():
-                values, units = self.convertUnitSystem(values, units, cur_obj_settings['unitsystem']) #TODO: confirm
-
-            chkvals = WF.checkData(values)
-            if not chkvals:
-                print('Invalid Data settings for contour plot year {0}'.format(year))
-                continue
-
-            if 'dateformat' in cur_obj_settings.keys():
-                if cur_obj_settings['dateformat'].lower() == 'jdate':
-                    if isinstance(dates[0], dt.datetime):
-                        dates = self.DatetimeToJDate(dates)
-                elif cur_obj_settings['dateformat'].lower() == 'datetime':
-                    if isinstance(dates[0], (int,float)):
-                        dates = self.JDateToDatetime(dates)
-
-            if 'label' not in cur_obj_settings.keys():
-                cur_obj_settings['label'] = ''
-
-            if 'description' not in cur_obj_settings.keys():
-                cur_obj_settings['description'] = ''
-
-            cur_obj_settings = self.getDefaultContourSettings(cur_obj_settings)
-
-            if 'filterbylimits' not in cur_obj_settings.keys():
-                cur_obj_settings['filterbylimits'] = 'true' #set default
-
-            if cur_obj_settings['filterbylimits'].lower() == 'true':
-                if 'xlims' in cur_obj_settings.keys():
-                    dates, values = self.limitXdata(dates, values, cur_obj_settings['xlims'])
-                if 'ylims' in cur_obj_settings.keys():
-                    dates, values = self.limitYdata(dates, values, cur_obj_settings['ylims'], baseOn=distance)
-
-            if 'min' in cur_obj_settings['colorbar']:
-                vmin = float(cur_obj_settings['colorbar']['min'])
-            else:
-                vmin = np.nanmin(values)
-            if 'max' in cur_obj_settings['colorbar']:
-                vmax = float(cur_obj_settings['colorbar']['max'])
-            else:
-                vmax = np.nanmax(values)
-
-            contr = ax.contourf(dates, distance, values.T, cmap=cur_obj_settings['colorbar']['colormap'],
-                                vmin=vmin, vmax=vmax,
-                                levels=np.linspace(vmin, vmax, int(cur_obj_settings['colorbar']['bins'])), #add one to get the desired number..
-                                extend='both') #the .T transposes the array so dates on bottom TODO:make extend variable
-            ax.invert_yaxis()
-
-            self.addLogEntry({'type': cur_obj_settings['label'] + '_ContourPlot' if cur_obj_settings['label'] != '' else 'ContourPlot',
-                              'name': self.ChapterRegion+'_'+yearstr,
-                              'description': cur_obj_settings['description'],
-                              'units': units,
-                              'value_start_date': self.translateDateFormat(dates[0], 'datetime', '').strftime('%d %b %Y'),
-                              'value_end_date': self.translateDateFormat(dates[-1], 'datetime', '').strftime('%d %b %Y'),
-                              'logoutputfilename': contour['logoutputfilename']
-                              },
-                             isdata=True)
-
-            # self.commitContourDataToMemory(values, dates, distance, units, contour['logoutputfilename'])
-
-            cur_obj_settings = self.updateFlaggedValues(cur_obj_settings, '%%units%%', units)
-
-            cbar = plt.colorbar(contr, ax=ax, orientation='horizontal', aspect=50.)
-            locs = np.linspace(vmin, vmax, int(cur_obj_settings['colorbar']['bins']))[::int(cur_obj_settings['colorbar']['skipticks'])]
-            cbar.set_ticks(locs)
-            cbar.set_ticklabels(locs.round(2))
-            if 'label' in cur_obj_settings['colorbar']:
-                if 'labelsize' in cur_obj_settings['colorbar'].keys():
-                    labsize = float(cur_obj_settings['colorbar']['labelsize'])
-                elif 'fontsize' in cur_obj_settings['colorbar'].keys():
-                    labsize = float(cur_obj_settings['colorbar']['fontsize'])
-                else:
-                    labsize = 12
-                cbar.set_label(cur_obj_settings['colorbar']['label'], fontsize=labsize)
-
-            if 'contourlines' in cur_obj_settings.keys():
-                for contourline in cur_obj_settings['contourlines']:
-                    if 'value' in contourline.keys():
-                        val = float(contourline['value'])
+            if pageformat == 'full':
+                height_ratios = []
+                for i in range(len(contoursbyID.keys())):
+                    if i == len(contoursbyID.keys())-1:
+                        height_ratios.append(1)
                     else:
-                        print('No Value set for contour line.')
-                        continue
-                    contourline = self.getDefaultContourLineSettings(contourline)
-                    cs = ax.contour(contr, levels=[val], linewidths=[float(contourline['linewidth'])], colors=[contourline['linecolor']],
-                                    linestyles=contourline['linestylepattern'], alpha=float(contourline['alpha']))
-                    if contourline['contourlinetext'].lower() == 'true':
-                        ax.clabel(cs, inline_spacing=contourline['contourlinespacing'],
-                                  fontsize=contourline['fontsize'], inline=contourline['inline'])
-                    if contourline['legend'].lower() == 'true':
-                        if 'label' in contourline.keys():
-                            label = contourline['label']
+                        height_ratios.append(.75)
+                fig, axes = plt.subplots(ncols=1, nrows=len(contoursbyID.keys()), sharex=True, figsize=figsize,
+                                         gridspec_kw={'height_ratios':height_ratios})
+            else:
+                fig, axes = plt.subplots(ncols=1, nrows=1, figsize=figsize,
+                                         )
+
+            for IDi, ID in enumerate(contoursbyID.keys()):
+                contour_settings = pickle.loads(pickle.dumps(cur_obj_settings, -1))
+                contour_settings = self.configureSettingsForID(ID, contour_settings)
+                contours = contoursbyID[ID]
+                values, dates, distance, transitions = self.stackContours(contours)
+                if len(contoursbyID.keys()) == 1:
+                    axes = [axes]
+
+                ax = axes[IDi]
+
+                for contourname in contours:
+                    contour = contours[contourname]
+                    parameter, contour_settings['param_count'] = self.getParameterCount(contour, contour_settings)
+
+                if 'units' in contour_settings.keys():
+                    units = contour_settings['units']
+                else:
+                    if 'parameter' in contour_settings.keys():
+                        parameter = contour_settings['parameter']
+                    else:
+                        parameter = ''
+                        top_count = 0
+                        for key in contour_settings['param_count'].keys():
+                            if contour_settings['param_count'][key] > top_count:
+                                parameter = key
+                    try:
+                        units = self.units[parameter]
+                    except KeyError:
+                        units = None
+
+                if isinstance(units, dict):
+                    if 'unitsystem' in contour_settings.keys():
+                        units = units[contour_settings['unitsystem'].lower()]
+                    else:
+                        units = None
+
+                if 'unitsystem' in contour_settings.keys():
+                    values, units = self.convertUnitSystem(values, units, contour_settings['unitsystem']) #TODO: confirm
+
+                chkvals = WF.checkData(values)
+                if not chkvals:
+                    print('Invalid Data settings for contour plot year {0}'.format(year))
+                    continue
+
+                if 'dateformat' in contour_settings.keys():
+                    if contour_settings['dateformat'].lower() == 'jdate':
+                        if isinstance(dates[0], dt.datetime):
+                            dates = self.DatetimeToJDate(dates)
+                    elif contour_settings['dateformat'].lower() == 'datetime':
+                        if isinstance(dates[0], (int,float)):
+                            dates = self.JDateToDatetime(dates)
+
+                if 'label' not in contour_settings.keys():
+                    contour_settings['label'] = ''
+
+                if 'description' not in contour_settings.keys():
+                    contour_settings['description'] = ''
+
+                contour_settings = self.getDefaultContourSettings(contour_settings)
+
+                if 'filterbylimits' not in contour_settings.keys():
+                    contour_settings['filterbylimits'] = 'true' #set default
+
+                if contour_settings['filterbylimits'].lower() == 'true':
+                    if 'xlims' in contour_settings.keys():
+                        dates, values = self.limitXdata(dates, values, contour_settings['xlims'])
+                    if 'ylims' in contour_settings.keys():
+                        dates, values = self.limitYdata(dates, values, contour_settings['ylims'], baseOn=distance)
+
+                if 'min' in contour_settings['colorbar']:
+                    vmin = float(contour_settings['colorbar']['min'])
+                else:
+                    vmin = np.nanmin(values)
+                if 'max' in contour_settings['colorbar']:
+                    vmax = float(contour_settings['colorbar']['max'])
+                else:
+                    vmax = np.nanmax(values)
+
+                contr = ax.contourf(dates, distance, values.T, cmap=contour_settings['colorbar']['colormap'],
+                                    vmin=vmin, vmax=vmax,
+                                    levels=np.linspace(vmin, vmax, int(contour_settings['colorbar']['bins'])), #add one to get the desired number..
+                                    extend='both') #the .T transposes the array so dates on bottom TODO:make extend variable
+                ax.invert_yaxis()
+
+                self.addLogEntry({'type': contour_settings['label'] + '_ContourPlot' if contour_settings['label'] != '' else 'ContourPlot',
+                                  'name': self.ChapterRegion+'_'+yearstr,
+                                  'description': contour_settings['description'],
+                                  'units': units,
+                                  'value_start_date': self.translateDateFormat(dates[0], 'datetime', '').strftime('%d %b %Y'),
+                                  'value_end_date': self.translateDateFormat(dates[-1], 'datetime', '').strftime('%d %b %Y'),
+                                  'logoutputfilename': contour['logoutputfilename']
+                                  },
+                                 isdata=True)
+
+                contour_settings = self.updateFlaggedValues(contour_settings, '%%units%%', units)
+
+                if 'contourlines' in contour_settings.keys():
+                    for contourline in contour_settings['contourlines']:
+                        if 'value' in contourline.keys():
+                            val = float(contourline['value'])
                         else:
-                            label = str(val)
-                        cl_leg = ax.plot([], [], c=contourline['linecolor'], ls=contourline['linestylepattern'],
-                                         alpha=float(contourline['alpha']), lw=float(contourline['linewidth']),
-                                         label=label)
+                            print('No Value set for contour line.')
+                            continue
+                        contourline = self.getDefaultContourLineSettings(contourline)
+                        cs = ax.contour(contr, levels=[val], linewidths=[float(contourline['linewidth'])], colors=[contourline['linecolor']],
+                                        linestyles=contourline['linestylepattern'], alpha=float(contourline['alpha']))
+                        if contourline['contourlinetext'].lower() == 'true':
+                            ax.clabel(cs, inline_spacing=contourline['contourlinespacing'],
+                                      fontsize=contourline['fontsize'], inline=contourline['inline'])
+                        if contourline['legend'].lower() == 'true':
+                            if 'label' in contourline.keys():
+                                label = contourline['label']
+                            else:
+                                label = str(val)
+                            cl_leg = ax.plot([], [], c=contourline['linecolor'], ls=contourline['linestylepattern'],
+                                             alpha=float(contourline['alpha']), lw=float(contourline['linewidth']),
+                                             label=label)
 
                 ### VERTICAL LINES ###
-                if 'vlines' in cur_obj_settings.keys():
-                    for vline in cur_obj_settings['vlines']:
+                if 'vlines' in contour_settings.keys():
+                    for vline in contour_settings['vlines']:
                         vline_settings = self.getDefaultStraightLineSettings(vline)
                         try:
                             vline_settings['value'] = float(vline_settings['value'])
                         except:
                             vline_settings['value'] = self.translateDateFormat(vline_settings['value'], 'datetime', '')
-                        if 'dateformat' in cur_obj_settings.keys():
-                            if cur_obj_settings['dateformat'].lower() == 'jdate':
+                        if 'dateformat' in contour_settings.keys():
+                            if contour_settings['dateformat'].lower() == 'jdate':
                                 if isinstance(vline_settings['value'], dt.datetime):
                                     vline_settings['value'] = self.DatetimeToJDate(vline_settings['value'])
                                 elif isinstance(vline_settings['value'], str):
@@ -1706,7 +1718,7 @@ class MakeAutomatedReport(object):
                                     except:
                                         vline_settings['value'] = self.translateDateFormat(vline_settings['value'], 'datetime', '')
                                         vline_settings['value'] = self.DatetimeToJDate(vline_settings['value'])
-                            elif cur_obj_settings['dateformat'].lower() == 'datetime':
+                            elif contour_settings['dateformat'].lower() == 'datetime':
                                 if isinstance(vline_settings['value'], (int,float)):
                                     vline_settings['value'] = self.JDateToDatetime(vline_settings['value'])
                                 elif isinstance(vline_settings['value'], str):
@@ -1725,8 +1737,8 @@ class MakeAutomatedReport(object):
                                    alpha=float(vline_settings['alpha']))
 
                 ### Horizontal LINES ###
-                if 'hlines' in cur_obj_settings.keys():
-                    for hline in cur_obj_settings['hlines']:
+                if 'hlines' in contour_settings.keys():
+                    for hline in contour_settings['hlines']:
                         hline_settings = self.getDefaultStraightLineSettings(hline)
                         if 'label' not in hline_settings.keys():
                             hline_settings['label'] = None
@@ -1739,34 +1751,78 @@ class MakeAutomatedReport(object):
                                    zorder=float(hline_settings['zorder']),
                                    alpha=float(hline_settings['alpha']))
 
-            if 'transitions' in cur_obj_settings.keys():
-                for transkey in transitions.keys():
-                    transition_start = transitions[transkey]
-                    trans_name = None
-                    hline = self.getDefaultStraightLineSettings(cur_obj_settings['transitions'])
-                    ax.axhline(y=transition_start, c=hline['linecolor'], ls=hline['linestylepattern'], alpha=float(hline['alpha']),
-                               lw=float(hline['linewidth']))
-                    if 'name' in cur_obj_settings['transitions'].keys():
-                        trans_flag = cur_obj_settings['transitions']['name'].lower() #blue:pink:white:pink:blue
-                        text_settings = self.getDefaultTextSettings(cur_obj_settings['transitions'])
+                if 'transitions' in contour_settings.keys():
+                    for transkey in transitions.keys():
+                        transition_start = transitions[transkey]
+                        trans_name = None
+                        hline = self.getDefaultStraightLineSettings(contour_settings['transitions'])
+                        ax.axhline(y=transition_start, c=hline['linecolor'], ls=hline['linestylepattern'], alpha=float(hline['alpha']),
+                                   lw=float(hline['linewidth']))
+                        if 'name' in contour_settings['transitions'].keys():
+                            trans_flag = contour_settings['transitions']['name'].lower() #blue:pink:white:pink:blue
+                            text_settings = self.getDefaultTextSettings(contour_settings['transitions'])
 
-                        if trans_flag in contours[transkey].keys():
-                            trans_name = contours[transkey][trans_flag]
-                        if trans_name != None:
+                            if trans_flag in contours[transkey].keys():
+                                trans_name = contours[transkey][trans_flag]
+                            if trans_name != None:
 
-                            trans_y_ratio = abs(1.0 - (transition_start / max(ax.get_ylim()) + .01)) #dont let user touch this
-
-
-                            fontcolor = self.prioritizeKey(contours[transkey], text_settings, 'fontcolor')
-                            fontsize = self.prioritizeKey(contours[transkey], text_settings, 'fontsize')
-                            horizontalalignment = self.prioritizeKey(contours[transkey], text_settings, 'horizontalalignment')
-                            text_x_pos = self.prioritizeKey(contours[transkey], text_settings, 'text_x_pos', backup=0.001)
-
-                            ax.text(float(text_x_pos), trans_y_ratio, trans_name, c=fontcolor, size=float(fontsize),
-                                    transform=ax.transAxes, horizontalalignment=horizontalalignment,
-                                    verticalalignment='top')
+                                trans_y_ratio = abs(1.0 - (transition_start / max(ax.get_ylim()) + .01)) #dont let user touch this
 
 
+                                fontcolor = self.prioritizeKey(contours[transkey], text_settings, 'fontcolor')
+                                fontsize = self.prioritizeKey(contours[transkey], text_settings, 'fontsize')
+                                horizontalalignment = self.prioritizeKey(contours[transkey], text_settings, 'horizontalalignment')
+                                text_x_pos = self.prioritizeKey(contours[transkey], text_settings, 'text_x_pos', backup=0.001)
+
+                                ax.text(float(text_x_pos), trans_y_ratio, trans_name, c=fontcolor, size=float(fontsize),
+                                        transform=ax.transAxes, horizontalalignment=horizontalalignment,
+                                        verticalalignment='top')
+                if self.iscomp:
+                    if 'modeltext' in contour_settings.keys():
+                        modeltext = contour_settings['modeltext']
+                    else:
+                        modeltext = self.SimulationName
+                    plt.text(1.02, 0.5, modeltext, fontsize=12, transform=ax.transAxes, verticalalignment='center', horizontalalignment='center', rotation='vertical')
+
+
+                if 'gridlines' in contour_settings.keys():
+                    if contour_settings['gridlines'].lower() == 'true':
+                        ax.grid(True)
+
+                if 'ylabel' in contour_settings.keys():
+                    if 'ylabelsize' in contour_settings.keys():
+                        ylabsize = float(contour_settings['ylabelsize'])
+                    elif 'fontsize' in contour_settings.keys():
+                        ylabsize = float(contour_settings['fontsize'])
+                    else:
+                        ylabsize = 12
+                    ax.set_ylabel(contour_settings['ylabel'], fontsize=ylabsize)
+
+                if 'ylims' in contour_settings.keys():
+                    if 'min' in contour_settings['ylims']:
+                        ax.set_ylim(bottom=float(contour_settings['ylims']['min']))
+                    if 'max' in contour_settings['ylims']:
+                        ax.set_ylim(top=float(contour_settings['ylims']['max']))
+
+                if 'xticksize' in contour_settings.keys():
+                    xticksize = float(contour_settings['xticksize'])
+                elif 'fontsize' in contour_settings.keys():
+                    xticksize = float(contour_settings['fontsize'])
+                else:
+                    xticksize = 10
+                ax.tick_params(axis='x', labelsize=xticksize)
+
+                if 'yticksize' in contour_settings.keys():
+                    yticksize = float(contour_settings['yticksize'])
+                elif 'fontsize' in contour_settings.keys():
+                    yticksize = float(contour_settings['fontsize'])
+                else:
+                    yticksize = 10
+                ax.tick_params(axis='y', labelsize=yticksize)
+
+            # #stuff to call once per plot
+            self.configureSettingsForID('base', cur_obj_settings)
+            cur_obj_settings = self.updateFlaggedValues(cur_obj_settings, '%%units%%', units)
 
             if 'title' in cur_obj_settings.keys():
                 if 'titlesize' in cur_obj_settings.keys():
@@ -1775,20 +1831,7 @@ class MakeAutomatedReport(object):
                     titlesize = float(object_settings['fontsize'])
                 else:
                     titlesize = 15
-                plt.title(cur_obj_settings['title'], fontsize=titlesize)
-
-            if 'gridlines' in cur_obj_settings.keys():
-                if cur_obj_settings['gridlines'].lower() == 'true':
-                    plt.grid(True)
-
-            if 'ylabel' in cur_obj_settings.keys():
-                if 'ylabelsize' in cur_obj_settings.keys():
-                    ylabsize = float(cur_obj_settings['ylabelsize'])
-                elif 'fontsize' in cur_obj_settings.keys():
-                    ylabsize = float(cur_obj_settings['fontsize'])
-                else:
-                    ylabsize = 12
-                plt.ylabel(cur_obj_settings['ylabel'], fontsize=ylabsize)
+                axes[0].set_title(cur_obj_settings['title'], fontsize=titlesize)
 
             if 'xlabel' in cur_obj_settings.keys():
                 if 'xlabelsize' in cur_obj_settings.keys():
@@ -1797,7 +1840,9 @@ class MakeAutomatedReport(object):
                     xlabsize = float(cur_obj_settings['fontsize'])
                 else:
                     xlabsize = 12
-                plt.xlabel(cur_obj_settings['xlabel'], fontsize=xlabsize)
+                axes[-1].set_xlabel(cur_obj_settings['xlabel'], fontsize=xlabsize)
+
+            self.formatDateXAxis(axes[-1], cur_obj_settings)
 
             if 'legend' in cur_obj_settings.keys():
                 if cur_obj_settings['legend'].lower() == 'true':
@@ -1807,32 +1852,27 @@ class MakeAutomatedReport(object):
                         legsize = float(cur_obj_settings['fontsize'])
                     else:
                         legsize = 12
-                    if len(ax.get_legend_handles_labels()[0]) > 0:
+                    if len(axes[0].get_legend_handles_labels()[0]) > 0:
                         plt.legend(fontsize=legsize)
 
-            self.formatDateXAxis(ax, cur_obj_settings)
+            cbar = plt.colorbar(contr, ax=axes[-1], orientation='horizontal', aspect=50.)
+            locs = np.linspace(vmin, vmax, int(cur_obj_settings['colorbar']['bins']))[::int(cur_obj_settings['colorbar']['skipticks'])]
+            cbar.set_ticks(locs)
+            cbar.set_ticklabels(locs.round(2))
+            if 'label' in cur_obj_settings['colorbar']:
+                if 'labelsize' in cur_obj_settings['colorbar'].keys():
+                    labsize = float(cur_obj_settings['colorbar']['labelsize'])
+                elif 'fontsize' in cur_obj_settings['colorbar'].keys():
+                    labsize = float(cur_obj_settings['colorbar']['fontsize'])
+                else:
+                    labsize = 12
+                cbar.set_label(cur_obj_settings['colorbar']['label'], fontsize=labsize)
 
-            if 'ylims' in cur_obj_settings.keys():
-                if 'min' in cur_obj_settings['ylims']:
-                    ax.set_ylim(bottom=float(cur_obj_settings['ylims']['min']))
-                if 'max' in cur_obj_settings['ylims']:
-                    ax.set_ylim(top=float(cur_obj_settings['ylims']['max']))
+            # plt.tight_layout()
+            plt.subplots_adjust(hspace=0.05)
 
-            if 'xticksize' in cur_obj_settings.keys():
-                xticksize = float(cur_obj_settings['xticksize'])
-            elif 'fontsize' in cur_obj_settings.keys():
-                xticksize = float(cur_obj_settings['fontsize'])
-            else:
-                xticksize = 10
-            ax.tick_params(axis='x', labelsize=xticksize)
-
-            if 'yticksize' in cur_obj_settings.keys():
-                yticksize = float(cur_obj_settings['yticksize'])
-            elif 'fontsize' in cur_obj_settings.keys():
-                yticksize = float(cur_obj_settings['fontsize'])
-            else:
-                yticksize = 10
-            ax.tick_params(axis='y', labelsize=yticksize)
+            if 'description' not in cur_obj_settings.keys():
+                cur_obj_settings['description'] = ''
 
             basefigname = os.path.join(self.images_path, 'ContourPlot' + '_' + self.ChapterRegion.replace(' ','_')
                                        + '_' + yearstr)
@@ -1849,7 +1889,10 @@ class MakeAutomatedReport(object):
             plt.savefig(figname, bbox_inches='tight')
             plt.close('all')
 
-            self.XML.writeHalfPagePlot(os.path.basename(figname), cur_obj_settings['description'])
+            if pageformat == 'full':
+                self.XML.writeFullPagePlot(os.path.basename(figname), cur_obj_settings['description'])
+            elif pageformat == 'half':
+                self.XML.writeHalfPagePlot(os.path.basename(figname), cur_obj_settings['description'])
 
 
     def makeBuzzPlot(self, object_settings):
@@ -3313,40 +3356,51 @@ class MakeAutomatedReport(object):
 
         data = {}
         for reach in object_settings['reaches']:
-            dates, values, units, distance = self.getContours(reach)
-            if 'flag' in reach.keys():
-                flag = reach['flag']
-            elif 'label' in reach.keys():
-                flag = reach['label']
-            else:
-                flag = 'reach'
-            if flag in data.keys():
-                count = 1
-                newflag = flag + '_{0}'.format(count)
-                while newflag in data.keys():
-                    count += 1
-                    newflag = flag + '_{0}'.format(count)
-                flag = newflag
-                print('The new flag is {0}'.format(newflag))
-            datamem_key = self.buildDataMemoryKey(reach)
+            for ID in self.accepted_IDs:
+                curreach = pickle.loads(pickle.dumps(reach, -1))
+                curreach = self.configureSettingsForID(ID, curreach)
+                if not self.checkModelType(curreach):
+                    continue
+                dates, values, units, distance = self.getContours(curreach)
+                if WF.checkData(values):
+                    if ID not in data.keys():
+                        data[ID] = {}
+                    if 'flag' in reach.keys():
+                        flag = reach['flag']
+                    elif 'label' in reach.keys():
+                        flag = reach['label']
+                    else:
+                        flag = 'reach_{0}'.format(ID)
+                    if flag in data[ID].keys():
+                        count = 1
+                        newflag = flag + '_{0}'.format(count)
+                        while newflag in data[ID].keys():
+                            count += 1
+                            newflag = flag + '_{0}'.format(count)
+                        flag = newflag
+                        print('The new flag is {0}'.format(newflag))
+                    datamem_key = self.buildDataMemoryKey(reach)
 
-            if 'units' in reach.keys() and units == None:
-                units = reach['units']
+                    if 'units' in reach.keys() and units == None:
+                        units = reach['units']
 
-            if 'y_scalar' in object_settings.keys():
-                y_scalar = float(object_settings['y_scalar'])
-                distance *= y_scalar
+                    if 'y_scalar' in object_settings.keys():
+                        y_scalar = float(object_settings['y_scalar'])
+                        distance *= y_scalar
 
-            data[flag] = {'values': values,
-                          'dates': dates,
-                          'units': units,
-                          'distance': distance,
-                          'logoutputfilename': datamem_key}
+                    data[ID][flag] = {'values': values,
+                                  'dates': dates,
+                                  'units': units,
+                                  'distance': distance,
+                                  'ID': ID,
+                                  'logoutputfilename': datamem_key}
 
-            for key in reach.keys():
-                if key not in data[flag].keys():
-                    data[flag][key] = reach[key]
-
+                    for key in reach.keys():
+                        if key not in data[ID][flag].keys():
+                            data[ID][flag][key] = reach[key]
+        #reset
+        self.loadCurrentID('base')
+        self.loadCurrentModelAltID('base')
         return data
 
     def getContours(self, object_settings):
@@ -3362,6 +3416,9 @@ class MakeAutomatedReport(object):
                 distance = datamem_entry['distance']
 
             else:
+                checkdomain = self.ModelAlt.checkSubdomain(object_settings['ressimresname'])
+                if not checkdomain:
+                    return [], [], [], []
                 times, values, distance = self.ModelAlt.readSubdomain(object_settings['parameter'],
                                                                       object_settings['ressimresname'])
 
@@ -3972,12 +4029,13 @@ class MakeAutomatedReport(object):
 
     def filterDataByYear(self, data, year):
         if year != 'ALLYEARS':
-            for flag in data.keys():
-                years = np.array([n.year for n in data[flag]['dates']])
-                msk = np.where(years==year)
+            for ID in data.keys():
+                for flag in data[ID].keys():
+                    years = np.array([n.year for n in data[ID][flag]['dates']])
+                    msk = np.where(years==year)
 
-                data[flag]['values'] = data[flag]['values'][msk]
-                data[flag]['dates'] = data[flag]['dates'][msk]
+                    data[ID][flag]['values'] = data[ID][flag]['values'][msk]
+                    data[ID][flag]['dates'] = data[ID][flag]['dates'][msk]
         return data
 
     def formatDateXAxis(self, curax, object_settings, twin=False):

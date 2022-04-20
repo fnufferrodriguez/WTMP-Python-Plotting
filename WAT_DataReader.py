@@ -1144,6 +1144,13 @@ class ResSim_Results(object):
         iend = -1
         return self.t_computed[istart:iend], v[istart:iend]
 
+    def checkSubdomain(self, subdomain_name):
+        dataset = 'Results/Subdomains/{0}'.format(subdomain_name)
+        if dataset not in self.h.keys():
+            return False
+        else:
+            return True
+
     def readSubdomain(self, metric, subdomain_name):
 
         if metric.lower() == 'flow':
