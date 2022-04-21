@@ -1564,8 +1564,9 @@ class MakeAutomatedReport(object):
 
             contoursbyID = self.getContourData(cur_obj_settings)
             contoursbyID = self.filterDataByYear(contoursbyID, year)
+            selectedContourIDs = self.getUsedIDs(contoursbyID)
 
-            if len(contoursbyID.keys()) == 1:
+            if len(selectedContourIDs) == 1:
                 figsize=(12, 6)
                 pageformat = 'half'
             else:
@@ -1574,23 +1575,24 @@ class MakeAutomatedReport(object):
 
             if pageformat == 'full':
                 height_ratios = []
-                for i in range(len(contoursbyID.keys())):
-                    if i == len(contoursbyID.keys())-1:
+                for i in range(len(selectedContourIDs)):
+                    if i == len(selectedContourIDs)-1:
                         height_ratios.append(1)
                     else:
                         height_ratios.append(.75)
-                fig, axes = plt.subplots(ncols=1, nrows=len(contoursbyID.keys()), sharex=True, figsize=figsize,
+                fig, axes = plt.subplots(ncols=1, nrows=len(selectedContourIDs), sharex=True, figsize=figsize,
                                          gridspec_kw={'height_ratios':height_ratios})
             else:
                 fig, axes = plt.subplots(ncols=1, nrows=1, figsize=figsize,
                                          )
 
-            for IDi, ID in enumerate(contoursbyID.keys()):
+            for IDi, ID in enumerate(selectedContourIDs):
                 contour_settings = pickle.loads(pickle.dumps(cur_obj_settings, -1))
                 contour_settings = self.configureSettingsForID(ID, contour_settings)
-                contours = contoursbyID[ID]
+                # contours = contoursbyID[ID]
+                contours = self.selectContoursByID(contoursbyID, ID)
                 values, dates, distance, transitions = self.stackContours(contours)
-                if len(contoursbyID.keys()) == 1:
+                if len(selectedContourIDs) == 1:
                     axes = [axes]
 
                 ax = axes[IDi]
@@ -1691,17 +1693,19 @@ class MakeAutomatedReport(object):
                         contourline = self.getDefaultContourLineSettings(contourline)
                         cs = ax.contour(contr, levels=[val], linewidths=[float(contourline['linewidth'])], colors=[contourline['linecolor']],
                                         linestyles=contourline['linestylepattern'], alpha=float(contourline['alpha']))
-                        if contourline['contourlinetext'].lower() == 'true':
-                            ax.clabel(cs, inline_spacing=contourline['contourlinespacing'],
-                                      fontsize=contourline['fontsize'], inline=contourline['inline'])
-                        if contourline['show_in_legend'].lower() == 'true':
-                            if 'label' in contourline.keys():
-                                label = contourline['label']
-                            else:
-                                label = str(val)
-                            cl_leg = ax.plot([], [], c=contourline['linecolor'], ls=contourline['linestylepattern'],
-                                             alpha=float(contourline['alpha']), lw=float(contourline['linewidth']),
-                                             label=label)
+                        if 'contourlinetext' in contourline.keys():
+                            if contourline['contourlinetext'].lower() == 'true':
+                                ax.clabel(cs, inline_spacing=contourline['inline_spacing'],
+                                          fontsize=contourline['fontsize'], inline=contourline['text_inline'])
+                        if 'show_in_legend' in contourline.keys():
+                            if contourline['show_in_legend'].lower() == 'true':
+                                if 'label' in contourline.keys():
+                                    label = contourline['label']
+                                else:
+                                    label = str(val)
+                                cl_leg = ax.plot([], [], c=contourline['linecolor'], ls=contourline['linestylepattern'],
+                                                 alpha=float(contourline['alpha']), lw=float(contourline['linewidth']),
+                                                 label=label)
 
                 ### VERTICAL LINES ###
                 if 'vlines' in contour_settings.keys():
@@ -1759,8 +1763,14 @@ class MakeAutomatedReport(object):
                         transition_start = transitions[transkey]
                         trans_name = None
                         hline = self.getDefaultStraightLineSettings(contour_settings['transitions'])
-                        ax.axhline(y=transition_start, c=hline['linecolor'], ls=hline['linestylepattern'], alpha=float(hline['alpha']),
-                                   lw=float(hline['linewidth']))
+
+                        linecolor = self.prioritizeKey(contours[transkey], hline, 'linecolor')
+                        linestylepattern = self.prioritizeKey(contours[transkey], hline, 'linestylepattern')
+                        alpha = self.prioritizeKey(contours[transkey], hline, 'alpha')
+                        linewidth = self.prioritizeKey(contours[transkey], hline, 'linewidth')
+
+                        ax.axhline(y=transition_start, c=linecolor, ls=linestylepattern, alpha=float(alpha),
+                                   lw=float(linewidth))
                         if 'name' in contour_settings['transitions'].keys():
                             trans_flag = contour_settings['transitions']['name'].lower() #blue:pink:white:pink:blue
                             text_settings = self.getDefaultTextSettings(contour_settings['transitions'])
@@ -1770,7 +1780,6 @@ class MakeAutomatedReport(object):
                             if trans_name != None:
 
                                 trans_y_ratio = abs(1.0 - (transition_start / max(ax.get_ylim()) + .01)) #dont let user touch this
-
 
                                 fontcolor = self.prioritizeKey(contours[transkey], text_settings, 'fontcolor')
                                 fontsize = self.prioritizeKey(contours[transkey], text_settings, 'fontsize')
@@ -2496,6 +2505,13 @@ class MakeAutomatedReport(object):
 
         return cur_obj_settings
 
+    def selectContoursByID(self, contoursbyID, ID):
+        output_contours = {}
+        for key in contoursbyID:
+            if contoursbyID[key]['ID'] == ID:
+                output_contours[key] = contoursbyID[key]
+        return output_contours
+
     def stackContours(self, contours):
         output_values = np.array([])
         output_dates = np.array([])
@@ -2704,13 +2720,14 @@ class MakeAutomatedReport(object):
                                     'alpha': 1,
                                     'contourlinetext': 'false',
                                     'fontsize': 10,
-                                    'inline': 'true',
+                                    'text_inline': 'true',
+                                    'inline_spacing': 10,
                                     'legend': 'false'}
 
         for key in default_contour_settings.keys():
             if key not in contour_settings:
                 contour_settings[key] = default_contour_settings[key]
-                if key == 'inline':
+                if key == 'text_inline':
                     if contour_settings[key].lower() == 'true':
                         contour_settings[key] = True
                     else:
@@ -3366,18 +3383,16 @@ class MakeAutomatedReport(object):
                     continue
                 dates, values, units, distance = self.getContours(curreach)
                 if WF.checkData(values):
-                    if ID not in data.keys():
-                        data[ID] = {}
                     if 'flag' in reach.keys():
                         flag = reach['flag']
                     elif 'label' in reach.keys():
                         flag = reach['label']
                     else:
                         flag = 'reach_{0}'.format(ID)
-                    if flag in data[ID].keys():
+                    if flag in data.keys():
                         count = 1
                         newflag = flag + '_{0}'.format(count)
-                        while newflag in data[ID].keys():
+                        while newflag in data.keys():
                             count += 1
                             newflag = flag + '_{0}'.format(count)
                         flag = newflag
@@ -3391,7 +3406,7 @@ class MakeAutomatedReport(object):
                         y_scalar = float(object_settings['y_scalar'])
                         distance *= y_scalar
 
-                    data[ID][flag] = {'values': values,
+                    data[flag] = {'values': values,
                                   'dates': dates,
                                   'units': units,
                                   'distance': distance,
@@ -3399,8 +3414,8 @@ class MakeAutomatedReport(object):
                                   'logoutputfilename': datamem_key}
 
                     for key in reach.keys():
-                        if key not in data[ID][flag].keys():
-                            data[ID][flag][key] = reach[key]
+                        if key not in data[flag].keys():
+                            data[flag][key] = reach[key]
         #reset
         self.loadCurrentID('base')
         self.loadCurrentModelAltID('base')
@@ -3597,6 +3612,14 @@ class MakeAutomatedReport(object):
             if units != None:
                 units_list.append(units)
         return units_list
+
+    def getUsedIDs(self, contoursbyID):
+        IDs = []
+        for key in contoursbyID.keys():
+            ID = contoursbyID[key]['ID']
+            if ID not in IDs:
+                IDs.append(ID)
+        return IDs
 
     def getRowHeader(self, row_val, line_settings):
         header = []
@@ -4032,13 +4055,12 @@ class MakeAutomatedReport(object):
 
     def filterDataByYear(self, data, year):
         if year != 'ALLYEARS':
-            for ID in data.keys():
-                for flag in data[ID].keys():
-                    years = np.array([n.year for n in data[ID][flag]['dates']])
-                    msk = np.where(years==year)
+            for flag in data.keys():
+                years = np.array([n.year for n in data[flag]['dates']])
+                msk = np.where(years==year)
 
-                    data[ID][flag]['values'] = data[ID][flag]['values'][msk]
-                    data[ID][flag]['dates'] = data[ID][flag]['dates'][msk]
+                data[flag]['values'] = data[flag]['values'][msk]
+                data[flag]['dates'] = data[flag]['dates'][msk]
         return data
 
     def formatDateXAxis(self, curax, object_settings, twin=False):
