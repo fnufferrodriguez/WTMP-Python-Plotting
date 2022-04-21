@@ -1145,6 +1145,11 @@ class ResSim_Results(object):
         return self.t_computed[istart:iend], v[istart:iend]
 
     def checkSubdomain(self, subdomain_name):
+        '''
+        checks to see if subdomain exists in model results
+        :param subdomain_name: name of subdomain to check
+        :return:
+        '''
         dataset = 'Results/Subdomains/{0}'.format(subdomain_name)
         if dataset not in self.h.keys():
             return False
@@ -1152,6 +1157,12 @@ class ResSim_Results(object):
             return True
 
     def readSubdomain(self, metric, subdomain_name):
+        '''
+        reads the subdomain data from h5 file
+        :param metric: metric of data to get
+        :param subdomain_name: name of subdomain to extract data from
+        :return: times, values, distances
+        '''
 
         if metric.lower() == 'flow':
             dataset_name = 'Cell flow'
@@ -1209,6 +1220,12 @@ class ResSim_Results(object):
         return dates, vals
 
     def calcSubdomainDistances(self, subdomain):
+        '''
+        calculates subdomain distances. Either uses the cell length to calculate, or does a distance formula between
+        cell centers. Using a cell length field is MUCH more accurate, but you gotta make do.
+        :param subdomain: name of subdomain
+        :return: list of distances
+        '''
 
         cell_center_xy = self.h['Geometry/Subdomains/{0}/Cell Center Coordinate'.format(subdomain)]
         firstpoint = cell_center_xy[0]

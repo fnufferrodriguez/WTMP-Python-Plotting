@@ -66,7 +66,7 @@ class MakeAutomatedReport(object):
         self.readGraphicsDefaultFile() #read graphical component defaults
         self.readDefaultLineStylesFile()
         self.buildLogFile()
-        self.initializeDataMemory()
+        # self.initializeDataMemory()
         if self.reportType == 'single': #Eventually be able to do comparison reports, put that here
             for simulation in self.Simulations:
                 print('Running Simulation:', simulation)
@@ -82,6 +82,7 @@ class MakeAutomatedReport(object):
                     self.setSimulationCSVVars(self.SimulationCSV[simorder])
                     self.readDefinitionsFile(self.SimulationCSV[simorder])
                     self.loadModelAlts(self.SimulationCSV[simorder])
+                    self.initializeDataMemory()
                     self.loadCurrentModelAltID('base')
                     self.addSimLogEntry()
                     self.writeChapter()
@@ -103,6 +104,7 @@ class MakeAutomatedReport(object):
                 self.setSimulationCSVVars(self.SimulationCSV[simorder])
                 self.readDefinitionsFile(self.SimulationCSV[simorder])
                 self.loadModelAlts(self.SimulationCSV[simorder])
+                self.initializeDataMemory()
                 self.loadCurrentModelAltID('base')
                 self.addSimLogEntry()
                 self.writeChapter()
@@ -1589,7 +1591,6 @@ class MakeAutomatedReport(object):
             for IDi, ID in enumerate(selectedContourIDs):
                 contour_settings = pickle.loads(pickle.dumps(cur_obj_settings, -1))
                 contour_settings = self.configureSettingsForID(ID, contour_settings)
-                # contours = contoursbyID[ID]
                 contours = self.selectContoursByID(contoursbyID, ID)
                 values, dates, distance, transitions = self.stackContours(contours)
                 if len(selectedContourIDs) == 1:
@@ -1794,7 +1795,8 @@ class MakeAutomatedReport(object):
                         modeltext = contour_settings['modeltext']
                     else:
                         modeltext = self.SimulationName
-                    plt.text(1.02, 0.5, modeltext, fontsize=12, transform=ax.transAxes, verticalalignment='center', horizontalalignment='center', rotation='vertical')
+                    plt.text(1.02, 0.5, modeltext, fontsize=12, transform=ax.transAxes, verticalalignment='center',
+                             horizontalalignment='center', rotation='vertical')
 
 
                 if 'gridlines' in contour_settings.keys():
@@ -2506,6 +2508,13 @@ class MakeAutomatedReport(object):
         return cur_obj_settings
 
     def selectContoursByID(self, contoursbyID, ID):
+        '''
+        selects contour data based on the ID
+        :param contoursbyID: dictionary containing all contours
+        :param ID: selected ID ('base', 'alt_1')
+        :return: list of contour keys that apply to that ID
+        '''
+
         output_contours = {}
         for key in contoursbyID:
             if contoursbyID[key]['ID'] == ID:
@@ -2513,6 +2522,17 @@ class MakeAutomatedReport(object):
         return output_contours
 
     def stackContours(self, contours):
+        '''
+        stacks data for multiple contour reaches so they appear as a single reach. Adds distances to stay consistent.
+        keeps track of the distances in which defined reaches change
+        :param contours: dictionary containing reach contour data
+        :return:
+            output_values: values at each timestep/distance
+            output_dates: list of dates for data
+            output_distance:distances for each cell center from source
+            transitions: names and locations where the reaches change
+        '''
+
         output_values = np.array([])
         output_dates = np.array([])
         output_distance = np.array([])
@@ -2536,6 +2556,10 @@ class MakeAutomatedReport(object):
         return output_values, output_dates, output_distance, transitions
 
     def setMultiRunStartEndYears(self):
+        '''
+        sets start and end times by looking at all possible runs. Picks overlapping time periods only.
+        '''
+
         for simID in self.SimulationVariables.keys():
             if self.SimulationVariables[simID]['StartTime'] > self.StartTime:
                 self.StartTime = self.SimulationVariables[simID]['StartTime']
@@ -2637,11 +2661,10 @@ class MakeAutomatedReport(object):
         '''
         gets line settings and adds missing needed settings with defaults. Then translates java style inputs to
         python commands. Gets colors and styles.
-        :param LineSettings: dictionary object containing settings and flags for lines/points
-        :param param: parameter of data in order to grab default
+        :param GateLineSettings: dictionary object containing settings and flags for gates
         :param i: number of line on the plot in order to get the right sequential color
         :return:
-            LineSettings: dictionary containing keys describing how the line/points are drawn
+            GateLineSettings: dictionary containing keys describing how the line/points are drawn
         '''
 
         GateLineSettings = self.getDrawFlags(GateLineSettings)
@@ -2653,7 +2676,6 @@ class MakeAutomatedReport(object):
 
             GateLineSettings = self.translateLineStylePatterns(GateLineSettings)
             GateLineSettings['linecolor'] = self.confirmColor(GateLineSettings['linecolor'], default_default_lines['linecolor'])
-
 
         if GateLineSettings['drawpoints'] == 'true':
             default_default_points = self.getDefaultDefaultPointStyles(i)
@@ -2714,9 +2736,14 @@ class MakeAutomatedReport(object):
         return TextSettings
 
     def getDefaultContourLineSettings(self, contour_settings):
+        '''
+        contains bare essentials for contour plots just incase nothing is specified
+        :param contour_settings: dictionary containing settings
+        :return:
+        '''
         default_contour_settings = {'linecolor': 'grey',
-                                    'linewidth':1,
-                                    'linestylepattern':'solid',
+                                    'linewidth': 1,
+                                    'linestylepattern': 'solid',
                                     'alpha': 1,
                                     'contourlinetext': 'false',
                                     'fontsize': 10,
@@ -2772,6 +2799,13 @@ class MakeAutomatedReport(object):
         return LineSettings
 
     def getDefaultContourSettings(self, object_settings):
+        '''
+        gets default settings for contours adn overwrites missing settings in object settings to be sure
+        contour plots have everything that they need
+        :param object_settings: dictionary containing settings
+        :return: updated settings dictionary
+        '''
+
         defaultColormap = mpl.cm.get_cmap('jet')
         default_colorbar_settings = {'colormap': defaultColormap,
                                      'bins':10,
@@ -3422,6 +3456,11 @@ class MakeAutomatedReport(object):
         return data
 
     def getContours(self, object_settings):
+        '''
+        Retrieves Contour data from sources
+        :param object_settings: dictionary for object settings
+        :return: times, values, units distance. All objects are 1D/2D arrays
+        '''
 
         if 'ressimresname' in object_settings.keys(): #Ressim subdomain
             datamem_key = self.buildDataMemoryKey(object_settings)
@@ -3613,25 +3652,30 @@ class MakeAutomatedReport(object):
                 units_list.append(units)
         return units_list
 
-    def getUsedIDs(self, contoursbyID):
+    def getUsedIDs(self, data):
+        '''
+        Finds all IDs that are actually used by data
+        :param data: dictionary for data
+        :return: list of IDs
+        '''
+
         IDs = []
-        for key in contoursbyID.keys():
-            ID = contoursbyID[key]['ID']
+        for key in data.keys():
+            ID = data[key]['ID']
             if ID not in IDs:
                 IDs.append(ID)
         return IDs
 
-    def getRowHeader(self, row_val, line_settings):
-        header = []
-        rv_split = row_val.replace('%', '').split('.')[1:]
-        for rv in rv_split:
-            if rv in line_settings.keys():
-                if 'label' in line_settings[rv]:
-                    header.append(line_settings[rv]['label'])
-        header = ', '.join(header)
-        return header
-
     def getGateConfigurationDays(self, gateconfig, gatedata, timestamp):
+        '''
+        calculates gate configuration days for a given timestamp. Gate configuration days are the amount of days in the
+        simulation where the configuration of currently open gates have been open
+        :param gateconfig: dictionary containing settings for gate configurations
+        :param gatedata: dictionary containing information for gates
+        :param timestamp: current timestamp to configure to
+        :return: decimal days number
+        '''
+
         time_interval = None
         operation_idx = []
         for gateop in gatedata.keys():
@@ -3655,6 +3699,15 @@ class MakeAutomatedReport(object):
         return round((time_interval * correct_config).days + ((time_interval * correct_config).seconds / 86400), 3)
 
     def getGateBlendDays(self, gateconfig, gatedata, timestamp):
+        '''
+        calculates gate blend days for a given timestamp. Gate blend days are the amount of days in the simulation where
+        the combination of currently open gates have been open
+        :param gateconfig: dictionary containing settings for gate configurations
+        :param gatedata: dictionary containing information for gates
+        :param timestamp: current timestamp to configure to
+        :return: decimal days number
+        '''
+
         time_interval = None
         gateconfig_activegateop = {}
         alldays_activeop = {}
@@ -3692,6 +3745,12 @@ class MakeAutomatedReport(object):
         return round((time_interval * idx_count).days + ((time_interval * idx_count).seconds / 86400), 3)
 
     def getRelativeMasterSet(self, linedata):
+        '''
+        organizes data and gets it on the same interval
+        :param linedata: dictionary containing data
+        :return: set of data on same interavl and units, settings for relative lines
+        '''
+
         #add all thje data together. then we cna use this when plotting it to get %
         #TODO: deal with irregular intervals
         intervals = {}
@@ -3739,6 +3798,12 @@ class MakeAutomatedReport(object):
         return RelativeMasterSet, RelativeLineSettings
 
     def getGateOperationTimes(self, gatedata):
+        '''
+        gets times when gates are operational
+        :param gatedata: dictionary containing gate data
+        :return: list of dates with dates operational
+        '''
+
         operationTimes = []
         for gateop in gatedata.keys():
             gateop_ops = np.array([])
@@ -3752,7 +3817,6 @@ class MakeAutomatedReport(object):
                         operationTimes.append(curgate['dates'][int(gateop_op)])
 
         return operationTimes
-
 
     def replaceDefaults(self, default_settings, object_settings):
         '''
@@ -3779,22 +3843,6 @@ class MakeAutomatedReport(object):
                     default_settings[key] = object_settings[key]
                 elif key.lower() not in default_settings.keys():
                     default_settings[key] = object_settings[key] #if the defaults dont have anything defined, fill it in
-                # else:
-                #     for item in object_settings[key]:
-                #         if isinstance(item, dict):
-                #             if 'flag' in item.keys(): #if we flag line
-                #                 flag_match = False
-                #                 for defaultitem in default_settings[key]:
-                #                     if 'flag' in defaultitem.keys():
-                #                         if defaultitem['flag'].lower() == item['flag'].lower(): #matching flags!
-                #                             flag_match = True
-                #                             for subkey in item.keys(): #for each settings defined, overwrite
-                #                                 defaultitem[subkey] = item[subkey]
-                #                 if not flag_match:
-                #                     default_settings[key].append(item)
-                #         if isinstance(item, str):
-                #             default_settings[key] = object_settings[key] #replace string with list, ex datessource
-                #             break
             else:
                 default_settings[key] = object_settings[key]
 
@@ -4054,11 +4102,17 @@ class MakeAutomatedReport(object):
         return units
 
     def filterDataByYear(self, data, year):
+        '''
+        filters data by a given year. Used when splitting by year
+        :param data: dictionary containing data to use
+        :param year: selected year
+        :return:dictionary containing fultered data
+        '''
+
         if year != 'ALLYEARS':
             for flag in data.keys():
                 years = np.array([n.year for n in data[flag]['dates']])
                 msk = np.where(years==year)
-
                 data[flag]['values'] = data[flag]['values'][msk]
                 data[flag]['dates'] = data[flag]['dates'][msk]
         return data
@@ -4317,6 +4371,14 @@ class MakeAutomatedReport(object):
         return out_stat, stat
 
     def buildTable(self, object_settings, split_by_year, data):
+        '''
+        builds a table header and rows
+        :param object_settings: dictionary containing settings for object
+        :param split_by_year: boolean flag to determine if table is for all years, or split up
+        :param data: dictionary contining data
+        :return: headers and rows lists
+        '''
+
         headers = {}
         rows = {}
         outputyears = [n for n in self.years] #this is usually a range or ALLYEARS
@@ -4398,6 +4460,14 @@ class MakeAutomatedReport(object):
         return organizedheaders, organizedrows
 
     def buildProfileStatsTable(self, object_settings, timestamp, data):
+        '''
+        builds a table header and rows for profile statistics
+        :param object_settings: dictionary containing settings
+        :param timestamp: current timestamp to configure table for
+        :param data: dictionary contianing data
+        :return: list of headers, list of rows
+        '''
+
         headers = []
         rows = []
         for ri, row in enumerate(object_settings['rows']):
@@ -4764,17 +4834,17 @@ class MakeAutomatedReport(object):
                             df = pd.DataFrame(colvals)
                 elif 'iscontour' in self.Data_Memory[key].keys():
                     continue #were not doing this for now, takes ~ 5 seconds per 3yr reach..
-                    if self.Data_Memory[key]['iscontour'] == True:
-                        alltimes = self.Data_Memory[key]['dates']
-                        allvalues = self.Data_Memory[key]['values'].T #this gets transposed a few times.. we want distance/date
-                        alldistance = self.Data_Memory[key]['distance']
-                        times = self.matcharrays(alltimes, allvalues)
-                        distances = self.matcharrays(alldistance, allvalues)
-                        values = self.getListItems(allvalues)
-                        units = self.Data_Memory[key]['units']
-                        newstime = time.time()
-                        df = pd.DataFrame({'Dates': times, 'Values ({0})'.format(units): values, 'Distances': distances,
-                                           })
+                    # if self.Data_Memory[key]['iscontour'] == True:
+                    #     alltimes = self.Data_Memory[key]['dates']
+                    #     allvalues = self.Data_Memory[key]['values'].T #this gets transposed a few times.. we want distance/date
+                    #     alldistance = self.Data_Memory[key]['distance']
+                    #     times = self.matcharrays(alltimes, allvalues)
+                    #     distances = self.matcharrays(alldistance, allvalues)
+                    #     values = self.getListItems(allvalues)
+                    #     units = self.Data_Memory[key]['units']
+                    #     newstime = time.time()
+                    #     df = pd.DataFrame({'Dates': times, 'Values ({0})'.format(units): values, 'Distances': distances,
+                    #                        })
                 else:
                     allvalues = self.Data_Memory[key]['values']
                     alltimes = self.Data_Memory[key]['times']
@@ -4866,6 +4936,14 @@ class MakeAutomatedReport(object):
             return array1
 
     def mergeLines(self, data, settings):
+        '''
+        reads in mergeline settings and combines time series as defined. returns a single time series based on the
+        controller flag. then removes lines if dictated.
+        :param data: dictionary containing data
+        :param settings: list of settings including mergeline settings
+        :return: updated data dictionary
+        '''
+
         removekeys = []
         if 'mergelines' in settings.keys():
             for mergeline in settings['mergelines']:
@@ -4939,6 +5017,7 @@ class MakeAutomatedReport(object):
                 self.alternativeDirectory
                 self.ModelAlt - WDR class that is plugin specific
         '''
+
         self.accepted_IDs = []
         for ID in self.SimulationVariables.keys():
             approved_modelalts = [modelalt for modelalt in self.SimulationVariables[ID]['ModelAlternatives']
@@ -4982,6 +5061,11 @@ class MakeAutomatedReport(object):
             sys.exit()
 
     def loadCurrentID(self, ID):
+        '''
+        loads model specific settings for a given ID
+        :param ID: selected ID, such as 'base' or 'alt_1'
+        '''
+
         self.currentlyloadedID = ID
         self.SimulationName = self.SimulationVariables[ID]['SimulationName']
         self.baseSimulationName = self.SimulationVariables[ID]['baseSimulationName']
@@ -4995,12 +5079,16 @@ class MakeAutomatedReport(object):
         self.EndTime = self.SimulationVariables[ID]['EndTime']
 
     def loadCurrentModelAltID(self, ID):
+        '''
+        loads model alternative specific settings for a given ID
+        :param ID: selected ID, such as 'base' or 'alt_1'
+        '''
         self.alternativeFpart = self.SimulationVariables[ID]['alternativeFpart']
         self.alternativeDirectory = self.SimulationVariables[ID]['alternativeDirectory']
         self.modelAltName = self.SimulationVariables[ID]['modelAltName']
         self.plugin = self.SimulationVariables[ID]['plugin']
         self.ModelAlt = self.SimulationVariables[ID]['ModelAlt']
-        # print('Model {0} Loaded'.format(ID))
+        # print('Model {0} Loaded'.format(ID)) #noisy
 
     def initializeXML(self):
         '''
@@ -5014,9 +5102,17 @@ class MakeAutomatedReport(object):
         self.XML.writeCover('DRAFT Temperature Validation Summary Report')
 
     def initializeDataMemory(self):
+        '''
+        create Data_Memory dictionary
+        '''
+
         self.Data_Memory = {}
 
     def initSimulationDict(self):
+        '''
+        create simulationVariables dictionary
+        '''
+
         self.SimulationVariables = {}
 
     def ensureDefaultFiles(self):
@@ -5066,6 +5162,15 @@ class MakeAutomatedReport(object):
                     print('Successfully copied to', new_file_path)
 
     def copyObjectSettingsToAxSetting(self, to_dict, from_dict, ignore=[]):
+        '''
+        Copies settings from an object to an Axis. That way, users can define settings once in the main flags and have
+        it cascade down to all axis, unless defined in the axis.
+        :param to_dict: settings to copy to
+        :param from_dict: settings to copy from
+        :param ignore: list of keys to not copy
+        :return: updated dictionary (to_dict)
+        '''
+
         for key in from_dict.keys():
             if key not in ignore:
                 if key not in to_dict.keys():
@@ -5073,6 +5178,13 @@ class MakeAutomatedReport(object):
         return to_dict
 
     def correctDuplicateLabels(self, linedata):
+        '''
+        changes the name of data internally if it is duplicated. Mostly used for comparison plots where "computed"
+        may be used several times. Appends numbers to the end
+        :param linedata: dictionary with settings
+        :return: updated dictionary
+        '''
+
         for line in linedata.keys():
             if 'label' in linedata[line].keys():
                 curlabel = linedata[line]['label']
@@ -5085,6 +5197,13 @@ class MakeAutomatedReport(object):
         return linedata
 
     def correctTableUnits(self, data, object_settings):
+        '''
+        converts units for table data
+        :param data: dictionary containing data
+        :param object_settings: settings for plot/table
+        :return: data with updated units
+        '''
+
         for datapath in data.keys():
             values = data[datapath]['values']
             units = data[datapath]['units']
@@ -5107,17 +5226,21 @@ class MakeAutomatedReport(object):
         return plot_info
 
     def getLineModelType(self, Line_info):
-        # plugin = self.SimulationVariables[ID]['plugin'].lower()
+        '''
+        attempts to figure out what model the data is for based off the model source as an attempt to filter out data
+        retrieval attempts
+        :param Line_info: dictionary of settings for line
+        :return: model plugin name if possible
+        '''
+
         model_specific_vars = {'ressimresname': 'ressim',
                                'xy': 'ressim',
                                'w2_segment': 'cequalw2',
                                'w2_file': 'cequalw2'}
         for var, ident in model_specific_vars.items():
-            # if var in Line_info.keys() and ident == plugin:
             if var in Line_info.keys():
                 return ident
-            # elif var in Line_info and ident != plugin:
-            #     return ident
+
         return 'undefined' #no id either way..
 
     def DatetimeToJDate(self, dates):
@@ -5169,6 +5292,10 @@ class MakeAutomatedReport(object):
             return dates
 
     def printVersion(self):
+        '''
+        print current version number
+        '''
+
         print('VERSION:', VERSIONNUMBER)
 
     def pickByParameter(self, values, line):
@@ -5200,6 +5327,16 @@ class MakeAutomatedReport(object):
                 return values[param_key]
 
     def prioritizeKey(self, firstchoice, secondchoice, key, backup=None):
+        '''
+        looks for a key in two sets of settings. If the key is in first choice, use that one. then check the second choice.
+        if it neither, just use backup.
+        :param firstchoice: dictionary
+        :param secondchoice: dictionary
+        :param key: settings key to look for in dictionaries
+        :param backup: backup value if in neither.
+        :return: setting from prioritized dictionary
+        '''
+
         if key in firstchoice:
             return firstchoice[key]
         elif key in secondchoice:
@@ -5400,8 +5537,7 @@ class MakeAutomatedReport(object):
         :param timestamps: list of dates
         :param year: target year
         :return:
-            timestamps: original date values
-            list of selected timestamps
+            timestamps: list of selected timestamps
         '''
 
         if year == 'ALLYEARS':
@@ -5409,13 +5545,18 @@ class MakeAutomatedReport(object):
         return [n for n in timestamps if n.year == year]
 
     def fixXMLModelIntroduction(self, simorder):
+        '''
+        Fixes intro in XML that shows what models are used for each region.
+        Updates a flag with used models.
+        :param simorder: number of simulation file
+        :return:
+        '''
+
         outstr = '{0}:'.format(self.ChapterRegion)
-        # for cnt, (ID, simvar) in enumerate(self.SimulationVariables.items()):
         for cnt, ID in enumerate(self.accepted_IDs):
             if cnt > 0:
                 outstr += ','
             outstr += ' {0}'.format(self.SimulationVariables[ID]['plugin'])
-            # outstr += ' {0}-{1}'.format(simvar['plugin'], simvar['SimulationName'])
         self.XML.replaceinXML('%%REPLACEINTRO_{0}%%'.format(simorder), outstr)
 
     def fixDuplicateColors(self, line_settings):
@@ -5423,9 +5564,10 @@ class MakeAutomatedReport(object):
         when doing comparison runs, we can end up with multiple runs with the same lines set
         settings can be set to a list of colors, like linecolors instead of linecolor.
         finds the correct index for each line ,or chooses a default color
-        :param line_settings:
-        :return:
+        :param line_settings: dictionary containing line settings
+        :return: line settings with updated color settings
         '''
+
         lineusedcount = line_settings['numtimesused']
         if lineusedcount > len(self.def_colors):
             defcol_idx = lineusedcount%len(self.def_colors)
@@ -5491,6 +5633,14 @@ class MakeAutomatedReport(object):
         return line_settings
 
     def filterProfileData(self, data, line_settings, object_settings):
+        '''
+        filters profile data by ylims, xlims, and omitvalues
+        :param data: dictionary containing data
+        :param line_settings: dictionary contining settings for line
+        :param object_settings: dictionary containing settings for object
+        :return: filtered profile dictionary
+        '''
+
         xmax = None
         xmin = None
         ymax = None
@@ -5511,7 +5661,6 @@ class MakeAutomatedReport(object):
                 xmax = float(object_settings['xlims']['max'])
             if 'min' in object_settings['xlims'].keys():
                 xmin = float(object_settings['xlims']['min'])
-
 
         if 'ylims' in object_settings.keys():
             if 'max' in object_settings['ylims'].keys():
@@ -5589,6 +5738,12 @@ class MakeAutomatedReport(object):
         return data, object_settings
 
     def filterTableData(self, data, object_settings):
+        '''
+        filters out data through xlims, ylims and omitvalues.
+        :param data: dictionary of data
+        :param object_settings: settings for current object containing limits
+        :return: filtered data dictionary
+        '''
 
         xmax = None
         xmin = None
@@ -5607,7 +5762,7 @@ class MakeAutomatedReport(object):
             if 'min' in object_settings['ylims'].keys():
                 ymin = float(object_settings['ylims']['min'])
 
-            # Find Index of ALL acceptable values.
+        # Find Index of ALL acceptable values.
         for lineflag in data.keys():
             line = data[lineflag]
             values = line['values']
@@ -5826,6 +5981,12 @@ class MakeAutomatedReport(object):
             return new_times, np.asarray(new_values)
 
     def checkModelType(self, line_info):
+        '''
+         checks to see if current data path configuration is congruent with currently loaded model ID.
+        :param line_info: selected line or datapath
+        :return: boolean
+        '''
+
         modeltype = self.getLineModelType(line_info)
         if modeltype == 'undefined':
             return True
@@ -5890,18 +6051,6 @@ class MakeAutomatedReport(object):
                                                  'units': object_settings['plot_units'],
                                                  'isprofile': True}
 
-    def commitContourDataToMemory(self, values, dates, distance, units, datamem_key):
-        '''
-        commits updated data to data memory dictionary that keeps track of data
-        :param object_settings:  dicitonary of user defined settings for current object
-        '''
-
-        self.Data_Memory[datamem_key] = {'times': dates,
-                                         'values': values,
-                                         'distance': distance,
-                                         'units': units,
-                                         'iscontour': True}
-
     def configureUnits(self, object_settings, parameter, units):
         '''
         configure units from line settings
@@ -5925,26 +6074,47 @@ class MakeAutomatedReport(object):
         return units
 
     def configureSettingsForID(self, ID, settings):
+        '''
+        loads settings for selected run ID. Mainly for comparison plots. The replaces model specific flags in settings
+        using loaded variables
+        :param ID: selected ID, aka 'base' or 'alt_1'
+        :param settings: dictionary of settings possibly containing flags to replace
+        :return: settings with updated flags. also flags such as self.baseSimulationName are updated to current ID
+        '''
+
         self.loadCurrentID(ID)
         self.loadCurrentModelAltID(ID)
         settings = self.replaceflaggedValues(settings, 'modelspecific')
         return settings
 
     def confirmColor(self, user_color, default_color):
+        '''
+        confirms the color choice is valid. If not, checks to see if common mistake with spaces.
+        If neither work, return a default color.
+        :param user_color: desired color for line to check
+        :param default_color: backup color we know works
+        :return: color string
+        '''
 
         if not is_color_like(user_color):
             if not is_color_like(user_color.replace(' ', '')):
-                print('Invalid pointfillcolor with {0}'.format(user_color))
+                print('Invalid color with {0}'.format(user_color))
                 print('Replacing with default color')
                 return default_color
             else:
-                print('Misspelling in pointfillcolor with {0}'.format(user_color))
+                print('Misspelling in color with {0}'.format(user_color))
                 print('Replacing with {0}'.format(user_color.replace(' ', '')))
                 return user_color.replace(' ', '')
         else:
             return user_color
 
     def confirm_axis(self, object_settings):
+        '''
+        Checks for an axis item in object settings. If not, make one.
+        :param object_settings: dictionary containing settings for current object
+        :return: object settings but with empty axis.
+        '''
+
         if 'axs' not in object_settings.keys():
             object_settings['axs'] = [{}] #empty axis object
         return object_settings
