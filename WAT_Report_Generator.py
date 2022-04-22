@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '4.0'
+VERSIONNUMBER = '4.1'
 
 import datetime as dt
 import os
@@ -1367,9 +1367,22 @@ class MakeAutomatedReport(object):
                                        labels=leg_labels)
 
 
-                figname = 'ProfilePlot_{0}_{1}_{2}_{3}_{4}.png'.format(self.ChapterName, yearstr,
+
+                basefigname = 'ProfilePlot_{0}_{1}_{2}_{3}_{4}'.format(self.ChapterName, yearstr,
                                                                        object_settings['plot_parameter'], self.plugin,
                                                                        page_i)
+
+                exists = True
+                tempnum = 1
+                tfn = basefigname
+                while exists:
+                    if os.path.exists(os.path.join(self.images_path, tfn + '.png')):
+                        tfn = basefigname + '_{0}'.format(tempnum)
+                        tempnum += 1
+                    else:
+                        exists = False
+
+                figname = tfn + '.png'
 
                 plt.savefig(os.path.join(self.images_path, figname))
                 plt.close('all')
