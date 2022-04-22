@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '4.1'
+VERSIONNUMBER = '4.2'
 
 import datetime as dt
 import os
@@ -1209,6 +1209,9 @@ class MakeAutomatedReport(object):
                                     showgate = False
                                     if 'showgates' in cur_gateop.keys():
                                         if cur_gateop['showgates'].lower() == 'true':
+                                            showgate = True
+                                    elif 'showgates' in cur_obj_settings.keys():
+                                        if cur_obj_settings['showgates'].lower() == 'true':
                                             showgate = True
 
                                     if showgate:
