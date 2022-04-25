@@ -898,7 +898,7 @@ class W2_Results(object):
 
 class ResSim_Results(object):
 
-    def __init__(self, simulationPath, alternativeName, starttime, endtime):
+    def __init__(self, simulationPath, alternativeName, starttime, endtime, external=False):
         '''
         Class Builder init.
         :param simulationPath: full path to ResSim simulation
@@ -911,10 +911,12 @@ class ResSim_Results(object):
         self.alternativeName = alternativeName.replace(':', '_')
         self.starttime = starttime
         self.endtime = endtime
+        self.external = external
 
-        self.getH5File()
-        self.load_time() #load time vars from h5
-        self.loadSubdomains()
+        if not self.external:
+            self.getH5File()
+            self.load_time() #load time vars from h5
+            self.loadSubdomains()
 
     def getH5File(self):
         '''
@@ -925,7 +927,10 @@ class ResSim_Results(object):
 
         h5filefrmt = self.alternativeName.replace(' ', '_')
         self.h5fname = os.path.join(self.simulationPath, 'rss', h5filefrmt + '.h5')
-        self.h = h5py.File(self.h5fname, 'r')
+        self.openH5File(self.h5fname)
+
+    def openH5File(self, h5fname):
+        self.h = h5py.File(h5fname, 'r')
 
     def load_time(self):
         '''

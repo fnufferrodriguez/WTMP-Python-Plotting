@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '4.2'
+VERSIONNUMBER = '4.3'
 
 import datetime as dt
 import os
@@ -2971,6 +2971,37 @@ class MakeAutomatedReport(object):
                                                  'values': pickle.loads(pickle.dumps(values, -1)),
                                                  'units': pickle.loads(pickle.dumps(units, -1))}
 
+        elif 'h5file' in Line_info.keys():
+            datamem_key = self.buildDataMemoryKey(Line_info)
+
+            if datamem_key in self.Data_Memory.keys():
+                print('READING {0} FROM MEMORY'.format(datamem_key))
+                datamementry = pickle.loads(pickle.dumps(self.Data_Memory[datamem_key], -1))
+                times = datamementry['times']
+                values = datamementry['values']
+                units = datamementry['units']
+
+            else:
+                filename = Line_info['h5file']
+                if not os.path.exists(filename):
+                    print('ERROR: H5 file does not exist:', filename)
+                    return [], [], None
+                externalResSim = WDR.ResSim_Results('', '', '', '', external=True)
+                externalResSim.openH5File(filename)
+                externalResSim.load_time() #load time vars from h5
+                externalResSim.loadSubdomains()
+                times, values = externalResSim.readTimeSeries(Line_info['parameter'],
+                                                              float(Line_info['easting']),
+                                                              float(Line_info['northing']))
+                if 'units' in Line_info.keys():
+                    units = Line_info['units']
+                else:
+                    units = None
+
+                self.Data_Memory[datamem_key] = {'times': pickle.loads(pickle.dumps(times, -1)),
+                                                 'values': pickle.loads(pickle.dumps(values, -1)),
+                                                 'units': pickle.loads(pickle.dumps(units, -1))}
+
         elif 'easting' in Line_info.keys() and 'northing' in Line_info.keys():
             datamem_key = self.buildDataMemoryKey(Line_info)
             if datamem_key in self.Data_Memory.keys():
@@ -3080,6 +3111,19 @@ class MakeAutomatedReport(object):
             filename = Line_info['filename']
             values, depths, times = WDR.readTextProfile(filename, timesteps)
             return values, [], depths, times, Line_info['flag']
+
+        elif 'h5file' in Line_info.keys() and 'ressimresname' in Line_info.keys():
+            filename = Line_info['h5file']
+            if not os.path.exists(filename):
+                print('ERROR: H5 file does not exist:', filename)
+                return [], [], [], [], Line_info['flag']
+            externalResSim = WDR.ResSim_Results('', '', '', '', external=True)
+            externalResSim.openH5File(filename)
+            externalResSim.load_time() #load time vars from h5
+            externalResSim.loadSubdomains()
+            vals, elevations, depths, times = externalResSim.readProfileData(Line_info['ressimresname'],
+                                                                             Line_info['parameter'], timesteps)
+            return vals, elevations, depths, times, Line_info['flag']
 
         elif 'w2_segment' in Line_info.keys():
             if self.plugin.lower() != 'cequalw2':
@@ -4613,6 +4657,15 @@ class MakeAutomatedReport(object):
             else:
                 outname = '{0}'.format(os.path.basename(Line_info['w2_file']).split('.')[0])
             return outname
+
+        elif 'h5file' in Line_info.keys():
+            h5name = os.path.basename(Line_info['h5file']).split('.h5')[0] + '_h5'
+            if 'easting' in Line_info.keys() and 'northing' in Line_info.keys():
+                outname = 'externalh5_{0}_{1}_{2}_{3}'.format(h5name, Line_info['parameter'], Line_info['easting'], Line_info['northing'])
+                return outname
+            elif 'ressimname' in Line_info.keys():
+                outname = 'externalh5_{0}_{1}_{2}'.format(h5name, Line_info['parameter'], Line_info['ressimresname'])
+                return outname
 
         elif 'easting' in Line_info.keys() and 'northing' in Line_info.keys():
             outname = '{0}_{1}_{2}'.format(Line_info['parameter'], Line_info['easting'], Line_info['northing'])
