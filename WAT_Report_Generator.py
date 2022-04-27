@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '4.3'
+VERSIONNUMBER = '4.5'
 
 import datetime as dt
 import os
@@ -871,8 +871,11 @@ class MakeAutomatedReport(object):
 
         object_settings = self.configureSettingsForID('base', object_settings)
 
-        ################ reformat data ###################
-        data, object_settings = self.convertDepthsToElevations(data, object_settings)
+        ################ convert yflags ################
+        if object_settings['usedepth'].lower() == 'false':
+            data, object_settings = self.convertDepthsToElevations(data, object_settings)
+        elif object_settings['usedepth'].lower() == 'true':
+            data, object_settings = self.convertElevationsToDepths(data, object_settings)
 
         ################# Get plot units #################
         data, line_settings = self.convertProfileDataUnits(object_settings, data, line_settings)
@@ -975,8 +978,11 @@ class MakeAutomatedReport(object):
         object_settings['plot_units'] = self.getPlotUnits(object_settings['units_list'], object_settings)
         object_settings = self.updateFlaggedValues(object_settings, '%%units%%', object_settings['plot_units'])
 
-        ################ convert Elevs ################
-        data, object_settings = self.convertDepthsToElevations(data, object_settings)
+        ################ convert yflags ################
+        if object_settings['usedepth'].lower() == 'false':
+            data, object_settings = self.convertDepthsToElevations(data, object_settings)
+        elif object_settings['usedepth'].lower() == 'true':
+            data, object_settings = self.convertElevationsToDepths(data, object_settings)
 
         self.commitProfileDataToMemory(data, line_settings, object_settings)
         linedata, object_settings = self.filterProfileData(data, line_settings, object_settings)
@@ -1020,7 +1026,6 @@ class MakeAutomatedReport(object):
                         ax.invert_yaxis()
 
                     for li, line in enumerate(data.keys()):
-
                         try:
                             values = data[line]['values'][j]
                             if len(values) == 0:
@@ -1080,8 +1085,12 @@ class MakeAutomatedReport(object):
                                 units = None
                             else:
                                 dates, values, units = self.getTimeSeries(hline_settings)
-                                hline_idx = np.where(object_settings['timestamps'][j] == dates)
-                                value = values[hline_idx]
+                                # hline_idx = np.where(object_settings['timestamps'][j] == dates)
+                                hline_idx = WDR.getClosestTime([object_settings['timestamps'][j]], dates)
+                                if len(hline_idx) == 0:
+                                    value = np.nan
+                                else:
+                                    value = values[hline_idx[0]]
 
                             if 'parameter' in hline_settings:
                                 if object_settings['usedepth'].lower() == 'true':
@@ -1122,8 +1131,13 @@ class MakeAutomatedReport(object):
                                 units = None
                             else:
                                 dates, values, units = self.getTimeSeries(vline_settings)
-                                vline_idx = np.where(object_settings['timestamps'][j] == dates)
-                                value = values[vline_idx]
+                                # vline_idx = np.where(object_settings['timestamps'][j] == dates)
+                                vline_idx = WDR.getClosestTime([object_settings['timestamps'][j]], dates)
+                                if len(vline_idx) == 0:
+                                    value = np.nan
+                                else:
+                                    value = values[vline_idx[0]]
+                                # value = values[vline_idx]
 
                             if 'label' not in vline_settings.keys():
                                 vline_settings['label'] = None
@@ -1150,7 +1164,7 @@ class MakeAutomatedReport(object):
                     # gategroups = {}
                     gateconfig = {}
                     if len(gatedata.keys()) > 0:
-
+                        gatemsk = None
                         for ggi, gategroup in enumerate(gatedata.keys()):
                             gatetop = None
                             gatebottom = None
@@ -1195,8 +1209,14 @@ class MakeAutomatedReport(object):
                                         if isinstance(dates[0], (int,float)):
                                             dates = self.JDateToDatetime(dates)
 
-                                gatemsk = np.where(object_settings['timestamps'][j] == dates)
-                                value = values[gatemsk][0]
+                                # gatemsk = np.where(object_settings['timestamps'][j] == dates)
+                                if gatemsk == None:
+                                    gatemsk = WDR.getClosestTime([object_settings['timestamps'][j]], dates)
+                                if len(gatemsk) == 0:
+                                    value = np.nan
+                                else:
+                                    value = values[gatemsk[0]]
+                                # value = values[gatemsk][0]
                                 xpos = gatepoint_xpositions[gate_count]
                                 if gategroup not in gateconfig.keys():
                                     gateconfig[gategroup] = {gate: value}
@@ -3105,12 +3125,28 @@ class MakeAutomatedReport(object):
         if datamemkey in self.Data_Memory.keys():
             dm = pickle.loads(pickle.dumps(self.Data_Memory[datamemkey], -1))
             print('retrieving profile from datamem')
-            return dm['values'], dm['elevations'], dm['depths'], dm['times'], Line_info['flag']
+            if np.array_equal(timesteps, dm['times']):
+                return dm['values'], dm['elevations'], dm['depths'], dm['times'], Line_info['flag']
+            else:
+                print('Incorrect Timesteps in data memory. Re-extracting data for', datamemkey)
 
-        elif 'filename' in Line_info.keys(): #Get data from Observed
+        if 'filename' in Line_info.keys(): #Get data from Observed
             filename = Line_info['filename']
-            values, depths, times = WDR.readTextProfile(filename, timesteps)
-            return values, [], depths, times, Line_info['flag']
+            values, yvals, times = WDR.readTextProfile(filename, timesteps)
+            if 'y_convention' in Line_info.keys():
+                if Line_info['y_convention'].lower() == 'depth':
+                    return values, [], yvals, times, Line_info['flag']
+                elif Line_info['y_convention'].lower() == 'elevation':
+                    return values, yvals, [], times, Line_info['flag']
+                else:
+                    print('Unknown value for flag y_convention: {0}'.format(Line_info['y_convention']))
+                    print('Please use "depth" or "elevation"')
+                    print('Assuming depths...')
+                    return values, [], yvals, times, Line_info['flag']
+            else:
+                print('No value for flag y_convention')
+                print('Assuming depths...')
+                return values, [], yvals, times, Line_info['flag']
 
         elif 'h5file' in Line_info.keys() and 'ressimresname' in Line_info.keys():
             filename = Line_info['h5file']
@@ -3738,20 +3774,28 @@ class MakeAutomatedReport(object):
 
         time_interval = None
         operation_idx = []
+        datamsk = None
         for gateop in gatedata.keys():
             for gi, gate in enumerate(gatedata[gateop]['gates'].keys()):
                 curgate = gatedata[gateop]['gates'][gate]
-                datamsk = np.where(curgate['dates'] == timestamp)
+                # datamsk = np.where(curgate['dates'] == timestamp)
+
+                if datamsk == None:
+                    datamsk = WDR.getClosestTime([timestamp], curgate['dates'])
+
+
                 if len(datamsk) == 0:
                     continue
                 else:
-                    datamsk = datamsk[0][0] + 1
+                    # datamsk = datamsk[0][0] + 1
+                    datamsk_i = datamsk[0] + 1
+
                 if time_interval == None:
                     time_interval = curgate['dates'][1] - curgate['dates'][0]
                 if np.isnan(gateconfig[gateop][gate]):
-                    correct_ops_idx = np.where(curgate['values'][:datamsk] != 1)[0].tolist()
+                    correct_ops_idx = np.where(curgate['values'][:datamsk_i] != 1)[0].tolist()
                 else:
-                    correct_ops_idx = np.where(curgate['values'][:datamsk] == 1)[0].tolist()
+                    correct_ops_idx = np.where(curgate['values'][:datamsk_i] == 1)[0].tolist()
 
                 operation_idx.append(correct_ops_idx)
 
@@ -3771,6 +3815,7 @@ class MakeAutomatedReport(object):
         time_interval = None
         gateconfig_activegateop = {}
         alldays_activeop = {}
+        datamsk = None
         for gateop in gateconfig.keys():
             gateconfig_activegateop[gateop] = False
             for gate in gateconfig[gateop].keys():
@@ -3781,20 +3826,23 @@ class MakeAutomatedReport(object):
                 for gate in gatedata[gateop]['gates'].keys():
                     curgate = gatedata[gateop]['gates'][gate]
                     if curgate['gategroup'] == gateop:
-                        datamsk = np.where(curgate['dates'] == timestamp)
+                        # datamsk = np.where(curgate['dates'] == timestamp)
+                        if datamsk == None:
+                            datamsk = WDR.getClosestTime([timestamp], curgate['dates'])
                         if len(datamsk) == 0:
                             continue
                         else:
-                            datamsk = datamsk[0][0]+1
+                            datamsk_i = datamsk[0]+1
+                            # datamsk = datamsk[0][0]+1
                         if gateop not in alldays_activeop.keys():
-                            alldays_activeop[gateop] = np.full(datamsk, False)
-                        idx_active = np.where(~np.isnan(curgate['values'][:datamsk]))
+                            alldays_activeop[gateop] = np.full(datamsk_i, False)
+                        idx_active = np.where(~np.isnan(curgate['values'][:datamsk_i]))
                         alldays_activeop[gateop][idx_active] = True
                         if time_interval == None:
                             time_interval = curgate['dates'][1] - curgate['dates'][0]
 
         idx_count = 0
-        for i in range(datamsk):
+        for i in range(datamsk_i):
             valid = True #assume all is well
             for gateop in alldays_activeop.keys(): #for each gate on this timestamp
                 if alldays_activeop[gateop][i] != gateconfig_activegateop[gateop]: #if the gate operation is not what it should be
@@ -5724,7 +5772,6 @@ class MakeAutomatedReport(object):
             print('UseDepth flag not set. Cannot filter properly.')
             return data, object_settings
 
-
         if 'xlims' in object_settings.keys():
             if 'max' in object_settings['xlims'].keys():
                 xmax = float(object_settings['xlims']['max'])
@@ -6086,20 +6133,43 @@ class MakeAutomatedReport(object):
         '''
 
         elev_flag = 'NOVALID'
-        if object_settings['usedepth'].lower() == 'false':
-            for ld in data.keys():
-                if data[ld]['elevations'] == []:
-                    noelev_flag = ld
-                    for old in data.keys():
-                        if len(data[old]['elevations']) > 0:
-                            elev_flag = old
-                            break
+        for ld in data.keys():
+            if data[ld]['elevations'] == []:
+                noelev_flag = ld
+                for old in data.keys():
+                    if len(data[old]['elevations']) > 0:
+                        elev_flag = old
+                        break
 
-                    if elev_flag != 'NOVALID':
-                        data[noelev_flag]['elevations'] = WF.convertObsDepths2Elevations(data[noelev_flag]['depths'],
-                                                                                         data[elev_flag]['elevations'])
-                    else:
-                        object_settings['usedepth'] = 'true'
+                if elev_flag != 'NOVALID':
+                    data[noelev_flag]['elevations'] = WF.convertObsDepths2Elevations(data[noelev_flag]['depths'],
+                                                                                     data[elev_flag]['elevations'])
+                else:
+                    object_settings['usedepth'] = 'true'
+        return data, object_settings
+
+    def convertElevationsToDepths(self, data, object_settings):
+        '''
+        handles data to convert depths into elevations for observed data
+        :param object_settings: dicitonary of user defined settings for current object
+        :return: object settings dictionary with updated elevation data
+        '''
+
+        depth_flag = 'NOVALID'
+        for ld in data.keys():
+            if data[ld]['depths'] == []:
+                nodepth_flag = ld
+                for old in data.keys():
+                    if len(data[old]['depths']) > 0:
+                        depth_flag = old
+                        break
+
+                if depth_flag != 'NOVALID':
+                    data[nodepth_flag]['depths'] = WF.convertObsElevations2Depths(data[nodepth_flag]['elevations'],
+                                                                                       data[depth_flag]['depths'],
+                                                                                       data[depth_flag]['elevations'])
+                else:
+                    object_settings['usedepth'] = 'false'
         return data, object_settings
 
     def commitProfileDataToMemory(self, data, line_settings, object_settings):
