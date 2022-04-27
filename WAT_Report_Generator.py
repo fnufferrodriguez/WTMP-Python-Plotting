@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '4.3'
+VERSIONNUMBER = '4.4'
 
 import datetime as dt
 import os
@@ -871,8 +871,11 @@ class MakeAutomatedReport(object):
 
         object_settings = self.configureSettingsForID('base', object_settings)
 
-        ################ reformat data ###################
-        data, object_settings = self.convertDepthsToElevations(data, object_settings)
+        ################ convert yflags ################
+        if object_settings['usedepth'].lower() == 'false':
+            data, object_settings = self.convertDepthsToElevations(data, object_settings)
+        elif object_settings['usedepth'].lower() == 'true':
+            data, object_settings = self.convertElevationsToDepths(data, object_settings)
 
         ################# Get plot units #################
         data, line_settings = self.convertProfileDataUnits(object_settings, data, line_settings)
@@ -975,8 +978,11 @@ class MakeAutomatedReport(object):
         object_settings['plot_units'] = self.getPlotUnits(object_settings['units_list'], object_settings)
         object_settings = self.updateFlaggedValues(object_settings, '%%units%%', object_settings['plot_units'])
 
-        ################ convert Elevs ################
-        data, object_settings = self.convertDepthsToElevations(data, object_settings)
+        ################ convert yflags ################
+        if object_settings['usedepth'].lower() == 'false':
+            data, object_settings = self.convertDepthsToElevations(data, object_settings)
+        elif object_settings['usedepth'].lower() == 'true':
+            data, object_settings = self.convertElevationsToDepths(data, object_settings)
 
         self.commitProfileDataToMemory(data, line_settings, object_settings)
         linedata, object_settings = self.filterProfileData(data, line_settings, object_settings)
@@ -3105,12 +3111,28 @@ class MakeAutomatedReport(object):
         if datamemkey in self.Data_Memory.keys():
             dm = pickle.loads(pickle.dumps(self.Data_Memory[datamemkey], -1))
             print('retrieving profile from datamem')
-            return dm['values'], dm['elevations'], dm['depths'], dm['times'], Line_info['flag']
+            if np.array_equal(timesteps, dm['times']):
+                return dm['values'], dm['elevations'], dm['depths'], dm['times'], Line_info['flag']
+            else:
+                print('Incorrect Timesteps in data memory. Re-extracting data for', datamemkey)
 
-        elif 'filename' in Line_info.keys(): #Get data from Observed
+        if 'filename' in Line_info.keys(): #Get data from Observed
             filename = Line_info['filename']
-            values, depths, times = WDR.readTextProfile(filename, timesteps)
-            return values, [], depths, times, Line_info['flag']
+            values, yvals, times = WDR.readTextProfile(filename, timesteps)
+            if 'y_convention' in Line_info.keys():
+                if Line_info['y_convention'].lower() == 'depth':
+                    return values, [], yvals, times, Line_info['flag']
+                elif Line_info['y_convention'].lower() == 'elevation':
+                    return values, yvals, [], times, Line_info['flag']
+                else:
+                    print('Unknown value for flag y_convention: {0}'.format(Line_info['y_convention']))
+                    print('Please use "depth" or "elevation"')
+                    print('Assuming depths...')
+                    return values, [], yvals, times, Line_info['flag']
+            else:
+                print('No value for flag y_convention')
+                print('Assuming depths...')
+                return values, [], yvals, times, Line_info['flag']
 
         elif 'h5file' in Line_info.keys() and 'ressimresname' in Line_info.keys():
             filename = Line_info['h5file']
@@ -5724,7 +5746,6 @@ class MakeAutomatedReport(object):
             print('UseDepth flag not set. Cannot filter properly.')
             return data, object_settings
 
-
         if 'xlims' in object_settings.keys():
             if 'max' in object_settings['xlims'].keys():
                 xmax = float(object_settings['xlims']['max'])
@@ -6086,20 +6107,43 @@ class MakeAutomatedReport(object):
         '''
 
         elev_flag = 'NOVALID'
-        if object_settings['usedepth'].lower() == 'false':
-            for ld in data.keys():
-                if data[ld]['elevations'] == []:
-                    noelev_flag = ld
-                    for old in data.keys():
-                        if len(data[old]['elevations']) > 0:
-                            elev_flag = old
-                            break
+        for ld in data.keys():
+            if data[ld]['elevations'] == []:
+                noelev_flag = ld
+                for old in data.keys():
+                    if len(data[old]['elevations']) > 0:
+                        elev_flag = old
+                        break
 
-                    if elev_flag != 'NOVALID':
-                        data[noelev_flag]['elevations'] = WF.convertObsDepths2Elevations(data[noelev_flag]['depths'],
-                                                                                         data[elev_flag]['elevations'])
-                    else:
-                        object_settings['usedepth'] = 'true'
+                if elev_flag != 'NOVALID':
+                    data[noelev_flag]['elevations'] = WF.convertObsDepths2Elevations(data[noelev_flag]['depths'],
+                                                                                     data[elev_flag]['elevations'])
+                else:
+                    object_settings['usedepth'] = 'true'
+        return data, object_settings
+
+    def convertElevationsToDepths(self, data, object_settings):
+        '''
+        handles data to convert depths into elevations for observed data
+        :param object_settings: dicitonary of user defined settings for current object
+        :return: object settings dictionary with updated elevation data
+        '''
+
+        depth_flag = 'NOVALID'
+        for ld in data.keys():
+            if data[ld]['depths'] == []:
+                nodepth_flag = ld
+                for old in data.keys():
+                    if len(data[old]['depths']) > 0:
+                        depth_flag = old
+                        break
+
+                if depth_flag != 'NOVALID':
+                    data[nodepth_flag]['depths'] = WF.convertObsElevations2Depths(data[nodepth_flag]['elevations'],
+                                                                                       data[depth_flag]['depths'],
+                                                                                       data[depth_flag]['elevations'])
+                else:
+                    object_settings['usedepth'] = 'false'
         return data, object_settings
 
     def commitProfileDataToMemory(self, data, line_settings, object_settings):

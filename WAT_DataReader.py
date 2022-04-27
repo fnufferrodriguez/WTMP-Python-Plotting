@@ -257,6 +257,7 @@ def readTextProfile(observed_data_filename, timestamps):
     with open(observed_data_filename, 'r') as odf:
         for j, line in enumerate(odf):
             if j == 0:
+                headers = line.strip().split(',')
                 continue
             sline = line.split(',')
             dt_str = sline[0]

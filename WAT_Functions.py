@@ -453,6 +453,28 @@ def convertObsDepths2Elevations(obs_depths, model_elevs):
             obs_elev.append(np.asarray(e))
     return obs_elev
 
+def convertObsElevations2Depths(obs_elevs, model_depths, model_elevations):
+    '''
+    calculate observed elevations based on model elevations and obs depths
+    :param obs_depths: array of depths for observed data at timestep
+    :param model_elevs: array of model elevations at timestep
+    :return: array of observed elevations
+    '''
+
+    obs_depth = []
+    for i, e in enumerate(obs_elevs):
+        d = []
+        modeled_depths = model_depths[i]
+        if len(modeled_depths) == 0 or len(model_elevations[i]) == 0:
+            obs_depth.append(np.full(len(e), np.nan)) #make nan boys
+        else:
+            topwater_elev = max(model_elevations[i])
+
+            for elev in e:
+                d.append(topwater_elev - elev)
+            obs_depth.append(np.asarray(d))
+    return obs_depth
+
 def convertTempUnits(values, units):
     '''
     convert temperature units between c and f
