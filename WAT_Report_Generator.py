@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '4.5'
+VERSIONNUMBER = '4.5.1'
 
 import datetime as dt
 import os
@@ -4870,6 +4870,8 @@ class MakeAutomatedReport(object):
                     if objtype == 'timeseriesplot':
                         self.makeTimeSeriesPlot(object)
                     elif objtype == 'profileplot':
+                        # import cProfile
+                        # ar = cProfile.runctx('self.makeProfilePlot(object)', globals(), locals())
                         self.makeProfilePlot(object)
                     elif objtype == 'errorstatisticstable':
                         self.makeErrorStatisticsTable(object)
@@ -4996,7 +4998,7 @@ class MakeAutomatedReport(object):
         '''
 
         if isinstance(array1, (list, np.ndarray)) and isinstance(array2, (list, np.ndarray)):
-            if len(np.asarray(array1).shape) < len(np.asarray(array2).shape):
+            if len(np.asarray(array1, dtype=object).shape) < len(np.asarray(array2, dtype=object).shape):
                 new_array1 = np.array([])
                 for i, ar2 in enumerate(array2):
                     new_array1 = np.append(new_array1, np.asarray([array1[i]] * len(ar2)))
