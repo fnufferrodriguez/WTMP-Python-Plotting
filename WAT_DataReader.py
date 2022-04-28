@@ -11,6 +11,7 @@ Created on 7/15/2021
 @contact: scott@rmanet.com
 @note:
 '''
+
 import os, sys
 import numpy as np
 import pandas as pd
@@ -324,12 +325,16 @@ def getTextProfileDates(observed_data_filename, starttime, endtime):
                 continue
             sline = line.split(',')
             dt_str = sline[0]
-            # dt_tmp = dateutil.parser.parse(dt_str) #trying this to see if it will work
-            dt_tmp = pendulum.parse(dt_str, strict=False).replace(tzinfo=None) #trying this to see if it will work
-            if starttime <= dt_tmp <= endtime: #get time window
-                if dt_tmp not in t:
-                    t.append(dt_tmp)
-    return np.asarray(t)
+            if dt_str not in t:
+                t.append(dt_str)
+    t_frmt = []
+    for tdate in t:
+        dt_tmp = pendulum.parse(tdate, strict=False).replace(tzinfo=None) #trying this to see if it will work
+        if starttime <= dt_tmp <= endtime: #get time window
+            if dt_tmp not in t_frmt:
+                t_frmt.append(dt_tmp)
+
+    return np.asarray(t_frmt)
 
 def getClosestTime(timestamps, dates):
     '''
@@ -343,15 +348,26 @@ def getClosestTime(timestamps, dates):
     cdi = [] #closest date index
     for timestamp in timestamps:
         closestDateidx = None
-        # closestDateDist = 9999999999999999999999 #seconds, so this needs to be sorta big.
         closestDateDist = 86400 #1 day in seconds
         for i, date in enumerate(dates):
             timedelt = abs((timestamp-date).total_seconds())
-            if timedelt < closestDateDist:
-                closestDateidx = i
-                closestDateDist = timedelt
+
+            if timedelt < closestDateDist: #if current diff is smaller than the last previous
+                if (timestamp-date).total_seconds() < 0: #if the difference is negative, we are moving away and not going to get better
+                    closestDateidx = i
+                    closestDateDist = timedelt
+                    break
+                else:
+                    closestDateidx = i
+                    closestDateDist = timedelt
+                    if timedelt == 0:
+                        break
+            else: #what if we start moving away, and were not smaller than the last change?
+                if (timestamp-date).total_seconds() < 0: #if the difference is negative, we are moving away and not going to get better
+                    break
 
         cdi.append(closestDateidx)
+
     return cdi
 
 def getchildren(root, returnkeyless=False):
