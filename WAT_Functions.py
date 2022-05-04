@@ -403,7 +403,8 @@ def calcNSE(data1, data2):
     #         np.sum((data1['values'] - data2['values']) ** 2, axis=0, dtype=np.float64)
     #         / np.sum((data2['values'] - np.mean(data2['values'])) ** 2, dtype=np.float64)
     # )
-
+    if np.isinf(nse_):
+        nse_ = np.nan
     return nse_
 
 def getCount(data1):
