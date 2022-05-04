@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '4.5.1'
+VERSIONNUMBER = '4.5.2'
 
 import datetime as dt
 import os
@@ -899,6 +899,9 @@ class MakeAutomatedReport(object):
             yrheaders = [list(itertools.chain.from_iterable(yrheaders))]
             yrheaders_i = [list(itertools.chain.from_iterable(yrheaders_i))]
         for yi, year in enumerate(self.years):
+            if len(yrheaders[yi]) == 0:
+                print('No data for', year)
+                continue
             yearstr = object_settings['yearstr'][yi]
             object_desc = self.updateFlaggedValues(object_settings['description'], '%%year%%', yearstr)
             if self.iscomp:
