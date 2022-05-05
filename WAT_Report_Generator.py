@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '4.5.2'
+VERSIONNUMBER = '4.5.3'
 
 import datetime as dt
 import os
@@ -1012,12 +1012,13 @@ class MakeAutomatedReport(object):
                 subplot_rows, subplot_cols = WF.getSubplotConfig(len(pgi), int(cur_obj_settings['profilesperrow']))
                 n_nrow_active = np.ceil(len(pgi) / subplot_cols)
 
-                fig, axs = plt.subplots(nrows=int(object_settings['rowsperpage']), ncols=int(object_settings['profilesperrow']), figsize=(7,10))
+                fig, axs = plt.subplots(nrows=int(object_settings['rowsperpage']), ncols=int(object_settings['profilesperrow']), figsize=(9,10))
 
                 for i in range(n):
 
-                    current_row = i // int(object_settings['rowsperpage'])
-                    current_col = i % int(object_settings['rowsperpage'])
+                    current_row = i // int(object_settings['profilesperrow'])
+                    current_col = i % int(object_settings['profilesperrow'])
+
                     ax = axs[current_row, current_col]
                     if i+1 > len(pgi):
                         ax.axis('off')
