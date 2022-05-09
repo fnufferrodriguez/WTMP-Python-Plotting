@@ -230,6 +230,22 @@ class XMLReport(object):
         self.current_table_num += 1
         self.column_order = 0
 
+    def writeNarrowTableStart(self, desc, type):
+        '''
+        writes start of table block for a desired table type
+        :param desc: description of table
+        :param type: type of table (monthly or error)
+        '''
+
+        with open(self.XML_fn, 'a') as XML:
+            XML.write('<Report_Element ReportElementOrder="{0}" Element="12_Column_Control_Point_Tables">\n'.format(self.current_reportelem_num))
+            XML.write('<Output_Temp_Flow Location="{0}">\n'.format(desc))
+            XML.write('<Output_Table TableNumber="{0}" TableDescription="{1}" TableType="{2}">\n'.format(self.current_table_num, desc, type))
+
+        self.current_reportelem_num += 1
+        self.current_table_num += 1
+        self.column_order = 0
+
     def writeDateControlledTableStart(self, desc, type):
         with open(self.XML_fn, 'a') as XML:
             XML.write('<Report_Element ReportElementOrder="{0}" Element="DateControlledTable">\n'.format(self.current_reportelem_num))
@@ -241,7 +257,7 @@ class XMLReport(object):
         self.column_order = 0
         self.datecolumn_order = 0
 
-    def writeTableColumn(self, header, rows):
+    def writeTableColumn(self, header, rows, thresholdcolors=[]):
         '''
         writes a full column of a table
         :param header: name of header for column
@@ -254,6 +270,10 @@ class XMLReport(object):
                 s_row = row.split('|')
                 rowname = s_row[0]
                 rowval = s_row[1]
+                if len(thresholdcolors) != 0:
+                    if thresholdcolors[i] != None:
+                        XML.write('<Row Row_Order="{0}" Row_name="{1}" Background_Color="{2}">{3}</Row>\n'.format(i, rowname, thresholdcolors[i], rowval))
+                        continue
                 XML.write('<Row Row_Order="{0}" Row_name="{1}">{2}</Row>\n'.format(i, rowname, rowval))
             XML.write('</Column>\n')
         self.column_order += 1
