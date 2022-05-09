@@ -12,14 +12,14 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '4.5.3'
+VERSIONNUMBER = '4.6.0'
 
 import datetime as dt
 import os
 import sys
 import matplotlib.pyplot as plt
 import matplotlib as mpl
-from matplotlib.colors import is_color_like
+from matplotlib.colors import is_color_like, to_hex
 import numpy as np
 import pandas as pd
 import xml.etree.ElementTree as ET
@@ -1301,7 +1301,17 @@ class MakeAutomatedReport(object):
                         xticksize = float(object_settings['fontsize'])
                     else:
                         xticksize = 10
-                    ax.tick_params(axis='x', labelsize=xticksize)
+
+                    show_xticks = True
+                    if 'xlims' in object_settings.keys() and not show_xlabel:
+                        if all([x in object_settings['xlims'].keys() for x in ['min', 'max']]):
+                            show_xticks = False
+
+                    if not show_xticks:
+                        ax.set_xticklabels([])
+                        ax.tick_params(axis='x', which='both', bottom=False)
+                    else:
+                        ax.tick_params(axis='x', labelsize=xticksize)
 
                     if 'yticksize' in object_settings.keys():
                         yticksize = float(object_settings['yticksize'])
@@ -1309,7 +1319,17 @@ class MakeAutomatedReport(object):
                         yticksize = float(object_settings['fontsize'])
                     else:
                         yticksize = 10
-                    ax.tick_params(axis='y', labelsize=yticksize)
+                        
+                    show_yticks = True
+                    if 'ylims' in object_settings.keys() and not show_ylabel:
+                        if all([x in object_settings['ylims'].keys() for x in ['min', 'max']]):
+                            show_yticks = False
+
+                    if not show_yticks:
+                        ax.set_yticklabels([])
+                        ax.tick_params(axis='y', which='both', left=False)
+                    else:
+                        ax.tick_params(axis='y', labelsize=yticksize)
 
                     cur_timestamp = object_settings['timestamps'][j]
                     if 'dateformat' in object_settings:
@@ -1354,10 +1374,13 @@ class MakeAutomatedReport(object):
                         # if show_xlabel:
                         #     ax.annotate(bottomtext, xy=(0.02, -40), fontsize=6, color='red', xycoords='axes points')
                         # else:
-                        ax.annotate(bottomtext, xy=(0.02, -22), fontsize=6, color='red', xycoords='axes points')
+                        if show_xticks:
+                            bottomtext_y = -25
+                        else:
+                            bottomtext_y = -10
+                        ax.annotate(bottomtext, xy=(0.02, bottomtext_y), fontsize=6, color='red', xycoords='axes points')
 
                 plt.tight_layout()
-
 
                 if 'legend' in cur_obj_settings.keys():
                     if cur_obj_settings['legend'].lower() == 'true':
@@ -1394,7 +1417,6 @@ class MakeAutomatedReport(object):
                                        labels=leg_labels)
 
 
-
                 basefigname = 'ProfilePlot_{0}_{1}_{2}_{3}_{4}'.format(self.ChapterName, yearstr,
                                                                        object_settings['plot_parameter'], self.plugin,
                                                                        page_i)
@@ -1411,7 +1433,7 @@ class MakeAutomatedReport(object):
 
                 figname = tfn + '.png'
 
-                plt.savefig(os.path.join(self.images_path, figname))
+                plt.savefig(os.path.join(self.images_path, figname), bbox_inches='tight')
                 plt.close('all')
 
                 ################################################
@@ -1534,11 +1556,14 @@ class MakeAutomatedReport(object):
         data = self.filterTableData(data, object_settings)
         data = self.correctTableUnits(data, object_settings)
 
+        thresholds = self.formatThreshold(object_settings)
+
         self.XML.writeTableStart(object_settings['description'], 'Month')
         for i, yearheader in enumerate(headings):
             year = yearheader[0]
             header = yearheader[1]
             frmt_rows = []
+            threshold_colors = []
             for row in rows:
                 s_row = row.split('|')
                 rowname = s_row[0]
@@ -1548,8 +1573,96 @@ class MakeAutomatedReport(object):
                     if len(rowdata) == 0:
                         row_val = None
                     else:
-
+                        c = None
                         row_val, stat = self.getStatsLine(row_val, rowdata)
+                        if not np.isnan(row_val) and row_val != None:
+                            for thresh in thresholds:
+                                if thresh['colorwhen'] == 'under':
+                                    if row_val < thresh['value']:
+                                        c = thresh['color']
+                                elif thresh['colorwhen'] == 'over':
+                                    if row_val > thresh['value']:
+                                        c = thresh['color']
+                        threshold_colors.append(c)
+                        data_start_date, data_end_date = self.getTableDates(year, object_settings, month=sr_month)
+                        self.addLogEntry({'type': 'Statistic',
+                                          'name': ' '.join([self.ChapterRegion, header, stat]),
+                                          'description': object_settings['description'],
+                                          'value': row_val,
+                                          'units': object_settings['units_list'],
+                                          'function': stat,
+                                          'value_start_date': self.translateDateFormat(data_start_date, 'datetime', ''),
+                                          'value_end_date': self.translateDateFormat(data_end_date, 'datetime', ''),
+                                          'logoutputfilename': ', '.join([data[flag]['logoutputfilename'] for flag in data])
+                                          },
+                                         isdata=True)
+
+                header = '' if header == None else header
+                frmt_rows.append('{0}|{1}'.format(rowname, row_val))
+            self.XML.writeTableColumn(header, frmt_rows, thresholdcolors=threshold_colors)
+        self.XML.writeTableEnd()
+
+    def makeSingleStatisticTable(self, object_settings):
+        '''
+        takes in object settings to build Single Statistic table and write to XML
+        :param object_settings: currently selected object settings dictionary
+        :return: creates png in images dir and writes to XML file
+        '''
+
+        print('\n################################')
+        print('Now making Single Statistic Table.')
+        print('################################\n')
+
+        default_settings = self.loadDefaultPlotObject('singlestatistictable') #get default SingleStat items
+        object_settings = self.replaceDefaults(default_settings, object_settings) #overwrite the defaults with chapter file
+
+        object_settings['years'] = pickle.loads(pickle.dumps(self.years, -1))
+        data = self.getTableData(object_settings)
+        data = self.mergeLines(data, object_settings)
+
+        headings, rows = self.buildSingleStatTable(object_settings, data)
+
+        # object_settings= self.configureSettingsForID('base', object_settings) #will turn on for comparison plot later
+        object_settings['units_list'] = self.getUnitsList(data)
+        object_settings['plot_units'] = self.getPlotUnits(object_settings['units_list'], object_settings)
+
+        object_settings = self.updateFlaggedValues(object_settings, '%%units%%', object_settings['plot_units'])
+
+        data = self.filterTableData(data, object_settings)
+        data = self.correctTableUnits(data, object_settings)
+
+        thresholds = self.formatThreshold(object_settings)
+
+        self.XML.writeNarrowTableStart(object_settings['description'], 'Year')
+        for i, header in enumerate(headings):
+            frmt_rows = []
+            threshold_colors = []
+            for row in rows:
+                s_row = row.split('|')
+                rowname = s_row[0]
+                if rowname in [str(n) for n in object_settings['years']]:
+                    year = int(rowname)
+                else:
+                    year = 'ALL'
+                row_val = s_row[i+1]
+                if '%%' in row_val:
+                    rowdata, sr_month = self.getStatsLineData(row_val, data, year=year)
+                    if len(rowdata) == 0:
+                        row_val = None
+                    else:
+                        c = None
+                        row_val, stat = self.getStatsLine(row_val, rowdata)
+                        if np.isnan(row_val):
+                            row_val = '-'
+                        else:
+                            for thresh in thresholds:
+                                if thresh['colorwhen'] == 'under':
+                                    if row_val < thresh['value']:
+                                        c = thresh['color']
+                                elif thresh['colorwhen'] == 'over':
+                                    if row_val > thresh['value']:
+                                        c = thresh['color']
+                        threshold_colors.append(c)
 
                         data_start_date, data_end_date = self.getTableDates(year, object_settings, month=sr_month)
                         self.addLogEntry({'type': 'Statistic',
@@ -1566,8 +1679,115 @@ class MakeAutomatedReport(object):
 
                 header = '' if header == None else header
                 frmt_rows.append('{0}|{1}'.format(rowname, row_val))
-            self.XML.writeTableColumn(header, frmt_rows)
+            self.XML.writeTableColumn(header, frmt_rows, thresholdcolors=threshold_colors)
         self.XML.writeTableEnd()
+
+    def makeSingleStatisticProfileTable(self, object_settings):
+        '''
+        takes in object settings to build Single Statistic profile table and write to XML
+        :param object_settings: currently selected object settings dictionary
+        :return: creates png in images dir and writes to XML file
+        '''
+
+        print('\n################################')
+        print('Now making Single Statistic Profile Table.')
+        print('################################\n')
+
+        default_settings = self.loadDefaultPlotObject('singlestatisticprofiletable') #get default SingleStat items
+        object_settings = self.replaceDefaults(default_settings, object_settings) #overwrite the defaults with chapter file
+        object_settings['datakey'] = 'datapaths'
+
+        ################# Get timestamps #################
+        object_settings['datessource_flag'] = self.getDateSourceFlag(object_settings)
+        object_settings['timestamps'] = self.getProfileTimestamps(object_settings)
+        object_settings['timestamp_index'] = self.getProfileTimestampYearMonthIndex(object_settings)
+
+        object_settings['years'] = pickle.loads(pickle.dumps(self.years, -1))
+
+        data, line_settings = self.getProfileData(object_settings)
+        line_settings = self.correctDuplicateLabels(line_settings)
+
+        ################ convert yflags ################
+        if object_settings['usedepth'].lower() == 'false':
+            data, object_settings = self.convertDepthsToElevations(data, object_settings)
+        elif object_settings['usedepth'].lower() == 'true':
+            data, object_settings = self.convertElevationsToDepths(data, object_settings)
+
+        headings, rows = self.buildSingleStatTable(object_settings, line_settings)
+
+        # object_settings= self.configureSettingsForID('base', object_settings) #will turn on for comparison plot later
+        ################# Get plot units #################
+        data, line_settings = self.convertProfileDataUnits(object_settings, data, line_settings)
+        object_settings['units_list'] = self.getUnitsList(line_settings)
+        object_settings['plot_units'] = self.getPlotUnits(object_settings['units_list'], object_settings)
+
+        object_settings = self.updateFlaggedValues(object_settings, '%%units%%', object_settings['plot_units'])
+
+        self.commitProfileDataToMemory(data, line_settings, object_settings)
+
+        data, object_settings = self.filterProfileData(data, line_settings, object_settings)
+
+        object_settings['resolution'] = self.getProfileInterpResolution(object_settings)
+
+        thresholds = self.formatThreshold(object_settings)
+
+        self.XML.writeNarrowTableStart(object_settings['description'], 'Year')
+        for i, header in enumerate(headings):
+            frmt_rows = []
+            threshold_colors = []
+            for ri, row in enumerate(rows):
+                s_row = row.split('|')
+                rowname = s_row[0]
+                if rowname in [str(n) for n in object_settings['years']]:
+                    year = int(rowname)
+                else:
+                    year = 'ALL'
+                row_val = s_row[i+1]
+                if '%%' in row_val:
+                    rowval_stats = {}
+                    if year == 'ALL':
+                        data_idx = self.getAllMonthIdx(object_settings['timestamp_index'], i)
+                    else:
+                        data_idx = object_settings['timestamp_index'][ri][i]
+                    for di in data_idx:
+                        stats_data = self.formatStatsProfileLineData(row_val, data, object_settings['resolution'],
+                                                                     object_settings['usedepth'], di)
+                        rowval_stats = self.stackProfileIndicies(rowval_stats, stats_data)
+
+                    c = None
+
+                    row_val, stat = self.getStatsLine(row_val, rowval_stats)
+                    if np.isnan(row_val):
+                        row_val = '-'
+                    else:
+                        for thresh in thresholds:
+                            if thresh['colorwhen'] == 'under':
+                                if row_val < thresh['value']:
+                                    c = thresh['color']
+                            elif thresh['colorwhen'] == 'over':
+                                if row_val > thresh['value']:
+                                    c = thresh['color']
+                    threshold_colors.append(c)
+
+                    data_start_date, data_end_date = self.getTableDates(year, object_settings, month=header)
+                    self.addLogEntry({'type': 'ProfileTableStatistic',
+                                      'name': ' '.join([self.ChapterRegion, header, stat]),
+                                      'description': object_settings['description'],
+                                      'value': row_val,
+                                      'function': stat,
+                                      'units': object_settings['plot_units'],
+                                      'value_start_date': data_start_date,
+                                      'value_end_date': data_end_date,
+                                      'logoutputfilename': ', '.join([line_settings[flag]['logoutputfilename'] for flag in line_settings])
+                                      },
+                                     isdata=True)
+
+                header = '' if header == None else header
+                frmt_rows.append('{0}|{1}'.format(rowname, row_val))
+
+            self.XML.writeTableColumn(header, frmt_rows, thresholdcolors=threshold_colors)
+        self.XML.writeTableEnd()
+
 
     def makeContourPlot(self, object_settings):
         '''
@@ -2595,6 +2815,22 @@ class MakeAutomatedReport(object):
                 transitions[contourname] = current_distances[0]
         return output_values, output_dates, output_distance, transitions
 
+    def stackProfileIndicies(self, exist_data, new_data):
+        #exist_data is existing array
+        #new data is data to be added to it
+        for runflag in new_data.keys():
+            if runflag not in exist_data.keys():
+                exist_data[runflag] = {}
+            for itemflag in new_data[runflag]:
+                if itemflag not in exist_data[runflag].keys():
+                    exist_data[runflag][itemflag] = new_data[runflag][itemflag]
+                else:
+                    if isinstance(new_data[runflag][itemflag], list):
+                        exist_data[runflag][itemflag] += new_data[runflag][itemflag]
+                    elif isinstance(new_data[runflag][itemflag], np.ndarray):
+                        exist_data[runflag][itemflag] = np.append(exist_data[runflag][itemflag], new_data[runflag][itemflag])
+        return exist_data
+
     def setMultiRunStartEndYears(self):
         '''
         sets start and end times by looking at all possible runs. Picks overlapping time periods only.
@@ -3258,6 +3494,7 @@ class MakeAutomatedReport(object):
                     data = self.recordTimeSeriesData(data, line)
         return data
 
+
     def getGateData(self, object_settings):
         '''
         Gets profile line data from defined data sources in XML files
@@ -3404,7 +3641,7 @@ class MakeAutomatedReport(object):
                 try:
                     month = int(month)
                 except ValueError:
-                    month = self.month2num
+                    month = self.month2num[month.lower()]
 
                 try:
                     start_date = dt.datetime.strptime(start_date, '%d %b %Y').replace(month=month).strftime('%d %b %Y')
@@ -3630,6 +3867,7 @@ class MakeAutomatedReport(object):
         '''
 
         if isinstance(object_settings['datessource_flag'], str):
+            timestamps = []
             for line in object_settings[object_settings['datakey']]:
                 if line['flag'] == object_settings['datessource_flag']:
                     timestamps = self.getProfileDates(line)
@@ -3650,6 +3888,20 @@ class MakeAutomatedReport(object):
             timestamps = self.makeRegularTimesteps(days=15)
 
         return np.asarray(timestamps)
+
+    def getProfileTimestampYearMonthIndex(self, object_settings):
+        timestamp_indexes = []
+        for year in self.years:
+            year_idx = []
+            for mon in range(1,13):
+                mon_idx = []
+                for ti, timestamp in enumerate(object_settings['timestamps']):
+                    if timestamp.year == year and timestamp.month == mon:
+                        mon_idx.append(ti)
+                year_idx.append(mon_idx)
+            timestamp_indexes.append(year_idx)
+        return timestamp_indexes
+
 
     def getPlotParameter(self, object_settings):
         '''
@@ -3765,6 +4017,12 @@ class MakeAutomatedReport(object):
             if ID not in IDs:
                 IDs.append(ID)
         return IDs
+
+    def getAllMonthIdx(self, timestamp_indexes, i):
+        out_idx = []
+        for yearlist in timestamp_indexes:
+            out_idx += yearlist[i]
+        return out_idx
 
     def getGateConfigurationDays(self, gateconfig, gatedata, timestamp):
         '''
@@ -4371,6 +4629,7 @@ class MakeAutomatedReport(object):
                 flags.append(sr)
         top = None
         bottom = None
+
         for flag in flags:
             #get elevs
             if usedepth.lower() == 'true':
@@ -4436,6 +4695,50 @@ class MakeAutomatedReport(object):
 
         return out_data
 
+    def formatThreshold(self, object_settings):
+        default_color = '#a6a6a6' #default
+        default_colorwhen = 'under' #default
+        accepted_threshold_conditions = ['under', 'over']
+        thresholds = []
+
+        if 'thresholds' in object_settings.keys():
+            for threshold in object_settings['thresholds']:
+
+                if 'value' in threshold.keys():
+                    threshold_value = float(threshold['value'])
+                else:
+                    continue #dont record this threshold
+
+                if 'color' in threshold.keys():
+                    threshold_color = self.formatThresholdColor(threshold['color'], default=default_color)
+                else:
+                    threshold_color = default_color
+
+                if 'colorwhen' in threshold.keys():
+                    if any([n.lower() == threshold['colorwhen'].lower() for n in accepted_threshold_conditions]):
+                        threshold_colorwhen = threshold['colorwhen'].lower()
+                    else:
+                        print(f"Invalid threshold setting {threshold['colorwhen']}")
+                        print(f'Please select value in {accepted_threshold_conditions}')
+                else:
+                    threshold_colorwhen =default_colorwhen
+
+                thresholds.append({'value': threshold_value, 'color': threshold_color, 'colorwhen': threshold_colorwhen})
+
+        return thresholds
+
+    def formatThresholdColor(self, in_color, default='#a6a6a6'):
+        threshold_color=default
+        if in_color.startswith('#'):
+            threshold_color = in_color
+        else:
+            try:
+                threshold_color = to_hex(in_color)
+            except ValueError:
+                print(f'Invalid color of {in_color}')
+
+        return threshold_color
+
     def getStatsLine(self, row, data):
         '''
         takes rows for tables and replaces flags with the correct data, computing stat analysis if needed
@@ -4448,32 +4751,43 @@ class MakeAutomatedReport(object):
 
         flags = list(data.keys())
 
-        if 'Computed' in flags:
-            flag1 = 'Computed'
-            if len(flags) >= 2:
-                flag2 = [n for n in flags if n != flag1][0] #not computed
+        if len(flags) > 0:
+            getdata=True
+            if 'Computed' in flags:
+                flag1 = 'Computed'
+                if len(flags) >= 2:
+                    flag2 = [n for n in flags if n != flag1][0] #not computed
+            else:
+                flag1 = flags[0]
+                if len(flags) >= 2:
+                    flag2 = flags[1]
         else:
-            flag1 = flags[0]
-            if len(flags) >= 2:
-                flag2 = flags[1]
+            getdata = False
 
+        out_stat = np.nan
         if row.lower().startswith('%%meanbias'):
-            out_stat = WF.calcMeanBias(data[flag1], data[flag2])
+            if getdata:
+                out_stat = WF.calcMeanBias(data[flag1], data[flag2])
             stat = 'meanbias'
         elif row.lower().startswith('%%mae'):
-            out_stat = WF.calcMAE(data[flag1], data[flag2])
+            if getdata:
+                out_stat = WF.calcMAE(data[flag1], data[flag2])
             stat = 'mae'
         elif row.lower().startswith('%%rmse'):
-            out_stat = WF.calcRMSE(data[flag1], data[flag2])
+            if getdata:
+                out_stat = WF.calcRMSE(data[flag1], data[flag2])
             stat = 'rmse'
         elif row.lower().startswith('%%nse'):
-            out_stat = WF.calcNSE(data[flag1], data[flag2])
+            if getdata:
+                out_stat = WF.calcNSE(data[flag1], data[flag2])
             stat = 'nse'
         elif row.lower().startswith('%%count'):
-            out_stat = WF.getCount(data[flag1])
+            if getdata:
+                out_stat = WF.getCount(data[flag1])
             stat = 'count'
         elif row.lower().startswith('%%mean'):
-            out_stat = WF.calcMean(data[flag1])
+            if getdata:
+                out_stat = WF.calcMean(data[flag1])
             stat = 'mean'
         else:
             if '%%' in row:
@@ -4570,6 +4884,43 @@ class MakeAutomatedReport(object):
                     organizedrows[ri] += '|{0}'.format(rw)
 
         return organizedheaders, organizedrows
+
+    def buildSingleStatTable(self, object_settings, data):
+        rows = []
+        headers = [n for n in self.mo_str_3]
+        stat = object_settings['statistic']
+        if stat in ['mean', 'count']:
+            numflagsneeded = 1
+        else:
+            numflagsneeded = 2
+        datakeys = list(data.keys())
+        if len(data.keys()) < 2 and numflagsneeded != 1:
+            print('\nWARNING: Insufficient amount of datapaths defined.')
+            print(f'Need 2 datapaths to compute statistics for {stat}')
+            print('Resulting table will not generate correctly.')
+        if len(data.keys()) > 2:
+            print('\nWARNING: Too many datapaths defined.')
+            print(f'Need 2 datapaths to compute statistics for {stat}')
+            print(f'Resulting table will use the following datapaths: {datakeys[0]}, {datakeys[1]}')
+        for year in object_settings['years']:
+            row = f'{year}'
+            for month in self.mo_str_3:
+                if numflagsneeded == 1:
+                    row += f'|%%{stat}.{data[datakeys[0]]["flag"]}.MONTH={month.upper()}%%'
+                else:
+                    row += f'|%%{stat}.{data[datakeys[0]]["flag"]}.MONTH={month.upper()}.{data[datakeys[1]]["flag"]}.MONTH={month.upper()}%%'
+            rows.append(row)
+        if 'includeallyears' in object_settings.keys():
+            if object_settings['includeallyears'].lower() == 'true':
+                row = 'All'
+                for month in self.mo_str_3:
+                    if numflagsneeded == 1:
+                        row += f'|%%{stat}.{data[datakeys[0]]["flag"]}.MONTH={month.upper()}%%'
+                    else:
+                        row += f'|%%{stat}.{data[datakeys[0]]["flag"]}.MONTH={month.upper()}.{data[datakeys[1]]["flag"]}.MONTH={month.upper()}%%'
+                rows.append(row)
+
+        return headers, rows
 
     def buildProfileStatsTable(self, object_settings, timestamp, data):
         '''
@@ -4874,8 +5225,6 @@ class MakeAutomatedReport(object):
                     if objtype == 'timeseriesplot':
                         self.makeTimeSeriesPlot(object)
                     elif objtype == 'profileplot':
-                        # import cProfile
-                        # ar = cProfile.runctx('self.makeProfilePlot(object)', globals(), locals())
                         self.makeProfilePlot(object)
                     elif objtype == 'errorstatisticstable':
                         self.makeErrorStatisticsTable(object)
@@ -4887,6 +5236,10 @@ class MakeAutomatedReport(object):
                         self.makeProfileStatisticsTable(object)
                     elif objtype == 'contourplot':
                         self.makeContourPlot(object)
+                    elif objtype == 'singlestatistictable':
+                        self.makeSingleStatisticTable(object)
+                    elif objtype == 'singlestatisticprofiletable':
+                        self.makeSingleStatisticProfileTable(object)
                     else:
                         print('Section Type {0} not identified.'.format(objtype))
                         print('Skipping Section..')
