@@ -12,13 +12,14 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '4.6.0'
+VERSIONNUMBER = '4.6.1'
 
 import datetime as dt
 import os
 import sys
 import matplotlib.pyplot as plt
 import matplotlib as mpl
+import matplotlib.ticker as mticker
 from matplotlib.colors import is_color_like, to_hex
 import numpy as np
 import pandas as pd
@@ -1153,16 +1154,7 @@ class MakeAutomatedReport(object):
                                        zorder=float(vline_settings['zorder']),
                                        alpha=float(vline_settings['alpha']))
 
-                    if 'xlims' in object_settings.keys():
-                        if 'min' in object_settings['xlims']:
-                            ax.set_xlim(left=float(object_settings['xlims']['min']))
-                        if 'max' in object_settings['xlims']:
-                            ax.set_xlim(right=float(object_settings['xlims']['max']))
-                    if 'ylims' in object_settings.keys():
-                        if 'min' in object_settings['ylims']:
-                            ax.set_ylim(bottom=float(object_settings['ylims']['min']))
-                        if 'max' in object_settings['ylims']:
-                            ax.set_ylim(top=float(object_settings['ylims']['max']))
+
 
                     ### GATES ###
                     # gategroups = {}
@@ -1307,11 +1299,33 @@ class MakeAutomatedReport(object):
                         if all([x in object_settings['xlims'].keys() for x in ['min', 'max']]):
                             show_xticks = False
 
+                    xmin, xmax = ax.get_xlim()
+                    if 'xlims' in object_settings.keys():
+                        if 'min' in object_settings['xlims']:
+                            xmin = float(object_settings['xlims']['min'])
+                        if 'max' in object_settings['xlims']:
+                            xmax = float(object_settings['xlims']['max'])
+
                     if not show_xticks:
                         ax.set_xticklabels([])
                         ax.tick_params(axis='x', which='both', bottom=False)
                     else:
                         ax.tick_params(axis='x', labelsize=xticksize)
+                        if 'xtickspacing' in object_settings.keys():
+                            xtickspacing = object_settings['xtickspacing']
+                            if '.' in xtickspacing:
+                                xtickspacing = float(xtickspacing)
+                            else:
+                                xtickspacing = int(xtickspacing)
+                            newxticks = np.arange(xmin, (xmax+xtickspacing), xtickspacing)
+                            newxticklabels = self.formatTickLabels(newxticks)
+                            # ax.xaxis.set_major_locator(mticker.FixedLocator(newxticks))
+                            ax.set_xticks(newxticks)
+                            ax.set_xticklabels(newxticklabels)
+
+                        ax.set_xlim(left=xmin)
+                        ax.set_xlim(right=xmax)
+
 
                     if 'yticksize' in object_settings.keys():
                         yticksize = float(object_settings['yticksize'])
@@ -1325,11 +1339,31 @@ class MakeAutomatedReport(object):
                         if all([x in object_settings['ylims'].keys() for x in ['min', 'max']]):
                             show_yticks = False
 
+                    ymin, ymax = ax.get_ylim()
+                    if 'ylims' in object_settings.keys():
+                        if 'min' in object_settings['ylims']:
+                            ymin = float(object_settings['ylims']['min'])
+                        if 'max' in object_settings['ylims']:
+                            ymax = float(object_settings['ylims']['max'])
+
                     if not show_yticks:
                         ax.set_yticklabels([])
                         ax.tick_params(axis='y', which='both', left=False)
                     else:
                         ax.tick_params(axis='y', labelsize=yticksize)
+                        if 'ytickspacing' in object_settings.keys():
+                            ytickspacing = object_settings['ytickspacing']
+                            if '.' in ytickspacing:
+                                ytickspacing = float(ytickspacing)
+                            else:
+                                ytickspacing = int(ytickspacing)
+                            newyticks = np.arange(ymin, (ymax+ytickspacing), ytickspacing)
+                            newyticklabels = self.formatTickLabels(newyticks)
+                            ax.set_yticks(newyticks)
+                            ax.set_yticklabels(newyticklabels)
+
+                        ax.set_ylim(bottom=ymin)
+                        ax.set_ylim(top=ymax)
 
                     cur_timestamp = object_settings['timestamps'][j]
                     if 'dateformat' in object_settings:
@@ -4738,6 +4772,22 @@ class MakeAutomatedReport(object):
                 print(f'Invalid color of {in_color}')
 
         return threshold_color
+
+    def formatTickLabels(self, ticks):
+        newticklabels = []
+        for tick in ticks:
+            if tick < 1 and tick != 0:
+                tickstr = '.' + str(tick).split('.')[1]
+                newticklabels.append(tickstr)
+            elif type(tick) == np.float64:
+                tickstr = str(tick)
+                if '.' in tickstr:
+                    if tickstr.split('.')[1].startswith('0'):
+                        newticklabels.append(str(round(tick)))
+                    else:
+                        newticklabels.append(str(round(tick, 1)))
+        return newticklabels
+
 
     def getStatsLine(self, row, data):
         '''
