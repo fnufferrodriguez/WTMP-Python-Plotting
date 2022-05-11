@@ -1298,8 +1298,8 @@ class MakeAutomatedReport(object):
 
                     show_xlabel, show_ylabel = self.getPlotLabelMasks(i, len(pgi), subplot_cols)
 
-                    if cur_obj_settings['gridlines'].lower() == 'true':
-                        ax.grid(zorder=-9)
+                    # if cur_obj_settings['gridlines'].lower() == 'true':
+                    #     ax.grid(zorder=-9)
 
                     if show_ylabel:
                         if 'ylabel' in cur_obj_settings.keys():
@@ -1344,24 +1344,24 @@ class MakeAutomatedReport(object):
                         if 'max' in object_settings['xlims']:
                             xmax = float(object_settings['xlims']['max'])
 
+                    ax.tick_params(axis='x', labelsize=xticksize)
+                    if 'xticks' in object_settings.keys():
+                        xtick_settings = object_settings['xticks']
+                        if 'spacing' in xtick_settings.keys():
+                            xtickspacing = xtick_settings['spacing']
+                            if '.' in xtickspacing:
+                                xtickspacing = float(xtickspacing)
+                            else:
+                                xtickspacing = int(xtickspacing)
+                            newxticks = np.arange(xmin, (xmax+xtickspacing), xtickspacing)
+                            newxticklabels = self.formatTickLabels(newxticks, xtick_settings)
+                            # ax.xaxis.set_major_locator(mticker.FixedLocator(newxticks))
+                            ax.set_xticks(newxticks)
+                            ax.set_xticklabels(newxticklabels)
+
                     if not show_xticks:
                         ax.set_xticklabels([])
                         ax.tick_params(axis='x', which='both', bottom=False)
-                    else:
-                        ax.tick_params(axis='x', labelsize=xticksize)
-                        if 'xticks' in object_settings.keys():
-                            xtick_settings = object_settings['xticks']
-                            if 'spacing' in xtick_settings.keys():
-                                xtickspacing = xtick_settings['spacing']
-                                if '.' in xtickspacing:
-                                    xtickspacing = float(xtickspacing)
-                                else:
-                                    xtickspacing = int(xtickspacing)
-                                newxticks = np.arange(xmin, (xmax+xtickspacing), xtickspacing)
-                                newxticklabels = self.formatTickLabels(newxticks, xtick_settings)
-                                # ax.xaxis.set_major_locator(mticker.FixedLocator(newxticks))
-                                ax.set_xticks(newxticks)
-                                ax.set_xticklabels(newxticklabels)
 
                     ax.set_xlim(left=xmin)
                     ax.set_xlim(right=xmax)
@@ -1386,26 +1386,29 @@ class MakeAutomatedReport(object):
                         if 'max' in object_settings['ylims']:
                             ymax = float(object_settings['ylims']['max'])
 
+                    ax.tick_params(axis='y', labelsize=yticksize)
+                    if 'yticks' in object_settings.keys():
+                        ytick_settings = object_settings['yticks']
+                        if 'spacing' in ytick_settings.keys():
+                            ytickspacing = ytick_settings['spacing']
+                            if '.' in ytickspacing:
+                                ytickspacing = float(ytickspacing)
+                            else:
+                                ytickspacing = int(ytickspacing)
+                            newyticks = np.arange(ymin, (ymax+ytickspacing), ytickspacing)
+                            newyticklabels = self.formatTickLabels(newyticks, ytick_settings)
+                            ax.set_yticks(newyticks)
+                            ax.set_yticklabels(newyticklabels)
+
                     if not show_yticks:
                         ax.set_yticklabels([])
                         ax.tick_params(axis='y', which='both', left=False)
-                    else:
-                        ax.tick_params(axis='y', labelsize=yticksize)
-                        if 'yticks' in object_settings.keys():
-                            ytick_settings = object_settings['yticks']
-                            if 'spacing' in ytick_settings.keys():
-                                ytickspacing = ytick_settings['spacing']
-                                if '.' in ytickspacing:
-                                    ytickspacing = float(ytickspacing)
-                                else:
-                                    ytickspacing = int(ytickspacing)
-                                newyticks = np.arange(ymin, (ymax+ytickspacing), ytickspacing)
-                                newyticklabels = self.formatTickLabels(newyticks, ytick_settings)
-                                ax.set_yticks(newyticks)
-                                ax.set_yticklabels(newyticklabels)
 
                     ax.set_ylim(bottom=ymin)
                     ax.set_ylim(top=ymax)
+
+                    if cur_obj_settings['gridlines'].lower() == 'true':
+                        ax.grid(zorder=-9)
 
                     cur_timestamp = object_settings['timestamps'][j]
                     if 'dateformat' in object_settings:
