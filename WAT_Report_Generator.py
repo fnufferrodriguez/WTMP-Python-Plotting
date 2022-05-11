@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '4.6.1'
+VERSIONNUMBER = '4.6.2'
 
 import datetime as dt
 import os
@@ -2996,13 +2996,14 @@ class MakeAutomatedReport(object):
 
         LineSettings = self.getDrawFlags(LineSettings)
         if LineSettings['drawline'].lower() == 'true':
-            if param.lower() in self.defaultLineStyles.keys():
-                if i >= len(self.defaultLineStyles[param.lower()]['lines']):
-                    i = i - len(self.defaultLineStyles[param.lower()]['lines'])
-                default_lines = self.defaultLineStyles[param.lower()]['lines'][i]
-                for key in default_lines.keys():
-                    if key not in LineSettings.keys():
-                        LineSettings[key] = default_lines[key]
+            if param != None:
+                if param.lower() in self.defaultLineStyles.keys():
+                    if i >= len(self.defaultLineStyles[param.lower()]['lines']):
+                        i = i - len(self.defaultLineStyles[param.lower()]['lines'])
+                    default_lines = self.defaultLineStyles[param.lower()]['lines'][i]
+                    for key in default_lines.keys():
+                        if key not in LineSettings.keys():
+                            LineSettings[key] = default_lines[key]
 
             default_default_lines = self.getDefaultDefaultLineStyles(i)
             for key in default_default_lines.keys():
