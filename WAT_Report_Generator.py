@@ -12,13 +12,14 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '4.6.0'
+VERSIONNUMBER = '4.6.1'
 
 import datetime as dt
 import os
 import sys
 import matplotlib.pyplot as plt
 import matplotlib as mpl
+import matplotlib.ticker as mticker
 from matplotlib.colors import is_color_like, to_hex
 import numpy as np
 import pandas as pd
@@ -400,6 +401,10 @@ class MakeAutomatedReport(object):
                         elif ax_settings['dateformat'].lower() == 'datetime':
                             if isinstance(dates[0], (int,float)):
                                 dates = self.JDateToDatetime(dates)
+                    else:
+                        ax_settings['dateformat'] = 'datetime'
+                        if isinstance(dates[0], (int,float)):
+                            dates = self.JDateToDatetime(dates)
 
                     line_settings = self.getDefaultLineSettings(curline, parameter, i)
                     line_settings = self.fixDuplicateColors(line_settings) #used the line, used param, then double up so subtract 1
@@ -618,6 +623,7 @@ class MakeAutomatedReport(object):
                             vline_settings['value'] = float(vline_settings['value'])
                         except:
                             vline_settings['value'] = self.translateDateFormat(vline_settings['value'], 'datetime', '')
+
                         if 'dateformat' in ax_settings.keys():
                             if ax_settings['dateformat'].lower() == 'jdate':
                                 if isinstance(vline_settings['value'], dt.datetime):
@@ -706,51 +712,84 @@ class MakeAutomatedReport(object):
                             legsize = float(ax_settings['fontsize'])
                         else:
                             legsize = 12
+
+                        handles, labels = ax.get_legend_handles_labels()
+
                         if ax_settings['legend_outside'].lower() == 'true':
                             if _usetwinx:
-                                legend_left = True
-                                left_sided_axes.append(ax)
-                                left_offset = ax.get_window_extent().x0 / ax.get_window_extent().width
-                                ax.legend(loc='center left', bbox_to_anchor=(-left_offset, 0.5), ncol=1,fontsize=legsize)
+                                empty_handle, = ax.plot([],[],color="w")
+                                handles.append(empty_handle)
+                                labels.append('')
+                                ax2_handles, ax2_labels = ax2.get_legend_handles_labels()
+                                handles += ax2_handles
+                                labels += ax2_labels
+                                legend_right = True
+                                right_sided_axes.append(ax)
+                                right_offset = ax.get_window_extent().x0 / ax.get_window_extent().width
+                                ax.legend(handles=handles, labels=labels, loc='center left', bbox_to_anchor=(1+right_offset/2, 0.5), ncol=1,fontsize=legsize)
+
                             else:
                                 legend_right = True
                                 right_sided_axes.append(ax)
-                                ax.legend(loc='center left', bbox_to_anchor=(1, 0.5), ncol=1,fontsize=legsize)
+                                ax.legend(handles=handles, labels=labels, loc='center left', bbox_to_anchor=(1, 0.5), ncol=1,fontsize=legsize)
                         else:
                             ax.legend(fontsize=legsize)
 
-                self.formatDateXAxis(ax, ax_settings)
 
+                ############# xticks and lims #############
+
+                self.formatDateXAxis(ax, ax_settings)
+                xmin, xmax = ax.get_xlim()
+
+                if ax_settings['dateformat'].lower() == 'datetime':
+                    xmin = mpl.dates.num2date(xmin)
+                    xmax = mpl.dates.num2date(xmax)
+
+                if 'xticks' in ax_settings.keys():
+                    xtick_settings = ax_settings['xticks']
+
+                    self.formatTimeSeriesXticks(ax, xtick_settings, ax_settings)
+
+                ax.set_xlim(left=xmin)
+                ax.set_xlim(right=xmax)
+
+                ############# yticks and lims #############
+                ymin, ymax = ax.get_ylim()
                 if 'ylims' in ax_settings.keys():
                     if 'min' in ax_settings['ylims']:
-                        ax.set_ylim(bottom=float(ax_settings['ylims']['min']))
-                    else:
-                        if len(gatedata.keys()) != 0:
-                            ax.set_ylim(bottom=0)
+                        ymin = float(ax_settings['ylims']['min'])
+
                     if 'max' in ax_settings['ylims']:
-                        ax.set_ylim(top=float(ax_settings['ylims']['max']))
+                        ymax = float(ax_settings['ylims']['max'])
+
+                if len(gatedata.keys()) != 0:
+                    ymax = gate_placement
+                    ymin = 0
+
+                if 'yticks' in ax_settings.keys():
+                    ytick_settings = ax_settings['yticks']
+                    if 'fontsize' in ytick_settings.keys():
+                        yticksize = float(ytick_settings['fontsize'])
+                    elif 'fontsize' in ax_settings.keys():
+                        yticksize = float(ax_settings['fontsize'])
                     else:
-                        if len(gatedata.keys()) != 0:
-                            ax.set_ylim(top=gate_placement)
-                else:
-                    if len(gatedata.keys()) != 0:
-                        ax.set_ylim(bottom=0, top=gate_placement)
+                        yticksize = 10
+                    ax.tick_params(axis='y', labelsize=yticksize)
 
-                if 'xticksize' in ax_settings.keys():
-                    xticksize = float(ax_settings['xticksize'])
-                elif 'fontsize' in ax_settings.keys():
-                    xticksize = float(ax_settings['fontsize'])
-                else:
-                    xticksize = 10
-                ax.tick_params(axis='x', labelsize=xticksize)
+                    if 'spacing' in ytick_settings.keys():
+                        ytickspacing = ytick_settings['spacing']
+                        if '.' in ytickspacing:
+                            ytickspacing = float(ytickspacing)
+                        else:
+                            ytickspacing = int(ytickspacing)
 
-                if 'yticksize' in ax_settings.keys():
-                    yticksize = float(ax_settings['yticksize'])
-                elif 'fontsize' in ax_settings.keys():
-                    yticksize = float(ax_settings['fontsize'])
-                else:
-                    yticksize = 10
-                ax.tick_params(axis='y', labelsize=yticksize)
+                        newyticks = np.arange(ymin, (ymax+ytickspacing), ytickspacing)
+                        newyticklabels = self.formatTickLabels(newyticks, ytick_settings)
+                        ax.set_yticks(newyticks)
+                        ax.set_yticklabels(newyticklabels)
+
+                ax.set_ylim(bottom=ymin)
+                ax.set_ylim(top=ymax)
 
                 if len(gatelabels_positions) > 0:
                     ax.set_yticks(gatelabels_positions)
@@ -767,37 +806,37 @@ class MakeAutomatedReport(object):
                             ylabsize2 = 12
                         ax2.set_ylabel(ax_settings['ylabel2'].replace("\\n", "\n"), fontsize=ylabsize2)
 
+                    ymin2, ymax2 = ax2.get_ylim()
                     if 'ylims2' in ax_settings.keys():
                         if 'min' in ax_settings['ylims2']:
-                            ax2.set_ylim(bottom=float(ax_settings['ylims2']['min']))
+                            ymin2 = float(ax_settings['ylims2']['min'])
                         if 'max' in ax_settings['ylims2']:
-                            ax2.set_ylim(top=float(ax_settings['ylims2']['max']))
+                            ymax2 = float(ax_settings['ylims2']['max'])
 
-                    if 'yticksize2' in ax_settings.keys():
-                        yticksize2 = float(ax_settings['yticksize2'])
-                    elif 'fontsize' in ax_settings.keys():
-                        yticksize2 = float(ax_settings['fontsize'])
-                    else:
-                        yticksize2 = 10
-                    ax2.tick_params(axis='y', labelsize=yticksize2)
+                    if 'yticks2' in ax_settings.keys():
+                        ytick2_settings = ax_settings['yticks2']
+                        if 'yticksize' in ytick2_settings.keys():
+                            yticksize = float(ytick2_settings['yticksize'])
+                        elif 'fontsize' in ytick2_settings.keys():
+                            yticksize = float(ytick2_settings['fontsize'])
+                        else:
+                            yticksize = 10
+                        ax2.tick_params(axis='y', labelsize=yticksize)
 
-                    if 'legend2' in ax_settings.keys():
-                        if ax_settings['legend2'].lower() == 'true':
-                            if 'legendsize' in ax_settings.keys():
-                                legsize = float(ax_settings['legendsize'])
-                            elif 'legendsize2' in ax_settings.keys():
-                                legsize = float(ax_settings['legendsize'])
-                            elif 'fontsize' in ax_settings.keys():
-                                legsize = float(ax_settings['fontsize'])
+                        if 'spacing' in ytick2_settings.keys():
+                            ytickspacing = ytick2_settings['spacing']
+                            if '.' in ytickspacing:
+                                ytickspacing = float(ytickspacing)
                             else:
-                                legsize = 12
-                            if ax_settings['legend_outside'].lower() == 'true':
-                                legend_right = True
-                                right_sided_axes.append(ax2)
-                                right_offset = ax.get_window_extent().x0 / ax.get_window_extent().width
-                                ax2.legend(loc='center left', bbox_to_anchor=(1+right_offset/2, 0.5), ncol=1,fontsize=legsize)
-                            else:
-                                ax2.legend(fontsize=legsize)
+                                ytickspacing = int(ytickspacing)
+
+                            newyticks = np.arange(ymin2, (ymax2+ytickspacing), ytickspacing)
+                            newyticklabels = self.formatTickLabels(newyticks, ytick2_settings)
+                            ax2.set_yticks(newyticks)
+                            ax2.set_yticklabels(newyticklabels)
+
+                    ax2.set_ylim(bottom=ymin2)
+                    ax2.set_ylim(top=ymax2)
 
                     ax2.grid(False)
                     ax.set_zorder(ax2.get_zorder()+1) #axis called second will always be on top unless this
@@ -1153,16 +1192,7 @@ class MakeAutomatedReport(object):
                                        zorder=float(vline_settings['zorder']),
                                        alpha=float(vline_settings['alpha']))
 
-                    if 'xlims' in object_settings.keys():
-                        if 'min' in object_settings['xlims']:
-                            ax.set_xlim(left=float(object_settings['xlims']['min']))
-                        if 'max' in object_settings['xlims']:
-                            ax.set_xlim(right=float(object_settings['xlims']['max']))
-                    if 'ylims' in object_settings.keys():
-                        if 'min' in object_settings['ylims']:
-                            ax.set_ylim(bottom=float(object_settings['ylims']['min']))
-                        if 'max' in object_settings['ylims']:
-                            ax.set_ylim(top=float(object_settings['ylims']['max']))
+
 
                     ### GATES ###
                     # gategroups = {}
@@ -1268,8 +1298,8 @@ class MakeAutomatedReport(object):
 
                     show_xlabel, show_ylabel = self.getPlotLabelMasks(i, len(pgi), subplot_cols)
 
-                    if cur_obj_settings['gridlines'].lower() == 'true':
-                        ax.grid(zorder=-9)
+                    # if cur_obj_settings['gridlines'].lower() == 'true':
+                    #     ax.grid(zorder=-9)
 
                     if show_ylabel:
                         if 'ylabel' in cur_obj_settings.keys():
@@ -1295,41 +1325,90 @@ class MakeAutomatedReport(object):
                                 labelpad = 0
                             ax.set_xlabel(cur_obj_settings['xlabel'], fontsize=xlabsize, labelpad=labelpad)
 
-                    if 'xticksize' in object_settings.keys():
-                        xticksize = float(object_settings['xticksize'])
-                    elif 'fontsize' in object_settings.keys():
-                        xticksize = float(object_settings['fontsize'])
-                    else:
-                        xticksize = 10
+                    xticksize = 10 #default
+                    if 'fontsize' in object_settings.keys():
+                        xticksize = float(object_settings['fontsize']) #plot defined default
+                    if 'xticks' in object_settings.keys(): #user defined
+                        if 'fontsize' in object_settings['xticks'].keys():
+                            xticksize = float(object_settings['xticks']['fontsize'])
 
                     show_xticks = True
                     if 'xlims' in object_settings.keys() and not show_xlabel:
                         if all([x in object_settings['xlims'].keys() for x in ['min', 'max']]):
                             show_xticks = False
 
+                    xmin, xmax = ax.get_xlim()
+                    if 'xlims' in object_settings.keys():
+                        if 'min' in object_settings['xlims']:
+                            xmin = float(object_settings['xlims']['min'])
+                        if 'max' in object_settings['xlims']:
+                            xmax = float(object_settings['xlims']['max'])
+
+                    ax.tick_params(axis='x', labelsize=xticksize)
+                    if 'xticks' in object_settings.keys():
+                        xtick_settings = object_settings['xticks']
+                        if 'spacing' in xtick_settings.keys():
+                            xtickspacing = xtick_settings['spacing']
+                            if '.' in xtickspacing:
+                                xtickspacing = float(xtickspacing)
+                            else:
+                                xtickspacing = int(xtickspacing)
+                            newxticks = np.arange(xmin, (xmax+xtickspacing), xtickspacing)
+                            newxticklabels = self.formatTickLabels(newxticks, xtick_settings)
+                            # ax.xaxis.set_major_locator(mticker.FixedLocator(newxticks))
+                            ax.set_xticks(newxticks)
+                            ax.set_xticklabels(newxticklabels)
+
                     if not show_xticks:
                         ax.set_xticklabels([])
                         ax.tick_params(axis='x', which='both', bottom=False)
-                    else:
-                        ax.tick_params(axis='x', labelsize=xticksize)
 
-                    if 'yticksize' in object_settings.keys():
-                        yticksize = float(object_settings['yticksize'])
-                    elif 'fontsize' in object_settings.keys():
-                        yticksize = float(object_settings['fontsize'])
-                    else:
-                        yticksize = 10
+                    ax.set_xlim(left=xmin)
+                    ax.set_xlim(right=xmax)
+
+
+                    yticksize = 10 #default
+                    if 'fontsize' in object_settings.keys():
+                        yticksize = float(object_settings['fontsize']) #plot defined default
+                    if 'yticks' in object_settings.keys(): #user defined
+                        if 'fontsize' in object_settings['yticks'].keys():
+                            yticksize = float(object_settings['yticks']['fontsize'])
                         
                     show_yticks = True
                     if 'ylims' in object_settings.keys() and not show_ylabel:
                         if all([x in object_settings['ylims'].keys() for x in ['min', 'max']]):
                             show_yticks = False
 
+                    ymin, ymax = ax.get_ylim()
+                    if 'ylims' in object_settings.keys():
+                        if 'min' in object_settings['ylims']:
+                            ymin = float(object_settings['ylims']['min'])
+                        if 'max' in object_settings['ylims']:
+                            ymax = float(object_settings['ylims']['max'])
+
+                    ax.tick_params(axis='y', labelsize=yticksize)
+                    if 'yticks' in object_settings.keys():
+                        ytick_settings = object_settings['yticks']
+                        if 'spacing' in ytick_settings.keys():
+                            ytickspacing = ytick_settings['spacing']
+                            if '.' in ytickspacing:
+                                ytickspacing = float(ytickspacing)
+                            else:
+                                ytickspacing = int(ytickspacing)
+                            newyticks = np.arange(ymin, (ymax+ytickspacing), ytickspacing)
+                            newyticklabels = self.formatTickLabels(newyticks, ytick_settings)
+                            ax.set_yticks(newyticks)
+                            ax.set_yticklabels(newyticklabels)
+
                     if not show_yticks:
                         ax.set_yticklabels([])
                         ax.tick_params(axis='y', which='both', left=False)
-                    else:
-                        ax.tick_params(axis='y', labelsize=yticksize)
+
+                    ax.set_ylim(bottom=ymin)
+                    ax.set_ylim(top=ymax)
+
+                    if cur_obj_settings['gridlines'].lower() == 'true':
+                        ax.grid(zorder=-9)
 
                     cur_timestamp = object_settings['timestamps'][j]
                     if 'dateformat' in object_settings:
@@ -1930,7 +2009,7 @@ class MakeAutomatedReport(object):
                                     vmin=vmin, vmax=vmax,
                                     levels=np.linspace(vmin, vmax, int(contour_settings['colorbar']['bins'])), #add one to get the desired number..
                                     extend='both') #the .T transposes the array so dates on bottom TODO:make extend variable
-                ax.invert_yaxis()
+                # ax.invert_yaxis()
 
                 self.addLogEntry({'type': contour_settings['label'] + '_ContourPlot' if contour_settings['label'] != '' else 'ContourPlot',
                                   'name': self.ChapterRegion+'_'+yearstr,
@@ -2078,21 +2157,51 @@ class MakeAutomatedReport(object):
                     if 'max' in contour_settings['ylims']:
                         ax.set_ylim(top=float(contour_settings['ylims']['max']))
 
-                if 'xticksize' in contour_settings.keys():
-                    xticksize = float(contour_settings['xticksize'])
-                elif 'fontsize' in contour_settings.keys():
-                    xticksize = float(contour_settings['fontsize'])
-                else:
-                    xticksize = 10
-                ax.tick_params(axis='x', labelsize=xticksize)
+                if 'xticks' in contour_settings.keys():
+                    xtick_settings = contour_settings['xticks']
+                    self.formatTimeSeriesXticks(ax, xtick_settings, contour_settings)
 
-                if 'yticksize' in contour_settings.keys():
-                    yticksize = float(contour_settings['yticksize'])
-                elif 'fontsize' in contour_settings.keys():
-                    yticksize = float(contour_settings['fontsize'])
-                else:
-                    yticksize = 10
+                # if 'yticksize' in contour_settings.keys():
+                #     yticksize = float(contour_settings['yticksize'])
+                # elif 'fontsize' in contour_settings.keys():
+                #     yticksize = float(contour_settings['fontsize'])
+                # else:
+                #     yticksize = 10
+                # ax.tick_params(axis='y', labelsize=yticksize)
+
+                yticksize = 10 #default
+                if 'fontsize' in object_settings.keys():
+                    yticksize = float(object_settings['fontsize']) #plot defined default
+                if 'yticks' in object_settings.keys(): #user defined
+                    if 'fontsize' in object_settings['yticks'].keys():
+                        yticksize = float(object_settings['yticks']['fontsize'])
+
+                ymin, ymax = ax.get_ylim()
+                if 'ylims' in object_settings.keys():
+                    if 'min' in object_settings['ylims']:
+                        ymin = float(object_settings['ylims']['min'])
+                    if 'max' in object_settings['ylims']:
+                        ymax = float(object_settings['ylims']['max'])
+
+
                 ax.tick_params(axis='y', labelsize=yticksize)
+                if 'yticks' in object_settings.keys():
+                    ytick_settings = object_settings['yticks']
+                    if 'spacing' in ytick_settings.keys():
+                        ytickspacing = ytick_settings['spacing']
+                        if '.' in ytickspacing:
+                            ytickspacing = float(ytickspacing)
+                        else:
+                            ytickspacing = int(ytickspacing)
+                        newyticks = np.arange(ymin, (ymax+ytickspacing), ytickspacing)
+                        newyticklabels = self.formatTickLabels(newyticks, ytick_settings)
+                        ax.set_yticks(newyticks)
+                        ax.set_yticklabels(newyticklabels)
+
+                ax.set_ylim(bottom=ymin)
+                ax.set_ylim(top=ymax)
+
+                ax.invert_yaxis()
 
             # #stuff to call once per plot
             self.configureSettingsForID('base', cur_obj_settings)
@@ -2886,11 +2995,11 @@ class MakeAutomatedReport(object):
         '''
 
         LineSettings = self.getDrawFlags(LineSettings)
-        if LineSettings['drawline'] == 'true':
-            if param in self.defaultLineStyles.keys():
-                if i >= len(self.defaultLineStyles[param]['lines']):
-                    i = i - len(self.defaultLineStyles[param]['lines'])
-                default_lines = self.defaultLineStyles[param]['lines'][i]
+        if LineSettings['drawline'].lower() == 'true':
+            if param.lower() in self.defaultLineStyles.keys():
+                if i >= len(self.defaultLineStyles[param.lower()]['lines']):
+                    i = i - len(self.defaultLineStyles[param.lower()]['lines'])
+                default_lines = self.defaultLineStyles[param.lower()]['lines'][i]
                 for key in default_lines.keys():
                     if key not in LineSettings.keys():
                         LineSettings[key] = default_lines[key]
@@ -4487,6 +4596,30 @@ class MakeAutomatedReport(object):
                 data[flag]['dates'] = data[flag]['dates'][msk]
         return data
 
+    def forceTimeInterval(self, interval):
+        numbers = []
+        letters = []
+        for n in interval:
+            if n != ' ':
+                try:
+                    numbers.append(str(int(n)))
+                except ValueError:
+                    letters.append(n)
+        number = int(''.join(numbers))
+        word = ''.join(letters)
+        if word.lower().startswith('minute'):
+            return dt.timedelta(minutes=number), 'np'
+        elif word.lower().startswith('hour'):
+            return dt.timedelta(hours=number), 'np'
+        elif word.lower().startswith('day'):
+            return dt.timedelta(days=number), 'np'
+        elif word.lower().startswith('mon'):
+            return f'{number}M', 'pd'
+        else:
+            print(f'Unhashable time interval {interval}')
+            print('Defaulting to 1 Month.')
+            return f'{number}M', 'pd'
+
     def formatDateXAxis(self, curax, object_settings, twin=False):
         '''
         formats the xaxis to be jdate or datetime and sets up xlimits. also sets up secondary xaxis
@@ -4739,6 +4872,120 @@ class MakeAutomatedReport(object):
 
         return threshold_color
 
+    def formatTickLabels(self, ticks, ticksettings):
+        newticklabels = []
+        for tick in ticks:
+            if isinstance(tick, (np.float64, int, float)):
+
+                if 'numdecimals' in ticksettings.keys():
+                    numdecimals = int(ticksettings['numdecimals'])
+                else:
+                    numdecimals = 1
+
+                if numdecimals == 0:
+                    newticklabel = int(round(tick, 0))
+                    newticklabels.append(str(newticklabel))
+                else:
+                    newticklabel = round(tick, numdecimals)
+                    if numdecimals == 1: #fix numbers like 10.0
+                        if str(newticklabel).split('.')[1].startswith('0'):
+                            newticklabel = str(newticklabel).split('.')[0]
+                            newticklabels.append(newticklabel)
+                        else:
+                            newticklabels.append(str(newticklabel))
+                                
+            elif isinstance(tick, dt.datetime):
+                if 'datetimeformat' in ticksettings.keys():
+                    datetimeformat = ticksettings['datetimeformat']
+                else:
+                    datetimeformat = '%m/%d/%Y'
+                tick_str = tick.strftime(datetimeformat)
+                newticklabels.append(tick_str)
+
+            else:
+                newticklabels.append(str(tick))
+
+        return newticklabels
+
+    def formatTimeSeriesXticks(self, curax, xtick_settings, axis_settings, dateformatflag='dateformat'):
+        xmin, xmax = curax.get_xlim()
+
+        if axis_settings[dateformatflag].lower() == 'datetime':
+            xmin = mpl.dates.num2date(xmin)
+            xmax = mpl.dates.num2date(xmax)
+
+        if 'fontsize' in xtick_settings.keys():
+            xticksize = float(xtick_settings['fontsize'])
+        elif 'fontsize' in axis_settings.keys():
+            xticksize = float(axis_settings['fontsize'])
+        else:
+            xticksize = 10
+
+        if 'rotation' in xtick_settings.keys():
+            rotation = float(xtick_settings['rotation'])
+        else:
+            rotation = 0
+
+        curax.tick_params(axis='x', labelsize=xticksize, rotation=rotation)
+
+        if 'onmonths' in xtick_settings.keys():
+            if isinstance(xtick_settings['onmonths'], dict):
+                xtick_settings['onmonths'] = [xtick_settings['onmonths']['month']]
+            bymonthday = [1]
+
+            if 'ondays' in xtick_settings.keys():
+                if isinstance(xtick_settings['ondays'], dict):
+                    xtick_settings['ondays'] = [xtick_settings['ondays']['day']]
+                bymonthday = [int(n) for n in xtick_settings['ondays']]
+
+            try:
+                locator = mpl.dates.MonthLocator([int(n) for n in xtick_settings['onmonths']], bymonthday=bymonthday)
+            except ValueError:
+                print('Invalid month values. Please use integer representation of Months (aka 1, 3, 5, etc...)')
+                formatted_months = [self.month2num[n.lower()] for n in xtick_settings['onmonths']]
+                locator = mpl.dates.MonthLocator(formatted_months, bymonthday=bymonthday)
+
+            curax.xaxis.set_major_locator(locator)
+            if axis_settings[dateformatflag].lower() == 'datetime':
+                if 'datetimeformat' in xtick_settings.keys():
+                    datetimeformat = xtick_settings['datetimeformat']
+                else:
+                    datetimeformat = '%b/%Y'
+                fmt = mpl.dates.DateFormatter(datetimeformat)
+                curax.xaxis.set_major_formatter(fmt)
+
+        elif 'ondays' in xtick_settings.keys():
+            if isinstance(xtick_settings['ondays'], dict):
+                xtick_settings['ondays'] = [xtick_settings['ondays']['day']]
+
+            locator = mpl.dates.DayLocator([int(n) for n in xtick_settings['ondays']])
+            curax.xaxis.set_major_locator(locator)
+            if axis_settings[dateformatflag].lower() == 'datetime':
+                if 'datetimeformat' in xtick_settings.keys():
+                    datetimeformat = xtick_settings['datetimeformat']
+                else:
+                    datetimeformat = '%m/%d/%Y'
+                fmt = mpl.dates.DateFormatter(datetimeformat)
+                curax.xaxis.set_major_formatter(fmt)
+
+        elif 'spacing' in xtick_settings.keys():
+            xtickspacing = xtick_settings['spacing']
+            if axis_settings[dateformatflag].lower() == 'jdate':
+                if '.' in xtickspacing:
+                    xtickspacing = float(xtickspacing)
+                else:
+                    xtickspacing = int(xtickspacing)
+                newxticks = np.arange(xmin, (xmax+xtickspacing), xtickspacing)
+            elif axis_settings[dateformatflag].lower() == 'datetime':
+                dt_xmin = self.JDateToDatetime(xmin) #do everything on datetime, and we can convert later
+                dt_xmax = self.JDateToDatetime(xmax) #do everything on datetime, and we can convert later
+                newxticks = self.buildTimeSeries(dt_xmin.replace(tzinfo=None), dt_xmax.replace(tzinfo=None), xtickspacing)
+
+            newxticklabels = self.formatTickLabels(newxticks, xtick_settings)
+            curax.set_xticks(newxticks)
+            curax.set_xticklabels(newxticklabels)
+
+
     def getStatsLine(self, row, data):
         '''
         takes rows for tables and replaces flags with the correct data, computing stat analysis if needed
@@ -4939,7 +5186,7 @@ class MakeAutomatedReport(object):
         if self.iscomp: #comp run
             for i, header in enumerate(object_settings['headers']):
                 if isinstance(object_settings['headers'], dict):
-                    header = object_settings['headers']['header'] #single headers come as dict objs TODO fix this eventually...
+                    header = object_settings['headers']['header'] #single headers come as dict objs TODO: fix this eventually...
                 curheader = pickle.loads(pickle.dumps(header, -1))
                 for datakey in data.keys():
                     if '%%{0}%%'.format(data[datakey]['flag']) in curheader: #found data specific flag
@@ -5010,7 +5257,7 @@ class MakeAutomatedReport(object):
             interval = intervalinfo[0]
             interval_info = intervalinfo[1]
         except KeyError:
-            interval_info = 'np'
+            interval, interval_info = self.forceTimeInterval(interval)
 
         if interval_info == 'np':
             ts = np.arange(startTime, endTime, interval)
