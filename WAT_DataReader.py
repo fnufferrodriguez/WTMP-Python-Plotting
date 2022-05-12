@@ -339,35 +339,21 @@ def getTextProfileDates(observed_data_filename, starttime, endtime):
 def getClosestTime(timestamps, dates):
     '''
     gets timestamp closest to given timestamps for profile plots
-    #TODO: set some limit?
     :param timestamps: list of target timestamps
     :param dates: dates in file
     :return:
     '''
 
-    cdi = [] #closest date index
+    cdi = []
     for timestamp in timestamps:
-        closestDateidx = None
-        closestDateDist = 86400 #1 day in seconds
-        for i, date in enumerate(dates):
-            timedelt = abs((timestamp-date).total_seconds())
-
-            if timedelt < closestDateDist: #if current diff is smaller than the last previous
-                if (timestamp-date).total_seconds() < 0: #if the difference is negative, we are moving away and not going to get better
-                    closestDateidx = i
-                    closestDateDist = timedelt
-                    break
-                else:
-                    closestDateidx = i
-                    closestDateDist = timedelt
-                    if timedelt == 0:
-                        break
-            else: #what if we start moving away, and were not smaller than the last change?
-                if (timestamp-date).total_seconds() < 0: #if the difference is negative, we are moving away and not going to get better
-                    break
-
-        cdi.append(closestDateidx)
-
+        cloz_dict = {
+            abs(timestamp.timestamp() - date.timestamp()) : di
+            for di, date in enumerate(dates)}
+        res = cloz_dict[min(cloz_dict.keys())]
+        if abs(timestamp.timestamp() - dates[res].timestamp()) > 86400: #seconds in a day
+            cdi.append(None)
+        else:
+            cdi.append(res)
     return cdi
 
 def getchildren(root, returnkeyless=False):

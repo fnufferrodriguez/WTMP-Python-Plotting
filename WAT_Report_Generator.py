@@ -12,20 +12,18 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '4.6.2'
+VERSIONNUMBER = '4.6.3'
 
 import datetime as dt
 import os
 import sys
 import matplotlib.pyplot as plt
 import matplotlib as mpl
-import matplotlib.ticker as mticker
 from matplotlib.colors import is_color_like, to_hex
 import numpy as np
 import pandas as pd
 import xml.etree.ElementTree as ET
 import calendar
-from dateutil.relativedelta import relativedelta
 import re
 from collections import Counter
 import shutil
@@ -1194,107 +1192,7 @@ class MakeAutomatedReport(object):
 
 
 
-                    ### GATES ###
-                    # gategroups = {}
-                    gateconfig = {}
-                    if len(gatedata.keys()) > 0:
-                        gatemsk = None
-                        for ggi, gategroup in enumerate(gatedata.keys()):
-                            gatetop = None
-                            gatebottom = None
-                            gatemiddle = None
-                            gateop_has_value = False
-                            gate_count = 0 #keep track of gate number in group
-                            numgates = len(gatedata[gategroup]['gates'])
-                            gatepoint_xpositions = np.linspace(ax.get_xlim()[0], ax.get_xlim()[1],numgates+2)[1:-1] #+2 for start and end
 
-                            cur_gateop = gatedata[gategroup]
-
-                            if 'top' in cur_gateop.keys():
-                                gatetop = float(cur_gateop['top'])
-
-                            if 'bottom' in cur_gateop.keys():
-                                gatebottom = float(cur_gateop['bottom'])
-
-                            if 'middle' in cur_gateop.keys():
-                                gatemiddle = float(cur_gateop['middle'])
-                            elif gatetop != None and gatebottom != None:
-                                gatemiddle = np.mean([gatetop, gatebottom])
-
-                            if gatetop == None and gatebottom != None and gatemiddle == None: #bottom no top/middle
-                                gatetop = gatebottom + float(object_settings['defaultgateenvelope'])
-                                gatemiddle = gatebottom + float(object_settings['defaultgateenvelope'])/2
-                            elif gatetop != None and gatebottom == None and gatemiddle == None: #top no bottom/middle
-                                gatebottom = gatetop - float(object_settings['defaultgateenvelope'])
-                                gatemiddle = gatetop - float(object_settings['defaultgateenvelope'])/2
-                            elif gatetop == None and gatebottom == None and gatemiddle != None: #only middle
-                                gatebottom = gatemiddle - float(object_settings['defaultgateenvelope'])/2
-                                gatetop = gatemiddle + float(object_settings['defaultgateenvelope'])/2
-
-                            for gate in cur_gateop['gates'].keys():
-
-                                curgate = cur_gateop['gates'][gate]
-
-                                values = curgate['values']
-                                dates = curgate['dates']
-
-                                if 'dateformat' in cur_obj_settings.keys():
-                                    if cur_obj_settings['dateformat'].lower() == 'datetime':
-                                        if isinstance(dates[0], (int,float)):
-                                            dates = self.JDateToDatetime(dates)
-
-                                # gatemsk = np.where(object_settings['timestamps'][j] == dates)
-                                if gatemsk == None:
-                                    gatemsk = WDR.getClosestTime([object_settings['timestamps'][j]], dates)
-                                if len(gatemsk) == 0:
-                                    value = np.nan
-                                else:
-                                    value = values[gatemsk[0]]
-                                # value = values[gatemsk][0]
-                                xpos = gatepoint_xpositions[gate_count]
-                                if gategroup not in gateconfig.keys():
-                                    gateconfig[gategroup] = {gate: value}
-                                else:
-                                    gateconfig[gategroup][gate] = value
-
-
-                                if not np.isnan(value):
-                                    gateop_has_value = True
-                                    showgate = False
-                                    if 'showgates' in cur_gateop.keys():
-                                        if cur_gateop['showgates'].lower() == 'true':
-                                            showgate = True
-                                    elif 'showgates' in cur_obj_settings.keys():
-                                        if cur_obj_settings['showgates'].lower() == 'true':
-                                            showgate = True
-
-                                    if showgate:
-                                        ax.scatter(xpos, gatemiddle, edgecolor='black', facecolor='black', marker='o')
-
-                                gate_count += 1 #keep track of gate number in group
-                                self.addLogEntry({'type': gate + '_GateTimeSeries' if gate != '' else 'GateTimeseries',
-                                                  'name': self.ChapterRegion+'_'+yearstr,
-                                                  'description': cur_obj_settings['description'],
-                                                  'units': 'BINARY',
-                                                  'value_start_date': self.translateDateFormat(dates[0], 'datetime', '').strftime('%d %b %Y'),
-                                                  'value_end_date': self.translateDateFormat(dates[-1], 'datetime', '').strftime('%d %b %Y'),
-                                                  'logoutputfilename': curgate['logoutputfilename']
-                                                  },
-                                                 isdata=True)
-
-                            if 'color' in cur_gateop.keys():
-                                color = cur_gateop['color']
-                                default_color = self.def_colors[ggi]
-                                color = self.confirmColor(color, default_color)
-                            if 'top' in cur_gateop.keys():
-                                ax.axhline(gatetop, color=color, zorder=-7)
-                            if 'bottom' in cur_gateop.keys():
-                                ax.axhline(gatebottom, color=color, zorder=-7)
-                            if 'middle' in cur_gateop.keys():
-                                ax.axhline(gatemiddle, color=color, zorder=-7)
-
-                            if gateop_has_value:
-                                ax.axhspan(gatebottom,gatetop, alpha=0.5, color=color, zorder=-8)
 
                     show_xlabel, show_ylabel = self.getPlotLabelMasks(i, len(pgi), subplot_cols)
 
@@ -1409,6 +1307,108 @@ class MakeAutomatedReport(object):
 
                     if cur_obj_settings['gridlines'].lower() == 'true':
                         ax.grid(zorder=-9)
+
+                    ### GATES ###
+                    # gategroups = {}
+                    gateconfig = {}
+                    if len(gatedata.keys()) > 0:
+                        gatemsk = None
+                        for ggi, gategroup in enumerate(gatedata.keys()):
+                            gatetop = None
+                            gatebottom = None
+                            gatemiddle = None
+                            gateop_has_value = False
+                            gate_count = 0 #keep track of gate number in group
+                            numgates = len(gatedata[gategroup]['gates'])
+                            gatepoint_xpositions = np.linspace(ax.get_xlim()[0], ax.get_xlim()[1],numgates+2)[1:-1] #+2 for start and end
+
+                            cur_gateop = gatedata[gategroup]
+
+                            if 'top' in cur_gateop.keys():
+                                gatetop = float(cur_gateop['top'])
+
+                            if 'bottom' in cur_gateop.keys():
+                                gatebottom = float(cur_gateop['bottom'])
+
+                            if 'middle' in cur_gateop.keys():
+                                gatemiddle = float(cur_gateop['middle'])
+                            elif gatetop != None and gatebottom != None:
+                                gatemiddle = np.mean([gatetop, gatebottom])
+
+                            if gatetop == None and gatebottom != None and gatemiddle == None: #bottom no top/middle
+                                gatetop = gatebottom + float(object_settings['defaultgateenvelope'])
+                                gatemiddle = gatebottom + float(object_settings['defaultgateenvelope'])/2
+                            elif gatetop != None and gatebottom == None and gatemiddle == None: #top no bottom/middle
+                                gatebottom = gatetop - float(object_settings['defaultgateenvelope'])
+                                gatemiddle = gatetop - float(object_settings['defaultgateenvelope'])/2
+                            elif gatetop == None and gatebottom == None and gatemiddle != None: #only middle
+                                gatebottom = gatemiddle - float(object_settings['defaultgateenvelope'])/2
+                                gatetop = gatemiddle + float(object_settings['defaultgateenvelope'])/2
+
+                            for gate in cur_gateop['gates'].keys():
+
+                                curgate = cur_gateop['gates'][gate]
+
+                                values = curgate['values']
+                                dates = curgate['dates']
+
+                                if 'dateformat' in cur_obj_settings.keys():
+                                    if cur_obj_settings['dateformat'].lower() == 'datetime':
+                                        if isinstance(dates[0], (int,float)):
+                                            dates = self.JDateToDatetime(dates)
+
+                                # gatemsk = np.where(object_settings['timestamps'][j] == dates)
+                                if gatemsk == None:
+                                    gatemsk = WDR.getClosestTime([object_settings['timestamps'][j]], dates)
+                                if len(gatemsk) == 0:
+                                    value = np.nan
+                                else:
+                                    value = values[gatemsk[0]]
+                                # value = values[gatemsk][0]
+                                xpos = gatepoint_xpositions[gate_count]
+                                if gategroup not in gateconfig.keys():
+                                    gateconfig[gategroup] = {gate: value}
+                                else:
+                                    gateconfig[gategroup][gate] = value
+
+
+                                if not np.isnan(value):
+                                    gateop_has_value = True
+                                    showgate = False
+                                    if 'showgates' in cur_gateop.keys():
+                                        if cur_gateop['showgates'].lower() == 'true':
+                                            showgate = True
+                                    elif 'showgates' in cur_obj_settings.keys():
+                                        if cur_obj_settings['showgates'].lower() == 'true':
+                                            showgate = True
+
+                                    if showgate:
+                                        ax.scatter(xpos, gatemiddle, edgecolor='black', facecolor='black', marker='o')
+
+                                gate_count += 1 #keep track of gate number in group
+                                self.addLogEntry({'type': gate + '_GateTimeSeries' if gate != '' else 'GateTimeseries',
+                                                  'name': self.ChapterRegion+'_'+yearstr,
+                                                  'description': cur_obj_settings['description'],
+                                                  'units': 'BINARY',
+                                                  'value_start_date': self.translateDateFormat(dates[0], 'datetime', '').strftime('%d %b %Y'),
+                                                  'value_end_date': self.translateDateFormat(dates[-1], 'datetime', '').strftime('%d %b %Y'),
+                                                  'logoutputfilename': curgate['logoutputfilename']
+                                                  },
+                                                 isdata=True)
+
+                            if 'color' in cur_gateop.keys():
+                                color = cur_gateop['color']
+                                default_color = self.def_colors[ggi]
+                                color = self.confirmColor(color, default_color)
+                            if 'top' in cur_gateop.keys():
+                                ax.axhline(gatetop, color=color, zorder=-7)
+                            if 'bottom' in cur_gateop.keys():
+                                ax.axhline(gatebottom, color=color, zorder=-7)
+                            if 'middle' in cur_gateop.keys():
+                                ax.axhline(gatemiddle, color=color, zorder=-7)
+
+                            if gateop_has_value:
+                                ax.axhspan(gatebottom,gatetop, alpha=0.5, color=color, zorder=-8)
 
                     cur_timestamp = object_settings['timestamps'][j]
                     if 'dateformat' in object_settings:
@@ -3296,7 +3296,7 @@ class MakeAutomatedReport(object):
             else:
                 datamem_key = self.buildDataMemoryKey(Line_info)
                 if datamem_key in self.Data_Memory.keys():
-                    print('Reading {0} from memory'.format(datamem_key))
+                    # print('Reading {0} from memory'.format(datamem_key))
                     datamementry = pickle.loads(pickle.dumps(self.Data_Memory[datamem_key], -1))
                     times = datamementry['times']
                     values = datamementry['values']
@@ -3319,7 +3319,7 @@ class MakeAutomatedReport(object):
                 return np.array([]), np.array([]), None
             datamem_key = self.buildDataMemoryKey(Line_info)
             if datamem_key in self.Data_Memory.keys():
-                print('READING {0} FROM MEMORY'.format(datamem_key))
+                # print('READING {0} FROM MEMORY'.format(datamem_key))
                 datamementry = pickle.loads(pickle.dumps(self.Data_Memory[datamem_key], -1))
                 times = datamementry['times']
                 values = datamementry['values']
@@ -3345,7 +3345,7 @@ class MakeAutomatedReport(object):
             datamem_key = self.buildDataMemoryKey(Line_info)
 
             if datamem_key in self.Data_Memory.keys():
-                print('READING {0} FROM MEMORY'.format(datamem_key))
+                # print('READING {0} FROM MEMORY'.format(datamem_key))
                 datamementry = pickle.loads(pickle.dumps(self.Data_Memory[datamem_key], -1))
                 times = datamementry['times']
                 values = datamementry['values']
@@ -3375,7 +3375,7 @@ class MakeAutomatedReport(object):
         elif 'easting' in Line_info.keys() and 'northing' in Line_info.keys():
             datamem_key = self.buildDataMemoryKey(Line_info)
             if datamem_key in self.Data_Memory.keys():
-                print('READING {0} FROM MEMORY'.format(datamem_key))
+                # print('READING {0} FROM MEMORY'.format(datamem_key))
                 datamementry = pickle.loads(pickle.dumps(self.Data_Memory[datamem_key], -1))
                 times = datamementry['times']
                 values = datamementry['values']
