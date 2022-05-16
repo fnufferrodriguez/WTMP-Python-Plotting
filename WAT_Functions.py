@@ -186,6 +186,8 @@ def matchData(data1, data2):
     :return: Two dictionaries containing dates and values flags (data1 and data2)
     '''
 
+    #TODO: CHECK THIS FUCNTION
+
     if 'dates' in data1.keys() and 'dates' in data2.keys():
         y_key = 'dates'
     elif 'depths' in data1.keys() and 'depths' in data2.keys():
@@ -200,7 +202,7 @@ def matchData(data1, data2):
     if y_key == 'dates':
         t_1 = [n.timestamp() for n in data1[y_key]]
     else:
-        t1 = data1[y_key]
+        t_1 = data1[y_key]
 
     v_2 = data2['values']
     if isinstance(v_2, list):
@@ -209,7 +211,7 @@ def matchData(data1, data2):
     if y_key == 'dates':
         t_2 = [n.timestamp() for n in data2[y_key]]
     else:
-        t2 = data2[y_key]
+        t_2 = data2[y_key]
 
     if len(v_1) == 0 or len(v_2) == 0:
         return data1, data2

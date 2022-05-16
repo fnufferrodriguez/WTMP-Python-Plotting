@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '4.7.0'
+VERSIONNUMBER = '4.7.1'
 
 import datetime as dt
 import os
@@ -5361,10 +5361,15 @@ class MakeAutomatedReport(object):
         :return: name for memory key, or null if can't be determined
         '''
 
+        very_special_flags = f'{self.SimulationName.replace(" ", "").replace(":", "")}_{self.baseSimulationName}'
+
         if 'dss_path' in Line_info.keys(): #Get data from DSS record
             if 'dss_filename' in Line_info.keys():
-                outname = '{0}_{1}'.format(os.path.basename(Line_info['dss_filename']).split('.')[0],
-                                        Line_info['dss_path'].replace('/', '').replace(':', ''))
+                # outname = '{0}_{1}'.format(os.path.basename(Line_info['dss_filename']).split('.')[0],
+                #                         Line_info['dss_path'].replace('/', '').replace(':', ''))
+                outname = f"{os.path.basename(Line_info['dss_filename']).split('.')[0]}_" \
+                          f"{Line_info['dss_path'].replace('/', '').replace(':', '')}_" \
+                          f"{very_special_flags}"
                 return outname
 
         elif 'w2_file' in Line_info.keys():
@@ -5376,35 +5381,35 @@ class MakeAutomatedReport(object):
                     structure_nums = [Line_info['structurenumbers']]
                 elif isinstance(Line_info['structurenumbers'], (list, np.ndarray)):
                     structure_nums = Line_info['structurenumbers']
-                outname += '_Struct_' + '_'.join(structure_nums)
+                outname += '_Struct_' + '_'.join(structure_nums) + f'_{very_special_flags}'
             else:
-                outname = '{0}'.format(os.path.basename(Line_info['w2_file']).split('.')[0])
+                outname = '{0}'.format(os.path.basename(Line_info['w2_file']).split('.')[0]) + f'_{very_special_flags}'
             return outname
 
         elif 'h5file' in Line_info.keys():
             h5name = os.path.basename(Line_info['h5file']).split('.h5')[0] + '_h5'
             if 'easting' in Line_info.keys() and 'northing' in Line_info.keys():
-                outname = 'externalh5_{0}_{1}_{2}_{3}'.format(h5name, Line_info['parameter'], Line_info['easting'], Line_info['northing'])
+                outname = 'externalh5_{0}_{1}_{2}_{3}'.format(h5name, Line_info['parameter'], Line_info['easting'], Line_info['northing'])+ f'_{very_special_flags}'
                 return outname
             elif 'ressimname' in Line_info.keys():
-                outname = 'externalh5_{0}_{1}_{2}'.format(h5name, Line_info['parameter'], Line_info['ressimresname'])
+                outname = 'externalh5_{0}_{1}_{2}'.format(h5name, Line_info['parameter'], Line_info['ressimresname'])+ f'_{very_special_flags}'
                 return outname
 
         elif 'easting' in Line_info.keys() and 'northing' in Line_info.keys():
-            outname = '{0}_{1}_{2}'.format(Line_info['parameter'], Line_info['easting'], Line_info['northing'])
+            outname = '{0}_{1}_{2}'.format(Line_info['parameter'], Line_info['easting'], Line_info['northing'])+ f'_{very_special_flags}'
             return outname
 
         elif 'filename' in Line_info.keys(): #Get data from Observed Profile
-            outname = '{0}'.format(os.path.basename(Line_info['filename']).split('.')[0].replace(' ', '_'))
+            outname = '{0}'.format(os.path.basename(Line_info['filename']).split('.')[0].replace(' ', '_'))+ f'_{very_special_flags}'
             return outname
 
         elif 'w2_segment' in Line_info.keys():
-            outname = 'W2_{0}_{1}_profile'.format(self.ModelAlt.output_file_name.split('.')[0], Line_info['w2_segment'])
+            outname = 'W2_{0}_{1}_profile'.format(self.ModelAlt.output_file_name.split('.')[0], Line_info['w2_segment'])+ f'_{very_special_flags}'
             return outname
 
         elif 'ressimresname' in Line_info.keys():
             outname = '{0}_{1}_{2}'.format(os.path.basename(self.ModelAlt.h5fname).split('.')[0]+'_h5',
-                                               Line_info['parameter'], Line_info['ressimresname'])
+                                               Line_info['parameter'], Line_info['ressimresname'])+ f'_{very_special_flags}'
             return outname
 
         return 'NULL'
