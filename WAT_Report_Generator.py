@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '4.6.3'
+VERSIONNUMBER = '4.7.0'
 
 import datetime as dt
 import os
@@ -33,7 +33,7 @@ import pickle
 import pendulum
 import itertools
 import traceback
-
+import math
 import WAT_DataReader as WDR
 import WAT_Functions as WF
 import WAT_XML_Utils as XML_Utils
@@ -281,7 +281,7 @@ class MakeAutomatedReport(object):
 
         object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = self.getPlotYears(object_settings)
 
-        object_settings = self.confirm_axis(object_settings)
+        object_settings = self.confirmAxis(object_settings)
 
         for yi, year in enumerate(object_settings['years']):
             cur_obj_settings = pickle.loads(pickle.dumps(object_settings, -1))
@@ -295,7 +295,7 @@ class MakeAutomatedReport(object):
                 figsize=(12, 6)
                 pageformat = 'half'
             else:
-                figsize=(12,18)
+                figsize=(12,16)
                 pageformat = 'full'
 
             axis_weight = []
@@ -315,7 +315,7 @@ class MakeAutomatedReport(object):
                 fig, axes = plt.subplots(ncols=1, nrows=len(cur_obj_settings['axs']), figsize=figsize,
                                          gridspec_kw={'height_ratios': axis_weight})
 
-            plt.subplots_adjust(wspace=0, hspace=0)
+            # plt.subplots_adjust(wspace=0, hspace=0)
 
             legend_left = False
             left_sided_axes = []
@@ -348,7 +348,7 @@ class MakeAutomatedReport(object):
                 linedata = self.getTimeseriesData(ax_settings)
                 linedata = self.mergeLines(linedata, ax_settings)
                 ax_settings = self.configureSettingsForID('base', ax_settings)
-                gatedata = self.getGateData(ax_settings)
+                gatedata = self.getGateData(ax_settings, makecopy=False)
                 linedata = self.filterDataByYear(linedata, year)
                 linedata = self.correctDuplicateLabels(linedata)
                 for gateop in gatedata.keys():
@@ -503,75 +503,77 @@ class MakeAutomatedReport(object):
                         values = curgate['values']
                         dates = curgate['dates']
 
-                        if 'dateformat' in ax_settings.keys():
-                            if ax_settings['dateformat'].lower() == 'jdate':
-                                if isinstance(dates[0], dt.datetime):
-                                    dates = self.DatetimeToJDate(dates)
-                            elif ax_settings['dateformat'].lower() == 'datetime':
-                                if isinstance(dates[0], (int,float)):
-                                    dates = self.JDateToDatetime(dates)
+                        if len(dates) > 0:
 
-                        gate_line_settings = self.getDefaultGateLineSettings(curgate, gate_count)
+                            if 'dateformat' in ax_settings.keys():
+                                if ax_settings['dateformat'].lower() == 'jdate':
+                                    if isinstance(dates[0], dt.datetime):
+                                        dates = self.DatetimeToJDate(dates)
+                                elif ax_settings['dateformat'].lower() == 'datetime':
+                                    if isinstance(dates[0], (int,float)):
+                                        dates = self.JDateToDatetime(dates)
 
-                        if 'zorder' not in gate_line_settings.keys():
-                            gate_line_settings['zorder'] = 4
+                            gate_line_settings = self.getDefaultGateLineSettings(curgate, gate_count)
 
-                        if 'label' not in gate_line_settings.keys():
-                            gate_line_settings['label'] = '{0}_{1}'.format(gateop['label'], gate_count)
+                            if 'zorder' not in gate_line_settings.keys():
+                                gate_line_settings['zorder'] = 4
 
-                        if 'filterbylimits' not in gate_line_settings.keys():
-                            gate_line_settings['filterbylimits'] = 'true' #set default
+                            if 'label' not in gate_line_settings.keys():
+                                gate_line_settings['label'] = '{0}_{1}'.format(gateop['label'], gate_count)
 
-                        if gate_line_settings['filterbylimits'].lower() == 'true':
-                            if 'xlims' in ax_settings.keys():
-                                dates, values = self.limitXdata(dates, values, ax_settings['xlims'])
+                            if 'filterbylimits' not in gate_line_settings.keys():
+                                gate_line_settings['filterbylimits'] = 'true' #set default
 
-                        if 'placement' in gate_line_settings.keys():
-                            line_placement = float(gate_line_settings['placement'])
-                        else:
-                            line_placement = gate_placement
+                            if gate_line_settings['filterbylimits'].lower() == 'true':
+                                if 'xlims' in ax_settings.keys():
+                                    dates, values = self.limitXdata(dates, values, ax_settings['xlims'])
 
-                        values *= line_placement
-                        gatelines_positions.append(line_placement)
+                            if 'placement' in gate_line_settings.keys():
+                                line_placement = float(gate_line_settings['placement'])
+                            else:
+                                line_placement = gate_placement
 
-                        curax = ax
-                        if _usetwinx:
-                            if 'xaxis' in line_settings.keys():
-                                if 'xaxis'.lower() == 'right':
-                                    curax = ax2
+                            values *= line_placement
+                            gatelines_positions.append(line_placement)
 
-                        if gate_line_settings['drawline'].lower() == 'true' and gate_line_settings['drawpoints'].lower() == 'true':
-                            curax.plot(dates, values, label=gate_line_settings['label'], c=gate_line_settings['linecolor'],
-                                       lw=gate_line_settings['linewidth'], ls=gate_line_settings['linestylepattern'],
-                                       marker=gate_line_settings['symboltype'], markerfacecolor=gate_line_settings['pointfillcolor'],
-                                       markeredgecolor=gate_line_settings['pointlinecolor'], markersize=float(gate_line_settings['symbolsize']),
-                                       markevery=int(gate_line_settings['numptsskip']), zorder=float(gate_line_settings['zorder']),
-                                       alpha=float(gate_line_settings['alpha']))
+                            curax = ax
+                            if _usetwinx:
+                                if 'xaxis' in line_settings.keys():
+                                    if 'xaxis'.lower() == 'right':
+                                        curax = ax2
 
-                        elif gate_line_settings['drawline'].lower() == 'true':
-                            curax.plot(dates, values, label=gate_line_settings['label'], c=gate_line_settings['linecolor'],
-                                       lw=gate_line_settings['linewidth'], ls=gate_line_settings['linestylepattern'],
-                                       zorder=float(gate_line_settings['zorder']),
-                                       alpha=float(gate_line_settings['alpha']))
+                            if gate_line_settings['drawline'].lower() == 'true' and gate_line_settings['drawpoints'].lower() == 'true':
+                                curax.plot(dates, values, label=gate_line_settings['label'], c=gate_line_settings['linecolor'],
+                                           lw=gate_line_settings['linewidth'], ls=gate_line_settings['linestylepattern'],
+                                           marker=gate_line_settings['symboltype'], markerfacecolor=gate_line_settings['pointfillcolor'],
+                                           markeredgecolor=gate_line_settings['pointlinecolor'], markersize=float(gate_line_settings['symbolsize']),
+                                           markevery=int(gate_line_settings['numptsskip']), zorder=float(gate_line_settings['zorder']),
+                                           alpha=float(gate_line_settings['alpha']))
 
-                        elif gate_line_settings['drawpoints'].lower() == 'true':
-                            curax.scatter(dates[::int(gate_line_settings['numptsskip'])], values[::int(gate_line_settings['numptsskip'])],
-                                          marker=gate_line_settings['symboltype'], facecolor=gate_line_settings['pointfillcolor'],
-                                          edgecolor=gate_line_settings['pointlinecolor'], s=float(gate_line_settings['symbolsize']),
-                                          label=gate_line_settings['label'], zorder=float(gate_line_settings['zorder']),
-                                          alpha=float(gate_line_settings['alpha']))
+                            elif gate_line_settings['drawline'].lower() == 'true':
+                                curax.plot(dates, values, label=gate_line_settings['label'], c=gate_line_settings['linecolor'],
+                                           lw=gate_line_settings['linewidth'], ls=gate_line_settings['linestylepattern'],
+                                           zorder=float(gate_line_settings['zorder']),
+                                           alpha=float(gate_line_settings['alpha']))
 
-                        gate_count += 1 #keep track of gate number in group
-                        gate_placement += 1 #keep track of gate palcement in space
-                        self.addLogEntry({'type': gate_line_settings['label'] + '_GateTimeSeries' if gate_line_settings['label'] != '' else 'GateTimeseries',
-                                          'name': self.ChapterRegion+'_'+yearstr,
-                                          'description': ax_settings['description'],
-                                          'units': 'BINARY',
-                                          'value_start_date': self.translateDateFormat(dates[0], 'datetime', '').strftime('%d %b %Y'),
-                                          'value_end_date': self.translateDateFormat(dates[-1], 'datetime', '').strftime('%d %b %Y'),
-                                          'logoutputfilename': curgate['logoutputfilename']
-                                          },
-                                         isdata=True)
+                            elif gate_line_settings['drawpoints'].lower() == 'true':
+                                curax.scatter(dates[::int(gate_line_settings['numptsskip'])], values[::int(gate_line_settings['numptsskip'])],
+                                              marker=gate_line_settings['symboltype'], facecolor=gate_line_settings['pointfillcolor'],
+                                              edgecolor=gate_line_settings['pointlinecolor'], s=float(gate_line_settings['symbolsize']),
+                                              label=gate_line_settings['label'], zorder=float(gate_line_settings['zorder']),
+                                              alpha=float(gate_line_settings['alpha']))
+
+                            gate_count += 1 #keep track of gate number in group
+                            gate_placement += 1 #keep track of gate palcement in space
+                            self.addLogEntry({'type': gate_line_settings['label'] + '_GateTimeSeries' if gate_line_settings['label'] != '' else 'GateTimeseries',
+                                              'name': self.ChapterRegion+'_'+yearstr,
+                                              'description': ax_settings['description'],
+                                              'units': 'BINARY',
+                                              'value_start_date': self.translateDateFormat(dates[0], 'datetime', '').strftime('%d %b %Y'),
+                                              'value_end_date': self.translateDateFormat(dates[-1], 'datetime', '').strftime('%d %b %Y'),
+                                              'logoutputfilename': curgate['logoutputfilename']
+                                              },
+                                             isdata=True)
 
                     gatelabels_positions.append(np.average(gatelines_positions))
                     gate_placement += gatespacing
@@ -857,6 +859,8 @@ class MakeAutomatedReport(object):
                 rax_leg_width_ratio = rax_leg.get_window_extent().width / rax.get_window_extent().width
                 if rax_leg_width_ratio > right_mod:
                     right_mod = rax_leg_width_ratio
+            plt.tight_layout()
+            plt.subplots_adjust(wspace=0, hspace=0)
 
             basefigname = os.path.join(self.images_path, 'TimeSeriesPlot' + '_' + self.ChapterRegion.replace(' ','_')
                                        + '_' + yearstr)
@@ -870,7 +874,9 @@ class MakeAutomatedReport(object):
                 else:
                     exists = False
             figname = tfn + '.png'
-            plt.savefig(figname, bbox_inches='tight')
+            # plt.tight_layout()
+            plt.savefig(figname)
+            # plt.savefig(figname, bbox_inches='tight')
             plt.close('all')
 
             if pageformat == 'half':
@@ -1010,7 +1016,7 @@ class MakeAutomatedReport(object):
         line_settings = self.correctDuplicateLabels(line_settings)
 
         object_settings = self.configureSettingsForID('base', object_settings)
-        gatedata = self.getGateData(object_settings)
+        gatedata = self.getGateData(object_settings, makecopy=False)
 
         ################# Get plot units #################
         data, line_settings = self.convertProfileDataUnits(object_settings, data, line_settings)
@@ -1125,7 +1131,7 @@ class MakeAutomatedReport(object):
                                 value = float(hline_settings['value'])
                                 units = None
                             else:
-                                dates, values, units = self.getTimeSeries(hline_settings)
+                                dates, values, units = self.getTimeSeries(hline_settings, makecopy=False)
                                 # hline_idx = np.where(object_settings['timestamps'][j] == dates)
                                 hline_idx = WDR.getClosestTime([object_settings['timestamps'][j]], dates)
                                 if len(hline_idx) == 0:
@@ -1171,7 +1177,7 @@ class MakeAutomatedReport(object):
                                 value = float(vline_settings['value'])
                                 units = None
                             else:
-                                dates, values, units = self.getTimeSeries(vline_settings)
+                                dates, values, units = self.getTimeSeries(vline_settings, makecopy=False)
                                 # vline_idx = np.where(object_settings['timestamps'][j] == dates)
                                 vline_idx = WDR.getClosestTime([object_settings['timestamps'][j]], dates)
                                 if len(vline_idx) == 0:
@@ -1512,7 +1518,7 @@ class MakeAutomatedReport(object):
 
                 figname = tfn + '.png'
 
-                plt.savefig(os.path.join(self.images_path, figname), bbox_inches='tight')
+                plt.savefig(os.path.join(self.images_path, figname))
                 plt.close('all')
 
                 ################################################
@@ -2251,8 +2257,8 @@ class MakeAutomatedReport(object):
                     labsize = 12
                 cbar.set_label(cur_obj_settings['colorbar']['label'], fontsize=labsize)
 
-            # plt.tight_layout()
             plt.subplots_adjust(hspace=0.05)
+            plt.tight_layout()
 
             if 'description' not in cur_obj_settings.keys():
                 cur_obj_settings['description'] = ''
@@ -2269,7 +2275,8 @@ class MakeAutomatedReport(object):
                 else:
                     exists = False
             figname = tfn + '.png'
-            plt.savefig(figname, bbox_inches='tight')
+            # plt.savefig(figname, bbox_inches='tight')
+            plt.savefig(figname)
             plt.close('all')
 
             if pageformat == 'full':
@@ -2601,7 +2608,9 @@ class MakeAutomatedReport(object):
             else:
                 exists = False
         figname = tfn + '.png'
-        plt.savefig(figname, bbox_inches='tight')
+        plt.tight_layout()
+        # plt.savefig(figname, bbox_inches='tight')
+        plt.savefig(figname)
         plt.close('all')
 
         self.XML.writeTimeSeriesPlot(os.path.basename(figname), object_settings['description'])
@@ -2683,7 +2692,7 @@ class MakeAutomatedReport(object):
         '''
 
         #TODO: split into 2 like profiles
-        dates, values, units = self.getTimeSeries(line)
+        dates, values, units = self.getTimeSeries(line, makecopy=False)
         if WF.checkData(values):
             flag = line['flag']
             if flag in data.keys():
@@ -3282,7 +3291,7 @@ class MakeAutomatedReport(object):
 
         return add_xlabel, add_ylabel
 
-    def getTimeSeries(self, Line_info):
+    def getTimeSeries(self, Line_info, makecopy=True):
         '''
         gets time series data from defined sources
         :param Line_info: dictionary of line setttings containing datasources
@@ -3297,7 +3306,10 @@ class MakeAutomatedReport(object):
                 datamem_key = self.buildDataMemoryKey(Line_info)
                 if datamem_key in self.Data_Memory.keys():
                     # print('Reading {0} from memory'.format(datamem_key))
-                    datamementry = pickle.loads(pickle.dumps(self.Data_Memory[datamem_key], -1))
+                    if makecopy:
+                        datamementry = pickle.loads(pickle.dumps(self.Data_Memory[datamem_key], -1))
+                    else:
+                        datamementry = self.Data_Memory[datamem_key]
                     times = datamementry['times']
                     values = datamementry['values']
                     units = datamementry['units']
@@ -3482,7 +3494,7 @@ class MakeAutomatedReport(object):
 
         if 'filename' in Line_info.keys(): #Get data from Observed
             filename = Line_info['filename']
-            values, yvals, times = WDR.readTextProfile(filename, timesteps)
+            values, yvals, times = WDR.readTextProfile(filename, timesteps, self.StartTime, self.EndTime)
             if 'y_convention' in Line_info.keys():
                 if Line_info['y_convention'].lower() == 'depth':
                     return values, [], yvals, times, Line_info['flag']
@@ -3605,7 +3617,7 @@ class MakeAutomatedReport(object):
         return data
 
 
-    def getGateData(self, object_settings):
+    def getGateData(self, object_settings, makecopy=True):
         '''
         Gets profile line data from defined data sources in XML files
         :param object_settings: currently selected object settings dictionary
@@ -3632,7 +3644,7 @@ class MakeAutomatedReport(object):
 
                 data[gateopkey]['gates'] = {}
                 for gate in gateop['gates']:
-                    dates, values, _ = self.getTimeSeries(gate)
+                    dates, values, _ = self.getTimeSeries(gate, makecopy=makecopy)
                     if 'flag' in gate.keys():
                         flag = gate['flag']
                     else:
@@ -4144,35 +4156,41 @@ class MakeAutomatedReport(object):
         :return: decimal days number
         '''
 
-        time_interval = None
-        operation_idx = []
-        datamsk = None
-        for gateop in gatedata.keys():
-            for gi, gate in enumerate(gatedata[gateop]['gates'].keys()):
-                curgate = gatedata[gateop]['gates'][gate]
-                # datamsk = np.where(curgate['dates'] == timestamp)
+        gd_key = list(gatedata.keys())[0]
+        curgate = gatedata[gd_key]['gates'][list(gatedata[gd_key]['gates'].keys())[0]]
+        idx = WDR.getClosestTime([timestamp], curgate['dates'])[0]
+        datamask = np.ones(idx+1, dtype=bool)
 
-                if datamsk == None:
-                    datamsk = WDR.getClosestTime([timestamp], curgate['dates'])
+        for gatelevel in gatedata.keys():
+            current_op_level = np.nan
+            for gatenumber in gatedata[gatelevel]['gates'].keys():
+                current_op = gateconfig[gatelevel][gatenumber]
+                if not np.isnan(current_op):
+                    current_op_level = 1
+                    break
 
+            datamask_gateLevel = np.zeros(idx+1, dtype=bool)
+            for gatenumber in gatedata[gatelevel]['gates'].keys():
+                msk = ~np.isnan(gatedata[gatelevel]['gates'][gatenumber]['values'][:idx+1]) #true when open
+                datamask_gateLevel = datamask_gateLevel | msk
 
-                if len(datamsk) == 0:
-                    continue
-                else:
-                    # datamsk = datamsk[0][0] + 1
-                    datamsk_i = datamsk[0] + 1
+            if np.isnan(current_op_level): #if closed..
+                datamask = datamask & ~datamask_gateLevel
+            else:
+                datamask = datamask & datamask_gateLevel #datamsk_gateLevel if true when open
 
-                if time_interval == None:
-                    time_interval = curgate['dates'][1] - curgate['dates'][0]
-                if np.isnan(gateconfig[gateop][gate]):
-                    correct_ops_idx = np.where(curgate['values'][:datamsk_i] != 1)[0].tolist()
-                else:
-                    correct_ops_idx = np.where(curgate['values'][:datamsk_i] == 1)[0].tolist()
+        changeop = False
+        for i in reversed(range(idx)):
+            if not datamask[i]:
+                changeop = True
+                break
+        timestep = (curgate['dates'][1] - curgate['dates'][0]).total_seconds() / 86400
+        if changeop:
+            decdays = (idx - i -1) * timestep
+        else:
+            decdays = idx * timestep
 
-                operation_idx.append(correct_ops_idx)
-
-        correct_config = len(set.intersection(*map(set,operation_idx)))
-        return round((time_interval * correct_config).days + ((time_interval * correct_config).seconds / 86400), 3)
+        return round(decdays, 3)
 
     def getGateBlendDays(self, gateconfig, gatedata, timestamp):
         '''
@@ -4184,45 +4202,33 @@ class MakeAutomatedReport(object):
         :return: decimal days number
         '''
 
-        time_interval = None
-        gateconfig_activegateop = {}
-        alldays_activeop = {}
-        datamsk = None
-        for gateop in gateconfig.keys():
-            gateconfig_activegateop[gateop] = False
-            for gate in gateconfig[gateop].keys():
-                if not np.isnan(gateconfig[gateop][gate]):
-                    gateconfig_activegateop[gateop] = True
-                    break
-            for gateop in gatedata.keys():
-                for gate in gatedata[gateop]['gates'].keys():
-                    curgate = gatedata[gateop]['gates'][gate]
-                    if curgate['gategroup'] == gateop:
-                        # datamsk = np.where(curgate['dates'] == timestamp)
-                        if datamsk == None:
-                            datamsk = WDR.getClosestTime([timestamp], curgate['dates'])
-                        if len(datamsk) == 0:
-                            continue
-                        else:
-                            datamsk_i = datamsk[0]+1
-                            # datamsk = datamsk[0][0]+1
-                        if gateop not in alldays_activeop.keys():
-                            alldays_activeop[gateop] = np.full(datamsk_i, False)
-                        idx_active = np.where(~np.isnan(curgate['values'][:datamsk_i]))
-                        alldays_activeop[gateop][idx_active] = True
-                        if time_interval == None:
-                            time_interval = curgate['dates'][1] - curgate['dates'][0]
+        gd_key = list(gatedata.keys())[0]
+        curgate = gatedata[gd_key]['gates'][list(gatedata[gd_key]['gates'].keys())[0]]
+        idx = WDR.getClosestTime([timestamp], curgate['dates'])[0]
+        datamask = np.ones(idx+1, dtype=bool)
 
-        idx_count = 0
-        for i in range(datamsk_i):
-            valid = True #assume all is well
-            for gateop in alldays_activeop.keys(): #for each gate on this timestamp
-                if alldays_activeop[gateop][i] != gateconfig_activegateop[gateop]: #if the gate operation is not what it should be
-                    valid = False #thenwe cannot count
-            if valid:
-                idx_count += 1
+        for gatelevel in gatedata.keys():
+            for gatenumber in gatedata[gatelevel]['gates'].keys():
+                current_op = gateconfig[gatelevel][gatenumber]
+                if np.isnan(current_op):
+                    msk = np.isnan(gatedata[gatelevel]['gates'][gatenumber]['values'][:idx+1])
+                else:
+                    msk = ~np.isnan(gatedata[gatelevel]['gates'][gatenumber]['values'][:idx+1])
+                datamask = datamask & msk
 
-        return round((time_interval * idx_count).days + ((time_interval * idx_count).seconds / 86400), 3)
+        changeop = False
+        for i in reversed(range(idx)):
+            if not datamask[i]:
+                changeop = True
+                break
+        timestep = (curgate['dates'][1] - curgate['dates'][0]).total_seconds() / 86400
+        if changeop:
+            decdays = (idx - i -1) * timestep
+        else:
+            decdays = idx * timestep
+
+        return round(decdays, 3)
+
 
     def getRelativeMasterSet(self, linedata):
         '''
@@ -4284,19 +4290,18 @@ class MakeAutomatedReport(object):
         :return: list of dates with dates operational
         '''
 
-        operationTimes = []
-        for gateop in gatedata.keys():
-            gateop_ops = np.array([])
-            for gi, gate in enumerate(gatedata[gateop]['gates']):
-                curgate = gatedata[gateop]['gates'][gate]
-                gateop_ops = np.append(gateop_ops, np.where(~np.isnan(curgate['values'])))#TODO: make sure gate dates are same length?
-            gateop_ops = list(set(gateop_ops.tolist()))
-            for gateop_op in gateop_ops: #idx where data IS valid, i.e. A gate is in
-                if gateop_op != 0 and gateop_op != len(curgate['values'])-1:
-                    if gateop_op + 1 not in gateop_ops or gateop_op - 1 not in gateop_ops:#gate was in, then taken out
-                        operationTimes.append(curgate['dates'][int(gateop_op)])
+        operationIndex = np.array([], dtype=int)
+        for gatelevel in gatedata.keys():
+            gate0 = list(gatedata[gatelevel]['gates'].keys())[0]
+            gateops_datamask = np.zeros(len(gatedata[gatelevel]['gates'][gate0]['values']), dtype=bool) #assume everything closed
+            for gi, gate in enumerate(gatedata[gatelevel]['gates']):
+                curgate = gatedata[gatelevel]['gates'][gate]
+                msk = ~np.isnan(curgate['values'])
+                gateops_datamask = gateops_datamask | msk #change when differnt
 
-        return operationTimes
+            operationIndex = np.append(operationIndex, np.where(gateops_datamask[:-1] != gateops_datamask[1:])[0])
+
+        return curgate['dates'][np.unique(operationIndex)]
 
     def replaceDefaults(self, default_settings, object_settings):
         '''
@@ -4588,14 +4593,54 @@ class MakeAutomatedReport(object):
         :param year: selected year
         :return:dictionary containing fultered data
         '''
-
         if year != 'ALLYEARS':
             for flag in data.keys():
-                years = np.array([n.year for n in data[flag]['dates']])
-                msk = np.where(years==year)
-                data[flag]['values'] = data[flag]['values'][msk]
-                data[flag]['dates'] = data[flag]['dates'][msk]
+                if len(data[flag]['dates']) > 0:
+                    s_idx, e_idx = self.getYearlyFilterIdx(data[flag]['dates'], year)
+                    data[flag]['values'] = data[flag]['values'][s_idx:e_idx]
+                    data[flag]['dates'] = data[flag]['dates'][s_idx:e_idx]
+
         return data
+
+    def getYearlyFilterIdx(self, dates, year):
+
+        start_date = dates[0]
+        end_date = dates[-1]
+        e_year_date = dt.datetime(year,12,31,23,59)
+        s_year_date = dt.datetime(year,1,1,0,0)
+        interval = (dates[1] - start_date).total_seconds()
+        if start_date.year == year:
+            s_idx = 0
+        else:
+            s_idx = round(int((s_year_date - start_date).total_seconds() / interval))
+        if end_date.year == year:
+            e_idx = len(dates)
+        else:
+            e_idx = round(int((e_year_date - start_date).total_seconds() / interval))
+
+        return s_idx, e_idx
+
+    def getMonthlyFilterIdx(self, dates, month):
+
+        start_date = dates[0]
+        end_date = dates[-1]
+        s_month_date = dt.datetime(start_date.year, month,1,0,0)
+        if month == 12:
+            e_month_date = dt.datetime(start_date.year+1,1,1,0,0) - dt.timedelta(seconds=1)
+        else:
+            e_month_date = dt.datetime(start_date.year,month+1,1,0,0) - dt.timedelta(seconds=1)
+
+        interval = (dates[1] - start_date).total_seconds()
+        if start_date.month == month:
+            s_idx = 0
+        else:
+            s_idx = round(int((s_month_date - start_date).total_seconds() / interval))
+        if end_date.month == month:
+            e_idx = len(dates)
+        else:
+            e_idx = round(int((e_month_date - start_date).total_seconds() / interval))
+
+        return s_idx, e_idx
 
     def forceTimeInterval(self, interval):
         numbers = []
@@ -4723,20 +4768,47 @@ class MakeAutomatedReport(object):
                             print('Please check Datapaths in the XML file, or modify the rows to have the correct flags'
                                   ' for the data present')
                             return data, ''
-                        months = np.array([n.month for n in curdates])
-                        msk = np.where(months==sr_month)
+                        # months = np.array([n.month for n in curdates])
+                        # msk = np.where(months==sr_month)
+                        newvals = np.array([])
+                        newdates = np.array([])
+                        if year != 'ALL':
+                            year_loops = [year]
+                        else:
+                            year_loops = self.years
+                        if len(curdates) > 0:
+                            for yearloop in year_loops:
+                                # print(year, sr_month, curdates[0], curdates[-1])
 
-                        data[curflag]['values'] = curvalues[msk]
-                        data[curflag]['dates'] = curdates[msk]
+                                # yrmsk = self.findYearMaskBinary(curdates, yearloop)
+
+                                s_idx, e_idx = self.getYearlyFilterIdx(curdates, yearloop)
+                                yearvals = curvalues[s_idx:e_idx]
+                                yeardates = curdates[s_idx:e_idx]
+
+                                if len(yeardates) > 0:
+                                    # msk = self.findMonthMaskBinary(curdates[yrmsk], sr_month)
+                                    s_idx, e_idx = self.getMonthlyFilterIdx(yeardates, sr_month)
+
+                                    newvals = np.append(newvals, yearvals[s_idx:e_idx])
+                                    newdates = np.append(newdates, yeardates[s_idx:e_idx])
+
+                        data[curflag]['values'] = newvals
+                        data[curflag]['dates'] = newdates
+                        # data[curflag]['values'] = curvalues[msk]
+                        # data[curflag]['dates'] = curdates[msk]
 
 
         if year != 'ALL':
             for flag in data.keys():
-                years = np.array([n.year for n in data[flag]['dates']])
-                msk = np.where(years==year)
-
-                data[flag]['values'] = data[flag]['values'][msk]
-                data[flag]['dates'] = data[flag]['dates'][msk]
+                # years = np.array([n.year for n in data[flag]['dates']])
+                # msk = np.where(years==year)
+                if len(data[flag]['dates']) == 0:
+                    continue
+                # msk = self.findYearMaskBinary(data[flag]['dates'], year)
+                s_idx, e_idx = self.getYearlyFilterIdx(data[flag]['dates'], year)
+                data[flag]['values'] = data[flag]['values'][s_idx:e_idx]
+                data[flag]['dates'] = data[flag]['dates'][s_idx:e_idx]
 
         return data, sr_month
 
@@ -6619,21 +6691,25 @@ class MakeAutomatedReport(object):
                 print('No time interval Defined.')
                 return times, values
 
+
             if avgtype == 'INST-VAL':
                 #at the point in time, find intervals and use values
                 if len(values.shape) == 1:
                     df = pd.DataFrame({'times': times, 'values': values})
                     df = df.set_index('times')
-                    df = df.resample(pd_interval, origin='end_day').asfreq().fillna(method='bfill')
+                    if df.index.inferred_freq != pd_interval:
+                        df = df.resample(pd_interval, origin='end_day').asfreq().fillna(method='bfill')
                     new_values = df['values'].to_numpy()
                     new_times = df.index.to_pydatetime()
+
                 elif len(values.shape) == 2:
                     tvals = values.T #transpose so now were [distances, times]
                     new_values = []
                     for i in range(tvals.shape[0]):#for each depth profile..
                         df = pd.DataFrame({'times': times, 'values': tvals[i]})
                         df = df.set_index('times')
-                        df = df.resample(pd_interval, origin='end_day').asfreq().fillna(method='bfill')
+                        if df.index.inferred_freq != pd_interval:
+                            df = df.resample(pd_interval, origin='end_day').asfreq().fillna(method='bfill')
                         new_values.append(df['values'].to_numpy())
                         new_times = df.index.to_pydatetime()
                     new_values = np.asarray(new_values).T #transpose back..
@@ -6661,7 +6737,8 @@ class MakeAutomatedReport(object):
                 if len(values.shape) == 1:
                     df = pd.DataFrame({'times': times, 'values': values})
                     df = df.set_index('times')
-                    df = df.resample(pd_interval, origin='end_day').mean().fillna(method='bfill')
+                    if df.index.inferred_freq != pd_interval:
+                        df = df.resample(pd_interval, origin='end_day').mean().fillna(method='bfill')
                     new_values = df['values'].to_numpy()
                     new_times = df.index.to_pydatetime()
                 elif len(values.shape) == 2:
@@ -6670,7 +6747,8 @@ class MakeAutomatedReport(object):
                     for i in range(tvals.shape[0]):#for each depth profile..
                         df = pd.DataFrame({'times': times, 'values': tvals[i]})
                         df = df.set_index('times')
-                        df = df.resample(pd_interval, origin='end_day').mean().fillna(method='bfill')
+                        if df.index.inferred_freq != pd_interval:
+                            df = df.resample(pd_interval, origin='end_day').mean().fillna(method='bfill')
                         new_values.append(df['values'].to_numpy())
                         new_times = df.index.to_pydatetime()
                     new_values = np.asarray(new_values).T #transpose back..
@@ -6680,7 +6758,8 @@ class MakeAutomatedReport(object):
                 if len(values.shape) == 1:
                     df = pd.DataFrame({'times': times, 'values': values})
                     df = df.set_index('times')
-                    df = df.resample(pd_interval, origin='end_day').sum().fillna(method='bfill')
+                    if df.index.inferred_freq != pd_interval:
+                        df = df.resample(pd_interval, origin='end_day').sum().fillna(method='bfill')
                     new_values = df['values'].to_numpy()
                     new_times = df.index.to_pydatetime()
                 elif len(values.shape) == 2:
@@ -6689,7 +6768,8 @@ class MakeAutomatedReport(object):
                     for i in range(tvals.shape[0]):#for each depth profile..
                         df = pd.DataFrame({'times': times, 'values': tvals[i]})
                         df = df.set_index('times')
-                        df = df.resample(pd_interval, origin='end_day').sum().fillna(method='bfill')
+                        if df.index.inferred_freq != pd_interval:
+                            df = df.resample(pd_interval, origin='end_day').sum().fillna(method='bfill')
                         new_values.append(df['values'].to_numpy())
                         new_times = df.index.to_pydatetime()
                     new_values = np.asarray(new_values).T #transpose back..
@@ -6854,7 +6934,7 @@ class MakeAutomatedReport(object):
         else:
             return user_color
 
-    def confirm_axis(self, object_settings):
+    def confirmAxis(self, object_settings):
         '''
         Checks for an axis item in object settings. If not, make one.
         :param object_settings: dictionary containing settings for current object

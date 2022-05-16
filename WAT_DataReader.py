@@ -235,7 +235,7 @@ def readW2ResultsFile(output_file_name, jd_dates, run_path, targetfieldidx=1):
 
     return out_vals
 
-def readTextProfile(observed_data_filename, timestamps):
+def readTextProfile(observed_data_filename, timestamps, starttime=None, endtime=None): #TODO
     '''
     reads in observed data files and returns values for Temperature Profiles
     :param observed_data_filename: file name
@@ -269,6 +269,10 @@ def readTextProfile(observed_data_filename, timestamps):
                 dt_tmp = pendulum.parse(dt_str, strict=False).replace(tzinfo=None)
                 last_dtstr = dt_str
                 last_dt = dt_tmp
+            if starttime > dt_tmp:
+                continue
+            if endtime < dt_tmp:
+                break
             # if (dt_tmp.year != hold_dt.year or dt_tmp.month != hold_dt.month or dt_tmp.day != hold_dt.day): #if its a new date
             if (dt_tmp != hold_dt): #if its a new date
                 if len(t_profile) != 0 and len(wt_profile) != 0 and len(d_profile) != 0:
@@ -290,7 +294,7 @@ def readTextProfile(observed_data_filename, timestamps):
         wt.append(np.array(wt_profile))
         d.append(np.array(d_profile))
 
-    cti = getClosestTime(timestamps, [n[0] for n in t])
+    cti = getClosestProfileTime(timestamps, [n[0] for n in t])
     wtn = []
     dn = []
     ts = []
@@ -336,7 +340,7 @@ def getTextProfileDates(observed_data_filename, starttime, endtime):
 
     return np.asarray(t_frmt)
 
-def getClosestTime(timestamps, dates):
+def getClosestProfileTime(timestamps, dates):
     '''
     gets timestamp closest to given timestamps for profile plots
     :param timestamps: list of target timestamps
@@ -354,6 +358,25 @@ def getClosestTime(timestamps, dates):
             cdi.append(None)
         else:
             cdi.append(res)
+    return cdi
+
+def getClosestTime(timestamps, dates):
+    '''
+    gets timestamp closest to given timestamps for profile plots
+    :param timestamps: list of target timestamps
+    :param dates: dates in file
+    :return:
+    '''
+
+    cdi = []
+    t0 = dates[0]
+    if len(dates) > 1:
+        t_interval = dates[1] - t0 #timedelta
+    t_interval_seconds = t_interval.total_seconds()
+    for timestamp in timestamps:
+        ts_diff = timestamp - t0
+        index = int(round(ts_diff.total_seconds() / t_interval_seconds))
+        cdi.append(index)
     return cdi
 
 def getchildren(root, returnkeyless=False):
@@ -1333,3 +1356,5 @@ if __name__ == '__main__':
     # results = read_GraphicsDefaults(graphicsDefaultfile)
     # print(results)
     print('debug.')
+
+
