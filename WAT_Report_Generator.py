@@ -86,6 +86,7 @@ class MakeAutomatedReport(object):
                     self.addSimLogEntry()
                     self.writeChapter()
                     self.fixXMLModelIntroduction(simorder)
+                    self.writeDataFiles()
                 self.XML.writeReportEnd()
                 self.equalizeLog()
         elif self.reportType == 'alternativecomparison':
@@ -108,6 +109,7 @@ class MakeAutomatedReport(object):
                 self.addSimLogEntry()
                 self.writeChapter()
                 self.fixXMLModelIntroduction(simorder)
+                self.writeDataFiles()
             self.XML.writeReportEnd()
             self.equalizeLog()
         else:
