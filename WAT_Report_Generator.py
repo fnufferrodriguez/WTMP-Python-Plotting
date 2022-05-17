@@ -4597,8 +4597,8 @@ class MakeAutomatedReport(object):
             for flag in data.keys():
                 if len(data[flag]['dates']) > 0:
                     s_idx, e_idx = self.getYearlyFilterIdx(data[flag]['dates'], year)
-                    data[flag]['values'] = data[flag]['values'][s_idx:e_idx]
-                    data[flag]['dates'] = data[flag]['dates'][s_idx:e_idx]
+                    data[flag]['values'] = data[flag]['values'][s_idx:e_idx+1]
+                    data[flag]['dates'] = data[flag]['dates'][s_idx:e_idx+1]
 
         return data
 
@@ -4783,15 +4783,15 @@ class MakeAutomatedReport(object):
                                 # yrmsk = self.findYearMaskBinary(curdates, yearloop)
 
                                 s_idx, e_idx = self.getYearlyFilterIdx(curdates, yearloop)
-                                yearvals = curvalues[s_idx:e_idx]
-                                yeardates = curdates[s_idx:e_idx]
+                                yearvals = curvalues[s_idx:e_idx+1]
+                                yeardates = curdates[s_idx:e_idx+1]
 
                                 if len(yeardates) > 0:
                                     # msk = self.findMonthMaskBinary(curdates[yrmsk], sr_month)
                                     s_idx, e_idx = self.getMonthlyFilterIdx(yeardates, sr_month)
 
-                                    newvals = np.append(newvals, yearvals[s_idx:e_idx])
-                                    newdates = np.append(newdates, yeardates[s_idx:e_idx])
+                                    newvals = np.append(newvals, yearvals[s_idx:e_idx+1])
+                                    newdates = np.append(newdates, yeardates[s_idx:e_idx+1])
 
                         data[curflag]['values'] = newvals
                         data[curflag]['dates'] = newdates
@@ -4807,8 +4807,8 @@ class MakeAutomatedReport(object):
                     continue
                 # msk = self.findYearMaskBinary(data[flag]['dates'], year)
                 s_idx, e_idx = self.getYearlyFilterIdx(data[flag]['dates'], year)
-                data[flag]['values'] = data[flag]['values'][s_idx:e_idx]
-                data[flag]['dates'] = data[flag]['dates'][s_idx:e_idx]
+                data[flag]['values'] = data[flag]['values'][s_idx:e_idx+1]
+                data[flag]['dates'] = data[flag]['dates'][s_idx:e_idx+1]
 
         return data, sr_month
 

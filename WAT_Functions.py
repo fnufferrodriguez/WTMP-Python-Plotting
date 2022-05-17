@@ -225,7 +225,8 @@ def matchData(data1, data2):
         v_2_msk = v2_interp[msk]
         data1['values'] = v_1_msk
         data2['values'] = v_2_msk
-        data2[y_key] = data1[y_key]
+        data2[y_key] = data1[y_key][msk]
+        data1[y_key] = data1[y_key][msk]
         return data1, data2
     elif len(v_2) > len(v_1):
         f_interp = interpolate.interp1d(t_1, v_1, bounds_error=False, fill_value=np.nan)
@@ -234,7 +235,8 @@ def matchData(data1, data2):
         v_1_msk = v1_interp[msk]
         v_2_msk = np.asarray(v_2)[msk]
         data1['values'] = v_1_msk
-        data1[y_key] = data2[y_key]
+        data1[y_key] = data2[y_key][msk]
+        data2[y_key] = data2[y_key][msk]
         data2['values'] = v_2_msk
         return data1, data2
 
