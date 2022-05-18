@@ -294,20 +294,21 @@ def readTextProfile(observed_data_filename, timestamps, starttime=None, endtime=
         wt.append(np.array(wt_profile))
         d.append(np.array(d_profile))
 
-    cti = getClosestProfileTime(timestamps, [n[0] for n in t])
     wtn = []
     dn = []
     ts = []
+    if len(t) > 0:
+        cti = getClosestProfileTime(timestamps, [n[0] for n in t])
 
-    for ci, i in enumerate(cti):
-        if i != None:
-            wtn.append(np.asarray(wt[i]))
-            dn.append(np.asarray(d[i]))
-            ts.append(timestamps[ci])
-        else:
-            wtn.append(np.array([]))
-            dn.append(np.array([]))
-            ts.append(timestamps[ci])
+        for ci, i in enumerate(cti):
+            if i != None:
+                wtn.append(np.asarray(wt[i]))
+                dn.append(np.asarray(d[i]))
+                ts.append(timestamps[ci])
+            else:
+                wtn.append(np.array([]))
+                dn.append(np.array([]))
+                ts.append(timestamps[ci])
 
     return wtn, dn, np.asarray(ts)
 

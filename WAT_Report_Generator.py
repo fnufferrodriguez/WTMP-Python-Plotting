@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '4.7.1'
+VERSIONNUMBER = '4.7.2'
 
 import datetime as dt
 import os
@@ -5071,18 +5071,40 @@ class MakeAutomatedReport(object):
             stat: string name for stat
         '''
 
+        stat_flag_Req = {'%%meanbias': 2,
+                         '%%mae': 2,
+                         '%%rmse': 2,
+                         '%%nse': 2,
+                         '%%count': 1,
+                         '%%mean': 1}
+
+        numFlagsReqd=2 #start with most restrictive..
+        for key in stat_flag_Req.keys():
+            if row.lower().startswith(key):
+                numFlagsReqd = stat_flag_Req[key]
+                break
+
         flags = list(data.keys())
 
         if len(flags) > 0:
-            getdata=True
+            getdata = True
             if 'Computed' in flags:
                 flag1 = 'Computed'
-                if len(flags) >= 2:
-                    flag2 = [n for n in flags if n != flag1][0] #not computed
+                if numFlagsReqd == 2:
+                    if len(flags) >= 2:
+                        if 'Observed' in flags:
+                            flag2 = 'Observed'
+                        else:
+                            flag2 = [n for n in flags if n != flag1][0] #not computed
+                    else:
+                        getdata=False
             else:
                 flag1 = flags[0]
-                if len(flags) >= 2:
-                    flag2 = flags[1]
+                if numFlagsReqd == 2:
+                    if len(flags) >= 2:
+                        flag2 = flags[1]
+                    else:
+                        getdata = False
         else:
             getdata = False
 
@@ -5220,27 +5242,39 @@ class MakeAutomatedReport(object):
             print('\nWARNING: Insufficient amount of datapaths defined.')
             print(f'Need 2 datapaths to compute statistics for {stat}')
             print('Resulting table will not generate correctly.')
-        if len(data.keys()) > 2:
+            for year in object_settings['years']:
+                row = f'{year}'
+                for month in self.mo_str_3:
+                    row += '|-'
+                rows.append(row)
+            if 'includeallyears' in object_settings.keys():
+                if object_settings['includeallyears'].lower() == 'true':
+                    row = 'All'
+                    for month in self.mo_str_3:
+                        row += '|-'
+                    rows.append(row)
+        elif len(data.keys()) > 2:
             print('\nWARNING: Too many datapaths defined.')
             print(f'Need 2 datapaths to compute statistics for {stat}')
             print(f'Resulting table will use the following datapaths: {datakeys[0]}, {datakeys[1]}')
-        for year in object_settings['years']:
-            row = f'{year}'
-            for month in self.mo_str_3:
-                if numflagsneeded == 1:
-                    row += f'|%%{stat}.{data[datakeys[0]]["flag"]}.MONTH={month.upper()}%%'
-                else:
-                    row += f'|%%{stat}.{data[datakeys[0]]["flag"]}.MONTH={month.upper()}.{data[datakeys[1]]["flag"]}.MONTH={month.upper()}%%'
-            rows.append(row)
-        if 'includeallyears' in object_settings.keys():
-            if object_settings['includeallyears'].lower() == 'true':
-                row = 'All'
+        else:
+            for year in object_settings['years']:
+                row = f'{year}'
                 for month in self.mo_str_3:
                     if numflagsneeded == 1:
                         row += f'|%%{stat}.{data[datakeys[0]]["flag"]}.MONTH={month.upper()}%%'
                     else:
                         row += f'|%%{stat}.{data[datakeys[0]]["flag"]}.MONTH={month.upper()}.{data[datakeys[1]]["flag"]}.MONTH={month.upper()}%%'
                 rows.append(row)
+            if 'includeallyears' in object_settings.keys():
+                if object_settings['includeallyears'].lower() == 'true':
+                    row = 'All'
+                    for month in self.mo_str_3:
+                        if numflagsneeded == 1:
+                            row += f'|%%{stat}.{data[datakeys[0]]["flag"]}.MONTH={month.upper()}%%'
+                        else:
+                            row += f'|%%{stat}.{data[datakeys[0]]["flag"]}.MONTH={month.upper()}.{data[datakeys[1]]["flag"]}.MONTH={month.upper()}%%'
+                    rows.append(row)
 
         return headers, rows
 
