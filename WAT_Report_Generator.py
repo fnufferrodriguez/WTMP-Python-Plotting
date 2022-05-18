@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '4.7.2'
+VERSIONNUMBER = '4.7.3'
 
 import datetime as dt
 import os
@@ -5160,8 +5160,6 @@ class MakeAutomatedReport(object):
                 rows[year][ri] = []
 
         for i, header in enumerate(object_settings['headers']):
-            if isinstance(object_settings['headers'], dict):
-                header = object_settings['headers']['header'] #single headers come as dict objs TODO fix this eventually...
             curheader = pickle.loads(pickle.dumps(header, -1))
             if self.iscomp: #comp run
                 isused = False
@@ -5294,8 +5292,6 @@ class MakeAutomatedReport(object):
 
         if self.iscomp: #comp run
             for i, header in enumerate(object_settings['headers']):
-                if isinstance(object_settings['headers'], dict):
-                    header = object_settings['headers']['header'] #single headers come as dict objs TODO: fix this eventually...
                 curheader = pickle.loads(pickle.dumps(header, -1))
                 for datakey in data.keys():
                     if '%%{0}%%'.format(data[datakey]['flag']) in curheader: #found data specific flag
@@ -5331,8 +5327,6 @@ class MakeAutomatedReport(object):
         header_by_year = []
         yearstr = object_settings['yearstr']
         for i, header in enumerate(object_settings['headers']):
-            if isinstance(object_settings['headers'], dict):
-                header = object_settings['headers']['header'] #single headers come as dict objs TODO fix this eventually...
             if '%%year%%' in header:
                 if split_by_year:
                     header_by_year.append(header)
@@ -6339,15 +6333,10 @@ class MakeAutomatedReport(object):
         rows = []
         rows_by_year = []
         for i, row in enumerate(object_settings['rows']):
-            if isinstance(object_settings['rows'], dict):
-                row = object_settings['rows']['row'] #single headers come as dict objs TODO fix this eventually...
             srow = row.split('|')
             r = [srow[0]] #<Row>Jan|%%MEAN.Computed.MONTH=JAN%%|%%MEAN.Observed.MONTH=JAN%%</Row>
             for si, sr in enumerate(srow[1:]):
-                if isinstance(object_settings['headers'][si], dict):
-                    header = object_settings['headers'][si]['header'] #single headers come as dict objs TODO fix this eventually...
-                else:
-                    header = object_settings['headers'][si]
+                header = object_settings['headers'][si]
                 if '%%year%%' in header:
                     if split_by_year:
                         rows_by_year.append(sr)

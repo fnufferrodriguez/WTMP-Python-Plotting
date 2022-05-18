@@ -399,13 +399,20 @@ def getchildren(root, returnkeyless=False):
         except:
             children[root.tag.lower()] = root.text
     else:
-        children[root.tag.lower()] = []
-        for subroot in root: #figure out if we have a list or dict..
-            if Counter([n.tag for n in root])[subroot.tag] != 1:
-                break
-            if len(subroot.text.strip()) != 0: #empty meaning another def, aka "line" in "Lines"
-                children[root.tag.lower()] = {}
-                break
+        if len(Counter([n.tag for n in root])) > 1: #if the amount of diff subroots > 1
+            children[root.tag.lower()] = {}
+        else: #if there is only 1 subroot
+            if len(root.text.strip()) == 0: #if the text len of root is 0, we have subitems
+                if len([n.tag for n in root]) > 1: #if we have more than 1 of the same subroot
+                    children[root.tag.lower()] = []
+                else: #otherwise, we have a single dictionary
+                    children[root.tag.lower()] = []
+                    for subroot in root: #if any subroot texts more than 0, make a dict. otherwise list.
+                        if len(subroot.text.split()) > 0:
+                            children[root.tag.lower()] = {}
+            else:
+                children[root.tag.lower()] = []
+
         for subroot in root:
             if isinstance(children[root.tag.lower()], list):
                 children[root.tag.lower()].append(getchildren(subroot, returnkeyless=True))
