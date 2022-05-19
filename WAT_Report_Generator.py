@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '4.7.4'
+VERSIONNUMBER = '4.7.5'
 
 import datetime as dt
 import os
@@ -961,7 +961,8 @@ class MakeAutomatedReport(object):
                 headings, rows = self.buildProfileStatsTable(table_blueprint, yrheaders[yi][yhi], line_settings)
                 for hi,heading in enumerate(headings):
                     frmt_rows = []
-                    for row in rows:
+                    threshold_colors = np.full(len(rows), None)
+                    for ri, row in enumerate(rows):
                         s_row = row.split('|')
                         rowname = s_row[0]
                         row_val = s_row[hi+1]
@@ -970,6 +971,16 @@ class MakeAutomatedReport(object):
                             stats_data = self.formatStatsProfileLineData(row_val, data, object_settings['resolution'],
                                                                          object_settings['usedepth'], header_i)
                             row_val, stat = self.getStatsLine(row_val, stats_data)
+                            if not np.isnan(row_val) and row_val != None:
+                                thresholdsettings = self.matchThresholdToStat(stat, object_settings)
+                            for thresh in thresholdsettings:
+                                if thresh['colorwhen'] == 'under':
+                                    if row_val < thresh['value']:
+                                        threshold_colors[ri] = thresh['color']
+                                elif thresh['colorwhen'] == 'over':
+                                    if row_val > thresh['value']:
+                                        threshold_colors[ri] = thresh['color']
+
                             self.addLogEntry({'type': 'ProfileTableStatistic',
                                               'name': ' '.join([self.ChapterRegion, heading, stat]),
                                               'description': object_desc,
@@ -983,7 +994,7 @@ class MakeAutomatedReport(object):
                                              isdata=True)
 
                         frmt_rows.append('{0}|{1}'.format(rowname, row_val))
-                    self.XML.writeTableColumn(heading, frmt_rows)
+                    self.XML.writeTableColumn(heading, frmt_rows, thresholdcolors=threshold_colors)
                 if self.iscomp:
                     self.XML.writeDateColumnEnd()
             self.XML.writeTableEnd()
@@ -1589,7 +1600,8 @@ class MakeAutomatedReport(object):
             year = yearheader[0]
             header = yearheader[1]
             frmt_rows = []
-            for row in rows:
+            threshold_colors = np.full(len(rows), None)
+            for ri, row in enumerate(rows):
                 s_row = row.split('|')
                 rowname = s_row[0]
                 row_val = s_row[i+1]
@@ -1599,7 +1611,15 @@ class MakeAutomatedReport(object):
                         row_val = None
                     else:
                         row_val, stat = self.getStatsLine(row_val, rowdata)
-
+                        if not np.isnan(row_val) and row_val != None:
+                            thresholdsettings = self.matchThresholdToStat(stat, object_settings)
+                            for thresh in thresholdsettings:
+                                if thresh['colorwhen'] == 'under':
+                                    if row_val < thresh['value']:
+                                        threshold_colors[ri] = thresh['color']
+                                elif thresh['colorwhen'] == 'over':
+                                    if row_val > thresh['value']:
+                                        threshold_colors[ri] = thresh['color']
                         data_start_date, data_end_date = self.getTableDates(year, object_settings)
                         self.addLogEntry({'type': 'Statistic',
                                           'name': ' '.join([self.ChapterRegion, header, stat]),
@@ -1615,7 +1635,7 @@ class MakeAutomatedReport(object):
 
                 header = '' if header == None else header
                 frmt_rows.append('{0}|{1}'.format(rowname, row_val))
-            self.XML.writeTableColumn(header, frmt_rows)
+            self.XML.writeTableColumn(header, frmt_rows, thresholdcolors=threshold_colors)
         self.XML.writeTableEnd()
 
     def makeMonthlyStatisticsTable(self, object_settings):
@@ -1654,8 +1674,8 @@ class MakeAutomatedReport(object):
             year = yearheader[0]
             header = yearheader[1]
             frmt_rows = []
-            threshold_colors = []
-            for row in rows:
+            threshold_colors = np.full(len(rows), None)
+            for ri, row in enumerate(rows):
                 s_row = row.split('|')
                 rowname = s_row[0]
                 row_val = s_row[i+1]
@@ -1664,17 +1684,15 @@ class MakeAutomatedReport(object):
                     if len(rowdata) == 0:
                         row_val = None
                     else:
-                        c = None
                         row_val, stat = self.getStatsLine(row_val, rowdata)
                         if not np.isnan(row_val) and row_val != None:
                             for thresh in thresholds:
                                 if thresh['colorwhen'] == 'under':
                                     if row_val < thresh['value']:
-                                        c = thresh['color']
+                                        threshold_colors[ri] = thresh['color']
                                 elif thresh['colorwhen'] == 'over':
                                     if row_val > thresh['value']:
-                                        c = thresh['color']
-                        threshold_colors.append(c)
+                                        threshold_colors[ri] = thresh['color']
                         data_start_date, data_end_date = self.getTableDates(year, object_settings, month=sr_month)
                         self.addLogEntry({'type': 'Statistic',
                                           'name': ' '.join([self.ChapterRegion, header, stat]),
@@ -1727,8 +1745,8 @@ class MakeAutomatedReport(object):
         self.XML.writeNarrowTableStart(object_settings['description'], 'Year')
         for i, header in enumerate(headings):
             frmt_rows = []
-            threshold_colors = []
-            for row in rows:
+            threshold_colors = np.full(len(rows), None)
+            for ri, row in enumerate(rows):
                 s_row = row.split('|')
                 rowname = s_row[0]
                 if rowname in [str(n) for n in object_settings['years']]:
@@ -1741,7 +1759,6 @@ class MakeAutomatedReport(object):
                     if len(rowdata) == 0:
                         row_val = None
                     else:
-                        c = None
                         row_val, stat = self.getStatsLine(row_val, rowdata)
                         if np.isnan(row_val):
                             row_val = '-'
@@ -1749,11 +1766,10 @@ class MakeAutomatedReport(object):
                             for thresh in thresholds:
                                 if thresh['colorwhen'] == 'under':
                                     if row_val < thresh['value']:
-                                        c = thresh['color']
+                                        threshold_colors[ri] = thresh['color']
                                 elif thresh['colorwhen'] == 'over':
                                     if row_val > thresh['value']:
-                                        c = thresh['color']
-                        threshold_colors.append(c)
+                                        threshold_colors[ri] = thresh['color']
 
                         data_start_date, data_end_date = self.getTableDates(year, object_settings, month=sr_month)
                         self.addLogEntry({'type': 'Statistic',
@@ -1825,7 +1841,7 @@ class MakeAutomatedReport(object):
         self.XML.writeNarrowTableStart(object_settings['description'], 'Year')
         for i, header in enumerate(headings):
             frmt_rows = []
-            threshold_colors = []
+            threshold_colors = np.full(len(rows), None)
             for ri, row in enumerate(rows):
                 s_row = row.split('|')
                 rowname = s_row[0]
@@ -1845,7 +1861,6 @@ class MakeAutomatedReport(object):
                                                                      object_settings['usedepth'], di)
                         rowval_stats = self.stackProfileIndicies(rowval_stats, stats_data)
 
-                    c = None
 
                     row_val, stat = self.getStatsLine(row_val, rowval_stats)
                     if np.isnan(row_val):
@@ -1854,11 +1869,10 @@ class MakeAutomatedReport(object):
                         for thresh in thresholds:
                             if thresh['colorwhen'] == 'under':
                                 if row_val < thresh['value']:
-                                    c = thresh['color']
+                                    threshold_colors[ri] = thresh['color']
                             elif thresh['colorwhen'] == 'over':
                                 if row_val > thresh['value']:
-                                    c = thresh['color']
-                    threshold_colors.append(c)
+                                    threshold_colors[ri] = thresh['color']
 
                     data_start_date, data_end_date = self.getTableDates(year, object_settings, month=header)
                     self.addLogEntry({'type': 'ProfileTableStatistic',
@@ -5769,6 +5783,17 @@ class MakeAutomatedReport(object):
 
         else:
             return array1
+
+    def matchThresholdToStat(self, stat, object_settings):
+        thresholds = []
+        if 'tablecolors' in object_settings.keys():
+            for tablecolor in object_settings['tablecolors']:
+                if 'statistic' in tablecolor.keys():
+                    if stat.lower() == tablecolor['statistic'].lower():
+                        thresholds += self.formatThreshold(tablecolor)
+                else:
+                    thresholds += self.formatThreshold(tablecolor)
+        return thresholds
 
     def mergeLines(self, data, settings):
         '''
