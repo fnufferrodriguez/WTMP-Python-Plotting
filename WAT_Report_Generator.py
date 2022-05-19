@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '4.7.3'
+VERSIONNUMBER = '4.7.4'
 
 import datetime as dt
 import os
@@ -1198,10 +1198,6 @@ class MakeAutomatedReport(object):
                                        zorder=float(vline_settings['zorder']),
                                        alpha=float(vline_settings['alpha']))
 
-
-
-
-
                     show_xlabel, show_ylabel = self.getPlotLabelMasks(i, len(pgi), subplot_cols)
 
                     # if cur_obj_settings['gridlines'].lower() == 'true':
@@ -1465,7 +1461,15 @@ class MakeAutomatedReport(object):
                             bottomtext_y = -25
                         else:
                             bottomtext_y = -10
-                        ax.annotate(bottomtext, xy=(0.02, bottomtext_y), fontsize=6, color='red', xycoords='axes points')
+                        if 'bottomtextfontsize' in cur_obj_settings.keys():
+                            bottomtextfontsize = float(cur_obj_settings['bottomtextfontsize'])
+                        else:
+                            bottomtextfontsize = 6
+                        if 'bottomtextfontcolor' in cur_obj_settings.keys():
+                            bottomtextfontcolor = self.confirmColor(cur_obj_settings['bottomtextfontcolor'], 'red')
+                        else:
+                            bottomtextfontcolor = 'red'
+                        ax.annotate(bottomtext, xy=(0.02, bottomtext_y), fontsize=bottomtextfontsize, color=bottomtextfontcolor, xycoords='axes points')
 
                 plt.tight_layout()
 
