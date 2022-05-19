@@ -18,8 +18,8 @@ import pandas as pd
 import datetime as dt
 import h5py
 from scipy.interpolate import interp1d
-from collections import Counter
 from pydsstools.heclib.dss import HecDss
+from collections import Counter
 # from pydsstools.heclib.utils import dss_logging
 # dss_logging.config(level="None")
 import xml.etree.ElementTree as ET
@@ -406,10 +406,11 @@ def getchildren(root, returnkeyless=False):
                 if len([n.tag for n in root]) > 1: #if we have more than 1 of the same subroot
                     children[root.tag.lower()] = []
                 else: #otherwise, we have a single dictionary
-                    children[root.tag.lower()] = []
-                    for subroot in root: #if any subroot texts more than 0, make a dict. otherwise list.
-                        if len(subroot.text.split()) > 0:
-                            children[root.tag.lower()] = {}
+                    subroot = root[0]
+                    if subroot.tag.lower() == root.tag.lower()[:-1]: #if the subroots is just the root, but singular
+                        children[root.tag.lower()] = []
+                    else:
+                        children[root.tag.lower()] = {}
             else:
                 children[root.tag.lower()] = []
 
