@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '4.7.6'
+VERSIONNUMBER = '4.7.7'
 
 import datetime as dt
 import os
@@ -225,7 +225,7 @@ class MakeAutomatedReport(object):
         '''
         sets up a list of default colors to use in the event that colors are not set up in the graphics default file
         for a line
-        Color Changes based off https://davidmathlogic.com/colorblind/#%23332288-%23117733-%2344AA99-%2388CCEE-%23DDCC77-%23CC6677-%23AA4499-%23882255
+        Color Changes based off https://davidmathlogic.com/colorblind/#%2388CCEE-%23882255-%23117733-%2344AA99-%23DDCC77-%23CC6677-%23AA4499-%23332288
         :return: class variable
                     self.def_colors
         '''
@@ -4015,10 +4015,9 @@ class MakeAutomatedReport(object):
                 if line['flag'] == object_settings['datessource_flag']:
                     timestamps = self.getProfileDates(line)
         elif isinstance(object_settings['datessource_flag'], dict): #single date instance..
-            timestamps = object_settings['datessource']['date']
-        elif isinstance(object_settings['datessource_flag'], list):
             timestamps = []
-            for d in object_settings['datessource']:
+            tstamp_dates = object_settings['datessource']['dates']
+            for d in tstamp_dates:
                 dfrmt = self.translateDateFormat(d, 'datetime', None)
                 if dfrmt != None:
                     timestamps.append(dfrmt)
