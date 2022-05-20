@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '4.7.5'
+VERSIONNUMBER = '4.7.6'
 
 import datetime as dt
 import os
@@ -225,13 +225,14 @@ class MakeAutomatedReport(object):
         '''
         sets up a list of default colors to use in the event that colors are not set up in the graphics default file
         for a line
-        Color Changes based off of bureau of Rec Identification program pdf
+        Color Changes based off https://davidmathlogic.com/colorblind/#%23332288-%23117733-%2344AA99-%2388CCEE-%23DDCC77-%23CC6677-%23AA4499-%23882255
         :return: class variable
                     self.def_colors
         '''
 
-        self.def_colors = ['#003E51', '#FF671F', '#007396', '#215732', '#C69214', '#4C12A1', '#DDCBA4', '#9A3324']
-        #                     blue       orange    l blue     green      mustard     purple     tan      dark red
+        # self.def_colors = ['#003E51', '#FF671F', '#007396', '#215732', '#C69214', '#4C12A1', '#DDCBA4', '#9A3324']
+        self.def_colors = ['#88CCEE', '#882255', '#117733', '#44AA99', '#DDCC77', '#CC6677', '#AA4499', '#332288']
+        #                     blue       red       green    light green   yellow     salmon    redpink, purple
 
     def defineUnits(self):
         '''
