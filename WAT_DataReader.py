@@ -235,7 +235,7 @@ def readW2ResultsFile(output_file_name, jd_dates, run_path, targetfieldidx=1):
 
     return out_vals
 
-def readTextProfile(observed_data_filename, timestamps, starttime=None, endtime=None): #TODO
+def readTextProfile(observed_data_filename, timestamps, starttime=None, endtime=None):
     '''
     reads in observed data files and returns values for Temperature Profiles
     :param observed_data_filename: file name
@@ -294,23 +294,26 @@ def readTextProfile(observed_data_filename, timestamps, starttime=None, endtime=
         wt.append(np.array(wt_profile))
         d.append(np.array(d_profile))
 
-    wtn = []
-    dn = []
-    ts = []
-    if len(t) > 0:
-        cti = getClosestProfileTime(timestamps, [n[0] for n in t])
+    if isinstance(timestamps, (list, np.ndarray)):
+        wtn = []
+        dn = []
+        ts = []
+        if len(t) > 0:
+            cti = getClosestProfileTime(timestamps, [n[0] for n in t])
 
-        for ci, i in enumerate(cti):
-            if i != None:
-                wtn.append(np.asarray(wt[i]))
-                dn.append(np.asarray(d[i]))
-                ts.append(timestamps[ci])
-            else:
-                wtn.append(np.array([]))
-                dn.append(np.array([]))
-                ts.append(timestamps[ci])
+            for ci, i in enumerate(cti):
+                if i != None:
+                    wtn.append(np.asarray(wt[i]))
+                    dn.append(np.asarray(d[i]))
+                    ts.append(timestamps[ci])
+                else:
+                    wtn.append(np.array([]))
+                    dn.append(np.array([]))
+                    ts.append(timestamps[ci])
 
-    return wtn, dn, np.asarray(ts)
+        return wtn, dn, np.asarray(ts)
+    else:
+        return wt, d, np.asarray(t)
 
 def getTextProfileDates(observed_data_filename, starttime, endtime):
     '''
@@ -638,17 +641,11 @@ class W2_Results(object):
         :return: array of water temperatures, elevations and depths
         '''
 
-        unique_times = timesteps
-        print('Num unique times:', len(unique_times))
+        # unique_times = timesteps
+        # print('Num unique times:', len(unique_times))
 
         self.get_tempprofile_layers() #get the output layers. out at 2m depths
-        # self.getOutputFileName() #get the W2 sanctioned output file name convention
 
-        # wt = np.full((len(self.jd_dates), len(self.layers)), np.nan)
-        # WS_Elev = np.full((len(self.jd_dates), len(self.layers)), np.nan)
-
-        # wt = []
-        # WS_Elev = []
         wt = np.full((len(self.layers), len(self.jd_dates)), np.nan)
         WS_Elev = np.full((len(self.layers), len(self.jd_dates)), np.nan)
 
@@ -690,42 +687,45 @@ class W2_Results(object):
         wt = np.asarray(wt).T
         WS_Elev = np.asarray(WS_Elev).T
 
-        select_wt = []
-        elevations = []
-        depths = []
-        times = []
-        for t, time in enumerate(unique_times):
-            # print('{0} of {1}'.format(t, len(unique_times)))
-            e = []
-            timestep = WF.getIdxForTimestamp(self.jd_dates, time, self.t_offset)
-            if timestep > -1:#timestep in model
-                WSE = WS_Elev[timestep] #Meters #get WSE
-                if not WF.checkData(WSE): #if WSE is bad, skip usually first timestep...
+        if isinstance(timesteps, (list, np.ndarray)):
+            select_wt = []
+            elevations = []
+            depths = []
+            times = []
+            for t, time in enumerate(timesteps):
+                # print('{0} of {1}'.format(t, len(unique_times)))
+                e = []
+                timestep = WF.getIdxForTimestamp(self.jd_dates, time, self.t_offset)
+                if timestep > -1:#timestep in model
+                    WSE = WS_Elev[timestep] #Meters #get WSE
+                    if not WF.checkData(WSE): #if WSE is bad, skip usually first timestep...
+                        elevations.append(np.array([]))
+                        depths.append(np.array([]))
+                        select_wt.append(np.array([]))
+                        times.append(time)
+                        continue
+                    WSE = WSE[np.where(~np.isnan(WSE))][0] #otherwise find valid
+                    WSE_array = np.full((self.layers.shape), WSE)
+                    e = (WSE_array - self.layers) * 3.28
+                    # for depth in self.layers: #get all depths
+                    #     e.append((WSE - depth) * 3.28) #conv to feet
+                    # select_wt[t] = wt[timestep][:] #find WTs
+                    select_wt.append(wt[timestep][:]) #find WTs
+
+                else: #if timestep NOT in model, add empties
+                    select_wt.append(np.array([])) #find WTs
                     elevations.append(np.array([]))
                     depths.append(np.array([]))
-                    select_wt.append(np.array([]))
                     times.append(time)
-                    continue
-                WSE = WSE[np.where(~np.isnan(WSE))][0] #otherwise find valid
-                WSE_array = np.full((self.layers.shape), WSE)
-                e = (WSE_array - self.layers) * 3.28
-                # for depth in self.layers: #get all depths
-                #     e.append((WSE - depth) * 3.28) #conv to feet
-                # select_wt[t] = wt[timestep][:] #find WTs
-                select_wt.append(wt[timestep][:]) #find WTs
+                elevations.append(np.asarray(e)) #then append for timestep
+                depths.append(self.layers * 3.28) #append dpeths
+                times.append(time) #get time
+            select_wt, elevations, depths = self.matchProfileLengths(select_wt, elevations, depths)
+            # return select_wt, elevations, np.asarray(depths), np.asarray(times)
 
-            else: #if timestep NOT in model, add empties
-                select_wt.append(np.array([])) #find WTs
-                elevations.append(np.array([]))
-                depths.append(np.array([]))
-                times.append(time)
-            elevations.append(np.asarray(e)) #then append for timestep
-            depths.append(self.layers * 3.28) #append dpeths
-            times.append(time) #get time
-        select_wt, elevations, depths = self.matchProfileLengths(select_wt, elevations, depths)
-        # return select_wt, elevations, np.asarray(depths), np.asarray(times)
+            return select_wt, elevations, depths, np.asarray(times)
+        # else:
 
-        return select_wt, elevations, depths, np.asarray(times)
 
     def readStructuredTimeSeries(self, output_file_name, structure_nums, skiprows=2):
         """
@@ -1013,7 +1013,7 @@ class ResSim_Results(object):
             y = np.array([dataset[i][1] for i in range(ncells)])
             self.subdomains[subdomain] = {'x': x, 'y': y}
 
-    def readProfileData(self, resname, metric, times):
+    def readProfileData(self, resname, metric, timestamps):
         '''
         reads Ressim profile data from model
         :param resname: name of reservoir in h5 file
@@ -1023,38 +1023,63 @@ class ResSim_Results(object):
         '''
 
         self.loadElevation(alt_subdomain_name=resname)
-        unique_times = [n for n in times]
+
 
         vals = []
         elevations = []
         depths = []
         times = []
         # print('UNIQUE TIMES:', unique_times)
-        for j, time_in in enumerate(unique_times):
-            timestep = WF.getIdxForTimestamp(self.jd_dates, time_in, self.t_offset)
-            if timestep == -1:
-                depths.append(np.asarray([]))
-                elevations.append(np.asarray([]))
-                vals.append(np.asarray([]))
-                times.append(time_in)
-                # continue
-            else:
-            # print('finding time for', time_in)
-                self.loadResults(time_in, metric.lower(), alt_subdomain_name=resname)
-                ktop = self.getTopLayer(timestep) #get waterlevel top layer to know where to grab data from
-                v_el = self.vals[:ktop + 1]
-                el = self.elev[:ktop + 1]
-                d_step = []
-                e_step = []
-                v_step = []
-                for ei, e in enumerate(el):
-                    d_step.append(np.max(el) - e)
-                    e_step.append(e)
-                    v_step.append(v_el[ei])
-                depths.append(np.asarray(d_step))
-                elevations.append(np.asarray(e_step))
-                vals.append(np.asarray(v_step))
-                times.append(time_in)
+        if isinstance(timestamps, (list, np.ndarray)):
+            unique_times = [n for n in timestamps]
+            for j, time_in in enumerate(unique_times):
+                timestep = WF.getIdxForTimestamp(self.jd_dates, time_in, self.t_offset)
+                if timestep == -1:
+                    depths.append(np.asarray([]))
+                    elevations.append(np.asarray([]))
+                    vals.append(np.asarray([]))
+                    times.append(time_in)
+                    # continue
+                else:
+                # print('finding time for', time_in)
+                    self.loadResults2(time_in, metric.lower(), alt_subdomain_name=resname)
+                    ktop = self.getTopLayer(timestep) #get waterlevel top layer to know where to grab data from
+                    v_el = self.vals[:ktop + 1]
+                    el = self.elev[:ktop + 1]
+                    d_step = []
+                    e_step = []
+                    v_step = []
+                    for ei, e in enumerate(el):
+                        d_step.append(np.max(el) - e)
+                        e_step.append(e)
+                        v_step.append(v_el[ei])
+                    depths.append(np.asarray(d_step))
+                    elevations.append(np.asarray(e_step))
+                    vals.append(np.asarray(v_step))
+                    times.append(time_in)
+        else:
+            self.loadResults2('all', metric.lower(), alt_subdomain_name=resname)
+            elevations = self.elev
+            vals = self.vals
+            depths = np.array([])
+            times = self.dt_dates
+
+            # for dti, dt_d in enumerate(self.dt_dates):
+            #     ktop = self.getTopLayer(dti) #get waterlevel top layer to know where to grab data from
+            #     v_el = self.vals[dti][:ktop + 1]
+            #     el = self.elev[:ktop + 1]
+            #     d_step = []
+            #     e_step = []
+            #     v_step = []
+            #     for ei, e in enumerate(el):
+            #         d_step.append(np.max(el) - e)
+            #         e_step.append(e)
+            #         v_step.append(v_el[ei])
+            #     depths.append(np.asarray(d_step))
+            #     elevations.append(np.asarray(e_step))
+            #     vals.append(np.asarray(v_step))
+            #     times.append(dt_d)
+
         return vals, elevations, depths, np.asarray(times)
 
     def getTopLayer(self, timestep_index):
@@ -1133,6 +1158,49 @@ class ResSim_Results(object):
             vdo = np.array([vtmp[timestep][i] for i in range(self.ncells)])
             vals = WF.calcComputedDOSat(vt, vdo)
         self.vals = vals
+
+    def loadResults2(self, t_in, metrc, alt_subdomain_name=None):
+        '''
+        loads results for a specific time step from h5 file
+        :param t_in: time in datetime object
+        :param metrc: metric to get data from
+        :param alt_subdomain_name: alt field if data is grabbed from a different location than the default
+        :return: set class vairables
+                self.t_data - timestep
+                self.vals - array of values
+        '''
+
+        this_subdomain = self.subdomain_name if alt_subdomain_name is None else alt_subdomain_name
+
+        if metrc.lower() == 'temperature':
+            metric_name = 'Water Temperature'
+            try:
+                vals = self.h['Results/Subdomains/' + this_subdomain + '/' + metric_name]
+            except KeyError:
+                raise KeyError('WQ Simulation does not have results for metric: {0}'.format(metric_name))
+
+        elif metrc == 'diss_oxy' or metrc.lower() == 'do':
+            metric_name = 'Dissolved Oxygen'
+            try:
+                vals = self.h['Results/Subdomains/' + this_subdomain + '/' + metric_name]
+            except KeyError:
+                raise KeyError('WQ Simulation does not have results for metric: {0}'.format(metric_name))
+
+        elif metrc.lower() == 'do_sat':
+            metric_name = 'Water Temperature'
+            vt = self.h['Results/Subdomains/' + this_subdomain + '/' + metric_name]
+            metric_name = 'Dissolved Oxygen'
+            vdo = self.h['Results/Subdomains/' + this_subdomain + '/' + metric_name]
+            vals = WF.calcComputedDOSat(vt, vdo)
+
+        if t_in != 'all':
+            timestep = WF.getIdxForTimestamp(self.jd_dates, t_in, self.t_offset) #get timestep index for current date
+            if timestep == -1:
+                print('should never be here..')
+            self.t_data = t_in
+            self.vals = np.array([vals[timestep][i] for i in range(self.ncells)])
+        else:
+            self.vals = vals
 
     def readTimeSeries(self, metric, x, y):
         '''
