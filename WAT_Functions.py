@@ -409,6 +409,7 @@ def calcNSE(data1, data2):
     # )
     if np.isinf(nse_):
         nse_ = np.nan
+
     return nse_
 
 def getCount(data1):
