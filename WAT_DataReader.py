@@ -1060,7 +1060,7 @@ class ResSim_Results(object):
         else:
             self.loadResults2('all', metric.lower(), alt_subdomain_name=resname)
             elevations = self.elev
-            vals = self.vals
+            vals = np.asarray(self.vals)
             depths = np.array([])
             times = self.dt_dates
 

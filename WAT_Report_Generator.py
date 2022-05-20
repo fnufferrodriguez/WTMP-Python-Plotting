@@ -974,13 +974,13 @@ class MakeAutomatedReport(object):
                             row_val, stat = self.getStatsLine(row_val, stats_data)
                             if not np.isnan(row_val) and row_val != None:
                                 thresholdsettings = self.matchThresholdToStat(stat, object_settings)
-                            for thresh in thresholdsettings:
-                                if thresh['colorwhen'] == 'under':
-                                    if row_val < thresh['value']:
-                                        threshold_colors[ri] = thresh['color']
-                                elif thresh['colorwhen'] == 'over':
-                                    if row_val > thresh['value']:
-                                        threshold_colors[ri] = thresh['color']
+                                for thresh in thresholdsettings:
+                                    if thresh['colorwhen'] == 'under':
+                                        if row_val < thresh['value']:
+                                            threshold_colors[ri] = thresh['color']
+                                    elif thresh['colorwhen'] == 'over':
+                                        if row_val > thresh['value']:
+                                            threshold_colors[ri] = thresh['color']
 
                             self.addLogEntry({'type': 'ProfileTableStatistic',
                                               'name': ' '.join([self.ChapterRegion, heading, stat]),
@@ -2368,16 +2368,22 @@ class MakeAutomatedReport(object):
             for IDi, ID in enumerate(selectedContourIDs):
                 contour_settings = pickle.loads(pickle.dumps(cur_obj_settings, -1))
                 contour_settings = self.configureSettingsForID(ID, contour_settings)
-                contours = self.selectContoursByID(contoursbyID, ID)
-                values, dates, distance, transitions = self.stackContours(contours)
+                contours = self.selectContoursByID(contoursbyID, ID, returntype='single')
+
+                values = contour['values']
+                elevations = contour['elevations']
+                dates = contour['dates']
+
+                # contours = self.selectContoursByID(contoursbyID, ID)
+
+
                 if len(selectedContourIDs) == 1:
                     axes = [axes]
 
                 ax = axes[IDi]
 
-                for contourname in contours:
-                    contour = contours[contourname]
-                    parameter, contour_settings['param_count'] = self.getParameterCount(contour, contour_settings)
+
+                parameter, contour_settings['param_count'] = self.getParameterCount(contour, contour_settings)
 
                 if 'units' in contour_settings.keys():
                     units = contour_settings['units']
@@ -2432,7 +2438,7 @@ class MakeAutomatedReport(object):
                     if 'xlims' in contour_settings.keys():
                         dates, values = self.limitXdata(dates, values, contour_settings['xlims'])
                     if 'ylims' in contour_settings.keys():
-                        dates, values = self.limitYdata(dates, values, contour_settings['ylims'], baseOn=distance)
+                        dates, values = self.limitYdata(dates, values, contour_settings['ylims'], baseOn=elevations)
 
                 if 'min' in contour_settings['colorbar']:
                     vmin = float(contour_settings['colorbar']['min'])
@@ -2443,7 +2449,7 @@ class MakeAutomatedReport(object):
                 else:
                     vmax = np.nanmax(values)
 
-                contr = ax.contourf(dates, distance, values.T, cmap=contour_settings['colorbar']['colormap'],
+                contr = ax.contourf(dates, elevations, values.T, cmap=contour_settings['colorbar']['colormap'],
                                     vmin=vmin, vmax=vmax,
                                     levels=np.linspace(vmin, vmax, int(contour_settings['colorbar']['bins'])), #add one to get the desired number..
                                     extend='both') #the .T transposes the array so dates on bottom TODO:make extend variable
@@ -2536,37 +2542,6 @@ class MakeAutomatedReport(object):
                                    zorder=float(hline_settings['zorder']),
                                    alpha=float(hline_settings['alpha']))
 
-                if 'transitions' in contour_settings.keys():
-                    for transkey in transitions.keys():
-                        transition_start = transitions[transkey]
-                        trans_name = None
-                        hline = self.getDefaultStraightLineSettings(contour_settings['transitions'])
-
-                        linecolor = self.prioritizeKey(contours[transkey], hline, 'linecolor')
-                        linestylepattern = self.prioritizeKey(contours[transkey], hline, 'linestylepattern')
-                        alpha = self.prioritizeKey(contours[transkey], hline, 'alpha')
-                        linewidth = self.prioritizeKey(contours[transkey], hline, 'linewidth')
-
-                        ax.axhline(y=transition_start, c=linecolor, ls=linestylepattern, alpha=float(alpha),
-                                   lw=float(linewidth))
-                        if 'name' in contour_settings['transitions'].keys():
-                            trans_flag = contour_settings['transitions']['name'].lower() #blue:pink:white:pink:blue
-                            text_settings = self.getDefaultTextSettings(contour_settings['transitions'])
-
-                            if trans_flag in contours[transkey].keys():
-                                trans_name = contours[transkey][trans_flag]
-                            if trans_name != None:
-
-                                trans_y_ratio = abs(1.0 - (transition_start / max(ax.get_ylim()) + .01)) #dont let user touch this
-
-                                fontcolor = self.prioritizeKey(contours[transkey], text_settings, 'fontcolor')
-                                fontsize = self.prioritizeKey(contours[transkey], text_settings, 'fontsize')
-                                horizontalalignment = self.prioritizeKey(contours[transkey], text_settings, 'horizontalalignment')
-                                text_x_pos = self.prioritizeKey(contours[transkey], text_settings, 'text_x_pos', backup=0.001)
-
-                                ax.text(float(text_x_pos), trans_y_ratio, trans_name, c=fontcolor, size=float(fontsize),
-                                        transform=ax.transAxes, horizontalalignment=horizontalalignment,
-                                        verticalalignment='top')
                 if self.iscomp:
                     if 'modeltext' in contour_settings.keys():
                         modeltext = contour_settings['modeltext']
@@ -4378,8 +4353,10 @@ class MakeAutomatedReport(object):
                         print('The new flag is {0}'.format(newflag))
                     datamem_key = self.buildDataMemoryKey(datapath)
 
-                    if 'units' in datapath.keys() and units == None:
+                    if 'units' in datapath.keys():
                         units = datapath['units']
+                    else:
+                        units = None
 
                     data[flag] = {'values': values,
                                   'dates': dates,
