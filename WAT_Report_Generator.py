@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '4.7.7'
+VERSIONNUMBER = '4.7.8'
 
 import datetime as dt
 import os
@@ -974,13 +974,13 @@ class MakeAutomatedReport(object):
                             row_val, stat = self.getStatsLine(row_val, stats_data)
                             if not np.isnan(row_val) and row_val != None:
                                 thresholdsettings = self.matchThresholdToStat(stat, object_settings)
-                            for thresh in thresholdsettings:
-                                if thresh['colorwhen'] == 'under':
-                                    if row_val < thresh['value']:
-                                        threshold_colors[ri] = thresh['color']
-                                elif thresh['colorwhen'] == 'over':
-                                    if row_val > thresh['value']:
-                                        threshold_colors[ri] = thresh['color']
+                                for thresh in thresholdsettings:
+                                    if thresh['colorwhen'] == 'under':
+                                        if row_val < thresh['value']:
+                                            threshold_colors[ri] = thresh['color']
+                                    elif thresh['colorwhen'] == 'over':
+                                        if row_val > thresh['value']:
+                                            threshold_colors[ri] = thresh['color']
 
                             self.addLogEntry({'type': 'ProfileTableStatistic',
                                               'name': ' '.join([self.ChapterRegion, heading, stat]),
