@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '4.7.8'
+VERSIONNUMBER = '4.7.9'
 
 import datetime as dt
 import os

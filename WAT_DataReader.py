@@ -370,7 +370,10 @@ def getClosestTime(timestamps, dates):
     '''
 
     cdi = []
-    t0 = dates[0]
+    if len(dates) > 0:
+        t0 = dates[0]
+    else:
+        return []
     if len(dates) > 1:
         t_interval = dates[1] - t0 #timedelta
     t_interval_seconds = t_interval.total_seconds()
