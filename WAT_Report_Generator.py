@@ -1957,7 +1957,7 @@ class MakeAutomatedReport(object):
             for IDi, ID in enumerate(selectedContourIDs):
                 contour_settings = pickle.loads(pickle.dumps(cur_obj_settings, -1))
                 contour_settings = self.configureSettingsForID(ID, contour_settings)
-                contours = self.selectContoursByID(contoursbyID, ID)
+                contours = self.selectContourReachesByID(contoursbyID, ID)
                 values, dates, distance, transitions = self.stackContours(contours)
                 if len(selectedContourIDs) == 1:
                     axes = [axes]
@@ -2368,7 +2368,7 @@ class MakeAutomatedReport(object):
             for IDi, ID in enumerate(selectedContourIDs):
                 contour_settings = pickle.loads(pickle.dumps(cur_obj_settings, -1))
                 contour_settings = self.configureSettingsForID(ID, contour_settings)
-                contours = self.selectContoursByID(contoursbyID, ID, returntype='single')
+                contour = self.selectContourReservoirByID(contoursbyID, ID)
 
                 values = contour['values']
                 elevations = contour['elevations']
@@ -2448,6 +2448,8 @@ class MakeAutomatedReport(object):
                     vmax = float(contour_settings['colorbar']['max'])
                 else:
                     vmax = np.nanmax(values)
+
+                values = self.filterContourOverTopWater(values, )
 
                 contr = ax.contourf(dates, elevations, values.T, cmap=contour_settings['colorbar']['colormap'],
                                     vmin=vmin, vmax=vmax,
@@ -2613,8 +2615,6 @@ class MakeAutomatedReport(object):
 
                 ax.set_ylim(bottom=ymin)
                 ax.set_ylim(top=ymax)
-
-                ax.invert_yaxis()
 
             # #stuff to call once per plot
             self.configureSettingsForID('base', cur_obj_settings)
@@ -3146,9 +3146,14 @@ class MakeAutomatedReport(object):
             else:
                 datakey = line['flag']
 
-            line_settings[datakey]  = {'units': units,
+            subset = True
+            if isinstance(timestamps, str):
+                subset = False
+
+            line_settings[datakey] = {'units': units,
                                       'numtimesused': line['numtimesused'],
-                                      'logoutputfilename': datamem_key
+                                      'logoutputfilename': datamem_key,
+                                      'subset': subset
                                        }
 
             data[datakey] = {'values': vals,
@@ -3291,7 +3296,7 @@ class MakeAutomatedReport(object):
 
         return cur_obj_settings
 
-    def selectContoursByID(self, contoursbyID, ID):
+    def selectContourReachesByID(self, contoursbyID, ID):
         '''
         selects contour data based on the ID
         :param contoursbyID: dictionary containing all contours
@@ -3304,6 +3309,12 @@ class MakeAutomatedReport(object):
             if contoursbyID[key]['ID'] == ID:
                 output_contours[key] = contoursbyID[key]
         return output_contours
+
+    def selectContourReservoirByID(self, contoursbyID, ID):
+        for key in contoursbyID:
+            if contoursbyID[key]['ID'] == ID:
+                return contoursbyID[key]
+        return {}
 
     def stackContours(self, contours):
         '''
@@ -3879,6 +3890,76 @@ class MakeAutomatedReport(object):
         most_common_interval = occurence_count.most_common(1)[0][0]
         return most_common_interval
 
+    def getProfileTopWater(self, Line_info, timesteps):
+        '''
+        gets topwater elevations for timestamps
+        :param Line_info: dictionary containing settings for line
+        :param timesteps: given list of timesteps to extract data at
+        :return: values, elevations, depths, flag
+        '''
+
+        datamemkey = self.buildDataMemoryKey(Line_info)
+
+        if datamemkey in self.Data_Memory.keys():
+            dm = pickle.loads(pickle.dumps(self.Data_Memory[datamemkey], -1))
+            print('retrieving profile topwater from datamem')
+            if isinstance(timesteps, str): #if looking for all
+                if dm['subset'] == 'false': #the last time data was grabbed, it was not a subset, aka all
+                    return dm['topwater']
+                else:
+                    print('Incorrect Timesteps in data memory. Re-extracting data for', datamemkey)
+            elif np.array_equal(timesteps, dm['times']):
+                return dm['topwater']
+            else:
+                print('Incorrect Timesteps in data memory. Re-extracting data for', datamemkey)
+
+        if 'filename' in Line_info.keys(): #Get data from Observed
+            filename = Line_info['filename']
+            values, yvals, times = WDR.readTextProfile(filename, timesteps, self.StartTime, self.EndTime)
+            if 'y_convention' in Line_info.keys():
+                if Line_info['y_convention'].lower() == 'elevation':
+                    return [yval[0] for yval in yvals]
+                elif Line_info['y_convention'].lower() == 'depth':
+                    print('Unable to get topwater from depth.')
+                    return []
+                else:
+                    print('Unknown value for flag y_convention: {0}'.format(Line_info['y_convention']))
+                    print('Please use "elevation"')
+                    print('Assuming elevations...')
+                    return [yval[0] for yval in yvals]
+            else:
+                print('No value for flag y_convention')
+                print('Assuming elevation...')
+                return [yval[0] for yval in yvals]
+
+        elif 'h5file' in Line_info.keys() and 'ressimresname' in Line_info.keys():
+            filename = Line_info['h5file']
+            if not os.path.exists(filename):
+                print('ERROR: H5 file does not exist:', filename)
+                return []
+            externalResSim = WDR.ResSim_Results('', '', '', '', external=True)
+            externalResSim.openH5File(filename)
+            externalResSim.load_time() #load time vars from h5
+            externalResSim.loadSubdomains()
+            topwater = externalResSim.readProfileTopwater(Line_info['ressimresname'], timesteps)
+            return topwater
+
+        elif 'w2_segment' in Line_info.keys():
+            if self.plugin.lower() != 'cequalw2':
+                return []
+            topwater = self.ModelAlt.readProfileData(Line_info['w2_segment'], timesteps)
+            return topwater
+
+        elif 'ressimresname' in Line_info.keys():
+            if self.plugin.lower() != 'ressim':
+                return []
+            topwater = self.ModelAlt.readProfileTopwater(Line_info['ressimresname'], timesteps)
+            return topwater
+
+        print('No Data Defined for line')
+        print('Line:', Line_info)
+        return []
+
     def getProfileValues(self, Line_info, timesteps):
         '''
         reads in profile data from various sources for profile plots at given timesteps
@@ -3893,7 +3974,12 @@ class MakeAutomatedReport(object):
         if datamemkey in self.Data_Memory.keys():
             dm = pickle.loads(pickle.dumps(self.Data_Memory[datamemkey], -1))
             print('retrieving profile from datamem')
-            if np.array_equal(timesteps, dm['times']):
+            if isinstance(timesteps, str): #if looking for all
+                if dm['subset'] == 'false': #the last time data was grabbed, it was not a subset, aka all
+                    return dm['values'], dm['elevations'], dm['depths'], dm['times'], Line_info['flag']
+                else:
+                    print('Incorrect Timesteps in data memory. Re-extracting data for', datamemkey)
+            elif np.array_equal(timesteps, dm['times']):
                 return dm['values'], dm['elevations'], dm['depths'], dm['times'], Line_info['flag']
             else:
                 print('Incorrect Timesteps in data memory. Re-extracting data for', datamemkey)
@@ -4336,6 +4422,7 @@ class MakeAutomatedReport(object):
                     continue
                 # object_settings['timestamps'] = 'all'
                 values, elevations, depths, dates, flag = self.getProfileValues(curreach, 'all') #todo: this
+                topwater = self.getProfileTopWater(curreach, 'all')
                 if WF.checkData(values):
                     if 'flag' in datapath.keys():
                         flag = datapath['flag']
@@ -7363,10 +7450,12 @@ class MakeAutomatedReport(object):
         commits updated data to data memory dictionary that keeps track of data
         :param object_settings:  dicitonary of user defined settings for current object
         '''
+
         for line in data.keys():
             values = pickle.loads(pickle.dumps(data[line]['values'], -1))
             depths = pickle.loads(pickle.dumps(data[line]['depths'], -1))
             elevations = pickle.loads(pickle.dumps(data[line]['elevations'], -1))
+            subset = pickle.loads(pickle.dumps(line_settings[line]['subset'], -1))
             datamem_key = line_settings[line]['logoutputfilename']
             if datamem_key not in self.Data_Memory.keys():
                 self.Data_Memory[datamem_key] = {'times': object_settings['timestamps'],
@@ -7374,7 +7463,9 @@ class MakeAutomatedReport(object):
                                                  'elevations': elevations,
                                                  'depths': depths,
                                                  'units': object_settings['plot_units'],
-                                                 'isprofile': True}
+                                                 'isprofile': True,
+                                                 'subset': subset
+                                                 }
 
     def configureUnits(self, object_settings, parameter, units):
         '''

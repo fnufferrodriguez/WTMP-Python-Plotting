@@ -726,6 +726,88 @@ class W2_Results(object):
             return select_wt, elevations, depths, np.asarray(times)
         # else:
 
+    def readProfileTopwater(self, seg, timesteps):
+        self.get_tempprofile_layers() #get the output layers. out at 2m depths
+
+        wt = np.full((len(self.layers), len(self.jd_dates)), np.nan)
+        WS_Elev = np.full((len(self.layers), len(self.jd_dates)), np.nan)
+
+        for i in range(1,len(self.layers)+1):
+            # print('{0} of {1}'.format(i, len(self.layers)+1))
+            ofn = '{0}_{1}_seg{2}.{3}'.format(self.output_file_name.split('.')[0],
+                                              i,
+                                              seg,
+                                              self.output_file_name.split('.')[1])
+            ofn_path = os.path.join(self.run_path, ofn)
+            if not os.path.exists(ofn_path):
+                print('File {0} not found'.format(ofn_path))
+                continue
+            op_file = pd.read_csv(ofn_path, header=0)
+            op_file.columns = op_file.columns.str.lower()
+            if len(op_file['jday']) > 1:
+                WT_interp = interp1d(op_file['jday'], op_file['t2(c)'])
+                Elev_interp = interp1d(op_file['jday'], op_file['elws(m)'])
+                jdate_minmask = np.where(min(op_file['jday']) <= self.jd_dates)
+                jdate_maxmask = np.where(max(op_file['jday']) >= self.jd_dates)
+                jdate_msk = np.intersect1d(jdate_maxmask, jdate_minmask)
+                wt_ts_Vals = np.full(len(self.jd_dates), np.nan)
+                wsElev_ts_Vals = np.full(len(self.jd_dates), np.nan)
+                wt_ts_Vals[jdate_msk] = WT_interp(self.jd_dates[jdate_msk])
+                wsElev_ts_Vals[jdate_msk] = Elev_interp(self.jd_dates[jdate_msk])
+                wt[i-1] = wt_ts_Vals
+                WS_Elev[i-1] = wsElev_ts_Vals
+                # wt.append(wt_ts_Vals)
+                # WS_Elev.append(wsElev_ts_Vals)
+                # wt.append(WT_interp(self.jd_dates[jdate_msk]))
+                # WS_Elev.append(Elev_interp(self.jd_dates[jdate_msk]))
+                # for j, jd in enumerate(self.jd_dates):
+                #     try:
+                #         wt[j][i-1] = WT_interp(jd)
+                #         WS_Elev[j][i-1] = Elev_interp(jd)
+                #     except ValueError:
+                #         continue
+
+        wt = np.asarray(wt).T
+        WS_Elev = np.asarray(WS_Elev).T
+
+        if isinstance(timesteps, (list, np.ndarray)):
+            select_wt = []
+            elevations = []
+            depths = []
+            times = []
+            for t, time in enumerate(timesteps):
+                # print('{0} of {1}'.format(t, len(unique_times)))
+                e = []
+                timestep = WF.getIdxForTimestamp(self.jd_dates, time, self.t_offset)
+                if timestep > -1:#timestep in model
+                    WSE = WS_Elev[timestep] #Meters #get WSE
+                    if not WF.checkData(WSE): #if WSE is bad, skip usually first timestep...
+                        elevations.append(np.array([]))
+                        depths.append(np.array([]))
+                        select_wt.append(np.array([]))
+                        times.append(time)
+                        continue
+                    WSE = WSE[np.where(~np.isnan(WSE))][0] #otherwise find valid
+                    WSE_array = np.full((self.layers.shape), WSE)
+                    e = (WSE_array - self.layers) * 3.28
+                    # for depth in self.layers: #get all depths
+                    #     e.append((WSE - depth) * 3.28) #conv to feet
+                    # select_wt[t] = wt[timestep][:] #find WTs
+                    select_wt.append(wt[timestep][:]) #find WTs
+
+                else: #if timestep NOT in model, add empties
+                    select_wt.append(np.array([])) #find WTs
+                    elevations.append(np.array([]))
+                    depths.append(np.array([]))
+                    times.append(time)
+                elevations.append(np.asarray(e)) #then append for timestep
+                depths.append(self.layers * 3.28) #append dpeths
+                times.append(time) #get time
+            select_wt, elevations, depths = self.matchProfileLengths(select_wt, elevations, depths)
+            # return select_wt, elevations, np.asarray(depths), np.asarray(times)
+
+            return select_wt, elevations, depths, np.asarray(times)
+        # else:
 
     def readStructuredTimeSeries(self, output_file_name, structure_nums, skiprows=2):
         """
@@ -1251,6 +1333,22 @@ class ResSim_Results(object):
         istart = 0
         iend = -1
         return self.t_computed[istart:iend], v[istart:iend]
+
+    def readProfileTopwater(self, resname, timestamps):
+        self.loadElevation(alt_subdomain_name=resname)
+        if isinstance(timestamps, (list, np.ndarray)):
+            topwater = []
+            unique_times = [n for n in timestamps]
+            for j, time_in in enumerate(unique_times):
+                timestep = WF.getIdxForTimestamp(self.jd_dates, time_in, self.t_offset)
+                if timestep == -1:
+                    topwater.append(np.nan)
+                    # continue
+                else:
+                    topwater.append(self.elev_ts[timestep])
+        else:
+            topwater = self.elev_ts[:]
+        return np.asarray(topwater)
 
     def checkSubdomain(self, subdomain_name):
         '''
