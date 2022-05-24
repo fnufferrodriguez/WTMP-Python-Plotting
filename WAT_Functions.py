@@ -241,6 +241,13 @@ def matchData(data1, data2):
         return data1, data2
 
 def normalize2DElevations(vals, elevations):
+    '''
+    interpolates reservoir data in order to normalize the list of elevations for W2 runs
+    :param vals: list of lists of values at timestamps/elevations
+    :param elevations: list of lists of elevations at timestamps
+    :return: new values, new elevations
+    '''
+
     newvals = []
     top_elev = np.nanmax([np.nanmax(n) for n in elevations if ~np.all(np.isnan(n))])
     bottom_elev = np.nanmin([np.nanmin(n) for n in elevations if ~np.all(np.isnan(n))])

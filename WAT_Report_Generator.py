@@ -2014,15 +2014,6 @@ class MakeAutomatedReport(object):
 
                 contour_settings = self.getDefaultContourSettings(contour_settings)
 
-                if 'filterbylimits' not in contour_settings.keys():
-                    contour_settings['filterbylimits'] = 'true' #set default
-
-                if contour_settings['filterbylimits'].lower() == 'true':
-                    if 'xlims' in contour_settings.keys():
-                        dates, values = self.limitXdata(dates, values, contour_settings['xlims'])
-                    if 'ylims' in contour_settings.keys():
-                        dates, values = self.limitYdata(dates, values, contour_settings['ylims'], baseOn=distance)
-
                 if 'min' in contour_settings['colorbar']:
                     vmin = float(contour_settings['colorbar']['min'])
                 else:
@@ -2188,14 +2179,6 @@ class MakeAutomatedReport(object):
                     xtick_settings = contour_settings['xticks']
                     self.formatTimeSeriesXticks(ax, xtick_settings, contour_settings)
 
-                # if 'yticksize' in contour_settings.keys():
-                #     yticksize = float(contour_settings['yticksize'])
-                # elif 'fontsize' in contour_settings.keys():
-                #     yticksize = float(contour_settings['fontsize'])
-                # else:
-                #     yticksize = 10
-                # ax.tick_params(axis='y', labelsize=yticksize)
-
                 yticksize = 10 #default
                 if 'fontsize' in object_settings.keys():
                     yticksize = float(object_settings['fontsize']) #plot defined default
@@ -2209,7 +2192,6 @@ class MakeAutomatedReport(object):
                         ymin = float(object_settings['ylims']['min'])
                     if 'max' in object_settings['ylims']:
                         ymax = float(object_settings['ylims']['max'])
-
 
                 ax.tick_params(axis='y', labelsize=yticksize)
                 if 'yticks' in object_settings.keys():
@@ -2279,8 +2261,8 @@ class MakeAutomatedReport(object):
                     labsize = 12
                 cbar.set_label(cur_obj_settings['colorbar']['label'], fontsize=labsize)
 
-            plt.subplots_adjust(hspace=0.05)
             plt.tight_layout()
+            plt.subplots_adjust(hspace=0.05)
 
             if 'description' not in cur_obj_settings.keys():
                 cur_obj_settings['description'] = ''
@@ -2338,9 +2320,10 @@ class MakeAutomatedReport(object):
             # array of dates corresponding to the number of the first D of array above
             # supplementary array for distances corrsponding to the second D of array above
             #ex
-            #[[1,2,3,5],[2,3,4,2],[5,3,2,5]] #values per date at a distance
+            #[[1,2,3,5],[2,3,4,2],[5,3,2,5]] #values per date
             #[01jan2016, 04Feb2016, 23May2016] #dates
-            #[0, 19, 25, 35] #distances
+            #[0, 19, 25, 35] #elevations
+            #[0, 19, 25, 35] #top water elevations
 
             contoursbyID = self.getReservoirContourData(cur_obj_settings)
             contoursbyID = self.filterDataByYear(contoursbyID, year, extraflag='topwater')
@@ -2375,9 +2358,6 @@ class MakeAutomatedReport(object):
                 elevations = contour['elevations']
                 dates = contour['dates']
                 topwater = contour['topwater']
-
-                # contours = self.selectContoursByID(contoursbyID, ID)
-
 
                 if len(selectedContourIDs) == 1:
                     axes = [axes]
@@ -2432,15 +2412,6 @@ class MakeAutomatedReport(object):
                     contour_settings['description'] = ''
 
                 contour_settings = self.getDefaultContourSettings(contour_settings)
-
-                if 'filterbylimits' not in contour_settings.keys():
-                    contour_settings['filterbylimits'] = 'true' #set default
-
-                if contour_settings['filterbylimits'].lower() == 'true':
-                    if 'xlims' in contour_settings.keys():
-                        dates, values = self.limitXdata(dates, values, contour_settings['xlims'])
-                    if 'ylims' in contour_settings.keys():
-                        dates, values = self.limitYdata(dates, values, contour_settings['ylims'], baseOn=elevations)
 
                 if 'min' in contour_settings['colorbar']:
                     vmin = float(contour_settings['colorbar']['min'])
@@ -2655,7 +2626,6 @@ class MakeAutomatedReport(object):
                         plt.legend(fontsize=legsize)
 
             cbar = plt.colorbar(contr, ax=axes[-1], orientation='horizontal', aspect=50.)
-            # locs = np.linspace(vmin, vmax, int(cur_obj_settings['colorbar']['bins']))[::int(cur_obj_settings['colorbar']['skipticks'])]
             locs = np.linspace(vmin, vmax, int(cur_obj_settings['colorbar']['numticks']))
             cbar.set_ticks(locs)
             cbar.set_ticklabels(locs.round(2))
@@ -2668,8 +2638,8 @@ class MakeAutomatedReport(object):
                     labsize = 12
                 cbar.set_label(cur_obj_settings['colorbar']['label'], fontsize=labsize)
 
-            plt.subplots_adjust(hspace=0.05)
             plt.tight_layout()
+            plt.subplots_adjust(hspace=0.05)
 
             if 'description' not in cur_obj_settings.keys():
                 cur_obj_settings['description'] = ''
@@ -3315,6 +3285,13 @@ class MakeAutomatedReport(object):
         return output_contours
 
     def selectContourReservoirByID(self, contoursbyID, ID):
+        '''
+        returns the correct contour from dictionary based on ID
+        :param contoursbyID: dictionary containing several contours
+        :param ID: selected ID to find in data
+        :return: dictionary for corresponding ID, or empty
+        '''
+
         for key in contoursbyID:
             if contoursbyID[key]['ID'] == ID:
                 return contoursbyID[key]
@@ -3355,8 +3332,17 @@ class MakeAutomatedReport(object):
         return output_values, output_dates, output_distance, transitions
 
     def stackProfileIndicies(self, exist_data, new_data):
-        #exist_data is existing array
-        #new data is data to be added to it
+        '''
+        takes an existing array of data and adds another array
+        for contour plots of several reaches split into different groups
+        stacks them together so they function as a single reach
+        exist_data is existing array
+        new data is data to be added to it
+        :param exist_data: dictionary containing existing data
+        :param new_data: data to be added to existing data
+        :return: modified exist_data
+        '''
+
         for runflag in new_data.keys():
             if runflag not in exist_data.keys():
                 exist_data[runflag] = {}
@@ -3557,6 +3543,7 @@ class MakeAutomatedReport(object):
         :param contour_settings: dictionary containing settings
         :return:
         '''
+
         default_contour_settings = {'linecolor': 'grey',
                                     'linewidth': 1,
                                     'linestylepattern': 'solid',
@@ -3757,7 +3744,6 @@ class MakeAutomatedReport(object):
                 times = datamementry['times']
                 values = datamementry['values']
                 units = datamementry['units']
-
 
             else:
                 if 'structurenumbers' in Line_info.keys():
@@ -4112,7 +4098,6 @@ class MakeAutomatedReport(object):
                         continue
                     data = self.recordTimeSeriesData(data, line)
         return data
-
 
     def getGateData(self, object_settings, makecopy=True):
         '''
@@ -4563,6 +4548,12 @@ class MakeAutomatedReport(object):
         return np.asarray(timestamps)
 
     def getProfileTimestampYearMonthIndex(self, object_settings):
+        '''
+        gets month indexes for each year based off timestamps for profile tables
+        :param object_settings: dictionary containing settings for current object
+        :return: list of lists for years/months and timestamps
+        '''
+
         timestamp_indexes = []
         for year in self.years:
             year_idx = []
@@ -4574,7 +4565,6 @@ class MakeAutomatedReport(object):
                 year_idx.append(mon_idx)
             timestamp_indexes.append(year_idx)
         return timestamp_indexes
-
 
     def getPlotParameter(self, object_settings):
         '''
@@ -4692,6 +4682,13 @@ class MakeAutomatedReport(object):
         return IDs
 
     def getAllMonthIdx(self, timestamp_indexes, i):
+        '''
+        collects all indecies for all years for a given month
+        :param timestamp_indexes: list of indicies that fall in every month for every year ([[], [], []])
+        :param i: month index (0-11)
+        :return: list of indicies for a month for all years
+        '''
+
         out_idx = []
         for yearlist in timestamp_indexes:
             out_idx += yearlist[i]
@@ -5155,6 +5152,12 @@ class MakeAutomatedReport(object):
         return data
 
     def getYearlyFilterIdx(self, dates, year):
+        '''
+        finds start and end index for a given year for a list of dates
+        :param dates: list of datetime objects
+        :param year: target year
+        :return: start and end index for that year
+        '''
 
         start_date = dates[0]
         end_date = dates[-1]
@@ -5173,6 +5176,12 @@ class MakeAutomatedReport(object):
         return s_idx, e_idx
 
     def getMonthlyFilterIdx(self, dates, month):
+        '''
+        finds start and end index for a given month for a list of dates
+        :param dates: list of datetime objects
+        :param month: target month
+        :return: start and end index for that year
+        '''
 
         start_date = dates[0]
         end_date = dates[-1]
@@ -5195,6 +5204,12 @@ class MakeAutomatedReport(object):
         return s_idx, e_idx
 
     def forceTimeInterval(self, interval):
+        '''
+        returns time interval by parsing DSSVue word inputs like "1MON" or "15MIN"
+        :param interval: DSSVue formatted time interval
+        :return: either time delta or pd interval, and interp type (np or pd)
+        '''
+
         numbers = []
         letters = []
         for n in interval:
@@ -5320,8 +5335,7 @@ class MakeAutomatedReport(object):
                             print('Please check Datapaths in the XML file, or modify the rows to have the correct flags'
                                   ' for the data present')
                             return data, ''
-                        # months = np.array([n.month for n in curdates])
-                        # msk = np.where(months==sr_month)
+
                         newvals = np.array([])
                         newdates = np.array([])
                         if year != 'ALL':
@@ -5330,16 +5344,13 @@ class MakeAutomatedReport(object):
                             year_loops = self.years
                         if len(curdates) > 0:
                             for yearloop in year_loops:
-                                # print(year, sr_month, curdates[0], curdates[-1])
 
-                                # yrmsk = self.findYearMaskBinary(curdates, yearloop)
 
                                 s_idx, e_idx = self.getYearlyFilterIdx(curdates, yearloop)
                                 yearvals = curvalues[s_idx:e_idx+1]
                                 yeardates = curdates[s_idx:e_idx+1]
 
                                 if len(yeardates) > 0:
-                                    # msk = self.findMonthMaskBinary(curdates[yrmsk], sr_month)
                                     s_idx, e_idx = self.getMonthlyFilterIdx(yeardates, sr_month)
 
                                     newvals = np.append(newvals, yearvals[s_idx:e_idx+1])
@@ -5347,17 +5358,11 @@ class MakeAutomatedReport(object):
 
                         data[curflag]['values'] = newvals
                         data[curflag]['dates'] = newdates
-                        # data[curflag]['values'] = curvalues[msk]
-                        # data[curflag]['dates'] = curdates[msk]
-
 
         if year != 'ALL':
             for flag in data.keys():
-                # years = np.array([n.year for n in data[flag]['dates']])
-                # msk = np.where(years==year)
                 if len(data[flag]['dates']) == 0:
                     continue
-                # msk = self.findYearMaskBinary(data[flag]['dates'], year)
                 s_idx, e_idx = self.getYearlyFilterIdx(data[flag]['dates'], year)
                 data[flag]['values'] = data[flag]['values'][s_idx:e_idx+1]
                 data[flag]['dates'] = data[flag]['dates'][s_idx:e_idx+1]
@@ -5454,6 +5459,12 @@ class MakeAutomatedReport(object):
         return out_data
 
     def formatThreshold(self, object_settings):
+        '''
+        organizes settings for thresholds for stat tables. Fills in missing values with defaults
+        :param object_settings: dictionary containing settings for thresholds
+        :return: list of dictionary objects for each threshold
+        '''
+
         default_color = '#a6a6a6' #default
         default_colorwhen = 'under' #default
         accepted_threshold_conditions = ['under', 'over']
@@ -5486,6 +5497,13 @@ class MakeAutomatedReport(object):
         return thresholds
 
     def formatThresholdColor(self, in_color, default='#a6a6a6'):
+        '''
+        formats input color to either turn to hex or use default
+        :param in_color: string to test if legit
+        :param default: color to use if in_color fails
+        :return:hex color
+        '''
+
         threshold_color=default
         if in_color.startswith('#'):
             threshold_color = in_color
@@ -5498,6 +5516,13 @@ class MakeAutomatedReport(object):
         return threshold_color
 
     def formatTickLabels(self, ticks, ticksettings):
+        '''
+        changes ticks based on input settings
+        :param ticks: existing ticks
+        :param ticksettings: dictionary contianing settings for ticks
+        :return: formatted ticks
+        '''
+
         newticklabels = []
         for tick in ticks:
             if isinstance(tick, (np.float64, int, float)):
@@ -5533,6 +5558,14 @@ class MakeAutomatedReport(object):
         return newticklabels
 
     def formatTimeSeriesXticks(self, curax, xtick_settings, axis_settings, dateformatflag='dateformat'):
+        '''
+        applies tick settings to Xaxis for time series
+        :param curax: current axis object
+        :param xtick_settings: dictionary containing settings for ticks
+        :param axis_settings: dictionary containing settings for ticks
+        :param dateformatflag: flag to get dateformat from settings
+        '''
+
         xmin, xmax = curax.get_xlim()
 
         if axis_settings[dateformatflag].lower() == 'datetime':
@@ -5778,6 +5811,13 @@ class MakeAutomatedReport(object):
         return organizedheaders, organizedrows
 
     def buildSingleStatTable(self, object_settings, data):
+        '''
+        builds headings and rows for single stat table
+        :param object_settings: dictionary containing settings for table
+        :param data: dictionary contianing data
+        :return: headings and rows used to build tables
+        '''
+
         rows = []
         headers = [n for n in self.mo_str_3]
         stat = object_settings['statistic']
@@ -6934,6 +6974,15 @@ class MakeAutomatedReport(object):
         return [n for n in timestamps if n.year == year]
 
     def filterContourOverTopWater(self, values, elevations, topwater):
+        '''
+        takes values for contour reservoir plots and nan's out any values over topwater. Ressim duplicates data
+        to the top of the domain instead of cutting it off
+        :param values: list of values at each timestep
+        :param elevations: elevations to find closest index to top water
+        :param topwater: water surface elevation at each timestep
+        :return: values with nans
+        '''
+
         for twi, tw in enumerate(topwater):
             elevationtopwateridx = (np.abs(elevations - tw)).argmin()
             values[twi][elevationtopwateridx+1:] = np.nan

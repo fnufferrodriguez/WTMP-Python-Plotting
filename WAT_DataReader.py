@@ -736,6 +736,13 @@ class W2_Results(object):
             return wt, elevations, [], self.dt_dates
 
     def readProfileTopwater(self, seg, timesteps):
+        '''
+        gets the WSE for each timestep to filter for profile contour plots
+        :param seg: segment number for profile
+        :param timesteps: list of timesteps, or 'all'
+        :return: list of WSE
+        '''
+
         self.get_tempprofile_layers() #get the output layers. out at 2m depths
 
         WS_Elev = np.full((len(self.layers), len(self.jd_dates)), np.nan)
@@ -790,7 +797,7 @@ class W2_Results(object):
 
             return WSE_out
         else:
-            return WS_Elev[:,0]
+            return WS_Elev[:,0] * 3.28
 
     def readStructuredTimeSeries(self, output_file_name, structure_nums, skiprows=2):
         """
@@ -1318,6 +1325,13 @@ class ResSim_Results(object):
         return self.t_computed[istart:iend], v[istart:iend]
 
     def readProfileTopwater(self, resname, timestamps):
+        '''
+        gets the WSE for each timestep to filter for profile contour plots
+        :param resname: name of reservoir to get from H5 file
+        :param timestamps: list of timesteps, or 'all'
+        :return: list of WSE
+        '''
+
         self.loadElevation(alt_subdomain_name=resname)
         if isinstance(timestamps, (list, np.ndarray)):
             topwater = []
