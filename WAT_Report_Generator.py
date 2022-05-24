@@ -2266,7 +2266,8 @@ class MakeAutomatedReport(object):
                         plt.legend(fontsize=legsize)
 
             cbar = plt.colorbar(contr, ax=axes[-1], orientation='horizontal', aspect=50.)
-            locs = np.linspace(vmin, vmax, int(cur_obj_settings['colorbar']['bins']))[::int(cur_obj_settings['colorbar']['skipticks'])]
+            # locs = np.linspace(vmin, vmax, int(cur_obj_settings['colorbar']['bins']))[::int(cur_obj_settings['colorbar']['skipticks'])]
+            locs = np.linspace(vmin, vmax, int(cur_obj_settings['colorbar']['numticks']))
             cbar.set_ticks(locs)
             cbar.set_ticklabels(locs.round(2))
             if 'label' in cur_obj_settings['colorbar']:
@@ -2342,7 +2343,7 @@ class MakeAutomatedReport(object):
             #[0, 19, 25, 35] #distances
 
             contoursbyID = self.getReservoirContourData(cur_obj_settings)
-            contoursbyID = self.filterDataByYear(contoursbyID, year)
+            contoursbyID = self.filterDataByYear(contoursbyID, year, extraflag='topwater')
             selectedContourIDs = self.getUsedIDs(contoursbyID)
 
             if len(selectedContourIDs) == 1:
@@ -2373,6 +2374,7 @@ class MakeAutomatedReport(object):
                 values = contour['values']
                 elevations = contour['elevations']
                 dates = contour['dates']
+                topwater = contour['topwater']
 
                 # contours = self.selectContoursByID(contoursbyID, ID)
 
@@ -2449,14 +2451,14 @@ class MakeAutomatedReport(object):
                 else:
                     vmax = np.nanmax(values)
 
-                values = self.filterContourOverTopWater(values, )
+                values = self.filterContourOverTopWater(values, elevations, topwater)
 
                 contr = ax.contourf(dates, elevations, values.T, cmap=contour_settings['colorbar']['colormap'],
                                     vmin=vmin, vmax=vmax,
                                     levels=np.linspace(vmin, vmax, int(contour_settings['colorbar']['bins'])), #add one to get the desired number..
                                     extend='both') #the .T transposes the array so dates on bottom TODO:make extend variable
                 # ax.invert_yaxis()
-
+                ax.plot(dates, topwater, c='red')
                 self.addLogEntry({'type': contour_settings['label'] + '_ContourPlot' if contour_settings['label'] != '' else 'ContourPlot',
                                   'name': self.ChapterRegion+'_'+yearstr,
                                   'description': contour_settings['description'],
@@ -2566,48 +2568,49 @@ class MakeAutomatedReport(object):
                         ylabsize = 12
                     ax.set_ylabel(contour_settings['ylabel'], fontsize=ylabsize)
 
-                if 'ylims' in contour_settings.keys():
-                    if 'min' in contour_settings['ylims']:
-                        ax.set_ylim(bottom=float(contour_settings['ylims']['min']))
-                    if 'max' in contour_settings['ylims']:
-                        ax.set_ylim(top=float(contour_settings['ylims']['max']))
+                ############# xticks and lims #############
+
+                self.formatDateXAxis(ax, contour_settings)
+                xmin, xmax = ax.get_xlim()
+
+                if contour_settings['dateformat'].lower() == 'datetime':
+                    xmin = mpl.dates.num2date(xmin)
+                    xmax = mpl.dates.num2date(xmax)
 
                 if 'xticks' in contour_settings.keys():
                     xtick_settings = contour_settings['xticks']
+
                     self.formatTimeSeriesXticks(ax, xtick_settings, contour_settings)
 
-                # if 'yticksize' in contour_settings.keys():
-                #     yticksize = float(contour_settings['yticksize'])
-                # elif 'fontsize' in contour_settings.keys():
-                #     yticksize = float(contour_settings['fontsize'])
-                # else:
-                #     yticksize = 10
-                # ax.tick_params(axis='y', labelsize=yticksize)
+                ax.set_xlim(left=xmin)
+                ax.set_xlim(right=xmax)
 
-                yticksize = 10 #default
-                if 'fontsize' in object_settings.keys():
-                    yticksize = float(object_settings['fontsize']) #plot defined default
-                if 'yticks' in object_settings.keys(): #user defined
-                    if 'fontsize' in object_settings['yticks'].keys():
-                        yticksize = float(object_settings['yticks']['fontsize'])
-
+                ############# yticks and lims #############
                 ymin, ymax = ax.get_ylim()
-                if 'ylims' in object_settings.keys():
-                    if 'min' in object_settings['ylims']:
-                        ymin = float(object_settings['ylims']['min'])
-                    if 'max' in object_settings['ylims']:
-                        ymax = float(object_settings['ylims']['max'])
+                if 'ylims' in contour_settings.keys():
+                    if 'min' in contour_settings['ylims']:
+                        ymin = float(contour_settings['ylims']['min'])
 
+                    if 'max' in contour_settings['ylims']:
+                        ymax = float(contour_settings['ylims']['max'])
 
-                ax.tick_params(axis='y', labelsize=yticksize)
-                if 'yticks' in object_settings.keys():
-                    ytick_settings = object_settings['yticks']
+                if 'yticks' in contour_settings.keys():
+                    ytick_settings = contour_settings['yticks']
+                    if 'fontsize' in ytick_settings.keys():
+                        yticksize = float(ytick_settings['fontsize'])
+                    elif 'fontsize' in contour_settings.keys():
+                        yticksize = float(contour_settings['fontsize'])
+                    else:
+                        yticksize = 10
+                    ax.tick_params(axis='y', labelsize=yticksize)
+
                     if 'spacing' in ytick_settings.keys():
                         ytickspacing = ytick_settings['spacing']
                         if '.' in ytickspacing:
                             ytickspacing = float(ytickspacing)
                         else:
                             ytickspacing = int(ytickspacing)
+
                         newyticks = np.arange(ymin, (ymax+ytickspacing), ytickspacing)
                         newyticklabels = self.formatTickLabels(newyticks, ytick_settings)
                         ax.set_yticks(newyticks)
@@ -2652,7 +2655,8 @@ class MakeAutomatedReport(object):
                         plt.legend(fontsize=legsize)
 
             cbar = plt.colorbar(contr, ax=axes[-1], orientation='horizontal', aspect=50.)
-            locs = np.linspace(vmin, vmax, int(cur_obj_settings['colorbar']['bins']))[::int(cur_obj_settings['colorbar']['skipticks'])]
+            # locs = np.linspace(vmin, vmax, int(cur_obj_settings['colorbar']['bins']))[::int(cur_obj_settings['colorbar']['skipticks'])]
+            locs = np.linspace(vmin, vmax, int(cur_obj_settings['colorbar']['numticks']))
             cbar.set_ticks(locs)
             cbar.set_ticklabels(locs.round(2))
             if 'label' in cur_obj_settings['colorbar']:
@@ -3621,7 +3625,7 @@ class MakeAutomatedReport(object):
         defaultColormap = mpl.cm.get_cmap('jet')
         default_colorbar_settings = {'colormap': defaultColormap,
                                      'bins':10,
-                                     'skipticks':1}
+                                     'numticks':5}
 
         if 'colorbar' in object_settings.keys():
             if 'colormap' in object_settings['colorbar'].keys():
@@ -3947,7 +3951,7 @@ class MakeAutomatedReport(object):
         elif 'w2_segment' in Line_info.keys():
             if self.plugin.lower() != 'cequalw2':
                 return []
-            topwater = self.ModelAlt.readProfileData(Line_info['w2_segment'], timesteps)
+            topwater = self.ModelAlt.readProfileTopwater(Line_info['w2_segment'], timesteps)
             return topwater
 
         elif 'ressimresname' in Line_info.keys():
@@ -4019,6 +4023,7 @@ class MakeAutomatedReport(object):
             if self.plugin.lower() != 'cequalw2':
                 return [], [], [], [], None
             vals, elevations, depths, times = self.ModelAlt.readProfileData(Line_info['w2_segment'], timesteps)
+            vals, elevations = WF.normalize2DElevations(vals, elevations)
             return vals, elevations, depths, times, Line_info['flag']
 
         elif 'ressimresname' in Line_info.keys():
@@ -4449,6 +4454,7 @@ class MakeAutomatedReport(object):
                                   'dates': dates,
                                   'units': units,
                                   'elevations': elevations,
+                                  'topwater': topwater,
                                   'ID': ID,
                                   'logoutputfilename': datamem_key}
 
@@ -5131,7 +5137,7 @@ class MakeAutomatedReport(object):
         print('Units Undefined:', units)
         return units
 
-    def filterDataByYear(self, data, year):
+    def filterDataByYear(self, data, year, extraflag=None):
         '''
         filters data by a given year. Used when splitting by year
         :param data: dictionary containing data to use
@@ -5144,7 +5150,8 @@ class MakeAutomatedReport(object):
                     s_idx, e_idx = self.getYearlyFilterIdx(data[flag]['dates'], year)
                     data[flag]['values'] = data[flag]['values'][s_idx:e_idx+1]
                     data[flag]['dates'] = data[flag]['dates'][s_idx:e_idx+1]
-
+                    if extraflag != None:
+                        data[flag][extraflag] = data[flag][extraflag][s_idx:e_idx+1]
         return data
 
     def getYearlyFilterIdx(self, dates, year):
@@ -6925,6 +6932,12 @@ class MakeAutomatedReport(object):
         if year == 'ALLYEARS':
             return timestamps
         return [n for n in timestamps if n.year == year]
+
+    def filterContourOverTopWater(self, values, elevations, topwater):
+        for twi, tw in enumerate(topwater):
+            elevationtopwateridx = (np.abs(elevations - tw)).argmin()
+            values[twi][elevationtopwateridx+1:] = np.nan
+        return values
 
     def fixXMLModelIntroduction(self, simorder):
         '''

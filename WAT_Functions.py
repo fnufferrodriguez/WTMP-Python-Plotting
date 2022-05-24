@@ -240,6 +240,16 @@ def matchData(data1, data2):
         data2['values'] = v_2_msk
         return data1, data2
 
+def normalize2DElevations(vals, elevations):
+    newvals = []
+    top_elev = np.nanmax([np.nanmax(n) for n in elevations if ~np.all(np.isnan(n))])
+    bottom_elev = np.nanmin([np.nanmin(n) for n in elevations if ~np.all(np.isnan(n))])
+    new_elevations = np.linspace(bottom_elev, top_elev, elevations.shape[1])
+    for vi, v in enumerate(vals):
+        valelev_interp = interpolate.interp1d(elevations[vi], v, bounds_error=False, fill_value = np.nan)
+        newvals.append(valelev_interp(new_elevations))
+    return np.asarray(newvals), np.asarray(new_elevations)
+
 def checkData(dataset, flag='values'):
     '''
     checks datasets to ensure that they are valid for representation. Checks for a given flag, any length and
@@ -498,3 +508,4 @@ def convertTempUnits(values, units):
     else:
         print('Undefined temp units:', units)
         return values
+
