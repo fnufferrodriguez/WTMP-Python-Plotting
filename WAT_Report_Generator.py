@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '4.7.9'
+VERSIONNUMBER = '4.8.1'
 
 import datetime as dt
 import os
@@ -1957,7 +1957,7 @@ class MakeAutomatedReport(object):
             for IDi, ID in enumerate(selectedContourIDs):
                 contour_settings = pickle.loads(pickle.dumps(cur_obj_settings, -1))
                 contour_settings = self.configureSettingsForID(ID, contour_settings)
-                contours = self.selectContoursByID(contoursbyID, ID)
+                contours = self.selectContourReachesByID(contoursbyID, ID)
                 values, dates, distance, transitions = self.stackContours(contours)
                 if len(selectedContourIDs) == 1:
                     axes = [axes]
@@ -2013,15 +2013,6 @@ class MakeAutomatedReport(object):
                     contour_settings['description'] = ''
 
                 contour_settings = self.getDefaultContourSettings(contour_settings)
-
-                if 'filterbylimits' not in contour_settings.keys():
-                    contour_settings['filterbylimits'] = 'true' #set default
-
-                if contour_settings['filterbylimits'].lower() == 'true':
-                    if 'xlims' in contour_settings.keys():
-                        dates, values = self.limitXdata(dates, values, contour_settings['xlims'])
-                    if 'ylims' in contour_settings.keys():
-                        dates, values = self.limitYdata(dates, values, contour_settings['ylims'], baseOn=distance)
 
                 if 'min' in contour_settings['colorbar']:
                     vmin = float(contour_settings['colorbar']['min'])
@@ -2188,14 +2179,6 @@ class MakeAutomatedReport(object):
                     xtick_settings = contour_settings['xticks']
                     self.formatTimeSeriesXticks(ax, xtick_settings, contour_settings)
 
-                # if 'yticksize' in contour_settings.keys():
-                #     yticksize = float(contour_settings['yticksize'])
-                # elif 'fontsize' in contour_settings.keys():
-                #     yticksize = float(contour_settings['fontsize'])
-                # else:
-                #     yticksize = 10
-                # ax.tick_params(axis='y', labelsize=yticksize)
-
                 yticksize = 10 #default
                 if 'fontsize' in object_settings.keys():
                     yticksize = float(object_settings['fontsize']) #plot defined default
@@ -2209,7 +2192,6 @@ class MakeAutomatedReport(object):
                         ymin = float(object_settings['ylims']['min'])
                     if 'max' in object_settings['ylims']:
                         ymax = float(object_settings['ylims']['max'])
-
 
                 ax.tick_params(axis='y', labelsize=yticksize)
                 if 'yticks' in object_settings.keys():
@@ -2266,7 +2248,8 @@ class MakeAutomatedReport(object):
                         plt.legend(fontsize=legsize)
 
             cbar = plt.colorbar(contr, ax=axes[-1], orientation='horizontal', aspect=50.)
-            locs = np.linspace(vmin, vmax, int(cur_obj_settings['colorbar']['bins']))[::int(cur_obj_settings['colorbar']['skipticks'])]
+            # locs = np.linspace(vmin, vmax, int(cur_obj_settings['colorbar']['bins']))[::int(cur_obj_settings['colorbar']['skipticks'])]
+            locs = np.linspace(vmin, vmax, int(cur_obj_settings['colorbar']['numticks']))
             cbar.set_ticks(locs)
             cbar.set_ticklabels(locs.round(2))
             if 'label' in cur_obj_settings['colorbar']:
@@ -2278,8 +2261,8 @@ class MakeAutomatedReport(object):
                     labsize = 12
                 cbar.set_label(cur_obj_settings['colorbar']['label'], fontsize=labsize)
 
-            plt.subplots_adjust(hspace=0.05)
             plt.tight_layout()
+            plt.subplots_adjust(hspace=0.05)
 
             if 'description' not in cur_obj_settings.keys():
                 cur_obj_settings['description'] = ''
@@ -2305,6 +2288,382 @@ class MakeAutomatedReport(object):
             elif pageformat == 'half':
                 self.XML.writeHalfPagePlot(os.path.basename(figname), cur_obj_settings['description'])
 
+    def makeReservoirContourPlot(self, object_settings):
+        '''
+        takes in object settings to build reservoir contour plot and write to XML
+        :param object_settings: currently selected object settings dictionary
+        :return: creates png in images dir and writes to XML file
+        '''
+
+        print('\n################################')
+        print('Now making Reservoir Contour Plot.')
+        print('################################\n')
+
+        default_settings = self.loadDefaultPlotObject('reservoircontourplot') #get default TS plot items
+        object_settings = self.replaceDefaults(default_settings, object_settings) #overwrite the defaults with chapter file
+        object_settings['datakey'] = 'datapaths'
+
+        object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = self.getPlotYears(object_settings)
+
+        for yi, year in enumerate(object_settings['years']):
+            cur_obj_settings = pickle.loads(pickle.dumps(object_settings, -1))
+            if object_settings['split_by_year']:
+                yearstr = str(year)
+            else:
+                yearstr = object_settings['yearstr']
+
+            cur_obj_settings = self.setTimeSeriesXlims(cur_obj_settings, yearstr, object_settings['years'])
+
+            #NOTES
+            #Data structure:
+            #2D array of dates[distance from source]
+            # array of dates corresponding to the number of the first D of array above
+            # supplementary array for distances corrsponding to the second D of array above
+            #ex
+            #[[1,2,3,5],[2,3,4,2],[5,3,2,5]] #values per date
+            #[01jan2016, 04Feb2016, 23May2016] #dates
+            #[0, 19, 25, 35] #elevations
+            #[0, 19, 25, 35] #top water elevations
+
+            contoursbyID = self.getReservoirContourData(cur_obj_settings)
+            contoursbyID = self.filterDataByYear(contoursbyID, year, extraflag='topwater')
+            selectedContourIDs = self.getUsedIDs(contoursbyID)
+
+            if len(selectedContourIDs) == 1:
+                figsize=(12, 6)
+                pageformat = 'half'
+            else:
+                figsize=(12,12)
+                pageformat = 'full'
+
+            if pageformat == 'full':
+                height_ratios = []
+                for i in range(len(selectedContourIDs)):
+                    if i == len(selectedContourIDs)-1:
+                        height_ratios.append(1)
+                    else:
+                        height_ratios.append(.75)
+                fig, axes = plt.subplots(ncols=1, nrows=len(selectedContourIDs), sharex=True, figsize=figsize,
+                                         gridspec_kw={'height_ratios':height_ratios})
+            else:
+                fig, axes = plt.subplots(ncols=1, nrows=1, figsize=figsize,
+                                         )
+
+            for IDi, ID in enumerate(selectedContourIDs):
+                contour_settings = pickle.loads(pickle.dumps(cur_obj_settings, -1))
+                contour_settings = self.configureSettingsForID(ID, contour_settings)
+                contour = self.selectContourReservoirByID(contoursbyID, ID)
+
+                values = contour['values']
+                elevations = contour['elevations']
+                dates = contour['dates']
+                topwater = contour['topwater']
+
+                if len(selectedContourIDs) == 1:
+                    axes = [axes]
+
+                ax = axes[IDi]
+
+
+                parameter, contour_settings['param_count'] = self.getParameterCount(contour, contour_settings)
+
+                if 'units' in contour_settings.keys():
+                    units = contour_settings['units']
+                else:
+                    if 'parameter' in contour_settings.keys():
+                        parameter = contour_settings['parameter']
+                    else:
+                        parameter = ''
+                        top_count = 0
+                        for key in contour_settings['param_count'].keys():
+                            if contour_settings['param_count'][key] > top_count:
+                                parameter = key
+                    try:
+                        units = self.units[parameter]
+                    except KeyError:
+                        units = None
+
+                if isinstance(units, dict):
+                    if 'unitsystem' in contour_settings.keys():
+                        units = units[contour_settings['unitsystem'].lower()]
+                    else:
+                        units = None
+
+                if 'unitsystem' in contour_settings.keys():
+                    values, units = self.convertUnitSystem(values, units, contour_settings['unitsystem']) #TODO: confirm
+
+                chkvals = WF.checkData(values)
+                if not chkvals:
+                    print('Invalid Data settings for contour plot year {0}'.format(year))
+                    continue
+
+                if 'dateformat' in contour_settings.keys():
+                    if contour_settings['dateformat'].lower() == 'jdate':
+                        if isinstance(dates[0], dt.datetime):
+                            dates = self.DatetimeToJDate(dates)
+                    elif contour_settings['dateformat'].lower() == 'datetime':
+                        if isinstance(dates[0], (int,float)):
+                            dates = self.JDateToDatetime(dates)
+
+                if 'label' not in contour_settings.keys():
+                    contour_settings['label'] = ''
+
+                if 'description' not in contour_settings.keys():
+                    contour_settings['description'] = ''
+
+                contour_settings = self.getDefaultContourSettings(contour_settings)
+
+                if 'min' in contour_settings['colorbar']:
+                    vmin = float(contour_settings['colorbar']['min'])
+                else:
+                    vmin = np.nanmin(values)
+                if 'max' in contour_settings['colorbar']:
+                    vmax = float(contour_settings['colorbar']['max'])
+                else:
+                    vmax = np.nanmax(values)
+
+                values = self.filterContourOverTopWater(values, elevations, topwater)
+
+                contr = ax.contourf(dates, elevations, values.T, cmap=contour_settings['colorbar']['colormap'],
+                                    vmin=vmin, vmax=vmax,
+                                    levels=np.linspace(vmin, vmax, int(contour_settings['colorbar']['bins'])), #add one to get the desired number..
+                                    extend='both') #the .T transposes the array so dates on bottom TODO:make extend variable
+                # ax.invert_yaxis()
+                # ax.plot(dates, topwater, c='red') #debug topwater
+                self.addLogEntry({'type': contour_settings['label'] + '_ContourPlot' if contour_settings['label'] != '' else 'ContourPlot',
+                                  'name': self.ChapterRegion+'_'+yearstr,
+                                  'description': contour_settings['description'],
+                                  'units': units,
+                                  'value_start_date': self.translateDateFormat(dates[0], 'datetime', '').strftime('%d %b %Y'),
+                                  'value_end_date': self.translateDateFormat(dates[-1], 'datetime', '').strftime('%d %b %Y'),
+                                  'logoutputfilename': contour['logoutputfilename']
+                                  },
+                                 isdata=True)
+
+                contour_settings = self.updateFlaggedValues(contour_settings, '%%units%%', units)
+
+                if 'contourlines' in contour_settings.keys():
+                    for contourline in contour_settings['contourlines']:
+                        if 'value' in contourline.keys():
+                            val = float(contourline['value'])
+                        else:
+                            print('No Value set for contour line.')
+                            continue
+                        contourline = self.getDefaultContourLineSettings(contourline)
+                        cs = ax.contour(contr, levels=[val], linewidths=[float(contourline['linewidth'])], colors=[contourline['linecolor']],
+                                        linestyles=contourline['linestylepattern'], alpha=float(contourline['alpha']))
+                        if 'contourlinetext' in contourline.keys():
+                            if contourline['contourlinetext'].lower() == 'true':
+                                ax.clabel(cs, inline_spacing=contourline['inline_spacing'],
+                                          fontsize=contourline['fontsize'], inline=contourline['text_inline'])
+                        if 'show_in_legend' in contourline.keys():
+                            if contourline['show_in_legend'].lower() == 'true':
+                                if 'label' in contourline.keys():
+                                    label = contourline['label']
+                                else:
+                                    label = str(val)
+                                cl_leg = ax.plot([], [], c=contourline['linecolor'], ls=contourline['linestylepattern'],
+                                                 alpha=float(contourline['alpha']), lw=float(contourline['linewidth']),
+                                                 label=label)
+
+                ### VERTICAL LINES ###
+                if 'vlines' in contour_settings.keys():
+                    for vline in contour_settings['vlines']:
+                        vline_settings = self.getDefaultStraightLineSettings(vline)
+                        try:
+                            vline_settings['value'] = float(vline_settings['value'])
+                        except:
+                            vline_settings['value'] = self.translateDateFormat(vline_settings['value'], 'datetime', '')
+                        if 'dateformat' in contour_settings.keys():
+                            if contour_settings['dateformat'].lower() == 'jdate':
+                                if isinstance(vline_settings['value'], dt.datetime):
+                                    vline_settings['value'] = self.DatetimeToJDate(vline_settings['value'])
+                                elif isinstance(vline_settings['value'], str):
+                                    try:
+                                        vline_settings['value'] = float(vline_settings['value'])
+                                    except:
+                                        vline_settings['value'] = self.translateDateFormat(vline_settings['value'], 'datetime', '')
+                                        vline_settings['value'] = self.DatetimeToJDate(vline_settings['value'])
+                            elif contour_settings['dateformat'].lower() == 'datetime':
+                                if isinstance(vline_settings['value'], (int,float)):
+                                    vline_settings['value'] = self.JDateToDatetime(vline_settings['value'])
+                                elif isinstance(vline_settings['value'], str):
+                                    vline_settings['value'] = self.translateDateFormat(vline_settings['value'], 'datetime', '')
+                        else:
+                            vline_settings['value'] = self.translateDateFormat(vline_settings['value'], 'datetime', '')
+
+                        if 'label' not in vline_settings.keys():
+                            vline_settings['label'] = None
+                        if 'zorder' not in vline_settings.keys():
+                            vline_settings['zorder'] = 3
+
+                        ax.axvline(vline_settings['value'], label=vline_settings['label'], c=vline_settings['linecolor'],
+                                   lw=vline_settings['linewidth'], ls=vline_settings['linestylepattern'],
+                                   zorder=float(vline_settings['zorder']),
+                                   alpha=float(vline_settings['alpha']))
+
+                ### Horizontal LINES ###
+                if 'hlines' in contour_settings.keys():
+                    for hline in contour_settings['hlines']:
+                        hline_settings = self.getDefaultStraightLineSettings(hline)
+                        if 'label' not in hline_settings.keys():
+                            hline_settings['label'] = None
+                        if 'zorder' not in hline_settings.keys():
+                            hline_settings['zorder'] = 3
+                        hline_settings['value'] = float(hline_settings['value'])
+
+                        ax.axhline(hline_settings['value'], label=hline_settings['label'], c=hline_settings['linecolor'],
+                                   lw=hline_settings['linewidth'], ls=hline_settings['linestylepattern'],
+                                   zorder=float(hline_settings['zorder']),
+                                   alpha=float(hline_settings['alpha']))
+
+                if self.iscomp:
+                    if 'modeltext' in contour_settings.keys():
+                        modeltext = contour_settings['modeltext']
+                    else:
+                        modeltext = self.SimulationName
+                    plt.text(1.02, 0.5, modeltext, fontsize=12, transform=ax.transAxes, verticalalignment='center',
+                             horizontalalignment='center', rotation='vertical')
+
+
+                if 'gridlines' in contour_settings.keys():
+                    if contour_settings['gridlines'].lower() == 'true':
+                        ax.grid(True)
+
+                if 'ylabel' in contour_settings.keys():
+                    if 'ylabelsize' in contour_settings.keys():
+                        ylabsize = float(contour_settings['ylabelsize'])
+                    elif 'fontsize' in contour_settings.keys():
+                        ylabsize = float(contour_settings['fontsize'])
+                    else:
+                        ylabsize = 12
+                    ax.set_ylabel(contour_settings['ylabel'], fontsize=ylabsize)
+
+                ############# xticks and lims #############
+
+                self.formatDateXAxis(ax, contour_settings)
+                xmin, xmax = ax.get_xlim()
+
+                if contour_settings['dateformat'].lower() == 'datetime':
+                    xmin = mpl.dates.num2date(xmin)
+                    xmax = mpl.dates.num2date(xmax)
+
+                if 'xticks' in contour_settings.keys():
+                    xtick_settings = contour_settings['xticks']
+
+                    self.formatTimeSeriesXticks(ax, xtick_settings, contour_settings)
+
+                ax.set_xlim(left=xmin)
+                ax.set_xlim(right=xmax)
+
+                ############# yticks and lims #############
+                ymin, ymax = ax.get_ylim()
+                if 'ylims' in contour_settings.keys():
+                    if 'min' in contour_settings['ylims']:
+                        ymin = float(contour_settings['ylims']['min'])
+
+                    if 'max' in contour_settings['ylims']:
+                        ymax = float(contour_settings['ylims']['max'])
+
+                if 'yticks' in contour_settings.keys():
+                    ytick_settings = contour_settings['yticks']
+                    if 'fontsize' in ytick_settings.keys():
+                        yticksize = float(ytick_settings['fontsize'])
+                    elif 'fontsize' in contour_settings.keys():
+                        yticksize = float(contour_settings['fontsize'])
+                    else:
+                        yticksize = 10
+                    ax.tick_params(axis='y', labelsize=yticksize)
+
+                    if 'spacing' in ytick_settings.keys():
+                        ytickspacing = ytick_settings['spacing']
+                        if '.' in ytickspacing:
+                            ytickspacing = float(ytickspacing)
+                        else:
+                            ytickspacing = int(ytickspacing)
+
+                        newyticks = np.arange(ymin, (ymax+ytickspacing), ytickspacing)
+                        newyticklabels = self.formatTickLabels(newyticks, ytick_settings)
+                        ax.set_yticks(newyticks)
+                        ax.set_yticklabels(newyticklabels)
+
+                ax.set_ylim(bottom=ymin)
+                ax.set_ylim(top=ymax)
+
+            # #stuff to call once per plot
+            self.configureSettingsForID('base', cur_obj_settings)
+            cur_obj_settings = self.updateFlaggedValues(cur_obj_settings, '%%units%%', units)
+
+            if 'title' in cur_obj_settings.keys():
+                if 'titlesize' in cur_obj_settings.keys():
+                    titlesize = float(object_settings['titlesize'])
+                elif 'fontsize' in cur_obj_settings.keys():
+                    titlesize = float(object_settings['fontsize'])
+                else:
+                    titlesize = 15
+                axes[0].set_title(cur_obj_settings['title'], fontsize=titlesize)
+
+            if 'xlabel' in cur_obj_settings.keys():
+                if 'xlabelsize' in cur_obj_settings.keys():
+                    xlabsize = float(cur_obj_settings['xlabelsize'])
+                elif 'fontsize' in cur_obj_settings.keys():
+                    xlabsize = float(cur_obj_settings['fontsize'])
+                else:
+                    xlabsize = 12
+                axes[-1].set_xlabel(cur_obj_settings['xlabel'], fontsize=xlabsize)
+
+            self.formatDateXAxis(axes[-1], cur_obj_settings)
+
+            if 'legend' in cur_obj_settings.keys():
+                if cur_obj_settings['legend'].lower() == 'true':
+                    if 'legendsize' in cur_obj_settings.keys():
+                        legsize = float(cur_obj_settings['legendsize'])
+                    elif 'fontsize' in cur_obj_settings.keys():
+                        legsize = float(cur_obj_settings['fontsize'])
+                    else:
+                        legsize = 12
+                    if len(axes[0].get_legend_handles_labels()[0]) > 0:
+                        plt.legend(fontsize=legsize)
+
+            cbar = plt.colorbar(contr, ax=axes[-1], orientation='horizontal', aspect=50.)
+            locs = np.linspace(vmin, vmax, int(cur_obj_settings['colorbar']['numticks']))
+            cbar.set_ticks(locs)
+            cbar.set_ticklabels(locs.round(2))
+            if 'label' in cur_obj_settings['colorbar']:
+                if 'labelsize' in cur_obj_settings['colorbar'].keys():
+                    labsize = float(cur_obj_settings['colorbar']['labelsize'])
+                elif 'fontsize' in cur_obj_settings['colorbar'].keys():
+                    labsize = float(cur_obj_settings['colorbar']['fontsize'])
+                else:
+                    labsize = 12
+                cbar.set_label(cur_obj_settings['colorbar']['label'], fontsize=labsize)
+
+            plt.tight_layout()
+            plt.subplots_adjust(hspace=0.05)
+
+            if 'description' not in cur_obj_settings.keys():
+                cur_obj_settings['description'] = ''
+
+            basefigname = os.path.join(self.images_path, 'ContourPlot' + '_' + self.ChapterRegion.replace(' ','_')
+                                       + '_' + yearstr)
+            exists = True
+            tempnum = 1
+            tfn = basefigname
+            while exists:
+                if os.path.exists(tfn + '.png'):
+                    tfn = basefigname + '_{0}'.format(tempnum)
+                    tempnum += 1
+                else:
+                    exists = False
+            figname = tfn + '.png'
+            # plt.savefig(figname, bbox_inches='tight')
+            plt.savefig(figname)
+            plt.close('all')
+
+            if pageformat == 'full':
+                self.XML.writeFullPagePlot(os.path.basename(figname), cur_obj_settings['description'])
+            elif pageformat == 'half':
+                self.XML.writeHalfPagePlot(os.path.basename(figname), cur_obj_settings['description'])
 
     def makeBuzzPlot(self, object_settings):
         '''
@@ -2761,9 +3120,14 @@ class MakeAutomatedReport(object):
             else:
                 datakey = line['flag']
 
-            line_settings[datakey]  = {'units': units,
+            subset = True
+            if isinstance(timestamps, str):
+                subset = False
+
+            line_settings[datakey] = {'units': units,
                                       'numtimesused': line['numtimesused'],
-                                      'logoutputfilename': datamem_key
+                                      'logoutputfilename': datamem_key,
+                                      'subset': subset
                                        }
 
             data[datakey] = {'values': vals,
@@ -2906,7 +3270,7 @@ class MakeAutomatedReport(object):
 
         return cur_obj_settings
 
-    def selectContoursByID(self, contoursbyID, ID):
+    def selectContourReachesByID(self, contoursbyID, ID):
         '''
         selects contour data based on the ID
         :param contoursbyID: dictionary containing all contours
@@ -2919,6 +3283,19 @@ class MakeAutomatedReport(object):
             if contoursbyID[key]['ID'] == ID:
                 output_contours[key] = contoursbyID[key]
         return output_contours
+
+    def selectContourReservoirByID(self, contoursbyID, ID):
+        '''
+        returns the correct contour from dictionary based on ID
+        :param contoursbyID: dictionary containing several contours
+        :param ID: selected ID to find in data
+        :return: dictionary for corresponding ID, or empty
+        '''
+
+        for key in contoursbyID:
+            if contoursbyID[key]['ID'] == ID:
+                return contoursbyID[key]
+        return {}
 
     def stackContours(self, contours):
         '''
@@ -2955,8 +3332,17 @@ class MakeAutomatedReport(object):
         return output_values, output_dates, output_distance, transitions
 
     def stackProfileIndicies(self, exist_data, new_data):
-        #exist_data is existing array
-        #new data is data to be added to it
+        '''
+        takes an existing array of data and adds another array
+        for contour plots of several reaches split into different groups
+        stacks them together so they function as a single reach
+        exist_data is existing array
+        new data is data to be added to it
+        :param exist_data: dictionary containing existing data
+        :param new_data: data to be added to existing data
+        :return: modified exist_data
+        '''
+
         for runflag in new_data.keys():
             if runflag not in exist_data.keys():
                 exist_data[runflag] = {}
@@ -3157,6 +3543,7 @@ class MakeAutomatedReport(object):
         :param contour_settings: dictionary containing settings
         :return:
         '''
+
         default_contour_settings = {'linecolor': 'grey',
                                     'linewidth': 1,
                                     'linestylepattern': 'solid',
@@ -3225,7 +3612,7 @@ class MakeAutomatedReport(object):
         defaultColormap = mpl.cm.get_cmap('jet')
         default_colorbar_settings = {'colormap': defaultColormap,
                                      'bins':10,
-                                     'skipticks':1}
+                                     'numticks':5}
 
         if 'colorbar' in object_settings.keys():
             if 'colormap' in object_settings['colorbar'].keys():
@@ -3357,7 +3744,6 @@ class MakeAutomatedReport(object):
                 times = datamementry['times']
                 values = datamementry['values']
                 units = datamementry['units']
-
 
             else:
                 if 'structurenumbers' in Line_info.keys():
@@ -3494,6 +3880,76 @@ class MakeAutomatedReport(object):
         most_common_interval = occurence_count.most_common(1)[0][0]
         return most_common_interval
 
+    def getProfileTopWater(self, Line_info, timesteps):
+        '''
+        gets topwater elevations for timestamps
+        :param Line_info: dictionary containing settings for line
+        :param timesteps: given list of timesteps to extract data at
+        :return: values, elevations, depths, flag
+        '''
+
+        datamemkey = self.buildDataMemoryKey(Line_info)
+
+        if datamemkey in self.Data_Memory.keys():
+            dm = pickle.loads(pickle.dumps(self.Data_Memory[datamemkey], -1))
+            print('retrieving profile topwater from datamem')
+            if isinstance(timesteps, str): #if looking for all
+                if dm['subset'] == 'false': #the last time data was grabbed, it was not a subset, aka all
+                    return dm['topwater']
+                else:
+                    print('Incorrect Timesteps in data memory. Re-extracting data for', datamemkey)
+            elif np.array_equal(timesteps, dm['times']):
+                return dm['topwater']
+            else:
+                print('Incorrect Timesteps in data memory. Re-extracting data for', datamemkey)
+
+        if 'filename' in Line_info.keys(): #Get data from Observed
+            filename = Line_info['filename']
+            values, yvals, times = WDR.readTextProfile(filename, timesteps, self.StartTime, self.EndTime)
+            if 'y_convention' in Line_info.keys():
+                if Line_info['y_convention'].lower() == 'elevation':
+                    return [yval[0] for yval in yvals]
+                elif Line_info['y_convention'].lower() == 'depth':
+                    print('Unable to get topwater from depth.')
+                    return []
+                else:
+                    print('Unknown value for flag y_convention: {0}'.format(Line_info['y_convention']))
+                    print('Please use "elevation"')
+                    print('Assuming elevations...')
+                    return [yval[0] for yval in yvals]
+            else:
+                print('No value for flag y_convention')
+                print('Assuming elevation...')
+                return [yval[0] for yval in yvals]
+
+        elif 'h5file' in Line_info.keys() and 'ressimresname' in Line_info.keys():
+            filename = Line_info['h5file']
+            if not os.path.exists(filename):
+                print('ERROR: H5 file does not exist:', filename)
+                return []
+            externalResSim = WDR.ResSim_Results('', '', '', '', external=True)
+            externalResSim.openH5File(filename)
+            externalResSim.load_time() #load time vars from h5
+            externalResSim.loadSubdomains()
+            topwater = externalResSim.readProfileTopwater(Line_info['ressimresname'], timesteps)
+            return topwater
+
+        elif 'w2_segment' in Line_info.keys():
+            if self.plugin.lower() != 'cequalw2':
+                return []
+            topwater = self.ModelAlt.readProfileTopwater(Line_info['w2_segment'], timesteps)
+            return topwater
+
+        elif 'ressimresname' in Line_info.keys():
+            if self.plugin.lower() != 'ressim':
+                return []
+            topwater = self.ModelAlt.readProfileTopwater(Line_info['ressimresname'], timesteps)
+            return topwater
+
+        print('No Data Defined for line')
+        print('Line:', Line_info)
+        return []
+
     def getProfileValues(self, Line_info, timesteps):
         '''
         reads in profile data from various sources for profile plots at given timesteps
@@ -3508,7 +3964,12 @@ class MakeAutomatedReport(object):
         if datamemkey in self.Data_Memory.keys():
             dm = pickle.loads(pickle.dumps(self.Data_Memory[datamemkey], -1))
             print('retrieving profile from datamem')
-            if np.array_equal(timesteps, dm['times']):
+            if isinstance(timesteps, str): #if looking for all
+                if dm['subset'] == 'false': #the last time data was grabbed, it was not a subset, aka all
+                    return dm['values'], dm['elevations'], dm['depths'], dm['times'], Line_info['flag']
+                else:
+                    print('Incorrect Timesteps in data memory. Re-extracting data for', datamemkey)
+            elif np.array_equal(timesteps, dm['times']):
                 return dm['values'], dm['elevations'], dm['depths'], dm['times'], Line_info['flag']
             else:
                 print('Incorrect Timesteps in data memory. Re-extracting data for', datamemkey)
@@ -3548,6 +4009,7 @@ class MakeAutomatedReport(object):
             if self.plugin.lower() != 'cequalw2':
                 return [], [], [], [], None
             vals, elevations, depths, times = self.ModelAlt.readProfileData(Line_info['w2_segment'], timesteps)
+            vals, elevations = WF.normalize2DElevations(vals, elevations)
             return vals, elevations, depths, times, Line_info['flag']
 
         elif 'ressimresname' in Line_info.keys():
@@ -3636,7 +4098,6 @@ class MakeAutomatedReport(object):
                         continue
                     data = self.recordTimeSeriesData(data, line)
         return data
-
 
     def getGateData(self, object_settings, makecopy=True):
         '''
@@ -3935,6 +4396,65 @@ class MakeAutomatedReport(object):
         self.loadCurrentModelAltID('base')
         return data
 
+    def getReservoirContourData(self, object_settings):
+        '''
+        Gets Contour Reservoir data from defined data sources in XML files
+        :param object_settings: currently selected object settings dictionary
+        :return: dictionary containing data and information about each data set
+        '''
+
+        data = {}
+        for datapath in object_settings['datapaths']:
+            for ID in self.accepted_IDs:
+                curreach = pickle.loads(pickle.dumps(datapath, -1))
+                curreach = self.configureSettingsForID(ID, curreach)
+                if not self.checkModelType(curreach):
+                    continue
+                # object_settings['timestamps'] = 'all'
+                values, elevations, depths, dates, flag = self.getProfileValues(curreach, 'all') #todo: this
+                topwater = self.getProfileTopWater(curreach, 'all')
+                if 'interval' in curreach.keys():
+                    dates_change, values = self.changeTimeSeriesInterval(dates, values, curreach)
+                    dates_change, topwater = self.changeTimeSeriesInterval(dates, topwater, curreach)
+                    dates = dates_change
+                if WF.checkData(values):
+                    if 'flag' in datapath.keys():
+                        flag = datapath['flag']
+                    elif 'label' in datapath.keys():
+                        flag = datapath['label']
+                    else:
+                        flag = 'reservoir_{0}'.format(ID)
+                    if flag in data.keys():
+                        count = 1
+                        newflag = flag + '_{0}'.format(count)
+                        while newflag in data.keys():
+                            count += 1
+                            newflag = flag + '_{0}'.format(count)
+                        flag = newflag
+                        print('The new flag is {0}'.format(newflag))
+                    datamem_key = self.buildDataMemoryKey(datapath)
+
+                    if 'units' in datapath.keys():
+                        units = datapath['units']
+                    else:
+                        units = None
+
+                    data[flag] = {'values': values,
+                                  'dates': dates,
+                                  'units': units,
+                                  'elevations': elevations,
+                                  'topwater': topwater,
+                                  'ID': ID,
+                                  'logoutputfilename': datamem_key}
+
+                    for key in datapath.keys():
+                        if key not in data[flag].keys():
+                            data[flag][key] = datapath[key]
+        #reset
+        self.loadCurrentID('base')
+        self.loadCurrentModelAltID('base')
+        return data
+
     def getContours(self, object_settings):
         '''
         Retrieves Contour data from sources
@@ -4032,6 +4552,12 @@ class MakeAutomatedReport(object):
         return np.asarray(timestamps)
 
     def getProfileTimestampYearMonthIndex(self, object_settings):
+        '''
+        gets month indexes for each year based off timestamps for profile tables
+        :param object_settings: dictionary containing settings for current object
+        :return: list of lists for years/months and timestamps
+        '''
+
         timestamp_indexes = []
         for year in self.years:
             year_idx = []
@@ -4043,7 +4569,6 @@ class MakeAutomatedReport(object):
                 year_idx.append(mon_idx)
             timestamp_indexes.append(year_idx)
         return timestamp_indexes
-
 
     def getPlotParameter(self, object_settings):
         '''
@@ -4161,6 +4686,13 @@ class MakeAutomatedReport(object):
         return IDs
 
     def getAllMonthIdx(self, timestamp_indexes, i):
+        '''
+        collects all indecies for all years for a given month
+        :param timestamp_indexes: list of indicies that fall in every month for every year ([[], [], []])
+        :param i: month index (0-11)
+        :return: list of indicies for a month for all years
+        '''
+
         out_idx = []
         for yearlist in timestamp_indexes:
             out_idx += yearlist[i]
@@ -4606,7 +5138,7 @@ class MakeAutomatedReport(object):
         print('Units Undefined:', units)
         return units
 
-    def filterDataByYear(self, data, year):
+    def filterDataByYear(self, data, year, extraflag=None):
         '''
         filters data by a given year. Used when splitting by year
         :param data: dictionary containing data to use
@@ -4619,10 +5151,17 @@ class MakeAutomatedReport(object):
                     s_idx, e_idx = self.getYearlyFilterIdx(data[flag]['dates'], year)
                     data[flag]['values'] = data[flag]['values'][s_idx:e_idx+1]
                     data[flag]['dates'] = data[flag]['dates'][s_idx:e_idx+1]
-
+                    if extraflag != None:
+                        data[flag][extraflag] = data[flag][extraflag][s_idx:e_idx+1]
         return data
 
     def getYearlyFilterIdx(self, dates, year):
+        '''
+        finds start and end index for a given year for a list of dates
+        :param dates: list of datetime objects
+        :param year: target year
+        :return: start and end index for that year
+        '''
 
         start_date = dates[0]
         end_date = dates[-1]
@@ -4641,6 +5180,12 @@ class MakeAutomatedReport(object):
         return s_idx, e_idx
 
     def getMonthlyFilterIdx(self, dates, month):
+        '''
+        finds start and end index for a given month for a list of dates
+        :param dates: list of datetime objects
+        :param month: target month
+        :return: start and end index for that year
+        '''
 
         start_date = dates[0]
         end_date = dates[-1]
@@ -4663,6 +5208,12 @@ class MakeAutomatedReport(object):
         return s_idx, e_idx
 
     def forceTimeInterval(self, interval):
+        '''
+        returns time interval by parsing DSSVue word inputs like "1MON" or "15MIN"
+        :param interval: DSSVue formatted time interval
+        :return: either time delta or pd interval, and interp type (np or pd)
+        '''
+
         numbers = []
         letters = []
         for n in interval:
@@ -4788,8 +5339,7 @@ class MakeAutomatedReport(object):
                             print('Please check Datapaths in the XML file, or modify the rows to have the correct flags'
                                   ' for the data present')
                             return data, ''
-                        # months = np.array([n.month for n in curdates])
-                        # msk = np.where(months==sr_month)
+
                         newvals = np.array([])
                         newdates = np.array([])
                         if year != 'ALL':
@@ -4798,16 +5348,13 @@ class MakeAutomatedReport(object):
                             year_loops = self.years
                         if len(curdates) > 0:
                             for yearloop in year_loops:
-                                # print(year, sr_month, curdates[0], curdates[-1])
 
-                                # yrmsk = self.findYearMaskBinary(curdates, yearloop)
 
                                 s_idx, e_idx = self.getYearlyFilterIdx(curdates, yearloop)
                                 yearvals = curvalues[s_idx:e_idx+1]
                                 yeardates = curdates[s_idx:e_idx+1]
 
                                 if len(yeardates) > 0:
-                                    # msk = self.findMonthMaskBinary(curdates[yrmsk], sr_month)
                                     s_idx, e_idx = self.getMonthlyFilterIdx(yeardates, sr_month)
 
                                     newvals = np.append(newvals, yearvals[s_idx:e_idx+1])
@@ -4815,17 +5362,11 @@ class MakeAutomatedReport(object):
 
                         data[curflag]['values'] = newvals
                         data[curflag]['dates'] = newdates
-                        # data[curflag]['values'] = curvalues[msk]
-                        # data[curflag]['dates'] = curdates[msk]
-
 
         if year != 'ALL':
             for flag in data.keys():
-                # years = np.array([n.year for n in data[flag]['dates']])
-                # msk = np.where(years==year)
                 if len(data[flag]['dates']) == 0:
                     continue
-                # msk = self.findYearMaskBinary(data[flag]['dates'], year)
                 s_idx, e_idx = self.getYearlyFilterIdx(data[flag]['dates'], year)
                 data[flag]['values'] = data[flag]['values'][s_idx:e_idx+1]
                 data[flag]['dates'] = data[flag]['dates'][s_idx:e_idx+1]
@@ -4922,6 +5463,12 @@ class MakeAutomatedReport(object):
         return out_data
 
     def formatThreshold(self, object_settings):
+        '''
+        organizes settings for thresholds for stat tables. Fills in missing values with defaults
+        :param object_settings: dictionary containing settings for thresholds
+        :return: list of dictionary objects for each threshold
+        '''
+
         default_color = '#a6a6a6' #default
         default_colorwhen = 'under' #default
         accepted_threshold_conditions = ['under', 'over']
@@ -4954,6 +5501,13 @@ class MakeAutomatedReport(object):
         return thresholds
 
     def formatThresholdColor(self, in_color, default='#a6a6a6'):
+        '''
+        formats input color to either turn to hex or use default
+        :param in_color: string to test if legit
+        :param default: color to use if in_color fails
+        :return:hex color
+        '''
+
         threshold_color=default
         if in_color.startswith('#'):
             threshold_color = in_color
@@ -4966,6 +5520,13 @@ class MakeAutomatedReport(object):
         return threshold_color
 
     def formatTickLabels(self, ticks, ticksettings):
+        '''
+        changes ticks based on input settings
+        :param ticks: existing ticks
+        :param ticksettings: dictionary contianing settings for ticks
+        :return: formatted ticks
+        '''
+
         newticklabels = []
         for tick in ticks:
             if isinstance(tick, (np.float64, int, float)):
@@ -5001,6 +5562,14 @@ class MakeAutomatedReport(object):
         return newticklabels
 
     def formatTimeSeriesXticks(self, curax, xtick_settings, axis_settings, dateformatflag='dateformat'):
+        '''
+        applies tick settings to Xaxis for time series
+        :param curax: current axis object
+        :param xtick_settings: dictionary containing settings for ticks
+        :param axis_settings: dictionary containing settings for ticks
+        :param dateformatflag: flag to get dateformat from settings
+        '''
+
         xmin, xmax = curax.get_xlim()
 
         if axis_settings[dateformatflag].lower() == 'datetime':
@@ -5246,6 +5815,13 @@ class MakeAutomatedReport(object):
         return organizedheaders, organizedrows
 
     def buildSingleStatTable(self, object_settings, data):
+        '''
+        builds headings and rows for single stat table
+        :param object_settings: dictionary containing settings for table
+        :param data: dictionary contianing data
+        :return: headings and rows used to build tables
+        '''
+
         rows = []
         headers = [n for n in self.mo_str_3]
         stat = object_settings['statistic']
@@ -5609,6 +6185,8 @@ class MakeAutomatedReport(object):
                         self.makeProfileStatisticsTable(object)
                     elif objtype == 'contourplot':
                         self.makeContourPlot(object)
+                    elif objtype == 'reservoircontourplot':
+                        self.makeReservoirContourPlot(object)
                     elif objtype == 'singlestatistictable':
                         self.makeSingleStatisticTable(object)
                     elif objtype == 'singlestatisticprofiletable':
@@ -6399,6 +6977,21 @@ class MakeAutomatedReport(object):
             return timestamps
         return [n for n in timestamps if n.year == year]
 
+    def filterContourOverTopWater(self, values, elevations, topwater):
+        '''
+        takes values for contour reservoir plots and nan's out any values over topwater. Ressim duplicates data
+        to the top of the domain instead of cutting it off
+        :param values: list of values at each timestep
+        :param elevations: elevations to find closest index to top water
+        :param topwater: water surface elevation at each timestep
+        :return: values with nans
+        '''
+
+        for twi, tw in enumerate(topwater):
+            elevationtopwateridx = (np.abs(elevations - tw)).argmin()
+            values[twi][elevationtopwateridx+1:] = np.nan
+        return values
+
     def fixXMLModelIntroduction(self, simorder):
         '''
         Fixes intro in XML that shows what models are used for each region.
@@ -6923,10 +7516,12 @@ class MakeAutomatedReport(object):
         commits updated data to data memory dictionary that keeps track of data
         :param object_settings:  dicitonary of user defined settings for current object
         '''
+
         for line in data.keys():
             values = pickle.loads(pickle.dumps(data[line]['values'], -1))
             depths = pickle.loads(pickle.dumps(data[line]['depths'], -1))
             elevations = pickle.loads(pickle.dumps(data[line]['elevations'], -1))
+            subset = pickle.loads(pickle.dumps(line_settings[line]['subset'], -1))
             datamem_key = line_settings[line]['logoutputfilename']
             if datamem_key not in self.Data_Memory.keys():
                 self.Data_Memory[datamem_key] = {'times': object_settings['timestamps'],
@@ -6934,7 +7529,9 @@ class MakeAutomatedReport(object):
                                                  'elevations': elevations,
                                                  'depths': depths,
                                                  'units': object_settings['plot_units'],
-                                                 'isprofile': True}
+                                                 'isprofile': True,
+                                                 'subset': subset
+                                                 }
 
     def configureUnits(self, object_settings, parameter, units):
         '''
