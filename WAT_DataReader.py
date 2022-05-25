@@ -396,6 +396,7 @@ def getchildren(root, returnkeyless=False):
     '''
 
     children = {}
+
     if len(root) == 0:
         try:
             if len(root.text.strip()) == 0:
@@ -405,11 +406,11 @@ def getchildren(root, returnkeyless=False):
         except:
             children[root.tag.lower()] = root.text
     else:
-        if len(Counter([n.tag for n in root])) > 1: #if the amount of diff subroots > 1
+        if len(Counter([n.tag.lower() for n in root])) > 1: #if the amount of diff subroots > 1
             children[root.tag.lower()] = {}
         else: #if there is only 1 subroot
             if len(root.text.strip()) == 0: #if the text len of root is 0, we have subitems
-                if len([n.tag for n in root]) > 1: #if we have more than 1 of the same subroot
+                if len([n.tag.lower() for n in root]) > 1: #if we have more than 1 of the same subroot
                     children[root.tag.lower()] = []
                 else: #otherwise, we have a single dictionary
                     subroot = root[0]

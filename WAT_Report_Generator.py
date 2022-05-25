@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '4.8.1'
+VERSIONNUMBER = '4.8.2'
 
 import datetime as dt
 import os
@@ -2249,17 +2249,17 @@ class MakeAutomatedReport(object):
 
             cbar = plt.colorbar(contr, ax=axes[-1], orientation='horizontal', aspect=50.)
             # locs = np.linspace(vmin, vmax, int(cur_obj_settings['colorbar']['bins']))[::int(cur_obj_settings['colorbar']['skipticks'])]
-            locs = np.linspace(vmin, vmax, int(cur_obj_settings['colorbar']['numticks']))
+            locs = np.linspace(vmin, vmax, int(contour_settings['colorbar']['numticks']))
             cbar.set_ticks(locs)
             cbar.set_ticklabels(locs.round(2))
-            if 'label' in cur_obj_settings['colorbar']:
-                if 'labelsize' in cur_obj_settings['colorbar'].keys():
-                    labsize = float(cur_obj_settings['colorbar']['labelsize'])
-                elif 'fontsize' in cur_obj_settings['colorbar'].keys():
+            if 'label' in contour_settings['colorbar']:
+                if 'labelsize' in contour_settings['colorbar'].keys():
+                    labsize = float(contour_settings['colorbar']['labelsize'])
+                elif 'fontsize' in contour_settings['colorbar'].keys():
                     labsize = float(cur_obj_settings['colorbar']['fontsize'])
                 else:
                     labsize = 12
-                cbar.set_label(cur_obj_settings['colorbar']['label'], fontsize=labsize)
+                cbar.set_label(contour_settings['colorbar']['label'], fontsize=labsize)
 
             plt.tight_layout()
             plt.subplots_adjust(hspace=0.05)
@@ -2626,17 +2626,17 @@ class MakeAutomatedReport(object):
                         plt.legend(fontsize=legsize)
 
             cbar = plt.colorbar(contr, ax=axes[-1], orientation='horizontal', aspect=50.)
-            locs = np.linspace(vmin, vmax, int(cur_obj_settings['colorbar']['numticks']))
+            locs = np.linspace(vmin, vmax, int(contour_settings['colorbar']['numticks']))
             cbar.set_ticks(locs)
             cbar.set_ticklabels(locs.round(2))
-            if 'label' in cur_obj_settings['colorbar']:
-                if 'labelsize' in cur_obj_settings['colorbar'].keys():
-                    labsize = float(cur_obj_settings['colorbar']['labelsize'])
+            if 'label' in contour_settings['colorbar']:
+                if 'labelsize' in contour_settings['colorbar'].keys():
+                    labsize = float(contour_settings['colorbar']['labelsize'])
                 elif 'fontsize' in cur_obj_settings['colorbar'].keys():
                     labsize = float(cur_obj_settings['colorbar']['fontsize'])
                 else:
                     labsize = 12
-                cbar.set_label(cur_obj_settings['colorbar']['label'], fontsize=labsize)
+                cbar.set_label(contour_settings['colorbar']['label'], fontsize=labsize)
 
             plt.tight_layout()
             plt.subplots_adjust(hspace=0.05)
@@ -4079,6 +4079,7 @@ class MakeAutomatedReport(object):
                     print('Flag not set for line (Computed/Observed/etc)')
                     print('Not plotting Line:', line)
                     continue
+
                 elif line['flag'].lower() == 'computed':
                     for ID in self.accepted_IDs:
                         curline = pickle.loads(pickle.dumps(line, -1))
@@ -4097,6 +4098,7 @@ class MakeAutomatedReport(object):
                     if not self.checkModelType(line):
                         continue
                     data = self.recordTimeSeriesData(data, line)
+
         return data
 
     def getGateData(self, object_settings, makecopy=True):
