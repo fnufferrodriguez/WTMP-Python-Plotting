@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '4.8.0'
+VERSIONNUMBER = '4.8.1'
 
 import datetime as dt
 import os
@@ -2429,7 +2429,7 @@ class MakeAutomatedReport(object):
                                     levels=np.linspace(vmin, vmax, int(contour_settings['colorbar']['bins'])), #add one to get the desired number..
                                     extend='both') #the .T transposes the array so dates on bottom TODO:make extend variable
                 # ax.invert_yaxis()
-                ax.plot(dates, topwater, c='red')
+                # ax.plot(dates, topwater, c='red') #debug topwater
                 self.addLogEntry({'type': contour_settings['label'] + '_ContourPlot' if contour_settings['label'] != '' else 'ContourPlot',
                                   'name': self.ChapterRegion+'_'+yearstr,
                                   'description': contour_settings['description'],
@@ -4413,6 +4413,10 @@ class MakeAutomatedReport(object):
                 # object_settings['timestamps'] = 'all'
                 values, elevations, depths, dates, flag = self.getProfileValues(curreach, 'all') #todo: this
                 topwater = self.getProfileTopWater(curreach, 'all')
+                if 'interval' in curreach.keys():
+                    dates_change, values = self.changeTimeSeriesInterval(dates, values, curreach)
+                    dates_change, topwater = self.changeTimeSeriesInterval(dates, topwater, curreach)
+                    dates = dates_change
                 if WF.checkData(values):
                     if 'flag' in datapath.keys():
                         flag = datapath['flag']
