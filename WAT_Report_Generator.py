@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '4.8.2'
+VERSIONNUMBER = '4.8.3'
 
 import datetime as dt
 import os
@@ -4009,7 +4009,8 @@ class MakeAutomatedReport(object):
             if self.plugin.lower() != 'cequalw2':
                 return [], [], [], [], None
             vals, elevations, depths, times = self.ModelAlt.readProfileData(Line_info['w2_segment'], timesteps)
-            vals, elevations = WF.normalize2DElevations(vals, elevations)
+            if isinstance(timesteps, str):
+                vals, elevations = WF.normalize2DElevations(vals, elevations)
             return vals, elevations, depths, times, Line_info['flag']
 
         elif 'ressimresname' in Line_info.keys():
