@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '4.8.3'
+VERSIONNUMBER = '5.0.0'
 
 import datetime as dt
 import os
@@ -34,9 +34,15 @@ import pendulum
 import itertools
 import traceback
 import math
-import WAT_DataReader as WDR
+
+import WAT_Reader as WR
 import WAT_Functions as WF
-import WAT_XML_Utils as XML_Utils
+import WAT_XML_Utils as WXMLU
+import WAT_Logger as WL
+import WAT_Constants as WC
+import WAT_DataOrganizer as WD
+import WAT_ResSim_Results as WRSS
+import WAT_W2_Results as WW2
 
 
 class MakeAutomatedReport(object):
@@ -54,18 +60,15 @@ class MakeAutomatedReport(object):
         self.simulationInfoFile = simulationInfoFile
         self.WriteLog = True #TODO we're testing this.
         self.batdir = batdir
-        self.readSimulationInfo(simulationInfoFile) #read file output by WAT
+        WR.readSimulationInfo(self, simulationInfoFile) #read file output by WAT
         # self.EnsureDefaultFiles() #TODO: turn this back on for copying
         self.definePaths()
+        self.Constants = WC.WAT_Constants()
         self.cleanOutputDirs()
-        self.defineUnits()
-        self.defineMonths()
-        self.defineTimeIntervals()
-        self.defineDefaultColors()
-        self.readGraphicsDefaultFile() #read graphical component defaults
-        self.readDefaultLineStylesFile()
-        self.buildLogFile()
-        # self.initializeDataMemory()
+        WR.readGraphicsDefaultFile(self) #read graphical component defaults
+        WR.readDefaultLineStylesFile(self)
+        self.WAT_log = WL.WAT_Logger()
+
         if self.reportType == 'single': #Eventually be able to do comparison reports, put that here
             for simulation in self.Simulations:
                 print('Running Simulation:', simulation)
@@ -73,22 +76,22 @@ class MakeAutomatedReport(object):
                 self.setSimulationVariables(simulation)
                 self.loadCurrentID('base') #load the data for the current sim, we do 1 at a time here..
                 self.defineStartEndYears()
-                self.readSimulationsCSV() #read to determine order/sims/regions in report
+                WR.readSimulationsCSV(self) #read to determine order/sims/regions in report
                 self.cleanOutputDirs()
                 self.initializeXML()
                 self.writeXMLIntroduction()
                 for simorder in self.SimulationCSV.keys():
                     self.setSimulationCSVVars(self.SimulationCSV[simorder])
-                    self.readDefinitionsFile(self.SimulationCSV[simorder])
+                    WR.readDefinitionsFile(self, self.SimulationCSV[simorder])
                     self.loadModelAlts(self.SimulationCSV[simorder])
-                    self.initializeDataMemory()
+                    self.initializeDataOrganizer()
                     self.loadCurrentModelAltID('base')
-                    self.addSimLogEntry()
+                    self.WAT_log.addSimLogEntry(self.accepted_IDs, self.SimulationVariables, self.observedDir)
                     self.writeChapter()
                     self.fixXMLModelIntroduction(simorder)
-                    self.writeDataFiles()
+                    self.Data.writeDataFiles()
                 self.XML.writeReportEnd()
-                self.equalizeLog()
+                self.WAT_log.equalizeLog()
         elif self.reportType == 'alternativecomparison':
             self.initSimulationDict()
             for simulation in self.Simulations:
@@ -96,73 +99,27 @@ class MakeAutomatedReport(object):
             self.loadCurrentID('base') #load the data for the current sim, we do 1 at a time here..
             self.setMultiRunStartEndYears() #find the start and end time
             self.defineStartEndYears() #format the years correctly after theyre set
-            self.readComparisonSimulationsCSV() #read to determine order/sims/regions in report
+            WR.readComparisonSimulationsCSV(self) #read to determine order/sims/regions in report
             self.cleanOutputDirs()
             self.initializeXML()
             self.writeXMLIntroduction()
             for simorder in self.SimulationCSV.keys():
                 self.setSimulationCSVVars(self.SimulationCSV[simorder])
-                self.readDefinitionsFile(self.SimulationCSV[simorder])
+                WR.readDefinitionsFile(self, self.SimulationCSV[simorder])
                 self.loadModelAlts(self.SimulationCSV[simorder])
-                self.initializeDataMemory()
+                self.initializeDataOrganizer()
                 self.loadCurrentModelAltID('base')
-                self.addSimLogEntry()
+                self.WAT_log.addSimLogEntry(self.accepted_IDs, self.SimulationVariables, self.observedDir)
                 self.writeChapter()
                 self.fixXMLModelIntroduction(simorder)
-                self.writeDataFiles()
+                self.Data.writeDataFiles()
             self.XML.writeReportEnd()
-            self.equalizeLog()
+            self.WAT_log.equalizeLog()
         else:
             print('UNKNOWN REPORT TYPE:', self.reportType)
             sys.exit()
-        self.writeLogFile()
-        self.writeDataFiles()
-
-    def addLogEntry(self, keysvalues, isdata=False):
-        '''
-        adds an entry to the log file. If data, add an entry for all lists.
-        :param keysvalues: dictionary containing values and headers
-        :param isdata: if True, adds blanks for all data rows to keep things consistent
-        '''
-
-        for key in keysvalues.keys():
-            self.Log[key].append(keysvalues[key])
-        if isdata:
-            allkeys = ['type', 'name', 'function', 'description', 'value', 'units',
-                       'value_start_date', 'value_end_date', 'logoutputfilename']
-            for key in allkeys:
-                if key not in keysvalues.keys():
-                    self.Log[key].append('')
-
-    def addSimLogEntry(self):
-        '''
-        adds entries for a simulation with relevenat metadata
-        '''
-
-        for ID in self.accepted_IDs:
-            print('ID:', ID)
-            print('Simvars:', self.SimulationVariables[ID])
-            self.Log['observed_data_path'].append(self.observedDir)
-            self.Log['start_time'].append(self.SimulationVariables[ID]['StartTimeStr'])
-            self.Log['end_time'].append(self.SimulationVariables[ID]['EndTimeStr'])
-            self.Log['compute_time'].append(self.SimulationVariables[ID]['LastComputed'])
-            self.Log['program'].append(self.SimulationVariables[ID]['plugin'])
-            self.Log['alternative_name'].append(self.SimulationVariables[ID]['modelAltName'])
-            self.Log['fpart'].append(self.SimulationVariables[ID]['alternativeFpart'])
-            self.Log['program_directory'].append(self.SimulationVariables[ID]['alternativeDirectory'])
-
-    def defineMonths(self):
-        '''
-        defines month 3 letter codes for table labels, and reference dicts for months and numbers (aka Jan: 1)
-        :return: class variables
-                    self.month2num
-                    self.num2month
-                    self.mo_str_3
-        '''
-
-        self.month2num = {month.lower(): index for index, month in enumerate(calendar.month_abbr) if month}
-        self.num2month = {index: month.lower() for index, month in enumerate(calendar.month_abbr) if month}
-        self.mo_str_3 = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+        self.WAT_log.writeLogFile(self.images_path)
+        self.Data.writeDataFiles()
 
     def defineStartEndYears(self):
         '''
@@ -191,70 +148,6 @@ class MakeAutomatedReport(object):
         else:
             self.years = range(tw_start.year, tw_end.year+1)
             self.years_str = "{0}-{1}".format(self.startYear, self.endYear)
-
-    def defineTimeIntervals(self):
-        '''
-        sets up a dictionary for DSS intervals and their associated timedelta amount for setting up regular
-        interval time series arrays
-        :return: class variable
-                    self.time_intervals
-        '''
-
-        self.time_intervals = {'1MIN': [dt.timedelta(minutes=1),'np'],
-                               '2MIN': [dt.timedelta(minutes=2),'np'],
-                               '5MIN': [dt.timedelta(minutes=5),'np'],
-                               '6MIN': [dt.timedelta(minutes=6),'np'],
-                               '10MIN': [dt.timedelta(minutes=10),'np'],
-                               '12MIN': [dt.timedelta(minutes=12),'np'],
-                               '15MIN': [dt.timedelta(minutes=15),'np'],
-                               '30MIN': [dt.timedelta(minutes=30),'np'],
-                               '1HOUR': [dt.timedelta(hours=1),'np'],
-                               '2HOUR': [dt.timedelta(hours=2),'np'],
-                               '3HOUR': [dt.timedelta(hours=3),'np'],
-                               '4HOUR': [dt.timedelta(hours=4),'np'],
-                               '5HOUR': [dt.timedelta(hours=5),'np'],
-                               '6HOUR': [dt.timedelta(hours=6),'np'],
-                               '1DAY': [dt.timedelta(days=1),'np'],
-                               '1MON': ['1M', 'pd'],
-                               '2MON': ['2M', 'pd'],
-                               '6MON': ['6M', 'pd'],
-                               '1YEAR': ['1Y', 'pd']}
-
-
-    def defineDefaultColors(self):
-        '''
-        sets up a list of default colors to use in the event that colors are not set up in the graphics default file
-        for a line
-        Color Changes based off https://davidmathlogic.com/colorblind/#%2388CCEE-%23882255-%23117733-%2344AA99-%23DDCC77-%23CC6677-%23AA4499-%23332288
-        :return: class variable
-                    self.def_colors
-        '''
-
-        # self.def_colors = ['#003E51', '#FF671F', '#007396', '#215732', '#C69214', '#4C12A1', '#DDCBA4', '#9A3324']
-        self.def_colors = ['#88CCEE', '#882255', '#117733', '#44AA99', '#DDCC77', '#CC6677', '#AA4499', '#332288']
-        #                     blue       red       green    light green   yellow     salmon    redpink, purple
-
-    def defineUnits(self):
-        '''
-        creates dictionary with units for vars for labels
-        #TODO: expand this
-        :return: set class variable
-                    self.units
-        '''
-
-        self.units = {'temperature': {'metric':'c', 'english':'f'},
-                      'temp': {'metric':'c', 'english':'f'},
-                      'do_sat': {'metric': '%', 'english': '%'},
-                      'flow': {'metric': 'm3/s', 'english': 'cfs'},
-                      'storage': {'metric': 'm3', 'english': 'af'},
-                      'stor': {'metric': 'm3', 'english': 'af'},
-                      'elevation': {'metric': 'm', 'english': 'ft'},
-                      'elev': {'metric': 'm', 'english': 'ft'},
-                      'ec':  {'metric': 'us/cm', 'english': 'us/cm'},
-                      'electrical conductivity': {'metric': 'us/cm', 'english': 'us/cm'},
-                      'salinity': {'metric': 'psu', 'english': 'psu'},
-                      'sal': {'metric': 'psu', 'english': 'psu'},
-                      }
 
     def definePaths(self):
         '''
@@ -348,10 +241,10 @@ class MakeAutomatedReport(object):
 
                 unitslist = []
                 unitslist2 = []
-                linedata = self.getTimeseriesData(ax_settings)
+                linedata = self.Data.getTimeSeriesDataDictionary(ax_settings)
                 linedata = self.mergeLines(linedata, ax_settings)
                 ax_settings = self.configureSettingsForID('base', ax_settings)
-                gatedata = self.getGateData(ax_settings, makecopy=False)
+                gatedata = self.Data.getGateDataDictionary(ax_settings, makecopy=False)
                 linedata = self.filterDataByYear(linedata, year)
                 linedata = self.correctDuplicateLabels(linedata)
                 for gateop in gatedata.keys():
@@ -377,7 +270,7 @@ class MakeAutomatedReport(object):
                     if units == None:
                         if parameter != None:
                             try:
-                                units = self.units[parameter]
+                                units = self.Constants.units[parameter]
                             except KeyError:
                                 units = None
 
@@ -468,15 +361,15 @@ class MakeAutomatedReport(object):
                                       alpha=float(line_settings['alpha']))
 
 
-                    self.addLogEntry({'type': line_settings['label'] + '_TimeSeries' if line_settings['label'] != '' else 'Timeseries',
-                                      'name': self.ChapterRegion+'_'+yearstr,
-                                      'description': ax_settings['description'],
-                                      'units': units,
-                                      'value_start_date': self.translateDateFormat(dates[0], 'datetime', '').strftime('%d %b %Y'),
-                                      'value_end_date': self.translateDateFormat(dates[-1], 'datetime', '').strftime('%d %b %Y'),
-                                      'logoutputfilename': curline['logoutputfilename']
-                                      },
-                                     isdata=True)
+                    self.WAT_log.addLogEntry({'type': line_settings['label'] + '_TimeSeries' if line_settings['label'] != '' else 'Timeseries',
+                                              'name': self.ChapterRegion+'_'+yearstr,
+                                              'description': ax_settings['description'],
+                                              'units': units,
+                                              'value_start_date': self.translateDateFormat(dates[0], 'datetime', '').strftime('%d %b %Y'),
+                                              'value_end_date': self.translateDateFormat(dates[-1], 'datetime', '').strftime('%d %b %Y'),
+                                              'logoutputfilename': curline['logoutputfilename']
+                                             },
+                                             isdata=True)
                 # GATE DATA #
                 if 'gatespacing' in ax_settings.keys():
                     gatespacing = float(ax_settings['gatespacing'])
@@ -568,15 +461,15 @@ class MakeAutomatedReport(object):
 
                             gate_count += 1 #keep track of gate number in group
                             gate_placement += 1 #keep track of gate palcement in space
-                            self.addLogEntry({'type': gate_line_settings['label'] + '_GateTimeSeries' if gate_line_settings['label'] != '' else 'GateTimeseries',
-                                              'name': self.ChapterRegion+'_'+yearstr,
-                                              'description': ax_settings['description'],
-                                              'units': 'BINARY',
-                                              'value_start_date': self.translateDateFormat(dates[0], 'datetime', '').strftime('%d %b %Y'),
-                                              'value_end_date': self.translateDateFormat(dates[-1], 'datetime', '').strftime('%d %b %Y'),
-                                              'logoutputfilename': curgate['logoutputfilename']
-                                              },
-                                             isdata=True)
+                            self.WAT_log.addLogEntry({'type': gate_line_settings['label'] + '_GateTimeSeries' if gate_line_settings['label'] != '' else 'GateTimeseries',
+                                                      'name': self.ChapterRegion+'_'+yearstr,
+                                                      'description': ax_settings['description'],
+                                                      'units': 'BINARY',
+                                                      'value_start_date': self.translateDateFormat(dates[0], 'datetime', '').strftime('%d %b %Y'),
+                                                      'value_end_date': self.translateDateFormat(dates[-1], 'datetime', '').strftime('%d %b %Y'),
+                                                      'logoutputfilename': curgate['logoutputfilename']
+                                                      },
+                                                     isdata=True)
 
                     gatelabels_positions.append(np.average(gatelines_positions))
                     gate_placement += gatespacing
@@ -911,7 +804,7 @@ class MakeAutomatedReport(object):
         object_settings['plot_parameter'] = self.getPlotParameter(object_settings)
 
         ################# Get data #################
-        data, line_settings = self.getProfileData(object_settings)
+        data, line_settings = self.Data.getProfileDataDictionary(object_settings)
         line_settings = self.correctDuplicateLabels(line_settings)
         table_blueprint = pickle.loads(pickle.dumps(object_settings, -1))
 
@@ -982,17 +875,17 @@ class MakeAutomatedReport(object):
                                         if row_val > thresh['value']:
                                             threshold_colors[ri] = thresh['color']
 
-                            self.addLogEntry({'type': 'ProfileTableStatistic',
-                                              'name': ' '.join([self.ChapterRegion, heading, stat]),
-                                              'description': object_desc,
-                                              'value': row_val,
-                                              'function': stat,
-                                              'units': object_settings['plot_units'],
-                                              'value_start_date': yrheader,
-                                              'value_end_date': yrheader,
-                                              'logoutputfilename': ', '.join([line_settings[flag]['logoutputfilename'] for flag in line_settings])
-                                              },
-                                             isdata=True)
+                            self.WAT_log.addLogEntry({'type': 'ProfileTableStatistic',
+                                                      'name': ' '.join([self.ChapterRegion, heading, stat]),
+                                                      'description': object_desc,
+                                                      'value': row_val,
+                                                      'function': stat,
+                                                      'units': object_settings['plot_units'],
+                                                      'value_start_date': yrheader,
+                                                      'value_end_date': yrheader,
+                                                      'logoutputfilename': ', '.join([line_settings[flag]['logoutputfilename'] for flag in line_settings])
+                                                      },
+                                                     isdata=True)
 
                         frmt_rows.append('{0}|{1}'.format(rowname, row_val))
                     self.XML.writeTableColumn(heading, frmt_rows, thresholdcolors=threshold_colors)
@@ -1026,11 +919,11 @@ class MakeAutomatedReport(object):
         object_settings['plot_parameter'] = self.getPlotParameter(object_settings)
 
         ################# Get data #################
-        data, line_settings = self.getProfileData(object_settings)
+        data, line_settings = self.Data.getProfileDataDictionary(object_settings)
         line_settings = self.correctDuplicateLabels(line_settings)
 
         object_settings = self.configureSettingsForID('base', object_settings)
-        gatedata = self.getGateData(object_settings, makecopy=False)
+        gatedata = self.Data.getGateDataDictionary(object_settings, makecopy=False)
 
         ################# Get plot units #################
         data, line_settings = self.convertProfileDataUnits(object_settings, data, line_settings)
@@ -1056,7 +949,7 @@ class MakeAutomatedReport(object):
             else:
                 yearstr = object_settings['yearstr']
 
-            t_stmps = self.filterTimestepByYear(object_settings['timestamps'], year)
+            t_stmps = WF.filterTimestepByYear(object_settings['timestamps'], year)
 
             prof_indices = [np.where(object_settings['timestamps'] == n)[0][0] for n in t_stmps]
             n = int(object_settings['profilesperrow']) * int(object_settings['rowsperpage']) #Get number of plots on page
@@ -1145,9 +1038,9 @@ class MakeAutomatedReport(object):
                                 value = float(hline_settings['value'])
                                 units = None
                             else:
-                                dates, values, units = self.getTimeSeries(hline_settings, makecopy=False)
+                                dates, values, units = self.Data.getTimeSeries(hline_settings, makecopy=False)
                                 # hline_idx = np.where(object_settings['timestamps'][j] == dates)
-                                hline_idx = WDR.getClosestTime([object_settings['timestamps'][j]], dates)
+                                hline_idx = WR.getClosestTime([object_settings['timestamps'][j]], dates)
                                 if len(hline_idx) == 0:
                                     value = np.nan
                                 else:
@@ -1191,9 +1084,9 @@ class MakeAutomatedReport(object):
                                 value = float(vline_settings['value'])
                                 units = None
                             else:
-                                dates, values, units = self.getTimeSeries(vline_settings, makecopy=False)
+                                dates, values, units = self.Data.getTimeSeries(vline_settings, makecopy=False)
                                 # vline_idx = np.where(object_settings['timestamps'][j] == dates)
-                                vline_idx = WDR.getClosestTime([object_settings['timestamps'][j]], dates)
+                                vline_idx = WR.getClosestTime([object_settings['timestamps'][j]], dates)
                                 if len(vline_idx) == 0:
                                     value = np.nan
                                 else:
@@ -1375,7 +1268,7 @@ class MakeAutomatedReport(object):
 
                                 # gatemsk = np.where(object_settings['timestamps'][j] == dates)
                                 if gatemsk == None:
-                                    gatemsk = WDR.getClosestTime([object_settings['timestamps'][j]], dates)
+                                    gatemsk = WR.getClosestTime([object_settings['timestamps'][j]], dates)
                                 if len(gatemsk) == 0:
                                     value = np.nan
                                 else:
@@ -1386,7 +1279,6 @@ class MakeAutomatedReport(object):
                                     gateconfig[gategroup] = {gate: value}
                                 else:
                                     gateconfig[gategroup][gate] = value
-
 
                                 if not np.isnan(value):
                                     gateop_has_value = True
@@ -1402,19 +1294,19 @@ class MakeAutomatedReport(object):
                                         ax.scatter(xpos, gatemiddle, edgecolor='black', facecolor='black', marker='o')
 
                                 gate_count += 1 #keep track of gate number in group
-                                self.addLogEntry({'type': gate + '_GateTimeSeries' if gate != '' else 'GateTimeseries',
-                                                  'name': self.ChapterRegion+'_'+yearstr,
-                                                  'description': cur_obj_settings['description'],
-                                                  'units': 'BINARY',
-                                                  'value_start_date': self.translateDateFormat(dates[0], 'datetime', '').strftime('%d %b %Y'),
-                                                  'value_end_date': self.translateDateFormat(dates[-1], 'datetime', '').strftime('%d %b %Y'),
-                                                  'logoutputfilename': curgate['logoutputfilename']
-                                                  },
-                                                 isdata=True)
+                                self.WAT_log.addLogEntry({'type': gate + '_GateTimeSeries' if gate != '' else 'GateTimeseries',
+                                                          'name': self.ChapterRegion+'_'+yearstr,
+                                                          'description': cur_obj_settings['description'],
+                                                          'units': 'BINARY',
+                                                          'value_start_date': self.translateDateFormat(dates[0], 'datetime', '').strftime('%d %b %Y'),
+                                                          'value_end_date': self.translateDateFormat(dates[-1], 'datetime', '').strftime('%d %b %Y'),
+                                                          'logoutputfilename': curgate['logoutputfilename']
+                                                          },
+                                                         isdata=True)
 
                             if 'color' in cur_gateop.keys():
                                 color = cur_gateop['color']
-                                default_color = self.def_colors[ggi]
+                                default_color = self.Constants.def_colors[ggi]
                                 color = self.confirmColor(color, default_color)
                             if 'top' in cur_gateop.keys():
                                 ax.axhline(gatetop, color=color, zorder=-7)
@@ -1544,17 +1436,17 @@ class MakeAutomatedReport(object):
                 description = '{0}: {1} of {2}'.format(cur_obj_settings['description'], page_i+1, len(page_indices))
                 self.XML.writeProfilePlotFigure(figname, description)
 
-                self.addLogEntry({'type': 'ProfilePlot',
-                                  'name': self.ChapterRegion,
-                                  'description': description,
-                                  'units': object_settings['plot_units'],
-                                  'value_start_date': self.translateDateFormat(object_settings['timestamps'][pgi[0]],
+                self.WAT_log.addLogEntry({'type': 'ProfilePlot',
+                                          'name': self.ChapterRegion,
+                                          'description': description,
+                                          'units': object_settings['plot_units'],
+                                          'value_start_date': self.translateDateFormat(object_settings['timestamps'][pgi[0]],
                                                                                'datetime', '').strftime('%d %b %Y'),
-                                  'value_end_date': self.translateDateFormat(object_settings['timestamps'][pgi[-1]],
+                                          'value_end_date': self.translateDateFormat(object_settings['timestamps'][pgi[-1]],
                                                                              'datetime', '').strftime('%d %b %Y'),
-                                  'logoutputfilename': ', '.join([line_settings[flag]['logoutputfilename'] for flag in line_settings])
-                                  },
-                                 isdata=True)
+                                          'logoutputfilename': ', '.join([line_settings[flag]['logoutputfilename'] for flag in line_settings])
+                                          },
+                                         isdata=True)
 
         self.XML.writeProfilePlotEnd()
 
@@ -1622,17 +1514,17 @@ class MakeAutomatedReport(object):
                                     if row_val > thresh['value']:
                                         threshold_colors[ri] = thresh['color']
                         data_start_date, data_end_date = self.getTableDates(year, object_settings)
-                        self.addLogEntry({'type': 'Statistic',
-                                          'name': ' '.join([self.ChapterRegion, header, stat]),
-                                          'description': desc,
-                                          'value': row_val,
-                                          'function': stat,
-                                          'units': object_settings['plot_units'],
-                                          'value_start_date': self.translateDateFormat(data_start_date, 'datetime', ''),
-                                          'value_end_date': self.translateDateFormat(data_end_date, 'datetime', ''),
-                                          'logoutputfilename': ', '.join([data[flag]['logoutputfilename'] for flag in data])
-                                          },
-                                         isdata=True)
+                        self.WAT_log.addLogEntry({'type': 'Statistic',
+                                                  'name': ' '.join([self.ChapterRegion, header, stat]),
+                                                  'description': desc,
+                                                  'value': row_val,
+                                                  'function': stat,
+                                                  'units': object_settings['plot_units'],
+                                                  'value_start_date': self.translateDateFormat(data_start_date, 'datetime', ''),
+                                                  'value_end_date': self.translateDateFormat(data_end_date, 'datetime', ''),
+                                                  'logoutputfilename': ', '.join([data[flag]['logoutputfilename'] for flag in data])
+                                                  },
+                                                 isdata=True)
 
                 header = '' if header == None else header
                 frmt_rows.append('{0}|{1}'.format(rowname, row_val))
@@ -1695,17 +1587,17 @@ class MakeAutomatedReport(object):
                                     if row_val > thresh['value']:
                                         threshold_colors[ri] = thresh['color']
                         data_start_date, data_end_date = self.getTableDates(year, object_settings, month=sr_month)
-                        self.addLogEntry({'type': 'Statistic',
-                                          'name': ' '.join([self.ChapterRegion, header, stat]),
-                                          'description': object_settings['description'],
-                                          'value': row_val,
-                                          'units': object_settings['units_list'],
-                                          'function': stat,
-                                          'value_start_date': self.translateDateFormat(data_start_date, 'datetime', ''),
-                                          'value_end_date': self.translateDateFormat(data_end_date, 'datetime', ''),
-                                          'logoutputfilename': ', '.join([data[flag]['logoutputfilename'] for flag in data])
-                                          },
-                                         isdata=True)
+                        self.WAT_log.addLogEntry({'type': 'Statistic',
+                                                  'name': ' '.join([self.ChapterRegion, header, stat]),
+                                                  'description': object_settings['description'],
+                                                  'value': row_val,
+                                                  'units': object_settings['units_list'],
+                                                  'function': stat,
+                                                  'value_start_date': self.translateDateFormat(data_start_date, 'datetime', ''),
+                                                  'value_end_date': self.translateDateFormat(data_end_date, 'datetime', ''),
+                                                  'logoutputfilename': ', '.join([data[flag]['logoutputfilename'] for flag in data])
+                                                  },
+                                                 isdata=True)
 
                 header = '' if header == None else header
                 frmt_rows.append('{0}|{1}'.format(rowname, row_val))
@@ -1773,17 +1665,17 @@ class MakeAutomatedReport(object):
                                         threshold_colors[ri] = thresh['color']
 
                         data_start_date, data_end_date = self.getTableDates(year, object_settings, month=sr_month)
-                        self.addLogEntry({'type': 'Statistic',
-                                          'name': ' '.join([self.ChapterRegion, header, stat]),
-                                          'description': object_settings['description'],
-                                          'value': row_val,
-                                          'units': object_settings['units_list'],
-                                          'function': stat,
-                                          'value_start_date': self.translateDateFormat(data_start_date, 'datetime', ''),
-                                          'value_end_date': self.translateDateFormat(data_end_date, 'datetime', ''),
-                                          'logoutputfilename': ', '.join([data[flag]['logoutputfilename'] for flag in data])
-                                          },
-                                         isdata=True)
+                        self.WAT_log.addLogEntry({'type': 'Statistic',
+                                                  'name': ' '.join([self.ChapterRegion, header, stat]),
+                                                  'description': object_settings['description'],
+                                                  'value': row_val,
+                                                  'units': object_settings['units_list'],
+                                                  'function': stat,
+                                                  'value_start_date': self.translateDateFormat(data_start_date, 'datetime', ''),
+                                                  'value_end_date': self.translateDateFormat(data_end_date, 'datetime', ''),
+                                                  'logoutputfilename': ', '.join([data[flag]['logoutputfilename'] for flag in data])
+                                                  },
+                                                 isdata=True)
 
                 header = '' if header == None else header
                 frmt_rows.append('{0}|{1}'.format(rowname, row_val))
@@ -1812,7 +1704,7 @@ class MakeAutomatedReport(object):
 
         object_settings['years'] = pickle.loads(pickle.dumps(self.years, -1))
 
-        data, line_settings = self.getProfileData(object_settings)
+        data, line_settings = self.Data.getProfileDataDictionary(object_settings)
         line_settings = self.correctDuplicateLabels(line_settings)
 
         ################ convert yflags ################
@@ -1876,24 +1768,23 @@ class MakeAutomatedReport(object):
                                     threshold_colors[ri] = thresh['color']
 
                     data_start_date, data_end_date = self.getTableDates(year, object_settings, month=header)
-                    self.addLogEntry({'type': 'ProfileTableStatistic',
-                                      'name': ' '.join([self.ChapterRegion, header, stat]),
-                                      'description': object_settings['description'],
-                                      'value': row_val,
-                                      'function': stat,
-                                      'units': object_settings['plot_units'],
-                                      'value_start_date': data_start_date,
-                                      'value_end_date': data_end_date,
-                                      'logoutputfilename': ', '.join([line_settings[flag]['logoutputfilename'] for flag in line_settings])
-                                      },
-                                     isdata=True)
+                    self.WAT_log.addLogEntry({'type': 'ProfileTableStatistic',
+                                              'name': ' '.join([self.ChapterRegion, header, stat]),
+                                              'description': object_settings['description'],
+                                              'value': row_val,
+                                              'function': stat,
+                                              'units': object_settings['plot_units'],
+                                              'value_start_date': data_start_date,
+                                              'value_end_date': data_end_date,
+                                              'logoutputfilename': ', '.join([line_settings[flag]['logoutputfilename'] for flag in line_settings])
+                                              },
+                                             isdata=True)
 
                 header = '' if header == None else header
                 frmt_rows.append('{0}|{1}'.format(rowname, row_val))
 
             self.XML.writeTableColumn(header, frmt_rows, thresholdcolors=threshold_colors)
         self.XML.writeTableEnd()
-
 
     def makeContourPlot(self, object_settings):
         '''
@@ -1930,7 +1821,7 @@ class MakeAutomatedReport(object):
             #[01jan2016, 04Feb2016, 23May2016] #dates
             #[0, 19, 25, 35] #distances
 
-            contoursbyID = self.getContourData(cur_obj_settings)
+            contoursbyID = self.Data.getContourDataDictionary(cur_obj_settings)
             contoursbyID = self.filterDataByYear(contoursbyID, year)
             selectedContourIDs = self.getUsedIDs(contoursbyID)
 
@@ -1980,7 +1871,7 @@ class MakeAutomatedReport(object):
                             if contour_settings['param_count'][key] > top_count:
                                 parameter = key
                     try:
-                        units = self.units[parameter]
+                        units = self.Constants.units[parameter]
                     except KeyError:
                         units = None
 
@@ -2029,15 +1920,15 @@ class MakeAutomatedReport(object):
                                     extend='both') #the .T transposes the array so dates on bottom TODO:make extend variable
                 # ax.invert_yaxis()
 
-                self.addLogEntry({'type': contour_settings['label'] + '_ContourPlot' if contour_settings['label'] != '' else 'ContourPlot',
-                                  'name': self.ChapterRegion+'_'+yearstr,
-                                  'description': contour_settings['description'],
-                                  'units': units,
-                                  'value_start_date': self.translateDateFormat(dates[0], 'datetime', '').strftime('%d %b %Y'),
-                                  'value_end_date': self.translateDateFormat(dates[-1], 'datetime', '').strftime('%d %b %Y'),
-                                  'logoutputfilename': contour['logoutputfilename']
-                                  },
-                                 isdata=True)
+                self.WAT_log.addLogEntry({'type': contour_settings['label'] + '_ContourPlot' if contour_settings['label'] != '' else 'ContourPlot',
+                                          'name': self.ChapterRegion+'_'+yearstr,
+                                          'description': contour_settings['description'],
+                                          'units': units,
+                                          'value_start_date': self.translateDateFormat(dates[0], 'datetime', '').strftime('%d %b %Y'),
+                                          'value_end_date': self.translateDateFormat(dates[-1], 'datetime', '').strftime('%d %b %Y'),
+                                          'logoutputfilename': contour['logoutputfilename']
+                                          },
+                                         isdata=True)
 
                 contour_settings = self.updateFlaggedValues(contour_settings, '%%units%%', units)
 
@@ -2154,7 +2045,6 @@ class MakeAutomatedReport(object):
                         modeltext = self.SimulationName
                     plt.text(1.02, 0.5, modeltext, fontsize=12, transform=ax.transAxes, verticalalignment='center',
                              horizontalalignment='center', rotation='vertical')
-
 
                 if 'gridlines' in contour_settings.keys():
                     if contour_settings['gridlines'].lower() == 'true':
@@ -2325,7 +2215,7 @@ class MakeAutomatedReport(object):
             #[0, 19, 25, 35] #elevations
             #[0, 19, 25, 35] #top water elevations
 
-            contoursbyID = self.getReservoirContourData(cur_obj_settings)
+            contoursbyID = self.Data.getReservoirContourDataDictionary(cur_obj_settings)
             contoursbyID = self.filterDataByYear(contoursbyID, year, extraflag='topwater')
             selectedContourIDs = self.getUsedIDs(contoursbyID)
 
@@ -2379,7 +2269,7 @@ class MakeAutomatedReport(object):
                             if contour_settings['param_count'][key] > top_count:
                                 parameter = key
                     try:
-                        units = self.units[parameter]
+                        units = self.Constants.units[parameter]
                     except KeyError:
                         units = None
 
@@ -2422,7 +2312,7 @@ class MakeAutomatedReport(object):
                 else:
                     vmax = np.nanmax(values)
 
-                values = self.filterContourOverTopWater(values, elevations, topwater)
+                values = WF.filterContourOverTopWater(values, elevations, topwater)
 
                 contr = ax.contourf(dates, elevations, values.T, cmap=contour_settings['colorbar']['colormap'],
                                     vmin=vmin, vmax=vmax,
@@ -2430,15 +2320,15 @@ class MakeAutomatedReport(object):
                                     extend='both') #the .T transposes the array so dates on bottom TODO:make extend variable
                 # ax.invert_yaxis()
                 # ax.plot(dates, topwater, c='red') #debug topwater
-                self.addLogEntry({'type': contour_settings['label'] + '_ContourPlot' if contour_settings['label'] != '' else 'ContourPlot',
-                                  'name': self.ChapterRegion+'_'+yearstr,
-                                  'description': contour_settings['description'],
-                                  'units': units,
-                                  'value_start_date': self.translateDateFormat(dates[0], 'datetime', '').strftime('%d %b %Y'),
-                                  'value_end_date': self.translateDateFormat(dates[-1], 'datetime', '').strftime('%d %b %Y'),
-                                  'logoutputfilename': contour['logoutputfilename']
-                                  },
-                                 isdata=True)
+                self.WAT_log.addLogEntry({'type': contour_settings['label'] + '_ContourPlot' if contour_settings['label'] != '' else 'ContourPlot',
+                                          'name': self.ChapterRegion+'_'+yearstr,
+                                          'description': contour_settings['description'],
+                                          'units': units,
+                                          'value_start_date': self.translateDateFormat(dates[0], 'datetime', '').strftime('%d %b %Y'),
+                                          'value_end_date': self.translateDateFormat(dates[-1], 'datetime', '').strftime('%d %b %Y'),
+                                          'logoutputfilename': contour['logoutputfilename']
+                                          },
+                                         isdata=True)
 
                 contour_settings = self.updateFlaggedValues(contour_settings, '%%units%%', units)
 
@@ -2726,7 +2616,7 @@ class MakeAutomatedReport(object):
 
         ### Plot Lines ###
         stackplots = {}
-        data = self.getTimeseriesData(object_settings)
+        data = self.Data.getTimeSeriesDataDictionary(object_settings)
         data = self.mergeLines(data, object_settings)
 
         object_settings = self.configureSettingsForID('base', object_settings)
@@ -2856,15 +2746,15 @@ class MakeAutomatedReport(object):
                                   label=line_settings['label'], zorder=int(line_settings['zorder']),
                                   alpha=float(line_settings['alpha']))
 
-                self.addLogEntry({'type': line_settings['label'] + '_BuzzPlot' if line_settings['label'] != '' else 'BuzzPlot',
-                                  'name': self.ChapterRegion,
-                                  'description': object_settings['description'],
-                                  'units': units,
-                                  'value_start_date': self.translateDateFormat(dates[0], 'datetime', '').strftime('%d %b %Y'),
-                                  'value_end_date': self.translateDateFormat(dates[-1], 'datetime', '').strftime('%d %b %Y'),
-                                  'logoutputfilename': line['logoutputfilename']
-                                  },
-                                 isdata=True)
+                self.WAT_log.addLogEntry({'type': line_settings['label'] + '_BuzzPlot' if line_settings['label'] != '' else 'BuzzPlot',
+                                          'name': self.ChapterRegion,
+                                          'description': object_settings['description'],
+                                          'units': units,
+                                          'value_start_date': self.translateDateFormat(dates[0], 'datetime', '').strftime('%d %b %Y'),
+                                          'value_end_date': self.translateDateFormat(dates[-1], 'datetime', '').strftime('%d %b %Y'),
+                                          'logoutputfilename': line['logoutputfilename']
+                                          },
+                                         isdata=True)
 
         for stackplot_ax in stackplots.keys():
             if stackplot_ax == 'left':
@@ -2995,186 +2885,6 @@ class MakeAutomatedReport(object):
 
         self.XML.writeTimeSeriesPlot(os.path.basename(figname), object_settings['description'])
 
-    def readSimulationInfo(self, simulationInfoFile):
-        '''
-        reads sim info XML file and organizes paths and variables into a list for iteration
-        :param simulationInfoFile: full path to simulation information XML file from WAT
-        :return: class variables:
-                    self.Simulations
-                    self.reportType
-                    self.studyDir
-                    self.observedData
-        '''
-
-        self.Simulations = []
-        tree = ET.parse(simulationInfoFile)
-        root = tree.getroot()
-
-        self.reportType = root.find('ReportType').text
-        self.studyDir = root.find('Study/Directory').text
-        self.observedDir = root.find('Study/ObservedData').text
-
-        if self.reportType == 'alternativecomparison':
-            self.iscomp = True
-        else:
-            self.iscomp = False
-
-        SimRoot = root.find('Simulations')
-        for simulation in SimRoot:
-            simulationInfo = {'name': simulation.find('Name').text,
-                              'basename': simulation.find('BaseName').text,
-                              'directory': simulation.find('Directory').text,
-                              'dssfile': simulation.find('DSSFile').text,
-                              'starttime': simulation.find('StartTime').text,
-                              'endtime': simulation.find('EndTime').text,
-                              'lastcomputed': simulation.find('LastComputed').text
-                              }
-
-            try:
-                simulationInfo['ID'] = simulation.find('ID').text
-            except AttributeError:
-                simulationInfo['ID'] = 'base'
-
-
-            modelAlternatives = []
-            for modelAlt in simulation.find('ModelAlternatives'):
-                modelAlternatives.append({'name': modelAlt.find('Name').text,
-                                          'program': modelAlt.find('Program').text,
-                                          'fpart': modelAlt.find('FPart').text,
-                                          'directory': modelAlt.find('Directory').text})
-
-            simulationInfo['modelalternatives'] = modelAlternatives
-            self.Simulations.append(simulationInfo)
-
-    def readSimulationsCSV(self):
-        '''
-        reads the Simulation file and gets the region info
-        :return: class variable
-                    self.SimulationCSV
-        '''
-
-        self.SimulationCSV = WDR.readSimulationFile(self.baseSimulationName, self.studyDir)
-
-    def readComparisonSimulationsCSV(self):
-        '''
-        Reads in the simulation CSV but for comparison plots. Comparison plots have '_comparison' appended to the end of them,
-        but are built in general the same as regular Simulation CSV files.
-        :return:
-        '''
-        self.SimulationCSV = WDR.readSimulationFile(self.SimulationVariables['base']['baseSimulationName'], self.studyDir, iscomp=self.iscomp)
-
-    def recordTimeSeriesData(self, data, line):
-        '''
-        organizes line information and places it into a data dictionary
-        :param data: dictionary containing line data
-        :param line: dictionary containing line settings
-        :return: updated data dictionary
-        '''
-
-        #TODO: split into 2 like profiles
-        dates, values, units = self.getTimeSeries(line, makecopy=False)
-        if WF.checkData(values):
-            flag = line['flag']
-            if flag in data.keys():
-                count = 1
-                newflag = flag + '_{0}'.format(count)
-                while newflag in data.keys():
-                    count += 1
-                    newflag = flag + '_{0}'.format(count)
-                flag = newflag
-                print('The new flag is {0}'.format(newflag))
-            datamem_key = self.buildDataMemoryKey(line)
-            if 'units' in line.keys() and units == None:
-                units = line['units']
-            data[flag] = {'values': values,
-                          'dates': dates,
-                          'units': units,
-                          'numtimesused': line['numtimesused'],
-                          'logoutputfilename': datamem_key}
-
-            for key in line.keys():
-                if key not in data[flag].keys():
-                    data[flag][key] = line[key]
-        return data
-
-    def recordProfileData(self, data, line_settings, line, timestamps):
-        '''
-        organizes line information and places it into a data dictionary
-        :param data: dictionary containing data
-        :param line_settings: dictionary containing all line settings
-        :param line: dictionary containing line settings
-        :param timestamps: list of dates to get data
-        :return: updated data dictionary, updated line_settings dictionary
-        '''
-
-        vals, elevations, depths, times, flag = self.getProfileValues(line, timestamps) #Test this speed for grabbing all profiles and then choosing
-        if len(vals) > 0:
-            datamem_key = self.buildDataMemoryKey(line)
-            if 'units' in line.keys():
-                units = line['units']
-            else:
-                units = None
-
-            if line['flag'] in line_settings.keys() or line['flag'] in data.keys():
-                datakey = '{0}_{1}'.format(line['flag'], line['numtimesused'])
-            else:
-                datakey = line['flag']
-
-            subset = True
-            if isinstance(timestamps, str):
-                subset = False
-
-            line_settings[datakey] = {'units': units,
-                                      'numtimesused': line['numtimesused'],
-                                      'logoutputfilename': datamem_key,
-                                      'subset': subset
-                                       }
-
-            data[datakey] = {'values': vals,
-                             'elevations': elevations,
-                             'depths': depths,
-                             'times': times
-                             }
-
-            for key in line.keys():
-                if key not in line_settings[datakey].keys():
-                    line_settings[datakey][key] = line[key]
-
-        return data, line_settings
-
-    def readGraphicsDefaultFile(self):
-        '''
-        sets up path for graphics default file in study and reads the xml
-        :return: class variable
-                    self.graphicsDefault
-        '''
-
-        graphicsDefaultfile = os.path.join(self.studyDir, 'reports', 'Graphics_Defaults.xml')
-        # graphicsDefaultfile = os.path.join(self.default_dir, 'Graphics_Defaults.xml') #TODO: implement with build
-        self.graphicsDefault = WDR.readGraphicsDefaults(graphicsDefaultfile)
-
-    def readDefaultLineStylesFile(self):
-        '''
-        sets up path for default line styles file and reads the xml
-        :return: class variable
-                    self.defaultLineStyles
-        '''
-
-        defaultLinesFile = os.path.join(self.studyDir, 'reports', 'defaultLineStyles.xml')
-        # defaultLinesFile = os.path.join(self.default_dir, 'defaultLineStyles.xml') #TODO: implement with build
-        self.defaultLineStyles = WDR.readDefaultLineStyle(defaultLinesFile)
-
-    def readDefinitionsFile(self, simorder):
-        '''
-        reads the chapter definitions file defined in the plugin csv file for a specified simulation
-        :param simorder: simulation dictionary object
-        :return: class variable
-                    self.ChapterDefinitions
-        '''
-
-        ChapterDefinitionsFile = os.path.join(self.studyDir, 'reports', simorder['deffile'])
-        self.ChapterDefinitions = WDR.readChapterDefFile(ChapterDefinitionsFile)
-
     def setSimulationDateTimes(self, ID):
         '''
         sets the simulation start time and dates from string format. If timestamp says 24:00, converts it to be correct
@@ -3223,7 +2933,7 @@ class MakeAutomatedReport(object):
         sets simulation dates and times
         :param simulation: simulation dictionary object for specified simulation
         :return: class variables
-                    self.Data_Memory
+                    self.Data.Memory
                     self.SimulationName
                     self.baseSimulationName
                     self.simulationDir
@@ -3234,7 +2944,7 @@ class MakeAutomatedReport(object):
                     self.ModelAlternatives
         '''
 
-        # self.Data_Memory = {}
+        # self.Data.Memory = {}
         ID = simulation['ID']
         self.SimulationVariables[ID] = {}
         self.SimulationVariables[ID]['SimulationName'] = simulation['name']
@@ -3641,9 +3351,9 @@ class MakeAutomatedReport(object):
         :return: dictionary with line settings
         '''
 
-        if i >= len(self.def_colors):
-            i = i - len(self.def_colors)
-        return {'linewidth': 2, 'linecolor': self.def_colors[i], 'linestylepattern': 'solid', 'alpha': 1.0}
+        if i >= len(self.Constants.def_colors):
+            i = i - len(self.Constants.def_colors)
+        return {'linewidth': 2, 'linecolor': self.Constants.def_colors[i], 'linestylepattern': 'solid', 'alpha': 1.0}
 
     def getDefaultDefaultTextStyles(self):
         '''
@@ -3662,9 +3372,9 @@ class MakeAutomatedReport(object):
         :return: dictionary with point settings
         '''
 
-        if i >= len(self.def_colors):
-            i = i - len(self.def_colors)
-        return {'pointfillcolor': self.def_colors[i], 'pointlinecolor': self.def_colors[i], 'symboltype': 1,
+        if i >= len(self.Constants.def_colors):
+            i = i - len(self.Constants.def_colors)
+        return {'pointfillcolor': self.Constants.def_colors[i], 'pointlinecolor': self.Constants.def_colors[i], 'symboltype': 1,
                 'symbolsize': 5, 'numptsskip': 0, 'alpha': 1.0}
 
     def getLineSettings(self, LineSettings, Flag):
@@ -3698,133 +3408,6 @@ class MakeAutomatedReport(object):
             add_ylabel = False
 
         return add_xlabel, add_ylabel
-
-    def getTimeSeries(self, Line_info, makecopy=True):
-        '''
-        gets time series data from defined sources
-        :param Line_info: dictionary of line setttings containing datasources
-        :return: dates, values, units
-        '''
-
-        if 'dss_path' in Line_info.keys(): #Get data from DSS record
-            if 'dss_filename' not in Line_info.keys():
-                print('DSS_Filename not set for Line: {0}'.format(Line_info))
-                return np.array([]), np.array([]), None
-            else:
-                datamem_key = self.buildDataMemoryKey(Line_info)
-                if datamem_key in self.Data_Memory.keys():
-                    # print('Reading {0} from memory'.format(datamem_key))
-                    if makecopy:
-                        datamementry = pickle.loads(pickle.dumps(self.Data_Memory[datamem_key], -1))
-                    else:
-                        datamementry = self.Data_Memory[datamem_key]
-                    times = datamementry['times']
-                    values = datamementry['values']
-                    units = datamementry['units']
-                else:
-                    times, values, units = WDR.readDSSData(Line_info['dss_filename'], Line_info['dss_path'],
-                                                           self.StartTime, self.EndTime)
-
-                    self.Data_Memory[datamem_key] = {'times': pickle.loads(pickle.dumps(times, -1)),
-                                                     'values': pickle.loads(pickle.dumps(values, -1)),
-                                                     'units': pickle.loads(pickle.dumps(units, -1))}
-
-                if np.any(values == None):
-                    return np.array([]), np.array([]), None
-                elif len(values) == 0:
-                    return np.array([]), np.array([]), None
-
-        elif 'w2_file' in Line_info.keys():
-            if self.plugin.lower() != 'cequalw2':
-                return np.array([]), np.array([]), None
-            datamem_key = self.buildDataMemoryKey(Line_info)
-            if datamem_key in self.Data_Memory.keys():
-                # print('READING {0} FROM MEMORY'.format(datamem_key))
-                datamementry = pickle.loads(pickle.dumps(self.Data_Memory[datamem_key], -1))
-                times = datamementry['times']
-                values = datamementry['values']
-                units = datamementry['units']
-
-            else:
-                if 'structurenumbers' in Line_info.keys():
-                    # Ryan Miles: yeah looks like it's str_brX.npt, and X is 1-# of branches (which is defined in the control file)
-                    times, values = self.ModelAlt.readStructuredTimeSeries(Line_info['w2_file'], Line_info['structurenumbers'])
-                else:
-                    times, values = self.ModelAlt.readTimeSeries(Line_info['w2_file'], **Line_info)
-                if 'units' in Line_info.keys():
-                    units = Line_info['units']
-                else:
-                    units = None
-
-                self.Data_Memory[datamem_key] = {'times': pickle.loads(pickle.dumps(times, -1)),
-                                                 'values': pickle.loads(pickle.dumps(values, -1)),
-                                                 'units': pickle.loads(pickle.dumps(units, -1))}
-
-        elif 'h5file' in Line_info.keys():
-            datamem_key = self.buildDataMemoryKey(Line_info)
-
-            if datamem_key in self.Data_Memory.keys():
-                # print('READING {0} FROM MEMORY'.format(datamem_key))
-                datamementry = pickle.loads(pickle.dumps(self.Data_Memory[datamem_key], -1))
-                times = datamementry['times']
-                values = datamementry['values']
-                units = datamementry['units']
-
-            else:
-                filename = Line_info['h5file']
-                if not os.path.exists(filename):
-                    print('ERROR: H5 file does not exist:', filename)
-                    return [], [], None
-                externalResSim = WDR.ResSim_Results('', '', '', '', external=True)
-                externalResSim.openH5File(filename)
-                externalResSim.load_time() #load time vars from h5
-                externalResSim.loadSubdomains()
-                times, values = externalResSim.readTimeSeries(Line_info['parameter'],
-                                                              float(Line_info['easting']),
-                                                              float(Line_info['northing']))
-                if 'units' in Line_info.keys():
-                    units = Line_info['units']
-                else:
-                    units = None
-
-                self.Data_Memory[datamem_key] = {'times': pickle.loads(pickle.dumps(times, -1)),
-                                                 'values': pickle.loads(pickle.dumps(values, -1)),
-                                                 'units': pickle.loads(pickle.dumps(units, -1))}
-
-        elif 'easting' in Line_info.keys() and 'northing' in Line_info.keys():
-            datamem_key = self.buildDataMemoryKey(Line_info)
-            if datamem_key in self.Data_Memory.keys():
-                # print('READING {0} FROM MEMORY'.format(datamem_key))
-                datamementry = pickle.loads(pickle.dumps(self.Data_Memory[datamem_key], -1))
-                times = datamementry['times']
-                values = datamementry['values']
-                units = datamementry['units']
-
-            else:
-                times, values = self.ModelAlt.readTimeSeries(Line_info['parameter'],
-                                                             float(Line_info['easting']),
-                                                             float(Line_info['northing']))
-                if 'units' in Line_info.keys():
-                    units = Line_info['units']
-                else:
-                    units = None
-
-                self.Data_Memory[datamem_key] = {'times': pickle.loads(pickle.dumps(times, -1)),
-                                                 'values': pickle.loads(pickle.dumps(values, -1)),
-                                                 'units': pickle.loads(pickle.dumps(units, -1))}
-
-        else:
-            print('No Data Defined for line')
-            return np.array([]), np.array([]), None
-
-        if 'omitvalue' in Line_info.keys():
-            omitval = float(Line_info['omitvalue'])
-            values = self.replaceOmittedValues(values, omitval)
-
-        if 'interval' in Line_info.keys():
-            times, values = self.changeTimeSeriesInterval(times, values, Line_info)
-
-        return times, values, units
 
     def getTimeIntervalSeconds(self, interval):
         '''
@@ -3880,288 +3463,7 @@ class MakeAutomatedReport(object):
         most_common_interval = occurence_count.most_common(1)[0][0]
         return most_common_interval
 
-    def getProfileTopWater(self, Line_info, timesteps):
-        '''
-        gets topwater elevations for timestamps
-        :param Line_info: dictionary containing settings for line
-        :param timesteps: given list of timesteps to extract data at
-        :return: values, elevations, depths, flag
-        '''
 
-        datamemkey = self.buildDataMemoryKey(Line_info)
-
-        if datamemkey in self.Data_Memory.keys():
-            dm = pickle.loads(pickle.dumps(self.Data_Memory[datamemkey], -1))
-            print('retrieving profile topwater from datamem')
-            if isinstance(timesteps, str): #if looking for all
-                if dm['subset'] == 'false': #the last time data was grabbed, it was not a subset, aka all
-                    return dm['topwater']
-                else:
-                    print('Incorrect Timesteps in data memory. Re-extracting data for', datamemkey)
-            elif np.array_equal(timesteps, dm['times']):
-                return dm['topwater']
-            else:
-                print('Incorrect Timesteps in data memory. Re-extracting data for', datamemkey)
-
-        if 'filename' in Line_info.keys(): #Get data from Observed
-            filename = Line_info['filename']
-            values, yvals, times = WDR.readTextProfile(filename, timesteps, self.StartTime, self.EndTime)
-            if 'y_convention' in Line_info.keys():
-                if Line_info['y_convention'].lower() == 'elevation':
-                    return [yval[0] for yval in yvals]
-                elif Line_info['y_convention'].lower() == 'depth':
-                    print('Unable to get topwater from depth.')
-                    return []
-                else:
-                    print('Unknown value for flag y_convention: {0}'.format(Line_info['y_convention']))
-                    print('Please use "elevation"')
-                    print('Assuming elevations...')
-                    return [yval[0] for yval in yvals]
-            else:
-                print('No value for flag y_convention')
-                print('Assuming elevation...')
-                return [yval[0] for yval in yvals]
-
-        elif 'h5file' in Line_info.keys() and 'ressimresname' in Line_info.keys():
-            filename = Line_info['h5file']
-            if not os.path.exists(filename):
-                print('ERROR: H5 file does not exist:', filename)
-                return []
-            externalResSim = WDR.ResSim_Results('', '', '', '', external=True)
-            externalResSim.openH5File(filename)
-            externalResSim.load_time() #load time vars from h5
-            externalResSim.loadSubdomains()
-            topwater = externalResSim.readProfileTopwater(Line_info['ressimresname'], timesteps)
-            return topwater
-
-        elif 'w2_segment' in Line_info.keys():
-            if self.plugin.lower() != 'cequalw2':
-                return []
-            topwater = self.ModelAlt.readProfileTopwater(Line_info['w2_segment'], timesteps)
-            return topwater
-
-        elif 'ressimresname' in Line_info.keys():
-            if self.plugin.lower() != 'ressim':
-                return []
-            topwater = self.ModelAlt.readProfileTopwater(Line_info['ressimresname'], timesteps)
-            return topwater
-
-        print('No Data Defined for line')
-        print('Line:', Line_info)
-        return []
-
-    def getProfileValues(self, Line_info, timesteps):
-        '''
-        reads in profile data from various sources for profile plots at given timesteps
-        attempts to get elevations if possible
-        :param Line_info: dictionary containing settings for line
-        :param timesteps: given list of timesteps to extract data at
-        :return: values, elevations, depths, flag
-        '''
-
-        datamemkey = self.buildDataMemoryKey(Line_info)
-
-        if datamemkey in self.Data_Memory.keys():
-            dm = pickle.loads(pickle.dumps(self.Data_Memory[datamemkey], -1))
-            print('retrieving profile from datamem')
-            if isinstance(timesteps, str): #if looking for all
-                if dm['subset'] == 'false': #the last time data was grabbed, it was not a subset, aka all
-                    return dm['values'], dm['elevations'], dm['depths'], dm['times'], Line_info['flag']
-                else:
-                    print('Incorrect Timesteps in data memory. Re-extracting data for', datamemkey)
-            elif np.array_equal(timesteps, dm['times']):
-                return dm['values'], dm['elevations'], dm['depths'], dm['times'], Line_info['flag']
-            else:
-                print('Incorrect Timesteps in data memory. Re-extracting data for', datamemkey)
-
-        if 'filename' in Line_info.keys(): #Get data from Observed
-            filename = Line_info['filename']
-            values, yvals, times = WDR.readTextProfile(filename, timesteps, self.StartTime, self.EndTime)
-            if 'y_convention' in Line_info.keys():
-                if Line_info['y_convention'].lower() == 'depth':
-                    return values, [], yvals, times, Line_info['flag']
-                elif Line_info['y_convention'].lower() == 'elevation':
-                    return values, yvals, [], times, Line_info['flag']
-                else:
-                    print('Unknown value for flag y_convention: {0}'.format(Line_info['y_convention']))
-                    print('Please use "depth" or "elevation"')
-                    print('Assuming depths...')
-                    return values, [], yvals, times, Line_info['flag']
-            else:
-                print('No value for flag y_convention')
-                print('Assuming depths...')
-                return values, [], yvals, times, Line_info['flag']
-
-        elif 'h5file' in Line_info.keys() and 'ressimresname' in Line_info.keys():
-            filename = Line_info['h5file']
-            if not os.path.exists(filename):
-                print('ERROR: H5 file does not exist:', filename)
-                return [], [], [], [], Line_info['flag']
-            externalResSim = WDR.ResSim_Results('', '', '', '', external=True)
-            externalResSim.openH5File(filename)
-            externalResSim.load_time() #load time vars from h5
-            externalResSim.loadSubdomains()
-            vals, elevations, depths, times = externalResSim.readProfileData(Line_info['ressimresname'],
-                                                                             Line_info['parameter'], timesteps)
-            return vals, elevations, depths, times, Line_info['flag']
-
-        elif 'w2_segment' in Line_info.keys():
-            if self.plugin.lower() != 'cequalw2':
-                return [], [], [], [], None
-            vals, elevations, depths, times = self.ModelAlt.readProfileData(Line_info['w2_segment'], timesteps)
-            if isinstance(timesteps, str):
-                vals, elevations = WF.normalize2DElevations(vals, elevations)
-            return vals, elevations, depths, times, Line_info['flag']
-
-        elif 'ressimresname' in Line_info.keys():
-            if self.plugin.lower() != 'ressim':
-                return [], [], [], [], None
-            vals, elevations, depths, times = self.ModelAlt.readProfileData(Line_info['ressimresname'],
-                                                                            Line_info['parameter'], timesteps)
-            return vals, elevations, depths, times, Line_info['flag']
-
-        print('No Data Defined for line')
-        print('Line:', Line_info)
-        return [], [], [], [], None
-
-    def getProfileData(self, object_settings):
-        '''
-        Gets profile line data from defined data sources in XML files
-        :param object_settings: currently selected object settings dictionary
-        :param keyval: determines what key to iterate over for data
-        :return: dictionary containing data and information about each data set
-        '''
-
-        data = {}
-        line_settings = {}
-        timestamps = object_settings['timestamps']
-        for line in object_settings[object_settings['datakey']]:
-            numtimesused = 0
-            if 'flag' not in line.keys():
-                print('Flag not set for line (Computed/Observed/etc)')
-                print('Not plotting Line:', line)
-                continue
-            elif line['flag'].lower() == 'computed':
-                # for ID in self.SimulationVariables.keys():
-                for ID in self.accepted_IDs:
-                    curline = pickle.loads(pickle.dumps(line, -1))
-                    curline = self.configureSettingsForID(ID, curline)
-                    curline['numtimesused'] = numtimesused
-                    curline['ID'] = ID
-                    if not self.checkModelType(curline):
-                        continue
-                    numtimesused += 1
-                    data, line_settings = self.recordProfileData(data, line_settings, curline, timestamps)
-            else:
-                if self.currentlyloadedID != 'base':
-                    line = self.configureSettingsForID('base', line)
-                else:
-                    line = self.replaceflaggedValues(line, 'modelspecific')
-                line['numtimesused'] = 0
-                if not self.checkModelType(line):
-                    continue
-                data, line_settings = self.recordProfileData(data, line_settings, line, timestamps)
-
-        return data, line_settings
-
-    def getTimeseriesData(self, object_settings):
-        '''
-        Gets profile line data from defined data sources in XML files
-        :param object_settings: currently selected object settings dictionary
-        :param keyval: determines what key to iterate over for data
-        :return: dictionary containing data and information about each data set
-        '''
-
-        data = {}
-        if 'lines' in object_settings.keys():
-            for line in object_settings['lines']:
-                numtimesused = 0
-                if 'flag' not in line.keys():
-                    print('Flag not set for line (Computed/Observed/etc)')
-                    print('Not plotting Line:', line)
-                    continue
-
-                elif line['flag'].lower() == 'computed':
-                    for ID in self.accepted_IDs:
-                        curline = pickle.loads(pickle.dumps(line, -1))
-                        curline = self.configureSettingsForID(ID, curline)
-                        if not self.checkModelType(curline):
-                            continue
-                        curline['numtimesused'] = numtimesused
-                        numtimesused += 1
-                        data = self.recordTimeSeriesData(data, curline)
-                else:
-                    if self.currentlyloadedID != 'base':
-                        line = self.configureSettingsForID('base', line)
-                    else:
-                        line = self.replaceflaggedValues(line, 'modelspecific')
-                    line['numtimesused'] = 0
-                    if not self.checkModelType(line):
-                        continue
-                    data = self.recordTimeSeriesData(data, line)
-
-        return data
-
-    def getGateData(self, object_settings, makecopy=True):
-        '''
-        Gets profile line data from defined data sources in XML files
-        :param object_settings: currently selected object settings dictionary
-        :param keyval: determines what key to iterate over for data
-        :return: dictionary containing data and information about each data set
-        '''
-
-        data = {}
-        if 'gateops' in object_settings.keys():
-            for gi, gateop in enumerate(object_settings['gateops']):
-
-                if 'flag' in gateop.keys():
-                    if gateop['flag'] not in data.keys():
-                        data[gateop['flag']] = {}
-                        gateopkey = gateop['flag']
-                elif 'label' in gateop.keys():
-                    if gateop['label'] not in data.keys():
-                        data[gateop['label']] = {}
-                        gateopkey = gateop['label']
-                else:
-                    if 'GATEOP_{0}'.format(gi) not in data.keys():
-                        gateopkey = 'GATEOP_{0}'.format(gi)
-                        data[gateopkey] = {}
-
-                data[gateopkey]['gates'] = {}
-                for gate in gateop['gates']:
-                    dates, values, _ = self.getTimeSeries(gate, makecopy=makecopy)
-                    if 'flag' in gate.keys():
-                        flag = gate['flag']
-                    else:
-                        flag = 'gate'
-                    if flag in data[gateopkey]['gates'].keys():
-                        count = 1
-                        newflag = flag + '_{0}'.format(count)
-                        while newflag in data[gateopkey]['gates'].keys():
-                            count += 1
-                            newflag = flag + '_{0}'.format(count)
-                        flag = newflag
-                    datamem_key = self.buildDataMemoryKey(gate)
-                    value_msk = np.where(values==0)
-                    values[value_msk] = np.nan
-                    if 'flag' in gateop.keys():
-                        gategroup = gateop['flag']
-                    else:
-                        gategroup = 'gategroup_{0}'.format(gi)
-                    data[gateopkey]['gates'][flag] = {'values': values,
-                                                      'dates': dates,
-                                                      'logoutputfilename': datamem_key,
-                                                      'gategroup': gategroup}
-
-                    for key in gate.keys():
-                        if key not in data[gateopkey]['gates'][flag].keys():
-                            data[gateopkey]['gates'][flag][key] = gate[key]
-
-                for key in gateop.keys():
-                    if key not in data[gateopkey].keys():
-                        data[gateopkey][key] = gateop[key]
-
-        return data
 
     def getProfileDates(self, Line_info):
         '''
@@ -4171,7 +3473,7 @@ class MakeAutomatedReport(object):
         '''
 
         if 'filename' in Line_info.keys(): #Get data from Observed
-            times = WDR.getTextProfileDates(Line_info['filename'], self.StartTime, self.EndTime) #TODO: set up for not observed data??
+            times = WR.getTextProfileDates(Line_info['filename'], self.StartTime, self.EndTime) #TODO: set up for not observed data??
             return times
 
         print('Illegal Dates selection. ')
@@ -4187,7 +3489,7 @@ class MakeAutomatedReport(object):
 
         if 'parameter' in object_settings.keys():
             try:
-                plotunits = self.units[object_settings['parameter'].lower()]
+                plotunits = self.Constants.units[object_settings['parameter'].lower()]
                 if isinstance(plotunits, dict):
                     if 'unitsystem' in object_settings.keys():
                         plotunits = plotunits[object_settings['unitsystem'].lower()]
@@ -4248,7 +3550,7 @@ class MakeAutomatedReport(object):
                 try:
                     month = int(month)
                 except ValueError:
-                    month = self.month2num[month.lower()]
+                    month = self.Constants.month2num[month.lower()]
 
                 try:
                     start_date = dt.datetime.strptime(start_date, '%d %b %Y').replace(month=month).strftime('%d %b %Y')
@@ -4292,7 +3594,7 @@ class MakeAutomatedReport(object):
                     if not self.checkModelType(cur_dp):
                         continue
                     numtimesused += 1
-                    data = self.recordTimeSeriesData(data, cur_dp)
+                    data = self.Data.updateTimeSeriesDataDictionary(data, cur_dp)
             else:
                 if self.currentlyloadedID != 'base':
                     dp = self.configureSettingsForID('base', dp)
@@ -4301,7 +3603,7 @@ class MakeAutomatedReport(object):
                 dp['numtimesused'] = 0
                 if not self.checkModelType(dp):
                     continue
-                data = self.recordTimeSeriesData(data, dp)
+                data = self.Data.updateTimeSeriesDataDictionary(data, dp)
 
         return data
 
@@ -4343,173 +3645,6 @@ class MakeAutomatedReport(object):
             elif isinstance(indict[key], (list, np.ndarray)):
                 outdict[key] = indict[key]
         return outdict
-
-    def getContourData(self, object_settings):
-        '''
-        Gets Contour line data from defined data sources in XML files
-        :param object_settings: currently selected object settings dictionary
-        :param keyval: determines what key to iterate over for data
-        :return: dictionary containing data and information about each data set
-        '''
-
-        data = {}
-        for reach in object_settings['reaches']:
-            for ID in self.accepted_IDs:
-                curreach = pickle.loads(pickle.dumps(reach, -1))
-                curreach = self.configureSettingsForID(ID, curreach)
-                if not self.checkModelType(curreach):
-                    continue
-                dates, values, units, distance = self.getContours(curreach)
-                if WF.checkData(values):
-                    if 'flag' in reach.keys():
-                        flag = reach['flag']
-                    elif 'label' in reach.keys():
-                        flag = reach['label']
-                    else:
-                        flag = 'reach_{0}'.format(ID)
-                    if flag in data.keys():
-                        count = 1
-                        newflag = flag + '_{0}'.format(count)
-                        while newflag in data.keys():
-                            count += 1
-                            newflag = flag + '_{0}'.format(count)
-                        flag = newflag
-                        print('The new flag is {0}'.format(newflag))
-                    datamem_key = self.buildDataMemoryKey(reach)
-
-                    if 'units' in reach.keys() and units == None:
-                        units = reach['units']
-
-                    if 'y_scalar' in object_settings.keys():
-                        y_scalar = float(object_settings['y_scalar'])
-                        distance *= y_scalar
-
-                    data[flag] = {'values': values,
-                                  'dates': dates,
-                                  'units': units,
-                                  'distance': distance,
-                                  'ID': ID,
-                                  'logoutputfilename': datamem_key}
-
-                    for key in reach.keys():
-                        if key not in data[flag].keys():
-                            data[flag][key] = reach[key]
-        #reset
-        self.loadCurrentID('base')
-        self.loadCurrentModelAltID('base')
-        return data
-
-    def getReservoirContourData(self, object_settings):
-        '''
-        Gets Contour Reservoir data from defined data sources in XML files
-        :param object_settings: currently selected object settings dictionary
-        :return: dictionary containing data and information about each data set
-        '''
-
-        data = {}
-        for datapath in object_settings['datapaths']:
-            for ID in self.accepted_IDs:
-                curreach = pickle.loads(pickle.dumps(datapath, -1))
-                curreach = self.configureSettingsForID(ID, curreach)
-                if not self.checkModelType(curreach):
-                    continue
-                # object_settings['timestamps'] = 'all'
-                values, elevations, depths, dates, flag = self.getProfileValues(curreach, 'all') #todo: this
-                topwater = self.getProfileTopWater(curreach, 'all')
-                if 'interval' in curreach.keys():
-                    dates_change, values = self.changeTimeSeriesInterval(dates, values, curreach)
-                    dates_change, topwater = self.changeTimeSeriesInterval(dates, topwater, curreach)
-                    dates = dates_change
-                if WF.checkData(values):
-                    if 'flag' in datapath.keys():
-                        flag = datapath['flag']
-                    elif 'label' in datapath.keys():
-                        flag = datapath['label']
-                    else:
-                        flag = 'reservoir_{0}'.format(ID)
-                    if flag in data.keys():
-                        count = 1
-                        newflag = flag + '_{0}'.format(count)
-                        while newflag in data.keys():
-                            count += 1
-                            newflag = flag + '_{0}'.format(count)
-                        flag = newflag
-                        print('The new flag is {0}'.format(newflag))
-                    datamem_key = self.buildDataMemoryKey(datapath)
-
-                    if 'units' in datapath.keys():
-                        units = datapath['units']
-                    else:
-                        units = None
-
-                    data[flag] = {'values': values,
-                                  'dates': dates,
-                                  'units': units,
-                                  'elevations': elevations,
-                                  'topwater': topwater,
-                                  'ID': ID,
-                                  'logoutputfilename': datamem_key}
-
-                    for key in datapath.keys():
-                        if key not in data[flag].keys():
-                            data[flag][key] = datapath[key]
-        #reset
-        self.loadCurrentID('base')
-        self.loadCurrentModelAltID('base')
-        return data
-
-    def getContours(self, object_settings):
-        '''
-        Retrieves Contour data from sources
-        :param object_settings: dictionary for object settings
-        :return: times, values, units distance. All objects are 1D/2D arrays
-        '''
-
-        if 'ressimresname' in object_settings.keys(): #Ressim subdomain
-            datamem_key = self.buildDataMemoryKey(object_settings)
-            if datamem_key in self.Data_Memory.keys():
-                print('READING {0} FROM MEMORY'.format(datamem_key))
-                datamem_entry = pickle.loads(pickle.dumps(self.Data_Memory[datamem_key], -1))
-                times = datamem_entry['dates']
-                values = datamem_entry['values']
-                units = datamem_entry['units']
-                distance = datamem_entry['distance']
-
-            else:
-                checkdomain = self.ModelAlt.checkSubdomain(object_settings['ressimresname'])
-                if not checkdomain:
-                    return [], [], [], []
-                times, values, distance = self.ModelAlt.readSubdomain(object_settings['parameter'],
-                                                                      object_settings['ressimresname'])
-
-                if 'units' in object_settings.keys():
-                    units = object_settings['units']
-                else:
-                    units = None
-
-                self.Data_Memory[datamem_key] = {'dates': pickle.loads(pickle.dumps(times, -1)),
-                                                 'values': pickle.loads(pickle.dumps(values, -1)),
-                                                 'units': pickle.loads(pickle.dumps(units, -1)),
-                                                 'distance': pickle.loads(pickle.dumps(distance, -1)),
-                                                 'iscontour': True}
-
-        elif 'w2_file' in object_settings.keys():
-            datamem_key = self.buildDataMemoryKey(object_settings)
-            if datamem_key in self.Data_Memory.keys():
-                print('READING {0} FROM MEMORY'.format(datamem_key))
-                datamementry = pickle.loads(pickle.dumps(self.Data_Memory[datamem_key], -1))
-                times = datamementry['dates']
-                values = datamementry['values']
-                units = datamementry['units']
-                distance = datamementry['distance']
-            else:
-                times, values, distance = self.ModelAlt.readSegment(object_settings['w2_file'],
-                                                                    object_settings['parameter'])
-
-        if 'interval' in object_settings.keys():
-            times, values = self.changeTimeSeriesInterval(times, values, object_settings)
-
-        return times, values, units, distance
 
     def getDateSourceFlag(self, object_settings):
         '''
@@ -4713,7 +3848,7 @@ class MakeAutomatedReport(object):
 
         gd_key = list(gatedata.keys())[0]
         curgate = gatedata[gd_key]['gates'][list(gatedata[gd_key]['gates'].keys())[0]]
-        idx = WDR.getClosestTime([timestamp], curgate['dates'])[0]
+        idx = WR.getClosestTime([timestamp], curgate['dates'])[0]
         datamask = np.ones(idx+1, dtype=bool)
 
         for gatelevel in gatedata.keys():
@@ -4759,7 +3894,7 @@ class MakeAutomatedReport(object):
 
         gd_key = list(gatedata.keys())[0]
         curgate = gatedata[gd_key]['gates'][list(gatedata[gd_key]['gates'].keys())[0]]
-        idx = WDR.getClosestTime([timestamp], curgate['dates'])[0]
+        idx = WR.getClosestTime([timestamp], curgate['dates'])[0]
         datamask = np.ones(idx+1, dtype=bool)
 
         for gatelevel in gatedata.keys():
@@ -5330,7 +4465,7 @@ class MakeAutomatedReport(object):
                             sr_month = int(sr_month)
                         except ValueError:
                             try:
-                                sr_month = self.month2num[sr_month.lower()]
+                                sr_month = self.Constants.month2num[sr_month.lower()]
                             except KeyError:
                                 print('Invalid Entry for {0}'.format(sr))
                                 print('Try using interger values or 3 letter monthly code.')
@@ -5607,7 +4742,7 @@ class MakeAutomatedReport(object):
                 locator = mpl.dates.MonthLocator([int(n) for n in xtick_settings['onmonths']], bymonthday=bymonthday)
             except ValueError:
                 print('Invalid month values. Please use integer representation of Months (aka 1, 3, 5, etc...)')
-                formatted_months = [self.month2num[n.lower()] for n in xtick_settings['onmonths']]
+                formatted_months = [self.Constants.month2num[n.lower()] for n in xtick_settings['onmonths']]
                 locator = mpl.dates.MonthLocator(formatted_months, bymonthday=bymonthday)
 
             curax.xaxis.set_major_locator(locator)
@@ -5826,7 +4961,7 @@ class MakeAutomatedReport(object):
         '''
 
         rows = []
-        headers = [n for n in self.mo_str_3]
+        headers = [n for n in self.Constants.mo_str_3]
         stat = object_settings['statistic']
         if stat in ['mean', 'count']:
             numflagsneeded = 1
@@ -5839,13 +4974,13 @@ class MakeAutomatedReport(object):
             print('Resulting table will not generate correctly.')
             for year in object_settings['years']:
                 row = f'{year}'
-                for month in self.mo_str_3:
+                for month in self.Constants.mo_str_3:
                     row += '|-'
                 rows.append(row)
             if 'includeallyears' in object_settings.keys():
                 if object_settings['includeallyears'].lower() == 'true':
                     row = 'All'
-                    for month in self.mo_str_3:
+                    for month in self.Constants.mo_str_3:
                         row += '|-'
                     rows.append(row)
         elif len(data.keys()) > 2:
@@ -5855,7 +4990,7 @@ class MakeAutomatedReport(object):
         else:
             for year in object_settings['years']:
                 row = f'{year}'
-                for month in self.mo_str_3:
+                for month in self.Constants.mo_str_3:
                     if numflagsneeded == 1:
                         row += f'|%%{stat}.{data[datakeys[0]]["flag"]}.MONTH={month.upper()}%%'
                     else:
@@ -5864,7 +4999,7 @@ class MakeAutomatedReport(object):
             if 'includeallyears' in object_settings.keys():
                 if object_settings['includeallyears'].lower() == 'true':
                     row = 'All'
-                    for month in self.mo_str_3:
+                    for month in self.Constants.mo_str_3:
                         if numflagsneeded == 1:
                             row += f'|%%{stat}.{data[datakeys[0]]["flag"]}.MONTH={month.upper()}%%'
                         else:
@@ -5953,7 +5088,7 @@ class MakeAutomatedReport(object):
         '''
 
         try:
-            intervalinfo = self.time_intervals[interval]
+            intervalinfo = self.Constants.time_intervals[interval]
             interval = intervalinfo[0]
             interval_info = intervalinfo[1]
         except KeyError:
@@ -5974,72 +5109,11 @@ class MakeAutomatedReport(object):
         :return: file name
         '''
 
-        MemKey = self.buildDataMemoryKey(Line_info)
+        MemKey = self.Data.buildMemoryKey(Line_info)
         if MemKey == 'Null':
             return MemKey
         else:
             return MemKey + '.csv'
-
-    def buildDataMemoryKey(self, Line_info):
-        '''
-        creates uniform name for csv log output for data
-        determines how to build the file name from the input type
-        :param Line_info: information about line
-        :return: name for memory key, or null if can't be determined
-        '''
-
-        very_special_flags = f'{self.SimulationName.replace(" ", "").replace(":", "")}_{self.baseSimulationName}'
-
-        if 'dss_path' in Line_info.keys(): #Get data from DSS record
-            if 'dss_filename' in Line_info.keys():
-                # outname = '{0}_{1}'.format(os.path.basename(Line_info['dss_filename']).split('.')[0],
-                #                         Line_info['dss_path'].replace('/', '').replace(':', ''))
-                outname = f"{os.path.basename(Line_info['dss_filename']).split('.')[0]}_" \
-                          f"{Line_info['dss_path'].replace('/', '').replace(':', '')}_" \
-                          f"{very_special_flags}"
-                return outname
-
-        elif 'w2_file' in Line_info.keys():
-            if 'structurenumbers' in Line_info.keys():
-                outname = '{0}'.format(os.path.basename(Line_info['w2_file']).split('.')[0])
-                if isinstance(Line_info['structurenumbers'], dict):
-                    structure_nums = [Line_info['structurenumbers']['structurenumber']]
-                elif isinstance(Line_info['structurenumbers'], str):
-                    structure_nums = [Line_info['structurenumbers']]
-                elif isinstance(Line_info['structurenumbers'], (list, np.ndarray)):
-                    structure_nums = Line_info['structurenumbers']
-                outname += '_Struct_' + '_'.join(structure_nums) + f'_{very_special_flags}'
-            else:
-                outname = '{0}'.format(os.path.basename(Line_info['w2_file']).split('.')[0]) + f'_{very_special_flags}'
-            return outname
-
-        elif 'h5file' in Line_info.keys():
-            h5name = os.path.basename(Line_info['h5file']).split('.h5')[0] + '_h5'
-            if 'easting' in Line_info.keys() and 'northing' in Line_info.keys():
-                outname = 'externalh5_{0}_{1}_{2}_{3}'.format(h5name, Line_info['parameter'], Line_info['easting'], Line_info['northing'])+ f'_{very_special_flags}'
-                return outname
-            elif 'ressimname' in Line_info.keys():
-                outname = 'externalh5_{0}_{1}_{2}'.format(h5name, Line_info['parameter'], Line_info['ressimresname'])+ f'_{very_special_flags}'
-                return outname
-
-        elif 'easting' in Line_info.keys() and 'northing' in Line_info.keys():
-            outname = '{0}_{1}_{2}'.format(Line_info['parameter'], Line_info['easting'], Line_info['northing'])+ f'_{very_special_flags}'
-            return outname
-
-        elif 'filename' in Line_info.keys(): #Get data from Observed Profile
-            outname = '{0}'.format(os.path.basename(Line_info['filename']).split('.')[0].replace(' ', '_'))+ f'_{very_special_flags}'
-            return outname
-
-        elif 'w2_segment' in Line_info.keys():
-            outname = 'W2_{0}_{1}_profile'.format(self.ModelAlt.output_file_name.split('.')[0], Line_info['w2_segment'])+ f'_{very_special_flags}'
-            return outname
-
-        elif 'ressimresname' in Line_info.keys():
-            outname = '{0}_{1}_{2}'.format(os.path.basename(self.ModelAlt.h5fname).split('.')[0]+'_h5',
-                                               Line_info['parameter'], Line_info['ressimresname'])+ f'_{very_special_flags}'
-            return outname
-
-        return 'NULL'
 
     def buildHeadersByTimestamps(self, timestamps, years):
         '''
@@ -6072,32 +5146,6 @@ class MakeAutomatedReport(object):
             headers_i.append(hi)
 
         return headers, headers_i
-
-    def equalizeLog(self):
-        '''
-        ensure that all arrays are the same length with a '' character
-        :return: append self.Log object
-        '''
-
-        longest_array_len = 0
-        for key in self.Log.keys():
-            if len(self.Log[key]) > longest_array_len:
-                longest_array_len = len(self.Log[key])
-        for key in self.Log.keys():
-            if len(self.Log[key]) < longest_array_len:
-                num_entries = longest_array_len - len(self.Log[key])
-                for i in range(num_entries):
-                    self.Log[key].append('')
-
-    def buildLogFile(self):
-        '''
-        builts the log dictionary for conisistent dictionary values
-        '''
-
-        self.Log = {'type': [], 'name': [], 'description': [], 'value': [], 'units': [], 'observed_data_path': [],
-                    'start_time': [], 'end_time': [], 'compute_time': [], 'program': [], 'alternative_name': [],
-                    'fpart': [], 'program_directory': [], 'region': [], 'value_start_date': [], 'value_end_date': [],
-                    'function': [], 'logoutputfilename': []}
 
     def limitXdata(self, dates, values, xlims):
         '''
@@ -6167,7 +5215,7 @@ class MakeAutomatedReport(object):
         for Chapter in self.ChapterDefinitions:
             self.ChapterName = Chapter['name']
             self.ChapterRegion = Chapter['region']
-            self.addLogEntry({'region': self.ChapterRegion})
+            self.WAT_log.addLogEntry({'region': self.ChapterRegion})
             self.XML.writeChapterStart(self.ChapterName)
             for section in Chapter['sections']:
                 section_header = section['header']
@@ -6202,101 +5250,6 @@ class MakeAutomatedReport(object):
             print('Chapter Complete.')
             print('################################\n')
             self.XML.writeChapterEnd()
-
-    def writeLogFile(self):
-        '''
-        Writes out logfile data to csv file in report dir
-        '''
-
-        df = pd.DataFrame({'observed_data_path': self.Log['observed_data_path'],
-                           'start_time': self.Log['start_time'],
-                           'end_time': self.Log['end_time'],
-                           'compute_time': self.Log['compute_time'],
-                           'program': self.Log['program'],
-                           'region': self.Log['region'],
-                           'alternative_name': self.Log['alternative_name'],
-                           'fpart': self.Log['fpart'],
-                           'program_directory': self.Log['program_directory'],
-                           'type': self.Log['type'],
-                           'name': self.Log['name'],
-                           'description': self.Log['description'],
-                           'function': self.Log['function'],
-                           'value': self.Log['value'],
-                           'units': self.Log['units'],
-                           'value_start_date': self.Log['value_start_date'],
-                           'value_end_date': self.Log['value_end_date'],
-                           'CSVOutputFilename': self.Log['logoutputfilename']})
-
-        df.to_csv(os.path.join(self.images_path, 'Log.csv'), index=False)
-
-    def writeDataFiles(self):
-        '''
-        writes out the data used in figures to csv files for later use and checking
-        '''
-
-        for key in self.Data_Memory.keys():
-            csv_name = os.path.join(self.CSVPath, '{0}.csv'.format(key))
-            try:
-                if 'isprofile' in self.Data_Memory[key].keys():
-                    if self.Data_Memory[key]['isprofile'] == True:
-                        alltimes = self.Data_Memory[key]['times']
-                        allvalues = self.Data_Memory[key]['values']
-                        alltimes = self.matcharrays(alltimes, allvalues)
-                        allelevs = self.Data_Memory[key]['elevations']
-                        alldepths = self.Data_Memory[key]['depths']
-                        if len(allelevs) == 0: #elevations may not always fall out
-                            allelevs = self.matcharrays(allelevs, alldepths)
-                        units = self.Data_Memory[key]['units']
-                        values = self.getListItems(allvalues)
-                        times = self.getListItems(alltimes)
-                        elevs = self.getListItems(allelevs)
-                        depths = self.getListItems(alldepths)
-                        if isinstance(values, (list, np.ndarray)):
-                            df = pd.DataFrame({'Dates': times, 'Values ({0})'.format(units): values, 'Elevations': elevs,
-                                               'Depths': depths})
-                        elif isinstance(values, dict):
-                            colvals = {}
-                            colvals['Dates'] = times
-                            for key in values:
-                                colvals[key] = values[key]
-                                colvals[key] = elevs[key]
-                                colvals[key] = depths[key]
-                            df = pd.DataFrame(colvals)
-                elif 'iscontour' in self.Data_Memory[key].keys():
-                    continue #were not doing this for now, takes ~ 5 seconds per 3yr reach..
-                    # if self.Data_Memory[key]['iscontour'] == True:
-                    #     alltimes = self.Data_Memory[key]['dates']
-                    #     allvalues = self.Data_Memory[key]['values'].T #this gets transposed a few times.. we want distance/date
-                    #     alldistance = self.Data_Memory[key]['distance']
-                    #     times = self.matcharrays(alltimes, allvalues)
-                    #     distances = self.matcharrays(alldistance, allvalues)
-                    #     values = self.getListItems(allvalues)
-                    #     units = self.Data_Memory[key]['units']
-                    #     newstime = time.time()
-                    #     df = pd.DataFrame({'Dates': times, 'Values ({0})'.format(units): values, 'Distances': distances,
-                    #                        })
-                else:
-                    allvalues = self.Data_Memory[key]['values']
-                    alltimes = self.Data_Memory[key]['times']
-                    units = self.Data_Memory[key]['units']
-                    values = self.getListItems(allvalues)
-                    times = self.getListItems(alltimes)
-                    if isinstance(values, (list, np.ndarray)):
-                        df = pd.DataFrame({'Dates': times, 'Values ({0})'.format(units): values})
-                    elif isinstance(values, dict):
-                        colvals = {}
-                        colvals['Dates'] = times
-                        for key in values:
-                            colvals[key] = values[key]
-                        df = pd.DataFrame(colvals)
-
-                df.to_csv(csv_name, index=False)
-
-            except:
-                print('ERROR WRITING CSV FILE')
-                print(traceback.format_exc())
-                with open(csv_name, 'w') as inf:
-                    inf.write('ERROR WRITING FILE.')
 
     def matcharrays(self, array1, array2):
         '''
@@ -6464,9 +5417,7 @@ class MakeAutomatedReport(object):
             approved_modelalts = [modelalt for modelalt in self.SimulationVariables[ID]['ModelAlternatives']
                                   if modelalt['name'] in simCSVAlt['modelaltnames'] and
                                   modelalt['program'] in simCSVAlt['plugins']]
-            # if len(approved_modelalts) == 0:
-            #
-            # else:
+
             if len(approved_modelalts) > 0:
                 approved_modelalt = approved_modelalts[0]
                 print('Added {0} for ID {1}'.format(approved_modelalt['program'], ID))
@@ -6476,14 +5427,14 @@ class MakeAutomatedReport(object):
                 self.SimulationVariables[ID]['plugin'] = approved_modelalt['program']
 
                 if self.SimulationVariables[ID]['plugin'].lower() == "ressim":
-                    self.SimulationVariables[ID]['ModelAlt'] = WDR.ResSim_Results(self.SimulationVariables[ID]['simulationDir'],
+                    self.SimulationVariables[ID]['ModelAlt'] = WRSS.ResSim_Results(self.SimulationVariables[ID]['simulationDir'],
                                                                                   self.SimulationVariables[ID]['alternativeFpart'],
-                                                                                  self.StartTime, self.EndTime)
+                                                                                  self.StartTime, self.EndTime, self)
                 elif self.SimulationVariables[ID]['plugin'].lower() == 'cequalw2':
-                    self.SimulationVariables[ID]['ModelAlt'] = WDR.W2_Results(self.SimulationVariables[ID]['simulationDir'],
+                    self.SimulationVariables[ID]['ModelAlt'] = WW2.W2_Results(self.SimulationVariables[ID]['simulationDir'],
                                                                               self.SimulationVariables[ID]['modelAltName'],
                                                                               self.SimulationVariables[ID]['alternativeDirectory'],
-                                                                              self.StartTime, self.EndTime)
+                                                                              self.StartTime, self.EndTime, self)
                 else:
                     self.SimulationVariables[ID]['ModelAlt'] == 'unknown'
                 self.accepted_IDs.append(ID)
@@ -6539,15 +5490,15 @@ class MakeAutomatedReport(object):
         '''
 
         new_xml = os.path.join(self.studyDir, 'reports', 'Datasources', 'USBRAutomatedReportOutput.xml') #required name for file
-        self.XML = XML_Utils.XMLReport(new_xml)
+        self.XML = WXMLU.XMLReport(new_xml)
         self.XML.writeCover('DRAFT Temperature Validation Summary Report')
 
-    def initializeDataMemory(self):
+    def initializeDataOrganizer(self):
         '''
         create Data_Memory dictionary
         '''
 
-        self.Data_Memory = {}
+        self.Data = WD.DataOrganizer(self)
 
     def initSimulationDict(self):
         '''
@@ -6674,11 +5625,7 @@ class MakeAutomatedReport(object):
         :return: model plugin name if possible
         '''
 
-        model_specific_vars = {'ressimresname': 'ressim',
-                               'xy': 'ressim',
-                               'w2_segment': 'cequalw2',
-                               'w2_file': 'cequalw2'}
-        for var, ident in model_specific_vars.items():
+        for var, ident in self.Constants.model_specific_vars.items():
             if var in Line_info.keys():
                 return ident
 
@@ -6815,17 +5762,9 @@ class MakeAutomatedReport(object):
             new_units: new converted units if successful
         '''
 
-        #Following is the SOURCE units, then the conversion to units listed above
-        conversion = {'m3/s': 35.314666213,
-                      'cfs': 0.0283168469997284,
-                      'm': 3.28084,
-                      'ft': 0.3048,
-                      'm3': 0.000810714,
-                      'af': 1233.48}
-
         units = self.translateUnits(units)
 
-        english_units = {self.units[key]['metric']: self.units[key]['english'] for key in self.units.keys()}
+        english_units = {self.Constants.units[key]['metric']: self.Constants.units[key]['english'] for key in self.Constants.units.keys()}
         metric_units = {v: k for k, v in english_units.items()}
 
         if units == None:
@@ -6865,11 +5804,11 @@ class MakeAutomatedReport(object):
 
         if units.lower() in ['c', 'f']:
             values = WF.convertTempUnits(values, units)
-        elif units.lower() in conversion.keys():
-            conversion_factor = conversion[units.lower()]
+        elif units.lower() in self.Constants.conversion.keys():
+            conversion_factor = self.Constants.conversion[units.lower()]
             values *= conversion_factor
-        elif new_units.lower() in conversion.keys():
-            conversion_factor = 1/conversion[units.lower()]
+        elif new_units.lower() in self.Constants.conversion.keys():
+            conversion_factor = 1/self.Constants.conversion[units.lower()]
             values *= conversion_factor
         else:
             print('Undefined Units conversion for units {0}.'.format(units))
@@ -6967,34 +5906,6 @@ class MakeAutomatedReport(object):
             rows.append('|'.join(r))
         return rows
 
-    def filterTimestepByYear(self, timestamps, year):
-        '''
-        returns only timestamps from the given year. Otherwise, just return all timestamps
-        :param timestamps: list of dates
-        :param year: target year
-        :return:
-            timestamps: list of selected timestamps
-        '''
-
-        if year == 'ALLYEARS':
-            return timestamps
-        return [n for n in timestamps if n.year == year]
-
-    def filterContourOverTopWater(self, values, elevations, topwater):
-        '''
-        takes values for contour reservoir plots and nan's out any values over topwater. Ressim duplicates data
-        to the top of the domain instead of cutting it off
-        :param values: list of values at each timestep
-        :param elevations: elevations to find closest index to top water
-        :param topwater: water surface elevation at each timestep
-        :return: values with nans
-        '''
-
-        for twi, tw in enumerate(topwater):
-            elevationtopwateridx = (np.abs(elevations - tw)).argmin()
-            values[twi][elevationtopwateridx+1:] = np.nan
-        return values
-
     def fixXMLModelIntroduction(self, simorder):
         '''
         Fixes intro in XML that shows what models are used for each region.
@@ -7020,8 +5931,8 @@ class MakeAutomatedReport(object):
         '''
 
         lineusedcount = line_settings['numtimesused']
-        if lineusedcount > len(self.def_colors):
-            defcol_idx = lineusedcount%len(self.def_colors)
+        if lineusedcount > len(self.Constants.def_colors):
+            defcol_idx = lineusedcount%len(self.Constants.def_colors)
         else:
             defcol_idx = lineusedcount
         if line_settings['drawline'].lower() == 'true':
@@ -7033,7 +5944,7 @@ class MakeAutomatedReport(object):
                         lc_idx = lineusedcount
                     line_settings['linecolor'] = line_settings['linecolors'][lc_idx]
                 else:
-                    line_settings['linecolor'] = self.def_colors[defcol_idx]
+                    line_settings['linecolor'] = self.Constants.def_colors[defcol_idx]
             else: #case where first line, but linecolor isnt defined, but linecolorS is
                   #so it used default color INSTEAD of the desired colro...
                 if 'linecolors' in line_settings.keys():
@@ -7063,13 +5974,13 @@ class MakeAutomatedReport(object):
                     if 'pointlinecolor' in line_settings.keys():
                         line_settings['pointfillcolor'] = line_settings['pointlinecolor']
                     else:
-                        line_settings['pointfillcolor'] = self.def_colors[defcol_idx]
+                        line_settings['pointfillcolor'] = self.Constants.def_colors[defcol_idx]
 
                 if 'pointlinecolor' not in line_settings.keys():
                     if 'pointfillcolor' in line_settings.keys():
                         line_settings['pointlinecolor'] = line_settings['pointfillcolor']
                     else:
-                        line_settings['pointlinecolor'] = self.def_colors[defcol_idx]
+                        line_settings['pointlinecolor'] = self.Constants.def_colors[defcol_idx]
 
             else: #case where first line, but linecolor isnt defined, so it used default color...
                 if 'pointfillcolors' in line_settings.keys():
@@ -7346,7 +6257,6 @@ class MakeAutomatedReport(object):
                 print('No time interval Defined.')
                 return times, values
 
-
             if avgtype == 'INST-VAL':
                 #at the point in time, find intervals and use values
                 if len(values.shape) == 1:
@@ -7526,8 +6436,8 @@ class MakeAutomatedReport(object):
             elevations = pickle.loads(pickle.dumps(data[line]['elevations'], -1))
             subset = pickle.loads(pickle.dumps(line_settings[line]['subset'], -1))
             datamem_key = line_settings[line]['logoutputfilename']
-            if datamem_key not in self.Data_Memory.keys():
-                self.Data_Memory[datamem_key] = {'times': object_settings['timestamps'],
+            if datamem_key not in self.Data.Memory.keys():
+                self.Data.Memory[datamem_key] = {'times': object_settings['timestamps'],
                                                  'values': values,
                                                  'elevations': elevations,
                                                  'depths': depths,
@@ -7547,7 +6457,7 @@ class MakeAutomatedReport(object):
 
         if units == None:
             try:
-                units = self.units[parameter.lower()]
+                units = self.Constants.units[parameter.lower()]
             except KeyError:
                 units = None
 

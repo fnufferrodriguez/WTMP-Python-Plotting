@@ -296,3 +296,23 @@ class XMLReport(object):
             XML.write('</Output_Table>\n')
             XML.write('</Output_Temp_Flow>\n')
             XML.write('</Report_Element>\n')
+
+    #################################################################
+    #End Class
+    #################################################################
+
+
+def fixXMLModelIntroduction(Report, simorder):
+    '''
+    Fixes intro in XML that shows what models are used for each region.
+    Updates a flag with used models.
+    :param simorder: number of simulation file
+    :return:
+    '''
+
+    outstr = '{0}:'.format(Report.ChapterRegion)
+    for cnt, ID in enumerate(Report.accepted_IDs):
+        if cnt > 0:
+            outstr += ','
+        outstr += ' {0}'.format(Report.SimulationVariables[ID]['plugin'])
+    Report.XML.replaceinXML('%%REPLACEINTRO_{0}%%'.format(simorder), outstr)
