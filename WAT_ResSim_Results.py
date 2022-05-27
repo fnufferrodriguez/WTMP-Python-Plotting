@@ -1,0 +1,494 @@
+'''
+* Copyright 2022 United States Bureau of Reclamation (USBR).
+* United States Department of the Interior
+* All Rights Reserved. USBR PROPRIETARY/CONFIDENTIAL.
+* Source may not be released without written approval
+* from USBR
+
+Created on 7/15/2021
+@author: scott
+@organization: Resource Management Associates
+@contact: scott@rmanet.com
+@note:
+'''
+
+import os
+import numpy as np
+import datetime as dt
+import h5py
+
+import WAT_Functions as WF
+
+class ResSim_Results(object):
+
+    def __init__(self, simulationPath, alternativeName, starttime, endtime, Report, external=False):
+        '''
+        Class Builder init.
+        :param simulationPath: full path to ResSim simulation
+        :param alternativeName: Name of selected Ressim Alternative run
+        :param starttime: start time datetime object
+        :param endtime: end time datetime object
+        '''
+
+        self.simulationPath = simulationPath
+        self.alternativeName = alternativeName.replace(':', '_')
+        self.starttime = starttime
+        self.endtime = endtime
+        self.external = external
+        self.Report = Report
+
+        if not self.external:
+            self.getH5File()
+            self.load_time() #load time vars from h5
+            self.loadSubdomains()
+
+    def getH5File(self):
+        '''
+        build h5 file name and open file
+        :return: class variable
+                    self.h
+        '''
+
+        h5filefrmt = self.alternativeName.replace(' ', '_')
+        self.h5fname = os.path.join(self.simulationPath, 'rss', h5filefrmt + '.h5')
+        self.openH5File(self.h5fname)
+
+    def openH5File(self, h5fname):
+        self.h = h5py.File(h5fname, 'r')
+
+    def load_time(self):
+        '''
+        Loads times from H5 file
+        :return: set class variables
+                    self.tstr - time string
+                    self.t - times list
+                    self.nt - num times
+                    self.t_offset - time offset
+        '''
+
+        self.tstr = self.h['Results/Subdomains/Time Date Stamp']
+        tstr0 = (self.tstr[0]).decode("utf-8")
+        ttmp = self.h['Results/Subdomains/Time']
+        jd_dates = ttmp[:]
+        try:
+            ttmp = dt.datetime.strptime(tstr0, '%Y-%m-%d, %H:%M')
+        except ValueError:
+            tstrtmp = tstr0.replace('24:00', '23:00')
+            ttmp = dt.datetime.strptime(tstrtmp, '%Y-%m-%d, %H:%M')
+            ttmp += dt.timedelta(hours=1)
+        dt_dates = []
+        t_offset = ttmp.toordinal() + float(ttmp.hour) / 24. + float(ttmp.minute) / (24. * 60.)
+        for t in jd_dates:
+            dt_dates.append(ttmp + dt.timedelta(days=t))
+        self.nt = len(dt_dates)
+
+        self.dt_dates = np.asarray(dt_dates)
+        self.jd_dates = np.asarray(jd_dates)
+        self.t_offset = t_offset
+
+    def loadSubdomains(self):
+        '''
+        creates a dictionary of all subdomains in the H5 file and grabes their XY coordinates for later reference
+        :return: set class variables
+                    self.subdomains
+        '''
+
+        self.subdomains = {}
+        group = self.h['Geometry/Subdomains']
+        for subdomain in group:
+            dataset = self.h['Geometry/Subdomains/{0}/Cell Center Coordinate'.format(subdomain)]
+            ncells = (np.shape(dataset))[0]
+            x = np.array([dataset[i][0] for i in range(ncells)])
+            y = np.array([dataset[i][1] for i in range(ncells)])
+            self.subdomains[subdomain] = {'x': x, 'y': y}
+
+    def readProfileData(self, resname, metric, timestamps):
+        '''
+        reads Ressim profile data from model
+        :param resname: name of reservoir in h5 file
+        :param metric: metric of data to be extracted
+        :param times: timesteps to grab
+        :return: vals, elevations, depths
+        '''
+
+        self.loadElevation(alt_subdomain_name=resname)
+
+
+        vals = []
+        elevations = []
+        depths = []
+        times = []
+        # print('UNIQUE TIMES:', unique_times)
+        if isinstance(timestamps, (list, np.ndarray)):
+            unique_times = [n for n in timestamps]
+            for j, time_in in enumerate(unique_times):
+                timestep = WF.getIdxForTimestamp(self.jd_dates, time_in, self.t_offset)
+                if timestep == -1:
+                    depths.append(np.asarray([]))
+                    elevations.append(np.asarray([]))
+                    vals.append(np.asarray([]))
+                    times.append(time_in)
+                    # continue
+                else:
+                    # print('finding time for', time_in)
+                    self.loadResults(time_in, metric.lower(), alt_subdomain_name=resname)
+                    ktop = self.getTopLayer(timestep) #get waterlevel top layer to know where to grab data from
+                    v_el = self.vals[:ktop + 1]
+                    el = self.elev[:ktop + 1]
+                    d_step = []
+                    e_step = []
+                    v_step = []
+                    for ei, e in enumerate(el):
+                        d_step.append(np.max(el) - e)
+                        e_step.append(e)
+                        v_step.append(v_el[ei])
+                    depths.append(np.asarray(d_step))
+                    elevations.append(np.asarray(e_step))
+                    vals.append(np.asarray(v_step))
+                    times.append(time_in)
+        else:
+            self.loadResults('all', metric.lower(), alt_subdomain_name=resname)
+            elevations = self.elev
+            vals = np.asarray(self.vals)
+            depths = np.array([])
+            times = self.dt_dates
+
+            # for dti, dt_d in enumerate(self.dt_dates):
+            #     ktop = self.getTopLayer(dti) #get waterlevel top layer to know where to grab data from
+            #     v_el = self.vals[dti][:ktop + 1]
+            #     el = self.elev[:ktop + 1]
+            #     d_step = []
+            #     e_step = []
+            #     v_step = []
+            #     for ei, e in enumerate(el):
+            #         d_step.append(np.max(el) - e)
+            #         e_step.append(e)
+            #         v_step.append(v_el[ei])
+            #     depths.append(np.asarray(d_step))
+            #     elevations.append(np.asarray(e_step))
+            #     vals.append(np.asarray(v_step))
+            #     times.append(dt_d)
+
+        return vals, elevations, depths, np.asarray(times)
+
+    def getTopLayer(self, timestep_index):
+        '''
+        grabs the top active layer of water for a given timestep
+        :param timestep_index: timestep index to grab data at
+        :return: returns index for top layer of water column
+        '''
+
+        elev = self.elev_ts[timestep_index] #elevations at a timestep
+        for k in range(len(self.elev) - 1): #for each cell..
+            cell_z = self.elev[k]  # layer midpoint
+            cell_z1 = self.elev[k + 1]  # layer above midpoint
+            top_of_cell_z = 0.5 * (cell_z + cell_z1)
+            if elev < top_of_cell_z:
+                break
+        return k
+
+    def loadElevation(self, alt_subdomain_name=None):
+        '''
+        loads elevations from the H5 file
+        :param alt_subdomain_name: alternate field if the domain is not class defined subdomain name
+        :return: set class variables
+                    self.ncells - number of cells
+                    self.elev - elevation time series for profile
+                    self.elev_ts - elevation time series
+        '''
+
+        this_subdomain = self.subdomain_name if alt_subdomain_name is None else alt_subdomain_name
+        cell_center_xy = self.h['Geometry/Subdomains/' + this_subdomain + '/Cell Center Coordinate']
+        self.ncells = (np.shape(cell_center_xy))[0]
+        # self.elev = np.array([cell_center_xy[i][2] for i in range(self.ncells)])
+        self.elev = np.array(cell_center_xy[:self.ncells, 2])
+        elev_ts = self.h['Results/Subdomains/' + this_subdomain + '/Water Surface Elevation']
+        # self.elev_ts = np.array([elev_ts[i] for i in range(self.nt)])
+        self.elev_ts = np.array(elev_ts[:self.nt])
+
+
+    def loadResults(self, t_in, metrc, alt_subdomain_name=None):
+        '''
+        loads results for a specific time step from h5 file
+        :param t_in: time in datetime object
+        :param metrc: metric to get data from
+        :param alt_subdomain_name: alt field if data is grabbed from a different location than the default
+        :return: set class vairables
+                self.t_data - timestep
+                self.vals - array of values
+        '''
+
+        this_subdomain = self.subdomain_name if alt_subdomain_name is None else alt_subdomain_name
+
+        if metrc.lower() == 'temperature':
+            metric_name = 'Water Temperature'
+            try:
+                vals = self.h['Results/Subdomains/' + this_subdomain + '/' + metric_name]
+            except KeyError:
+                raise KeyError('WQ Simulation does not have results for metric: {0}'.format(metric_name))
+
+        elif metrc == 'diss_oxy' or metrc.lower() == 'do':
+            metric_name = 'Dissolved Oxygen'
+            try:
+                vals = self.h['Results/Subdomains/' + this_subdomain + '/' + metric_name]
+            except KeyError:
+                raise KeyError('WQ Simulation does not have results for metric: {0}'.format(metric_name))
+
+        elif metrc.lower() == 'do_sat':
+            metric_name = 'Water Temperature'
+            vt = self.h['Results/Subdomains/' + this_subdomain + '/' + metric_name]
+            metric_name = 'Dissolved Oxygen'
+            vdo = self.h['Results/Subdomains/' + this_subdomain + '/' + metric_name]
+            vals = WF.calcComputedDOSat(vt, vdo, self.Report.Constants.satDO_interp)
+
+        if t_in != 'all':
+            timestep = WF.getIdxForTimestamp(self.jd_dates, t_in, self.t_offset) #get timestep index for current date
+            if timestep == -1:
+                print('should never be here..')
+            self.t_data = t_in
+            self.vals = np.array([vals[timestep][i] for i in range(self.ncells)])
+        else:
+            self.vals = vals
+
+    def readTimeSeries(self, metric, x, y):
+        '''
+        Gets Time series values from Ressim H5 files.
+        :param metric: metric of data
+        :param x: X coordinate of the observed data to be passed into self.find_computed_station_cell(xy) to find
+                    location of modeled data
+        :param y: Y coordinate of the observed data to be passed into self.find_computed_station_cell(xy) to find
+                    location of modeled data
+        :return: times and values arrays for selected metric and time window
+        '''
+
+        i, subdomain_name = self.findComputedStationCell(x, y)
+
+        if metric.lower() == 'flow':
+            dataset_name = 'Cell flow'
+            dataset = self.h['Results/Subdomains/{0}/{1}'.format(subdomain_name, dataset_name)]
+            v = np.array(dataset[:, i])
+            v = WF.cleanComputed(v)
+        elif metric.lower() == 'elevation':
+            dataset_name = 'Water Surface Elevation'
+            dataset = self.h['Results/Subdomains/{0}/{1}'.format(subdomain_name, dataset_name)]
+            v = np.array(dataset[:])
+            v = WF.cleanComputed(v)
+        elif metric.lower() == 'temperature':
+            dataset_name = 'Water Temperature'
+            dataset = self.h['Results/Subdomains/{0}/{1}'.format(subdomain_name, dataset_name)]
+            v = np.array(dataset[:, i])
+            v = WF.cleanComputed(v)
+        elif metric.lower() == 'do':
+            dataset_name = 'Dissolved Oxygen'
+            dataset = self.h['Results/Subdomains/{0}/{1}'.format(subdomain_name, dataset_name)]
+            v = np.array(dataset[:, i])
+            v = WF.cleanComputed(v)
+        elif metric.lower() == 'do_sat':
+            dataset_name = 'Water Temperature'
+            dataset = self.h['Results/Subdomains/{0}/{1}'.format(subdomain_name, dataset_name)]
+            vt = np.array(dataset[:, i])
+            dataset_name = 'Dissolved Oxygen'
+            dataset = self.h['Results/Subdomains/{0}/{1}'.format(subdomain_name, dataset_name)]
+            vdo = np.array(dataset[:, i])
+            vt = WF.cleanComputed(vt)
+            vdo = WF.cleanComputed(vdo)
+            v = WF.calcComputedDOSat(vt, vdo, self.Report.Constants.satDO_interp)
+
+        if not hasattr(self, 't_computed'):
+            self.loadComputedTime()
+        istart = 0
+        iend = -1
+        return self.t_computed[istart:iend], v[istart:iend]
+
+    def readProfileTopwater(self, resname, timestamps):
+        '''
+        gets the WSE for each timestep to filter for profile contour plots
+        :param resname: name of reservoir to get from H5 file
+        :param timestamps: list of timesteps, or 'all'
+        :return: list of WSE
+        '''
+
+        self.loadElevation(alt_subdomain_name=resname)
+        if isinstance(timestamps, (list, np.ndarray)):
+            topwater = []
+            unique_times = [n for n in timestamps]
+            for j, time_in in enumerate(unique_times):
+                timestep = WF.getIdxForTimestamp(self.jd_dates, time_in, self.t_offset)
+                if timestep == -1:
+                    topwater.append(np.nan)
+                    # continue
+                else:
+                    topwater.append(self.elev_ts[timestep])
+        else:
+            topwater = self.elev_ts[:]
+        return np.asarray(topwater)
+
+    def checkSubdomain(self, subdomain_name):
+        '''
+        checks to see if subdomain exists in model results
+        :param subdomain_name: name of subdomain to check
+        :return:
+        '''
+        dataset = 'Results/Subdomains/{0}'.format(subdomain_name)
+        if dataset not in self.h.keys():
+            return False
+        else:
+            return True
+
+    def readSubdomain(self, metric, subdomain_name):
+        '''
+        reads the subdomain data from h5 file
+        :param metric: metric of data to get
+        :param subdomain_name: name of subdomain to extract data from
+        :return: times, values, distances
+        '''
+
+        if metric.lower() == 'flow':
+            dataset_name = 'Cell flow'
+            dataset = self.h['Results/Subdomains/{0}/{1}'.format(subdomain_name, dataset_name)]
+            v = np.array(dataset[:])
+            v = WF.cleanComputed(v)
+        elif metric.lower() == 'elevation':
+            dataset_name = 'Water Surface Elevation'
+            dataset = self.h['Results/Subdomains/{0}/{1}'.format(subdomain_name, dataset_name)]
+            v = np.array(dataset[:])
+            v = WF.cleanComputed(v)
+        elif metric.lower() == 'temperature':
+            dataset_name = 'Water Temperature'
+            dataset = self.h['Results/Subdomains/{0}/{1}'.format(subdomain_name, dataset_name)]
+            v = np.array(dataset[:])
+            v = WF.cleanComputed(v)
+        elif metric.lower() == 'do':
+            dataset_name = 'Dissolved Oxygen'
+            dataset = self.h['Results/Subdomains/{0}/{1}'.format(subdomain_name, dataset_name)]
+            v = np.array(dataset[:])
+            v = WF.cleanComputed(v)
+        elif metric.lower() == 'do_sat':
+            dataset_name = 'Water Temperature'
+            dataset = self.h['Results/Subdomains/{0}/{1}'.format(subdomain_name, dataset_name)]
+            vt = np.array(dataset[:])
+            dataset_name = 'Dissolved Oxygen'
+            dataset = self.h['Results/Subdomains/{0}/{1}'.format(subdomain_name, dataset_name)]
+            vdo = np.array(dataset[:])
+            vt = WF.cleanComputed(vt)
+            vdo = WF.cleanComputed(vdo)
+            v = WF.calcComputedDOSat(vt, vdo, self.Report.Constants.satDO_interp)
+
+        distance = self.calcSubdomainDistances(subdomain_name)
+        #add a value at the start and end to compensate for the start and end values
+        v = np.insert(v, 0, v.T[:][0], 1)
+        v = np.insert(v, -1, v.T[:][-1], 1)
+
+        if not hasattr(self, 't_computed'):
+            self.loadComputedTime()
+        istart = 0
+        iend = -1
+        return self.t_computed[istart:iend], v[istart:iend], distance
+
+    def readModelTimeseriesData(self, data, metric):
+        '''
+        function to wrangle data and be universably 'callable' from main script
+        :param data: dictionary containing information about data records
+        :param metric: not needed for W2, but still passed in for Ressim results so a single function can be called
+        :return: arrays of dates and values
+        '''
+
+        x = data['easting']
+        y = data['northing']
+        dates, vals = self.get_Timeseries(metric, xy=[x, y])
+        return dates, vals
+
+    def calcSubdomainDistances(self, subdomain):
+        '''
+        calculates subdomain distances. Either uses the cell length to calculate, or does a distance formula between
+        cell centers. Using a cell length field is MUCH more accurate, but you gotta make do.
+        :param subdomain: name of subdomain
+        :return: list of distances
+        '''
+
+        cell_center_xy = self.h['Geometry/Subdomains/{0}/Cell Center Coordinate'.format(subdomain)]
+        firstpoint = cell_center_xy[0]
+        distance = []
+        if 'Geometry/Subdomains/{0}/Cell Length'.format(subdomain) in self.h.keys():
+            distance.append(0)
+            cell_lengths = self.h['Geometry/Subdomains/{0}/Cell Length'.format(subdomain)]
+            for cli, celllen in enumerate(cell_lengths):
+                if cli == 0:
+                    distance.append(celllen.item()/2)# distance from edge to first cell center
+                else:
+                    #half the len of current cell, half the len of last cell to get distnace between cell centers
+                    #then add on the distance we've calc'd
+                    distance.append(celllen.item()/2 + cell_lengths[cli-1].item()/2 + distance[-1])
+                if cli == len(cell_lengths)-1:
+                    #add the distance from the last cell center to the edge
+                    distance.append(celllen.item()/2 + distance[-1])
+            distance = np.asarray(distance)
+        else:
+            for cell in cell_center_xy:
+                d = np.sqrt( (cell[0] - firstpoint[0])**2 +  (cell[1] - firstpoint[1])**2)
+                distance.append(d)
+            #get roughly half the distance between first two cells. This is the closest we can get to half the cell distance
+            first_distance_diff_half = (distance[1] - distance[0]) / 2
+            #shift all distance so the first instance is now the cell center of the first point
+            distance = np.asarray(distance) + first_distance_diff_half
+            #then add 0 to the start, so it starts at 0
+            distance = np.insert(distance, 0, 0)
+            #then do the same for the backend
+            last_distance_diff_half = (distance[-1] - distance[-2]) / 2
+            distance = np.append(distance, distance[-1] + last_distance_diff_half)
+
+        return distance
+
+    def findComputedStationCell(self, easting, northing):
+        '''
+        finds subdomains that are closest to observed station coordinates
+        TODO: add some kind of tolerance or max distance?
+        :param xy: XY coordinates for observed station
+        :return: cell index and subdomain information closest to observed data
+        '''
+
+
+        nearest_dist = 1e6
+        for subdomain, sd_data in self.subdomains.items():
+            x = sd_data['x']
+            y = sd_data['y']
+            dist = np.sqrt((x - easting) * (x - easting) + (y - northing) * (y - northing))
+            min_dist = np.min(dist)
+            if min_dist < nearest_dist:
+                min_cell = np.argmin(dist)
+                data_index = min_cell
+                data_subdomain = subdomain
+                nearest_dist = min_dist
+        return data_index, data_subdomain
+
+    def loadComputedTime(self):
+        '''
+        loads computed time values, replacing 24 hr date values with 0000 the next day
+        grabs all values instead of user defined, if none are defined
+        TODO: is this still needed? require user input.
+        :return: sets class variables
+                    self.t_computed - list of times used in computation
+        '''
+
+        tstr = self.h['Results/Subdomains/Time Date Stamp']
+        tstr0 = (tstr[0]).decode("utf-8")
+        tstr1 = (tstr[1]).decode("utf-8")
+        ttmp = self.h['Results/Subdomains/Time']
+        nt = len(ttmp)
+        try:
+            ttmp0 = dt.datetime.strptime(tstr0, '%Y-%m-%d, %H:%M')
+        except ValueError:
+            tstrtmp = tstr0.replace('24:00', '23:00')
+            ttmp0 = dt.datetime.strptime(tstrtmp, '%Y-%m-%d, %H:%M')
+            ttmp0 += dt.timedelta(hours=1)
+        try:
+            ttmp1 = dt.datetime.strptime(tstr1, '%Y-%m-%d, %H:%M')
+        except ValueError:
+            tstrtmp = tstr1.replace('24:00', '23:00')
+            ttmp1 = dt.datetime.strptime(tstrtmp, '%Y-%m-%d, %H:%M')
+            ttmp1 += dt.timedelta(hours=1)
+        delta_t = ttmp1 - ttmp0
+        self.t_computed = []
+        for j in range(nt):
+            self.t_computed.append(ttmp0 + j * delta_t)
+        self.t_computed = np.array(self.t_computed)

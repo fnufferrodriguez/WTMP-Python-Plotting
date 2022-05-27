@@ -19,15 +19,6 @@ from scipy import interpolate
 from scipy.constants import convert_temperature
 from sklearn.metrics import mean_absolute_error
 
-sat_data_do = [14.60, 14.19, 13.81, 13.44, 13.09, 12.75, 12.43, 12.12, 11.83, 11.55, 11.27, 11.01, 10.76, 10.52, 10.29,
-               10.07, 9.85, 9.65, 9.45, 9.26, 9.07, 8.90, 8.72, 8.56, 8.40, 8.24, 8.09, 7.95, 7.81, 7.67, 7.54, 7.41,
-               7.28, 7.16, 7.05, 6.93, 6.82, 6.71, 6.61, 6.51, 6.41, 6.31, 6.22, 6.13, 6.04, 5.95]
-sat_data_temp = [0., 1., 2., 3., 4., 5., 6., 7., 8., 9., 10., 11., 12., 13., 14., 15., 16., 17., 18., 19., 20., 21.,
-                 22., 23., 24., 25., 26., 27., 28., 29., 30., 31., 32., 33., 34., 35., 36., 37., 38., 39., 40., 41.,
-                 42., 43., 44., 45.]
-
-f_interp = interpolate.interp1d(sat_data_temp, sat_data_do,
-                                fill_value=(sat_data_do[0], sat_data_do[-1]), bounds_error=False)
 
 
 def datetime2Ordinal(indate):
@@ -81,7 +72,7 @@ def cleanOutputDirectory(dir_name, filetype):
             print('Failed to delete', path_to_file)
             print('Continuing..')
 
-def calcDOSaturation(temp, diss_ox):
+def calcDOSaturation(temp, diss_ox, DOSat_Interp):
     '''
     calulates dissolved oxygen saturation. uses a series of pre computed DO values interpolated
     :param temp: temperature value
@@ -89,10 +80,10 @@ def calcDOSaturation(temp, diss_ox):
     :return: dissolved oxygen value
     '''
 
-    do_sat = f_interp(temp)
+    do_sat = DOSat_Interp(temp)
     return diss_ox / do_sat * 100.
 
-def calcComputedDOSat(vtemp, vdo):
+def calcComputedDOSat(vtemp, vdo, DOSat_Interp):
     '''
     calculates the computed dissolved saturated oxygen
     :param vtemp: temperature values
@@ -105,10 +96,10 @@ def calcComputedDOSat(vtemp, vdo):
         if np.isnan(vtemp[j]) or np.isnan(vdo[j]):
             v[j] = np.nan
         else:
-            v[j] = calcDOSaturation(vtemp[j], vdo[j])
+            v[j] = calcDOSaturation(vtemp[j], vdo[j], DOSat_Interp)
     return v
 
-def calcObservedDOSat(ttemp, vtemp, vdo):
+def calcObservedDOSat(ttemp, vtemp, vdo, ):
     '''
     calc dissolved saturated oxygen for observed data
     :param ttemp: times for data
@@ -186,8 +177,6 @@ def matchData(data1, data2):
     :return: Two dictionaries containing dates and values flags (data1 and data2)
     '''
 
-    #TODO: CHECK THIS FUCNTION
-
     if 'dates' in data1.keys() and 'dates' in data2.keys():
         y_key = 'dates'
     elif 'depths' in data1.keys() and 'depths' in data2.keys():
@@ -251,9 +240,7 @@ def normalize2DElevations(vals, elevations):
     newvals = []
     top_elev = np.nanmax([np.nanmax(n) for n in elevations if ~np.all(np.isnan(n))])
     bottom_elev = np.nanmin([np.nanmin(n) for n in elevations if ~np.all(np.isnan(n))])
-
     new_elevations = np.linspace(bottom_elev, top_elev, elevations.shape[1])
-
     for vi, v in enumerate(vals):
         # valelev_interp = interpolate.interp1d(elevations[vi], v, bounds_error=False, fill_value = np.nan)
         valelev_interp = interpolate.interp1d(elevations[vi], v, bounds_error=False, fill_value ="extrapolate")
@@ -519,3 +506,30 @@ def convertTempUnits(values, units):
         print('Undefined temp units:', units)
         return values
 
+def filterContourOverTopWater(values, elevations, topwater):
+    '''
+    takes values for contour reservoir plots and nan's out any values over topwater. Ressim duplicates data
+    to the top of the domain instead of cutting it off
+    :param values: list of values at each timestep
+    :param elevations: elevations to find closest index to top water
+    :param topwater: water surface elevation at each timestep
+    :return: values with nans
+    '''
+
+    for twi, tw in enumerate(topwater):
+        elevationtopwateridx = (np.abs(elevations - tw)).argmin()
+        values[twi][elevationtopwateridx+1:] = np.nan
+    return values
+
+def filterTimestepByYear(timestamps, year):
+    '''
+    returns only timestamps from the given year. Otherwise, just return all timestamps
+    :param timestamps: list of dates
+    :param year: target year
+    :return:
+        timestamps: list of selected timestamps
+    '''
+
+    if year == 'ALLYEARS':
+        return timestamps
+    return [n for n in timestamps if n.year == year]
