@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '5.0.0'
+VERSIONNUMBER = '5.0.1'
 
 import datetime as dt
 import os
@@ -43,6 +43,7 @@ import WAT_Constants as WC
 import WAT_DataOrganizer as WD
 import WAT_ResSim_Results as WRSS
 import WAT_W2_Results as WW2
+import WAT_Tables as WT
 
 
 class MakeAutomatedReport(object):
@@ -242,13 +243,13 @@ class MakeAutomatedReport(object):
                 unitslist = []
                 unitslist2 = []
                 linedata = self.Data.getTimeSeriesDataDictionary(ax_settings)
-                linedata = self.mergeLines(linedata, ax_settings)
+                linedata = WF.mergeLines(linedata, ax_settings)
                 ax_settings = self.configureSettingsForID('base', ax_settings)
                 gatedata = self.Data.getGateDataDictionary(ax_settings, makecopy=False)
-                linedata = self.filterDataByYear(linedata, year)
+                linedata = WF.filterDataByYear(linedata, year)
                 linedata = self.correctDuplicateLabels(linedata)
                 for gateop in gatedata.keys():
-                    gatedata[gateop]['gates'] = self.filterDataByYear(gatedata[gateop]['gates'], year)
+                    gatedata[gateop]['gates'] = WF.filterDataByYear(gatedata[gateop]['gates'], year)
 
                 if 'relative' in ax_settings.keys():
                     if ax_settings['relative'].lower() == 'true':
@@ -291,14 +292,14 @@ class MakeAutomatedReport(object):
                     if 'dateformat' in ax_settings.keys():
                         if ax_settings['dateformat'].lower() == 'jdate':
                             if isinstance(dates[0], dt.datetime):
-                                dates = self.DatetimeToJDate(dates)
+                                dates = WF.DatetimeToJDate(dates, self.ModelAlt.t_offset)
                         elif ax_settings['dateformat'].lower() == 'datetime':
                             if isinstance(dates[0], (int,float)):
-                                dates = self.JDateToDatetime(dates)
+                                dates = WF.JDateToDatetime(dates, self.startYear)
                     else:
                         ax_settings['dateformat'] = 'datetime'
                         if isinstance(dates[0], (int,float)):
-                            dates = self.JDateToDatetime(dates)
+                            dates = WF.JDateToDatetime(dates, self.startYear)
 
                     line_settings = self.getDefaultLineSettings(curline, parameter, i)
                     line_settings = self.fixDuplicateColors(line_settings) #used the line, used param, then double up so subtract 1
@@ -404,10 +405,10 @@ class MakeAutomatedReport(object):
                             if 'dateformat' in ax_settings.keys():
                                 if ax_settings['dateformat'].lower() == 'jdate':
                                     if isinstance(dates[0], dt.datetime):
-                                        dates = self.DatetimeToJDate(dates)
+                                        dates = WF.DatetimeToJDate(dates, self.ModelAlt.t_offset)
                                 elif ax_settings['dateformat'].lower() == 'datetime':
                                     if isinstance(dates[0], (int,float)):
-                                        dates = self.JDateToDatetime(dates)
+                                        dates = WF.JDateToDatetime(dates, self.startYear)
 
                             gate_line_settings = self.getDefaultGateLineSettings(curgate, gate_count)
 
@@ -488,16 +489,16 @@ class MakeAutomatedReport(object):
                             if 'dateformat' in ax_settings.keys():
                                 if ax_settings['dateformat'].lower() == 'jdate':
                                     if isinstance(operationTime, dt.datetime):
-                                        operationTime = self.DatetimeToJDate(operationTime)
+                                        operationTime = WF.DatetimeToJDate(operationTime, self.ModelAlt.t_offset)
                                     elif isinstance(operationTime, str):
                                         try:
                                             operationTime = float(operationTime)
                                         except:
                                             operationTime = self.translateDateFormat(operationTime, 'datetime', '')
-                                            operationTime = self.DatetimeToJDate(operationTime)
+                                            operationTime = WF.DatetimeToJDate(operationTime, self.ModelAlt.t_offset)
                                 elif ax_settings['dateformat'].lower() == 'datetime':
                                     if isinstance(operationTime, (int,float)):
-                                        operationTime = self.JDateToDatetime(operationTime)
+                                        operationTime = WF.JDateToDatetime(operationTime, self.startYear)
                                     elif isinstance(operationTime, str):
                                         operationTime = self.translateDateFormat(operationTime, 'datetime', '')
                             else:
@@ -523,16 +524,16 @@ class MakeAutomatedReport(object):
                         if 'dateformat' in ax_settings.keys():
                             if ax_settings['dateformat'].lower() == 'jdate':
                                 if isinstance(vline_settings['value'], dt.datetime):
-                                    vline_settings['value'] = self.DatetimeToJDate(vline_settings['value'])
+                                    vline_settings['value'] = WF.DatetimeToJDate(vline_settings['value'], self.ModelAlt.t_offset)
                                 elif isinstance(vline_settings['value'], str):
                                     try:
                                         vline_settings['value'] = float(vline_settings['value'])
                                     except:
                                         vline_settings['value'] = self.translateDateFormat(vline_settings['value'], 'datetime', '')
-                                        vline_settings['value'] = self.DatetimeToJDate(vline_settings['value'])
+                                        vline_settings['value'] = WF.DatetimeToJDate(vline_settings['value'], self.ModelAlt.t_offset)
                             elif ax_settings['dateformat'].lower() == 'datetime':
                                 if isinstance(vline_settings['value'], (int,float)):
-                                    vline_settings['value'] = self.JDateToDatetime(vline_settings['value'])
+                                    vline_settings['value'] = WF.JDateToDatetime(vline_settings['value'], self.startYear)
                                 elif isinstance(vline_settings['value'], str):
                                     vline_settings['value'] = self.translateDateFormat(vline_settings['value'], 'datetime', '')
                         else:
@@ -779,8 +780,7 @@ class MakeAutomatedReport(object):
                 self.XML.writeHalfPagePlot(os.path.basename(figname), cur_obj_settings['description'])
             if pageformat == 'full':
                 self.XML.writeFullPagePlot(os.path.basename(figname), cur_obj_settings['description'])
-            
-            
+
     def makeProfileStatisticsTable(self, object_settings):
         '''
         Makes a table to compute stats based off of profile lines. Data is interpolated over a series of points
@@ -791,6 +791,8 @@ class MakeAutomatedReport(object):
         print('\n################################')
         print('Now making Profile Stats Table.')
         print('################################\n')
+
+        tableFuncs = WT.Tables(self)
 
         default_settings = self.loadDefaultPlotObject('profilestatisticstable')
         object_settings = self.replaceDefaults(default_settings, object_settings)
@@ -818,7 +820,7 @@ class MakeAutomatedReport(object):
 
         ################# Get plot units #################
         data, line_settings = self.convertProfileDataUnits(object_settings, data, line_settings)
-        object_settings['units_list'] = self.getUnitsList(line_settings)
+        object_settings['units_list'] = WF.getUnitsList(line_settings)
         object_settings['plot_units'] = self.getPlotUnits(object_settings['units_list'], object_settings)
         object_settings = self.updateFlaggedValues(object_settings, '%%units%%', object_settings['plot_units'])
         # table_blueprint = pickle.loads(pickle.dumps(object_settings, -1))
@@ -832,7 +834,7 @@ class MakeAutomatedReport(object):
 
         object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = self.getPlotYears(object_settings)
 
-        yrheaders, yrheaders_i = self.buildHeadersByTimestamps(object_settings['timestamps'], self.years)
+        yrheaders, yrheaders_i = tableFuncs.buildHeadersByTimestamps(object_settings['timestamps'], self.years)
         yrheaders = self.convertHeaderFormats(yrheaders, object_settings)
         if not object_settings['split_by_year']: #if we dont want to split by year, just make a big ass list
             yrheaders = [list(itertools.chain.from_iterable(yrheaders))]
@@ -852,7 +854,7 @@ class MakeAutomatedReport(object):
                     #if a comparison, write the date column. Otherwise, this will be our header
                     self.XML.writeDateColumn(yrheader)
                 header_i = yrheaders_i[yi][yhi]
-                headings, rows = self.buildProfileStatsTable(table_blueprint, yrheaders[yi][yhi], line_settings)
+                headings, rows = tableFuncs.buildProfileStatsTable(table_blueprint, yrheaders[yi][yhi], line_settings)
                 for hi,heading in enumerate(headings):
                     frmt_rows = []
                     threshold_colors = np.full(len(rows), None)
@@ -927,7 +929,7 @@ class MakeAutomatedReport(object):
 
         ################# Get plot units #################
         data, line_settings = self.convertProfileDataUnits(object_settings, data, line_settings)
-        object_settings['units_list'] = self.getUnitsList(line_settings)
+        object_settings['units_list'] = WF.getUnitsList(line_settings)
         object_settings['plot_units'] = self.getPlotUnits(object_settings['units_list'], object_settings)
         object_settings = self.updateFlaggedValues(object_settings, '%%units%%', object_settings['plot_units'])
 
@@ -1264,7 +1266,7 @@ class MakeAutomatedReport(object):
                                 if 'dateformat' in cur_obj_settings.keys():
                                     if cur_obj_settings['dateformat'].lower() == 'datetime':
                                         if isinstance(dates[0], (int,float)):
-                                            dates = self.JDateToDatetime(dates)
+                                            dates = WF.JDateToDatetime(dates, self.startYear)
 
                                 # gatemsk = np.where(object_settings['timestamps'][j] == dates)
                                 if gatemsk == None:
@@ -1461,19 +1463,21 @@ class MakeAutomatedReport(object):
         print('Now making Error Stats table.')
         print('################################\n')
 
+        tableFuncs = WT.Tables(self)
+
         default_settings = self.loadDefaultPlotObject('errorstatisticstable')
         object_settings = self.replaceDefaults(default_settings, object_settings)
 
         object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = self.getPlotYears(object_settings)
 
-        data = self.getTableData(object_settings)
-        data = self.mergeLines(data, object_settings)
+        data = self.Data.getTableDataDictionary(object_settings)
+        data = WF.mergeLines(data, object_settings)
 
-        headings, rows = self.buildTable(object_settings, object_settings['split_by_year'], data)
+        headings, rows = tableFuncs.buildTable(object_settings, object_settings['split_by_year'], data)
 
         object_settings = self.configureSettingsForID('base', object_settings)
 
-        object_settings['units_list'] = self.getUnitsList(data)
+        object_settings['units_list'] = WF.getUnitsList(data)
         object_settings['plot_units'] = self.getPlotUnits(object_settings['units_list'], object_settings)
 
         object_settings = self.updateFlaggedValues(object_settings, '%%units%%', object_settings['plot_units'])
@@ -1487,6 +1491,8 @@ class MakeAutomatedReport(object):
             desc = object_settings['description']
         else:
             desc = ''
+
+        desc = self.updateFlaggedValues(desc, '%%year%%', object_settings['yearstr'])
 
         self.XML.writeTableStart(desc, 'Statistics')
         for i, yearheader in enumerate(headings):
@@ -1542,17 +1548,19 @@ class MakeAutomatedReport(object):
         print('Now making Monthly Stats Table.')
         print('################################\n')
 
+        tableFuncs = WT.Tables(self)
+
         default_settings = self.loadDefaultPlotObject('monthlystatisticstable')
         object_settings = self.replaceDefaults(default_settings, object_settings)
         object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = self.getPlotYears(object_settings)
 
-        data = self.getTableData(object_settings)
-        data = self.mergeLines(data, object_settings)
+        data = self.Data.getTableDataDictionary(object_settings)
+        data = WF.mergeLines(data, object_settings)
 
-        headings, rows = self.buildTable(object_settings, object_settings['split_by_year'], data)
+        headings, rows = tableFuncs.buildTable(object_settings, object_settings['split_by_year'], data)
 
         object_settings= self.configureSettingsForID('base', object_settings)
-        object_settings['units_list'] = self.getUnitsList(data)
+        object_settings['units_list'] = WF.getUnitsList(data)
         object_settings['plot_units'] = self.getPlotUnits(object_settings['units_list'], object_settings)
 
         object_settings = self.updateFlaggedValues(object_settings, '%%units%%', object_settings['plot_units'])
@@ -1562,7 +1570,13 @@ class MakeAutomatedReport(object):
 
         thresholds = self.formatThreshold(object_settings)
 
-        self.XML.writeTableStart(object_settings['description'], 'Month')
+        if 'description' in object_settings.keys():
+            desc = object_settings['description']
+        else:
+            desc = ''
+        desc = self.updateFlaggedValues(desc, '%%year%%', object_settings['yearstr'])
+
+        self.XML.writeTableStart(desc, 'Month')
         for i, yearheader in enumerate(headings):
             year = yearheader[0]
             header = yearheader[1]
@@ -1615,17 +1629,19 @@ class MakeAutomatedReport(object):
         print('Now making Single Statistic Table.')
         print('################################\n')
 
+        tableFuncs = WT.Tables(self)
+
         default_settings = self.loadDefaultPlotObject('singlestatistictable') #get default SingleStat items
         object_settings = self.replaceDefaults(default_settings, object_settings) #overwrite the defaults with chapter file
 
         object_settings['years'] = pickle.loads(pickle.dumps(self.years, -1))
-        data = self.getTableData(object_settings)
-        data = self.mergeLines(data, object_settings)
+        data = self.Data.getTableDataDictionary(object_settings)
+        data = WF.mergeLines(data, object_settings)
 
-        headings, rows = self.buildSingleStatTable(object_settings, data)
+        headings, rows = tableFuncs.buildSingleStatTable(object_settings, data)
 
         # object_settings= self.configureSettingsForID('base', object_settings) #will turn on for comparison plot later
-        object_settings['units_list'] = self.getUnitsList(data)
+        object_settings['units_list'] = WF.getUnitsList(data)
         object_settings['plot_units'] = self.getPlotUnits(object_settings['units_list'], object_settings)
 
         object_settings = self.updateFlaggedValues(object_settings, '%%units%%', object_settings['plot_units'])
@@ -1693,6 +1709,8 @@ class MakeAutomatedReport(object):
         print('Now making Single Statistic Profile Table.')
         print('################################\n')
 
+        tableFuncs = WT.Tables(self)
+
         default_settings = self.loadDefaultPlotObject('singlestatisticprofiletable') #get default SingleStat items
         object_settings = self.replaceDefaults(default_settings, object_settings) #overwrite the defaults with chapter file
         object_settings['datakey'] = 'datapaths'
@@ -1713,12 +1731,12 @@ class MakeAutomatedReport(object):
         elif object_settings['usedepth'].lower() == 'true':
             data, object_settings = self.convertElevationsToDepths(data, object_settings)
 
-        headings, rows = self.buildSingleStatTable(object_settings, line_settings)
+        headings, rows = tableFuncs.buildSingleStatTable(object_settings, line_settings)
 
         # object_settings= self.configureSettingsForID('base', object_settings) #will turn on for comparison plot later
         ################# Get plot units #################
         data, line_settings = self.convertProfileDataUnits(object_settings, data, line_settings)
-        object_settings['units_list'] = self.getUnitsList(line_settings)
+        object_settings['units_list'] = WF.getUnitsList(line_settings)
         object_settings['plot_units'] = self.getPlotUnits(object_settings['units_list'], object_settings)
 
         object_settings = self.updateFlaggedValues(object_settings, '%%units%%', object_settings['plot_units'])
@@ -1746,13 +1764,13 @@ class MakeAutomatedReport(object):
                 if '%%' in row_val:
                     rowval_stats = {}
                     if year == 'ALL':
-                        data_idx = self.getAllMonthIdx(object_settings['timestamp_index'], i)
+                        data_idx = WF.getAllMonthIdx(object_settings['timestamp_index'], i)
                     else:
                         data_idx = object_settings['timestamp_index'][ri][i]
                     for di in data_idx:
                         stats_data = self.formatStatsProfileLineData(row_val, data, object_settings['resolution'],
                                                                      object_settings['usedepth'], di)
-                        rowval_stats = self.stackProfileIndicies(rowval_stats, stats_data)
+                        rowval_stats = WF.stackProfileIndicies(rowval_stats, stats_data)
 
 
                     row_val, stat = self.getStatsLine(row_val, rowval_stats)
@@ -1822,8 +1840,8 @@ class MakeAutomatedReport(object):
             #[0, 19, 25, 35] #distances
 
             contoursbyID = self.Data.getContourDataDictionary(cur_obj_settings)
-            contoursbyID = self.filterDataByYear(contoursbyID, year)
-            selectedContourIDs = self.getUsedIDs(contoursbyID)
+            contoursbyID = WF.filterDataByYear(contoursbyID, year)
+            selectedContourIDs = WF.getUsedIDs(contoursbyID)
 
             if len(selectedContourIDs) == 1:
                 figsize=(12, 6)
@@ -1848,8 +1866,8 @@ class MakeAutomatedReport(object):
             for IDi, ID in enumerate(selectedContourIDs):
                 contour_settings = pickle.loads(pickle.dumps(cur_obj_settings, -1))
                 contour_settings = self.configureSettingsForID(ID, contour_settings)
-                contours = self.selectContourReachesByID(contoursbyID, ID)
-                values, dates, distance, transitions = self.stackContours(contours)
+                contours = WF.selectContourReachesByID(contoursbyID, ID)
+                values, dates, distance, transitions = WF.stackContours(contours)
                 if len(selectedContourIDs) == 1:
                     axes = [axes]
 
@@ -1892,10 +1910,10 @@ class MakeAutomatedReport(object):
                 if 'dateformat' in contour_settings.keys():
                     if contour_settings['dateformat'].lower() == 'jdate':
                         if isinstance(dates[0], dt.datetime):
-                            dates = self.DatetimeToJDate(dates)
+                            dates = WF.DatetimeToJDate(dates, self.ModelAlt.t_offset)
                     elif contour_settings['dateformat'].lower() == 'datetime':
                         if isinstance(dates[0], (int,float)):
-                            dates = self.JDateToDatetime(dates)
+                            dates = WF.JDateToDatetime(dates, self.startYear)
 
                 if 'label' not in contour_settings.keys():
                     contour_settings['label'] = ''
@@ -1967,16 +1985,16 @@ class MakeAutomatedReport(object):
                         if 'dateformat' in contour_settings.keys():
                             if contour_settings['dateformat'].lower() == 'jdate':
                                 if isinstance(vline_settings['value'], dt.datetime):
-                                    vline_settings['value'] = self.DatetimeToJDate(vline_settings['value'])
+                                    vline_settings['value'] = WF.DatetimeToJDate(vline_settings['value'], self.ModelAlt.t_offset)
                                 elif isinstance(vline_settings['value'], str):
                                     try:
                                         vline_settings['value'] = float(vline_settings['value'])
                                     except:
                                         vline_settings['value'] = self.translateDateFormat(vline_settings['value'], 'datetime', '')
-                                        vline_settings['value'] = self.DatetimeToJDate(vline_settings['value'])
+                                        vline_settings['value'] = WF.DatetimeToJDate(vline_settings['value'], self.ModelAlt.t_offset)
                             elif contour_settings['dateformat'].lower() == 'datetime':
                                 if isinstance(vline_settings['value'], (int,float)):
-                                    vline_settings['value'] = self.JDateToDatetime(vline_settings['value'])
+                                    vline_settings['value'] = WF.JDateToDatetime(vline_settings['value'], self.startYear)
                                 elif isinstance(vline_settings['value'], str):
                                     vline_settings['value'] = self.translateDateFormat(vline_settings['value'], 'datetime', '')
                         else:
@@ -2216,8 +2234,8 @@ class MakeAutomatedReport(object):
             #[0, 19, 25, 35] #top water elevations
 
             contoursbyID = self.Data.getReservoirContourDataDictionary(cur_obj_settings)
-            contoursbyID = self.filterDataByYear(contoursbyID, year, extraflag='topwater')
-            selectedContourIDs = self.getUsedIDs(contoursbyID)
+            contoursbyID = WF.filterDataByYear(contoursbyID, year, extraflag='topwater')
+            selectedContourIDs = WF.getUsedIDs(contoursbyID)
 
             if len(selectedContourIDs) == 1:
                 figsize=(12, 6)
@@ -2242,7 +2260,7 @@ class MakeAutomatedReport(object):
             for IDi, ID in enumerate(selectedContourIDs):
                 contour_settings = pickle.loads(pickle.dumps(cur_obj_settings, -1))
                 contour_settings = self.configureSettingsForID(ID, contour_settings)
-                contour = self.selectContourReservoirByID(contoursbyID, ID)
+                contour = WF.selectContourReservoirByID(contoursbyID, ID)
 
                 values = contour['values']
                 elevations = contour['elevations']
@@ -2290,10 +2308,10 @@ class MakeAutomatedReport(object):
                 if 'dateformat' in contour_settings.keys():
                     if contour_settings['dateformat'].lower() == 'jdate':
                         if isinstance(dates[0], dt.datetime):
-                            dates = self.DatetimeToJDate(dates)
+                            dates = WF.DatetimeToJDate(dates, self.ModelAlt.t_offset)
                     elif contour_settings['dateformat'].lower() == 'datetime':
                         if isinstance(dates[0], (int,float)):
-                            dates = self.JDateToDatetime(dates)
+                            dates = WF.JDateToDatetime(dates, self.startYear)
 
                 if 'label' not in contour_settings.keys():
                     contour_settings['label'] = ''
@@ -2367,16 +2385,16 @@ class MakeAutomatedReport(object):
                         if 'dateformat' in contour_settings.keys():
                             if contour_settings['dateformat'].lower() == 'jdate':
                                 if isinstance(vline_settings['value'], dt.datetime):
-                                    vline_settings['value'] = self.DatetimeToJDate(vline_settings['value'])
+                                    vline_settings['value'] = WF.DatetimeToJDate(vline_settings['value'], self.ModelAlt.t_offset)
                                 elif isinstance(vline_settings['value'], str):
                                     try:
                                         vline_settings['value'] = float(vline_settings['value'])
                                     except:
                                         vline_settings['value'] = self.translateDateFormat(vline_settings['value'], 'datetime', '')
-                                        vline_settings['value'] = self.DatetimeToJDate(vline_settings['value'])
+                                        vline_settings['value'] = WF.DatetimeToJDate(vline_settings['value'], self.ModelAlt.t_offset)
                             elif contour_settings['dateformat'].lower() == 'datetime':
                                 if isinstance(vline_settings['value'], (int,float)):
-                                    vline_settings['value'] = self.JDateToDatetime(vline_settings['value'])
+                                    vline_settings['value'] = WF.JDateToDatetime(vline_settings['value'], self.startYear)
                                 elif isinstance(vline_settings['value'], str):
                                     vline_settings['value'] = self.translateDateFormat(vline_settings['value'], 'datetime', '')
                         else:
@@ -2617,7 +2635,7 @@ class MakeAutomatedReport(object):
         ### Plot Lines ###
         stackplots = {}
         data = self.Data.getTimeSeriesDataDictionary(object_settings)
-        data = self.mergeLines(data, object_settings)
+        data = WF.mergeLines(data, object_settings)
 
         object_settings = self.configureSettingsForID('base', object_settings)
 
@@ -2647,13 +2665,13 @@ class MakeAutomatedReport(object):
             if 'dateformat' in object_settings.keys():
                 if object_settings['dateformat'].lower() == 'jdate':
                     if isinstance(dates[0], dt.datetime):
-                        dates = self.DatetimeToJDate(dates)
+                        dates = WF.DatetimeToJDate(dates, self.ModelAlt.t_offset)
                 elif object_settings['dateformat'].lower() == 'datetime':
                     if isinstance(dates[0], (float, int)):
-                        dates = self.JDateToDatetime(dates)
+                        dates = WF.JDateToDatetime(dates, self.startYear)
                 else:
                     if isinstance(dates[0], (float, int)):
-                        dates = self.JDateToDatetime(dates)
+                        dates = WF.JDateToDatetime(dates, self.startYear)
 
             if 'unitsystem' in object_settings.keys():
                 values, units = self.convertUnitSystem(values, units, object_settings['unitsystem'])
@@ -2980,92 +2998,6 @@ class MakeAutomatedReport(object):
 
         return cur_obj_settings
 
-    def selectContourReachesByID(self, contoursbyID, ID):
-        '''
-        selects contour data based on the ID
-        :param contoursbyID: dictionary containing all contours
-        :param ID: selected ID ('base', 'alt_1')
-        :return: list of contour keys that apply to that ID
-        '''
-
-        output_contours = {}
-        for key in contoursbyID:
-            if contoursbyID[key]['ID'] == ID:
-                output_contours[key] = contoursbyID[key]
-        return output_contours
-
-    def selectContourReservoirByID(self, contoursbyID, ID):
-        '''
-        returns the correct contour from dictionary based on ID
-        :param contoursbyID: dictionary containing several contours
-        :param ID: selected ID to find in data
-        :return: dictionary for corresponding ID, or empty
-        '''
-
-        for key in contoursbyID:
-            if contoursbyID[key]['ID'] == ID:
-                return contoursbyID[key]
-        return {}
-
-    def stackContours(self, contours):
-        '''
-        stacks data for multiple contour reaches so they appear as a single reach. Adds distances to stay consistent.
-        keeps track of the distances in which defined reaches change
-        :param contours: dictionary containing reach contour data
-        :return:
-            output_values: values at each timestep/distance
-            output_dates: list of dates for data
-            output_distance:distances for each cell center from source
-            transitions: names and locations where the reaches change
-        '''
-
-        output_values = np.array([])
-        output_dates = np.array([])
-        output_distance = np.array([])
-        transitions = {}
-        for contourname in contours.keys():
-            contour = contours[contourname]
-            if len(output_values) == 0:
-                output_values = pickle.loads(pickle.dumps(contour['values'], -1))
-            else:
-                output_values = np.append(output_values, contour['values'][:,1:], axis=1)
-            if len(output_dates) == 0:
-                output_dates = contour['dates']
-            if len(output_distance) == 0:
-                output_distance = contour['distance']
-                transitions[contourname] = 0
-            else:
-                last_distance = output_distance[-1]
-                current_distances = contour['distance'][1:] + last_distance
-                output_distance = np.append(output_distance, current_distances)
-                transitions[contourname] = current_distances[0]
-        return output_values, output_dates, output_distance, transitions
-
-    def stackProfileIndicies(self, exist_data, new_data):
-        '''
-        takes an existing array of data and adds another array
-        for contour plots of several reaches split into different groups
-        stacks them together so they function as a single reach
-        exist_data is existing array
-        new data is data to be added to it
-        :param exist_data: dictionary containing existing data
-        :param new_data: data to be added to existing data
-        :return: modified exist_data
-        '''
-
-        for runflag in new_data.keys():
-            if runflag not in exist_data.keys():
-                exist_data[runflag] = {}
-            for itemflag in new_data[runflag]:
-                if itemflag not in exist_data[runflag].keys():
-                    exist_data[runflag][itemflag] = new_data[runflag][itemflag]
-                else:
-                    if isinstance(new_data[runflag][itemflag], list):
-                        exist_data[runflag][itemflag] += new_data[runflag][itemflag]
-                    elif isinstance(new_data[runflag][itemflag], np.ndarray):
-                        exist_data[runflag][itemflag] = np.append(exist_data[runflag][itemflag], new_data[runflag][itemflag])
-        return exist_data
-
     def setMultiRunStartEndYears(self):
         '''
         sets start and end times by looking at all possible runs. Picks overlapping time periods only.
@@ -3078,36 +3010,7 @@ class MakeAutomatedReport(object):
                 self.EndTime = self.SimulationVariables[simID]['EndTime']
         print('Start and End time set to {0} - {1}'.format(self.StartTime, self.EndTime))
 
-    def getPandasTimeFreq(self, intervalstring):
-        '''
-        Reads in the DSS formatted time intervals and translates them to a format pandas.resample() understands
-        bases off of the time interval, so 15MIN becomes 15T, or 6MON becomes 6M
-        :param intervalstring: DSS interval string such as 1HOUR or 1DAY
-        :return: pandas time interval
-        '''
 
-        intervalstring = intervalstring.lower()
-        if 'min' in intervalstring:
-            timeint = intervalstring.replace('min','') + 'T'
-            return timeint
-        elif 'hour' in intervalstring:
-            timeint = intervalstring.replace('hour','') + 'H'
-            return timeint
-        elif 'day' in intervalstring:
-            timeint = intervalstring.replace('day','') + 'D'
-            return timeint
-        elif 'mon' in intervalstring:
-            timeint = intervalstring.replace('mon','') + 'M'
-            return timeint
-        elif 'week' in intervalstring:
-            timeint = intervalstring.replace('week','') + 'W'
-            return timeint
-        elif 'year' in intervalstring:
-            timeint = intervalstring.replace('year','') + 'A'
-            return timeint
-        else:
-            print('Unidentified time interval')
-            return 0
 
     def getDefaultLineSettings(self, LineSettings, param, i):
         '''
@@ -3571,42 +3474,6 @@ class MakeAutomatedReport(object):
 
         return start_date, end_date
 
-    def getTableData(self, object_settings):
-        '''
-        Grabs data from time series data to be used in tables
-        :param object_settings: currently selected object settings dictionary
-        :return: dictionary object containing info from each data source and list of units
-        '''
-
-        data = {}
-        for dp in object_settings['datapaths']:
-            numtimesused = 0
-            if 'flag' not in dp.keys():
-                print('Flag not set for line (Computed/Observed/etc)')
-                print('Not using Line:', dp)
-                continue
-            elif dp['flag'].lower() == 'computed':
-                for ID in self.accepted_IDs:
-                    cur_dp = pickle.loads(pickle.dumps(dp, -1))
-                    cur_dp = self.configureSettingsForID(ID, cur_dp)
-                    cur_dp['numtimesused'] = numtimesused
-                    cur_dp['ID'] = ID
-                    if not self.checkModelType(cur_dp):
-                        continue
-                    numtimesused += 1
-                    data = self.Data.updateTimeSeriesDataDictionary(data, cur_dp)
-            else:
-                if self.currentlyloadedID != 'base':
-                    dp = self.configureSettingsForID('base', dp)
-                else:
-                    dp = self.replaceflaggedValues(dp, 'modelspecific')
-                dp['numtimesused'] = 0
-                if not self.checkModelType(dp):
-                    continue
-                data = self.Data.updateTimeSeriesDataDictionary(data, dp)
-
-        return data
-
     def getListItems(self, listvals):
         '''
         recursive function to convert lists of lists into single lists for logging
@@ -3684,7 +3551,6 @@ class MakeAutomatedReport(object):
 
         if len(timestamps) == 0:
             #if something fails, or not implemented, or theres just no dates in the window, make some up
-            print('No TimeSteps found.. Making regular timesteps..')
             timestamps = self.makeRegularTimesteps(days=15)
 
         return np.asarray(timestamps)
@@ -3794,47 +3660,6 @@ class MakeAutomatedReport(object):
             param_count[param] += 1
 
         return param, param_count
-
-    def getUnitsList(self, line_settings):
-        '''
-        creates a list of units from defined lines in user defined settings
-        :param object_settings: currently selected object settings dictionary
-        :return: units_list: list of used units
-        '''
-
-        units_list = []
-        for flag in line_settings.keys():
-            units = line_settings[flag]['units']
-            if units != None:
-                units_list.append(units)
-        return units_list
-
-    def getUsedIDs(self, data):
-        '''
-        Finds all IDs that are actually used by data
-        :param data: dictionary for data
-        :return: list of IDs
-        '''
-
-        IDs = []
-        for key in data.keys():
-            ID = data[key]['ID']
-            if ID not in IDs:
-                IDs.append(ID)
-        return IDs
-
-    def getAllMonthIdx(self, timestamp_indexes, i):
-        '''
-        collects all indecies for all years for a given month
-        :param timestamp_indexes: list of indicies that fall in every month for every year ([[], [], []])
-        :param i: month index (0-11)
-        :return: list of indicies for a month for all years
-        '''
-
-        out_idx = []
-        for yearlist in timestamp_indexes:
-            out_idx += yearlist[i]
-        return out_idx
 
     def getGateConfigurationDays(self, gateconfig, gatedata, timestamp):
         '''
@@ -4004,8 +3829,8 @@ class MakeAutomatedReport(object):
             default_settings: dictionary of user and default settings
         '''
 
-        default_settings = pickle.loads(pickle.dumps(self.replaceflaggedValues(default_settings, 'general'), -1))
-        object_settings = pickle.loads(pickle.dumps(self.replaceflaggedValues(object_settings, 'general'), -1))
+        default_settings = pickle.loads(pickle.dumps(WF.replaceflaggedValues(self, default_settings, 'general'), -1))
+        object_settings = pickle.loads(pickle.dumps(WF.replaceflaggedValues(self, object_settings, 'general'), -1))
 
         for key in object_settings.keys():
             if key not in default_settings.keys(): #if defaults doesnt have key
@@ -4022,76 +3847,6 @@ class MakeAutomatedReport(object):
                 default_settings[key] = object_settings[key]
 
         return default_settings
-
-    def replaceflaggedValues(self, settings, itemset):
-        '''
-        recursive function to replace flagged values in settings
-        :param settings: dict, list or string containing settings, potentially with flags
-        :return:
-            settings: dict, list or string with flags replaced
-        '''
-
-        if isinstance(settings, str):
-            if '%%' in settings:
-                newval = self.replaceFlaggedValue(settings, itemset)
-                settings = newval
-        elif isinstance(settings, dict):
-            for key in settings.keys():
-                if isinstance(settings[key], dict):
-                    settings[key] = self.replaceflaggedValues(settings[key], itemset)
-                elif isinstance(settings[key], list):
-                    new_list = []
-                    for item in settings[key]:
-                        new_list.append(self.replaceflaggedValues(item, itemset))
-                    settings[key] = new_list
-                else:
-                    try:
-                        if '%%' in settings[key]:
-                            newval = self.replaceFlaggedValue(settings[key], itemset)
-                            settings[key] = newval
-                    except TypeError:
-                        continue
-        elif isinstance(settings, list):
-            for i, item in enumerate(settings):
-                if '%%' in item:
-                    settings[i] = self.replaceFlaggedValue(item, itemset)
-
-        return settings
-
-    def replaceFlaggedValue(self, value, itemset):
-        '''
-        replaces strings with flagged values with known paths
-        flags are now case insensitive with more intelligent matching. yay.
-        needs to use '[1:-1]' for paths, otherwise things like /t in a path C:/trains will be taken literal
-        :param value: string potentially containing flagged value
-        :return:
-            value: string with potential flags replaced
-        '''
-
-
-        if itemset == 'general':
-            flagged_values = {'%%region%%': self.ChapterRegion,
-                              '%%observedDir%%': self.observedDir,
-                              '%%startyear%%': str(self.startYear),
-                              '%%endyear%%': str(self.endYear)
-                              }
-        elif itemset == 'modelspecific':
-            flagged_values = {'%%ModelDSS%%': self.DSSFile,
-                              '%%Fpart%%': self.alternativeFpart,
-                              '%%plugin%%': self.plugin,
-                              '%%modelAltName%%': self.modelAltName,
-                              '%%SimulationName%%': self.SimulationName,
-                              '%%SimulationDir%%': self.SimulationDir,
-                              '%%baseSimulationName%%': self.baseSimulationName,
-                              '%%starttime%%': self.StartTimeStr,
-                              '%%endtime%%': self.EndTimeStr,
-                              '%%LastComputed%%': self.LastComputed
-                              }
-
-        for fv in flagged_values.keys():
-            pattern = re.compile(re.escape(fv), re.IGNORECASE)
-            value = pattern.sub(repr(flagged_values[fv])[1:-1], value) #this seems weird with [1:-1] but paths wont work otherwise
-        return value
 
     def replaceOmittedValues(self, values, omitval):
         '''
@@ -4208,7 +3963,7 @@ class MakeAutomatedReport(object):
                 print('Trying as Jdate..')
                 try:
                     lim_frmt = float(lim)
-                    lim_frmt = self.JDateToDatetime(lim_frmt)
+                    lim_frmt = WF.JDateToDatetime(lim_frmt, self.startYear)
                     print('JDate {0} as {1} Accepted!'.format(lim, lim_frmt))
                     return lim_frmt
                 except:
@@ -4235,14 +3990,14 @@ class MakeAutomatedReport(object):
                         else:
                             lim_frmt = lim
                         print('converting to jdate..')
-                        lim_frmt = self.DatetimeToJDate(lim_frmt)
+                        lim_frmt = WF.DatetimeToJDate(lim_frmt, self.ModelAlt.t_offset)
                         print('Converted to jdate!', lim_frmt)
                         return lim_frmt
                     except:
                         print('Error Reading Limit: {0} as a dt.datetime object.'.format(lim))
                         print('If this is wrong, try format: Apr 2014 1 12:00')
 
-                    fallback = self.DatetimeToJDate(fallback)
+                    fallback = WF.DatetimeToJDate(fallback, self.ModelAlt.t_offset)
 
                     if fallback != None and fallback != '':
                         print('Setting to fallback {0}.'.format(fallback))
@@ -4275,75 +4030,6 @@ class MakeAutomatedReport(object):
 
         print('Units Undefined:', units)
         return units
-
-    def filterDataByYear(self, data, year, extraflag=None):
-        '''
-        filters data by a given year. Used when splitting by year
-        :param data: dictionary containing data to use
-        :param year: selected year
-        :return:dictionary containing fultered data
-        '''
-        if year != 'ALLYEARS':
-            for flag in data.keys():
-                if len(data[flag]['dates']) > 0:
-                    s_idx, e_idx = self.getYearlyFilterIdx(data[flag]['dates'], year)
-                    data[flag]['values'] = data[flag]['values'][s_idx:e_idx+1]
-                    data[flag]['dates'] = data[flag]['dates'][s_idx:e_idx+1]
-                    if extraflag != None:
-                        data[flag][extraflag] = data[flag][extraflag][s_idx:e_idx+1]
-        return data
-
-    def getYearlyFilterIdx(self, dates, year):
-        '''
-        finds start and end index for a given year for a list of dates
-        :param dates: list of datetime objects
-        :param year: target year
-        :return: start and end index for that year
-        '''
-
-        start_date = dates[0]
-        end_date = dates[-1]
-        e_year_date = dt.datetime(year,12,31,23,59)
-        s_year_date = dt.datetime(year,1,1,0,0)
-        interval = (dates[1] - start_date).total_seconds()
-        if start_date.year == year:
-            s_idx = 0
-        else:
-            s_idx = round(int((s_year_date - start_date).total_seconds() / interval))
-        if end_date.year == year:
-            e_idx = len(dates)
-        else:
-            e_idx = round(int((e_year_date - start_date).total_seconds() / interval))
-
-        return s_idx, e_idx
-
-    def getMonthlyFilterIdx(self, dates, month):
-        '''
-        finds start and end index for a given month for a list of dates
-        :param dates: list of datetime objects
-        :param month: target month
-        :return: start and end index for that year
-        '''
-
-        start_date = dates[0]
-        end_date = dates[-1]
-        s_month_date = dt.datetime(start_date.year, month,1,0,0)
-        if month == 12:
-            e_month_date = dt.datetime(start_date.year+1,1,1,0,0) - dt.timedelta(seconds=1)
-        else:
-            e_month_date = dt.datetime(start_date.year,month+1,1,0,0) - dt.timedelta(seconds=1)
-
-        interval = (dates[1] - start_date).total_seconds()
-        if start_date.month == month:
-            s_idx = 0
-        else:
-            s_idx = round(int((s_month_date - start_date).total_seconds() / interval))
-        if end_date.month == month:
-            e_idx = len(dates)
-        else:
-            e_idx = round(int((e_month_date - start_date).total_seconds() / interval))
-
-        return s_idx, e_idx
 
     def forceTimeInterval(self, interval):
         '''
@@ -4410,7 +4096,7 @@ class MakeAutomatedReport(object):
                 if dateformat == 'datetime':
                     min = self.StartTime
                 elif dateformat == 'jdate':
-                    min = self.DatetimeToJDate(self.StartTime)
+                    min = WF.DatetimeToJDate(self.StartTime, self.ModelAlt.t_offset)
                 else:
                     #we've done everything we can at this point..
                     min = self.StartTime
@@ -4421,7 +4107,7 @@ class MakeAutomatedReport(object):
                 if dateformat == 'datetime':
                     max = self.EndTime
                 elif dateformat == 'jdate':
-                    max = self.DatetimeToJDate(self.EndTime)
+                    max = WF.DatetimeToJDate(self.EndTime, self.ModelAlt.t_offset)
                 else:
                     #we've done everything we can at this point..
                     max = self.StartTime
@@ -4486,14 +4172,12 @@ class MakeAutomatedReport(object):
                             year_loops = self.years
                         if len(curdates) > 0:
                             for yearloop in year_loops:
-
-
-                                s_idx, e_idx = self.getYearlyFilterIdx(curdates, yearloop)
+                                s_idx, e_idx = WF.getYearlyFilterIdx(curdates, yearloop)
                                 yearvals = curvalues[s_idx:e_idx+1]
                                 yeardates = curdates[s_idx:e_idx+1]
 
                                 if len(yeardates) > 0:
-                                    s_idx, e_idx = self.getMonthlyFilterIdx(yeardates, sr_month)
+                                    s_idx, e_idx = WF.getMonthlyFilterIdx(yeardates, sr_month)
 
                                     newvals = np.append(newvals, yearvals[s_idx:e_idx+1])
                                     newdates = np.append(newdates, yeardates[s_idx:e_idx+1])
@@ -4505,7 +4189,7 @@ class MakeAutomatedReport(object):
             for flag in data.keys():
                 if len(data[flag]['dates']) == 0:
                     continue
-                s_idx, e_idx = self.getYearlyFilterIdx(data[flag]['dates'], year)
+                s_idx, e_idx = WF.getYearlyFilterIdx(data[flag]['dates'], year)
                 data[flag]['values'] = data[flag]['values'][s_idx:e_idx+1]
                 data[flag]['dates'] = data[flag]['dates'][s_idx:e_idx+1]
 
@@ -4573,11 +4257,14 @@ class MakeAutomatedReport(object):
                         if bottom_elev > bottom:
                             bottom = bottom_elev
 
-        if usedepth.lower() == 'true':
-            #build elev profiles
-            output_interp_depths = np.arange(top, bottom, (bottom-top)/float(resolution))
+        if bottom != None and top != None:
+            if usedepth.lower() == 'true':
+                #build elev profiles
+                output_interp_depths = np.arange(top, bottom, (bottom-top)/float(resolution))
+            else:
+                output_interp_elevations = np.arange(bottom, top, (top-bottom)/float(resolution))
         else:
-            output_interp_elevations = np.arange(bottom, top, (top-bottom)/float(resolution))
+            output_interp_elevations = []
 
         for flag in flags:
             out_data[flag] = {}
@@ -4585,6 +4272,11 @@ class MakeAutomatedReport(object):
 
             if len(data_dict[flag]['values'][index]) < 2:
                 print('Insufficient data points with current bounds for {0}'.format(flag))
+                out_data[flag]['values'] = []
+                out_data[flag]['depths'] = []
+                out_data[flag]['elevations'] = []
+            elif len(output_interp_elevations) == 0:
+                print(f'Insufficient elevation points for row {flag} in {row}')
                 out_data[flag]['values'] = []
                 out_data[flag]['depths'] = []
                 out_data[flag]['elevations'] = []
@@ -4777,8 +4469,8 @@ class MakeAutomatedReport(object):
                     xtickspacing = int(xtickspacing)
                 newxticks = np.arange(xmin, (xmax+xtickspacing), xtickspacing)
             elif axis_settings[dateformatflag].lower() == 'datetime':
-                dt_xmin = self.JDateToDatetime(xmin) #do everything on datetime, and we can convert later
-                dt_xmax = self.JDateToDatetime(xmax) #do everything on datetime, and we can convert later
+                dt_xmin = WF.JDateToDatetime(xmin, self.startYear) #do everything on datetime, and we can convert later
+                dt_xmax = WF.JDateToDatetime(xmax,self.startYear) #do everything on datetime, and we can convert later
                 newxticks = self.buildTimeSeries(dt_xmin.replace(tzinfo=None), dt_xmax.replace(tzinfo=None), xtickspacing)
 
             newxticklabels = self.formatTickLabels(newxticks, xtick_settings)
@@ -4865,186 +4557,6 @@ class MakeAutomatedReport(object):
 
         return out_stat, stat
 
-    def buildTable(self, object_settings, split_by_year, data):
-        '''
-        builds a table header and rows
-        :param object_settings: dictionary containing settings for object
-        :param split_by_year: boolean flag to determine if table is for all years, or split up
-        :param data: dictionary contining data
-        :return: headers and rows lists
-        '''
-
-        headers = {}
-        rows = {}
-        outputyears = [n for n in self.years] #this is usually a range or ALLYEARS
-        outputyears.append('ALL') #do this last
-        for year in outputyears:
-            headers[year] = []
-            rows[year] = {}
-            for ri, row in enumerate(object_settings['rows']):
-                rows[year][ri] = []
-
-        for i, header in enumerate(object_settings['headers']):
-            curheader = pickle.loads(pickle.dumps(header, -1))
-            if self.iscomp: #comp run
-                isused = False
-                for datakey in data.keys():
-                    if '%%{0}%%'.format(data[datakey]['flag']) in curheader: #found data specific flag
-                        isused = True
-                        if 'ID' in data[datakey].keys():
-                            ID = data[datakey]['ID']
-                            tmpheader = self.configureSettingsForID(ID, curheader)
-                        else:
-                            tmpheader = pickle.loads(pickle.dumps(curheader, -1))
-                        tmpheader = tmpheader.replace('%%{0}%%'.format(data[datakey]['flag']), '')
-                        if split_by_year and '%%year%%' in curheader:
-                            for year in self.years:
-                                headers[year].append(tmpheader)
-                                for ri, row in enumerate(object_settings['rows']):
-                                    srow = row.split('|')[1:][i]
-                                    rows[year][ri].append(srow.replace(data[datakey]['flag'], datakey))
-                        else:
-                            headers['ALL'].append(tmpheader)
-                            for ri, row in enumerate(object_settings['rows']):
-                                srow = row.split('|')[1:][i]
-                                rows['ALL'][ri].append(srow.replace(data[datakey]['flag'], datakey))
-
-                if not isused: #if a header doesnt get used, probably something observed and not needing replacing.
-                    if split_by_year and '%%year%%' in curheader:
-                        for year in self.years:
-                            headers[year].append(curheader)
-                            for ri, row in enumerate(object_settings['rows']):
-                                srow = row.split('|')[1:][i]
-                                rows[year][ri].append(srow)
-
-                    else:
-                        headers['ALL'].append(curheader)
-                        for ri, row in enumerate(object_settings['rows']):
-                            srow = row.split('|')[1:][i]
-                            rows['ALL'][ri].append(srow)
-
-            else: #single run
-                if split_by_year and '%%year%%' in curheader:
-                    for year in self.years:
-                        headers[year].append(curheader)
-                        for ri, row in enumerate(object_settings['rows']):
-                            srow = row.split('|')[1:][i]
-                            rows[year][ri].append(srow)
-
-                else:
-                    headers['ALL'].append(curheader)
-                    for ri, row in enumerate(object_settings['rows']):
-                        srow = row.split('|')[1:][i]
-                        rows['ALL'][ri].append(srow)
-        
-
-        organizedheaders = []
-        organizedrows = []
-        for row in object_settings['rows']:
-            organizedrows.append(row.split('|')[0])
-        for year in outputyears:
-            yrstr = str(year) if split_by_year and year != 'ALL' else self.years_str
-            for hdr in headers[year]:
-                organizedheaders.append([year, self.updateFlaggedValues(hdr, '%%year%%', yrstr)])
-            for ri in rows[year].keys():
-                for rw in rows[year][ri]:
-                    organizedrows[ri] += '|{0}'.format(rw)
-
-        return organizedheaders, organizedrows
-
-    def buildSingleStatTable(self, object_settings, data):
-        '''
-        builds headings and rows for single stat table
-        :param object_settings: dictionary containing settings for table
-        :param data: dictionary contianing data
-        :return: headings and rows used to build tables
-        '''
-
-        rows = []
-        headers = [n for n in self.Constants.mo_str_3]
-        stat = object_settings['statistic']
-        if stat in ['mean', 'count']:
-            numflagsneeded = 1
-        else:
-            numflagsneeded = 2
-        datakeys = list(data.keys())
-        if len(data.keys()) < 2 and numflagsneeded != 1:
-            print('\nWARNING: Insufficient amount of datapaths defined.')
-            print(f'Need 2 datapaths to compute statistics for {stat}')
-            print('Resulting table will not generate correctly.')
-            for year in object_settings['years']:
-                row = f'{year}'
-                for month in self.Constants.mo_str_3:
-                    row += '|-'
-                rows.append(row)
-            if 'includeallyears' in object_settings.keys():
-                if object_settings['includeallyears'].lower() == 'true':
-                    row = 'All'
-                    for month in self.Constants.mo_str_3:
-                        row += '|-'
-                    rows.append(row)
-        elif len(data.keys()) > 2:
-            print('\nWARNING: Too many datapaths defined.')
-            print(f'Need 2 datapaths to compute statistics for {stat}')
-            print(f'Resulting table will use the following datapaths: {datakeys[0]}, {datakeys[1]}')
-        else:
-            for year in object_settings['years']:
-                row = f'{year}'
-                for month in self.Constants.mo_str_3:
-                    if numflagsneeded == 1:
-                        row += f'|%%{stat}.{data[datakeys[0]]["flag"]}.MONTH={month.upper()}%%'
-                    else:
-                        row += f'|%%{stat}.{data[datakeys[0]]["flag"]}.MONTH={month.upper()}.{data[datakeys[1]]["flag"]}.MONTH={month.upper()}%%'
-                rows.append(row)
-            if 'includeallyears' in object_settings.keys():
-                if object_settings['includeallyears'].lower() == 'true':
-                    row = 'All'
-                    for month in self.Constants.mo_str_3:
-                        if numflagsneeded == 1:
-                            row += f'|%%{stat}.{data[datakeys[0]]["flag"]}.MONTH={month.upper()}%%'
-                        else:
-                            row += f'|%%{stat}.{data[datakeys[0]]["flag"]}.MONTH={month.upper()}.{data[datakeys[1]]["flag"]}.MONTH={month.upper()}%%'
-                    rows.append(row)
-
-        return headers, rows
-
-    def buildProfileStatsTable(self, object_settings, timestamp, data):
-        '''
-        builds a table header and rows for profile statistics
-        :param object_settings: dictionary containing settings
-        :param timestamp: current timestamp to configure table for
-        :param data: dictionary contianing data
-        :return: list of headers, list of rows
-        '''
-
-        headers = []
-        rows = []
-        for ri, row in enumerate(object_settings['rows']):
-            rows.append(row.split('|')[0])
-
-        if self.iscomp: #comp run
-            for i, header in enumerate(object_settings['headers']):
-                curheader = pickle.loads(pickle.dumps(header, -1))
-                for datakey in data.keys():
-                    if '%%{0}%%'.format(data[datakey]['flag']) in curheader: #found data specific flag
-                        if 'ID' in data[datakey].keys():
-                            ID = data[datakey]['ID']
-                            tmpheader = self.configureSettingsForID(ID, curheader)
-                        else:
-                            tmpheader = pickle.loads(pickle.dumps(curheader, -1))
-                        tmpheader = tmpheader.replace('%%{0}%%'.format(data[datakey]['flag']), '')
-                        headers.append(tmpheader)
-                        for ri, row in enumerate(object_settings['rows']):
-                            srow = row.split('|')[1:][i]
-                            rows[ri] += '|{0}'.format(srow.replace(data[datakey]['flag'], datakey))
-
-        else: #single run
-            headers = [timestamp]
-            rows = object_settings['rows']
-
-        return headers, rows
-
-
     def buildHeadersByYear(self, object_settings, years, split_by_year):
         '''
         if split by year is selected, and a header has %%year%% flag, iterate through and create a new header for
@@ -5076,76 +4588,6 @@ class MakeAutomatedReport(object):
                 for yrhd in header_by_year:
                     headings.append([year, self.updateFlaggedValues(yrhd, '%%year%%', yearstr[yi])])
         return headings
-
-    def buildTimeSeries(self, startTime, endTime, interval):
-        '''
-        builds a regular time series using the start and end time and a given interval
-        #TODO: if start time isnt on the hour, but the interval is, change start time to be hourly?
-        :param startTime: datetime object
-        :param endTime: datetime object
-        :param interval: DSS interval
-        :return: list of time series dates
-        '''
-
-        try:
-            intervalinfo = self.Constants.time_intervals[interval]
-            interval = intervalinfo[0]
-            interval_info = intervalinfo[1]
-        except KeyError:
-            interval, interval_info = self.forceTimeInterval(interval)
-
-        if interval_info == 'np':
-            ts = np.arange(startTime, endTime, interval)
-            ts = np.asarray([t.astype(dt.datetime) for t in ts])
-        elif interval_info == 'pd':
-            ts = pd.date_range(startTime, endTime, freq=interval, closed=None)
-            ts = np.asarray([t.to_pydatetime() for t in ts])
-        return ts
-
-    def buildFileName(self, Line_info):
-        '''
-        creates uniform name for csv log output for data
-        :param Line_info: dictionary containing line values
-        :return: file name
-        '''
-
-        MemKey = self.Data.buildMemoryKey(Line_info)
-        if MemKey == 'Null':
-            return MemKey
-        else:
-            return MemKey + '.csv'
-
-    def buildHeadersByTimestamps(self, timestamps, years):
-        '''
-        build headers for profile line stat tables by timestamp
-        convert to Datetime, no matter what. We can convert back..
-        Filter by year, using year input. If ALLYEARS, no data is filtered.
-        :param timestamps: list of available timesteps
-        :param year: used to filter down to the year, or if ALLYEARS, allow all years
-        :return: list of headers
-        '''
-
-        headers = []
-        headers_i = []
-
-        for year in years:
-            h = []
-            hi = []
-            for ti, timestamp in enumerate(timestamps):
-                if isinstance(timestamp, dt.datetime):
-                    if year == timestamp.year:
-                        h.append(timestamp)
-                        hi.append(ti)
-
-                elif isinstance(timestamp, float):
-                    ts_dt = self.JDateToDatetime(timestamp)
-                    if year == ts_dt.year:
-                        h.append(str(timestamp))
-                        hi.append(ti)
-            headers.append(h)
-            headers_i.append(hi)
-
-        return headers, headers_i
 
     def limitXdata(self, dates, values, xlims):
         '''
@@ -5328,64 +4770,6 @@ class MakeAutomatedReport(object):
                 else:
                     thresholds += self.formatThreshold(tablecolor)
         return thresholds
-
-    def mergeLines(self, data, settings):
-        '''
-        reads in mergeline settings and combines time series as defined. returns a single time series based on the
-        controller flag. then removes lines if dictated.
-        :param data: dictionary containing data
-        :param settings: list of settings including mergeline settings
-        :return: updated data dictionary
-        '''
-
-        removekeys = []
-        if 'mergelines' in settings.keys():
-            for mergeline in settings['mergelines']:
-                dataflags = mergeline['flags']
-                if 'controller' in mergeline.keys():
-                    controller = mergeline['controller']
-                    if controller not in data.keys():
-                        controller = dataflags[0]
-                else:
-                    controller = dataflags[0]
-                otherflags = [n for n in dataflags if n != controller]
-                if controller not in data.keys():
-                    print('Mergeline Controller {0} not found in data {1}'.format(controller, data.keys()))
-                    continue
-                flagnotfound = False
-                for OF in otherflags:
-                    if OF not in data.keys():
-                        print('Mergeline flag {0} not found in data {1}'.format(OF, data.keys()))
-                        flagnotfound = True
-                if flagnotfound:
-                    continue
-                if 'math' in mergeline.keys():
-                    math = mergeline['math'].lower()
-                else:
-                    math = 'add'
-                baseunits = data[controller]['units']
-                for flag in otherflags:
-                    if data[flag]['units'] != baseunits:
-                        print('WARNING: Attempting to merge lines with differing units')
-                        print('{0}: {1} and {2}: {3}'.format(flag, data[flag]['units'], controller, baseunits))
-                        print('If incorrect, please modify/append input settings to ensure lines '
-                              'are converted prior to merging.')
-                    data[controller], data[flag] = WF.matchData(data[controller], data[flag])
-                    if math == 'add':
-                        data[controller]['values'] += data[flag]['values']
-                    elif math == 'multiply':
-                        data[controller]['values'] *= data[flag]['values']
-                    elif math == 'divide':
-                        data[controller]['values'] /= data[flag]['values']
-                    elif math == 'subtract':
-                        data[controller]['values'] -= data[flag]['values']
-                if 'keeplines' in mergeline.keys():
-                    if mergeline['keeplines'].lower() == 'false':
-                        for flag in otherflags:
-                            removekeys.append(flag)
-            for flag in removekeys:
-                data.pop(flag)
-        return data
 
     def cleanOutputDirs(self):
         '''
@@ -5631,53 +5015,7 @@ class MakeAutomatedReport(object):
 
         return 'undefined' #no id either way..
 
-    def DatetimeToJDate(self, dates):
-        '''
-        converts datetime dates to jdate values
-        :param dates: list of datetime dates
-        :return:
-            jdates: list of dates
-            jdate: single date
-            dates: original date if unable to convert
-        '''
 
-        if isinstance(dates, (float, int)):
-            return dates
-        elif isinstance(dates, (list, np.ndarray)):
-            if isinstance(dates[0], (float, int)):
-                return dates
-            jdates = np.asarray([(WF.datetime2Ordinal(n) - self.ModelAlt.t_offset) + 1 for n in dates])
-            return jdates
-        elif isinstance(dates, dt.datetime):
-            jdate = (WF.datetime2Ordinal(dates) - self.ModelAlt.t_offset) + 1
-            return jdate
-        else:
-            return dates
-
-    def JDateToDatetime(self, dates):
-        '''
-        converts jdate dates to datetime values
-        :param dates: list of jdate dates
-        :return:
-            dtimes: list of dates
-            dtime: single date
-            dates: original date if unable to convert
-        '''
-
-        first_year_Date = dt.datetime(self.ModelAlt.dt_dates[0].year, 1, 1, 0, 0)
-
-        if isinstance(dates, dt.datetime):
-            return dates
-        elif isinstance(dates, (list, np.ndarray)):
-            if isinstance(dates[0], dt.datetime):
-                return dates
-            dtimes = np.asarray([first_year_Date + dt.timedelta(days=n) for n in dates])
-            return dtimes
-        elif isinstance(dates, (float, int)):
-            dtime = first_year_Date + dt.timedelta(days=dates)
-            return dtime
-        else:
-            return dates
 
     def printVersion(self):
         '''
@@ -6227,13 +5565,13 @@ class MakeAutomatedReport(object):
         convert_to_jdate = False
 
         if isinstance(times[0], (int, float)): #check for jdate, this is easier in dt..
-            times = self.JDateToDatetime(times)
+            times = WF.JDateToDatetime(times, self.startyear)
             convert_to_jdate = True
 
         if 'type' in Line_info.keys() and 'interval' not in Line_info.keys():
             print('Defined Type but no interval..')
             if convert_to_jdate:
-                return self.DatetimeToJDate(times), values
+                return WF.DatetimeToJDate(times, self.ModelAlt.t_offset), values
             else:
                 return times, values
 
@@ -6252,7 +5590,7 @@ class MakeAutomatedReport(object):
 
             if 'interval' in Line_info:
                 interval = Line_info['interval'].upper()
-                pd_interval = self.getPandasTimeFreq(interval)
+                pd_interval = WF.getPandasTimeFreq(interval)
             else:
                 print('No time interval Defined.')
                 return times, values
@@ -6344,7 +5682,7 @@ class MakeAutomatedReport(object):
                 return times, values
 
         if convert_to_jdate:
-            return self.DatetimeToJDate(new_times), np.asarray(new_values)
+            return WF.DatetimeToJDate(new_times, self.ModelAlt.t_offset), np.asarray(new_values)
         else:
             return new_times, np.asarray(new_values)
 
@@ -6431,12 +5769,18 @@ class MakeAutomatedReport(object):
         '''
 
         for line in data.keys():
+            write = False
             values = pickle.loads(pickle.dumps(data[line]['values'], -1))
             depths = pickle.loads(pickle.dumps(data[line]['depths'], -1))
             elevations = pickle.loads(pickle.dumps(data[line]['elevations'], -1))
             subset = pickle.loads(pickle.dumps(line_settings[line]['subset'], -1))
             datamem_key = line_settings[line]['logoutputfilename']
             if datamem_key not in self.Data.Memory.keys():
+                write = True
+            else:
+                if not np.array_equal(object_settings['timestamps'], self.Data.Memory[datamem_key]['times']):
+                    write = True
+            if write:
                 self.Data.Memory[datamem_key] = {'times': object_settings['timestamps'],
                                                  'values': values,
                                                  'elevations': elevations,
@@ -6479,7 +5823,7 @@ class MakeAutomatedReport(object):
 
         self.loadCurrentID(ID)
         self.loadCurrentModelAltID(ID)
-        settings = self.replaceflaggedValues(settings, 'modelspecific')
+        settings = WF.replaceflaggedValues(self, settings, 'modelspecific')
         return settings
 
     def confirmColor(self, user_color, default_color):
@@ -6519,5 +5863,10 @@ if __name__ == '__main__':
     simInfoFile = sys.argv[1]
     # import cProfile
     # ar = cProfile.run('MakeAutomatedReport(simInfoFile, rundir)')
-    MakeAutomatedReport(simInfoFile, rundir)
+    try:
+        MakeAutomatedReport(simInfoFile, rundir)
+    except:
+        print('ERROR: Report Generator Failed.')
+        print(traceback.format_exc())
+        sys.exit(1)
 

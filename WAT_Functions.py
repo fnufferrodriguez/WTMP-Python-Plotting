@@ -18,8 +18,10 @@ import os
 from scipy import interpolate
 from scipy.constants import convert_temperature
 from sklearn.metrics import mean_absolute_error
-
-
+import re
+import pickle
+import pandas as pd
+import datetime as dt
 
 def datetime2Ordinal(indate):
     '''
@@ -533,3 +535,437 @@ def filterTimestepByYear(timestamps, year):
     if year == 'ALLYEARS':
         return timestamps
     return [n for n in timestamps if n.year == year]
+
+def replaceflaggedValues(Report, settings, itemset):
+    '''
+    recursive function to replace flagged values in settings
+    :param settings: dict, list or string containing settings, potentially with flags
+    :return:
+        settings: dict, list or string with flags replaced
+    '''
+
+    if isinstance(settings, str):
+        if '%%' in settings:
+            newval = replaceFlaggedValue(Report, settings, itemset)
+            settings = newval
+    elif isinstance(settings, dict):
+        for key in settings.keys():
+            if isinstance(settings[key], dict):
+                settings[key] = replaceflaggedValues(Report, settings[key], itemset)
+            elif isinstance(settings[key], list):
+                new_list = []
+                for item in settings[key]:
+                    new_list.append(replaceflaggedValues(Report, item, itemset))
+                settings[key] = new_list
+            else:
+                try:
+                    if '%%' in settings[key]:
+                        newval = replaceFlaggedValue(Report, settings[key], itemset)
+                        settings[key] = newval
+                except TypeError:
+                    continue
+    elif isinstance(settings, list):
+        for i, item in enumerate(settings):
+            if '%%' in item:
+                settings[i] = replaceFlaggedValue(Report, item, itemset)
+
+    return settings
+
+def replaceFlaggedValue(Report, value, itemset):
+    '''
+    replaces strings with flagged values with known paths
+    flags are now case insensitive with more intelligent matching. yay.
+    needs to use '[1:-1]' for paths, otherwise things like /t in a path C:/trains will be taken literal
+    :param value: string potentially containing flagged value
+    :return:
+        value: string with potential flags replaced
+    '''
+
+
+    if itemset == 'general':
+        flagged_values = {'%%region%%': Report.ChapterRegion,
+                          '%%observedDir%%': Report.observedDir,
+                          '%%startyear%%': str(Report.startYear),
+                          '%%endyear%%': str(Report.endYear)
+                          }
+    elif itemset == 'modelspecific':
+        flagged_values = {'%%ModelDSS%%': Report.DSSFile,
+                          '%%Fpart%%': Report.alternativeFpart,
+                          '%%plugin%%': Report.plugin,
+                          '%%modelAltName%%': Report.modelAltName,
+                          '%%SimulationName%%': Report.SimulationName,
+                          '%%SimulationDir%%': Report.SimulationDir,
+                          '%%baseSimulationName%%': Report.baseSimulationName,
+                          '%%starttime%%': Report.StartTimeStr,
+                          '%%endtime%%': Report.EndTimeStr,
+                          '%%LastComputed%%': Report.LastComputed
+                          }
+
+    for fv in flagged_values.keys():
+        pattern = re.compile(re.escape(fv), re.IGNORECASE)
+        value = pattern.sub(repr(flagged_values[fv])[1:-1], value) #this seems weird with [1:-1] but paths wont work otherwise
+    return value
+
+def selectContourReachesByID(contoursbyID, ID):
+    '''
+    selects contour data based on the ID
+    :param contoursbyID: dictionary containing all contours
+    :param ID: selected ID ('base', 'alt_1')
+    :return: list of contour keys that apply to that ID
+    '''
+
+    output_contours = {}
+    for key in contoursbyID:
+        if contoursbyID[key]['ID'] == ID:
+            output_contours[key] = contoursbyID[key]
+    return output_contours
+
+def selectContourReservoirByID(contoursbyID, ID):
+    '''
+    returns the correct contour from dictionary based on ID
+    :param contoursbyID: dictionary containing several contours
+    :param ID: selected ID to find in data
+    :return: dictionary for corresponding ID, or empty
+    '''
+
+    for key in contoursbyID:
+        if contoursbyID[key]['ID'] == ID:
+            return contoursbyID[key]
+    return {}
+
+def stackContours(contours):
+    '''
+    stacks data for multiple contour reaches so they appear as a single reach. Adds distances to stay consistent.
+    keeps track of the distances in which defined reaches change
+    :param contours: dictionary containing reach contour data
+    :return:
+        output_values: values at each timestep/distance
+        output_dates: list of dates for data
+        output_distance:distances for each cell center from source
+        transitions: names and locations where the reaches change
+    '''
+
+    output_values = np.array([])
+    output_dates = np.array([])
+    output_distance = np.array([])
+    transitions = {}
+    for contourname in contours.keys():
+        contour = contours[contourname]
+        if len(output_values) == 0:
+            output_values = pickle.loads(pickle.dumps(contour['values'], -1))
+        else:
+            output_values = np.append(output_values, contour['values'][:, 1:], axis=1)
+        if len(output_dates) == 0:
+            output_dates = contour['dates']
+        if len(output_distance) == 0:
+            output_distance = contour['distance']
+            transitions[contourname] = 0
+        else:
+            last_distance = output_distance[-1]
+            current_distances = contour['distance'][1:] + last_distance
+            output_distance = np.append(output_distance, current_distances)
+            transitions[contourname] = current_distances[0]
+    return output_values, output_dates, output_distance, transitions
+
+def stackProfileIndicies(exist_data, new_data):
+    '''
+    takes an existing array of data and adds another array
+    for contour plots of several reaches split into different groups
+    stacks them together so they function as a single reach
+    exist_data is existing array
+    new data is data to be added to it
+    :param exist_data: dictionary containing existing data
+    :param new_data: data to be added to existing data
+    :return: modified exist_data
+    '''
+
+    for runflag in new_data.keys():
+        if runflag not in exist_data.keys():
+            exist_data[runflag] = {}
+        for itemflag in new_data[runflag]:
+            if itemflag not in exist_data[runflag].keys():
+                exist_data[runflag][itemflag] = new_data[runflag][itemflag]
+            else:
+                if isinstance(new_data[runflag][itemflag], list):
+                    exist_data[runflag][itemflag] += new_data[runflag][itemflag]
+                elif isinstance(new_data[runflag][itemflag], np.ndarray):
+                    exist_data[runflag][itemflag] = np.append(exist_data[runflag][itemflag], new_data[runflag][itemflag])
+    return exist_data
+
+def getPandasTimeFreq(intervalstring):
+    '''
+    Reads in the DSS formatted time intervals and translates them to a format pandas.resample() understands
+    bases off of the time interval, so 15MIN becomes 15T, or 6MON becomes 6M
+    :param intervalstring: DSS interval string such as 1HOUR or 1DAY
+    :return: pandas time interval
+    '''
+
+    intervalstring = intervalstring.lower()
+    if 'min' in intervalstring:
+        timeint = intervalstring.replace('min','') + 'T'
+        return timeint
+    elif 'hour' in intervalstring:
+        timeint = intervalstring.replace('hour','') + 'H'
+        return timeint
+    elif 'day' in intervalstring:
+        timeint = intervalstring.replace('day','') + 'D'
+        return timeint
+    elif 'mon' in intervalstring:
+        timeint = intervalstring.replace('mon','') + 'M'
+        return timeint
+    elif 'week' in intervalstring:
+        timeint = intervalstring.replace('week','') + 'W'
+        return timeint
+    elif 'year' in intervalstring:
+        timeint = intervalstring.replace('year','') + 'A'
+        return timeint
+    else:
+        print('Unidentified time interval')
+        return 0
+
+def buildTimeSeries(startTime, endTime, interval):
+    '''
+    builds a regular time series using the start and end time and a given interval
+    #TODO: if start time isnt on the hour, but the interval is, change start time to be hourly?
+    :param startTime: datetime object
+    :param endTime: datetime object
+    :param interval: DSS interval
+    :return: list of time series dates
+    '''
+
+    intervalinfo = getPandasTimeFreq(interval)
+    ts = pd.date_range(startTime, endTime, freq=intervalinfo, closed=None)
+    ts = np.asarray([t.to_pydatetime() for t in ts])
+    return ts
+    # try:
+    #     # intervalinfo = self.Constants.time_intervals[interval]
+    #     interval = intervalinfo[0]
+    #     interval_info = intervalinfo[1]
+    # except KeyError:
+    #     interval, interval_info = self.forceTimeInterval(interval)
+
+    # if interval_info == 'np':
+    #     ts = np.arange(startTime, endTime, interval)
+    #     ts = np.asarray([t.astype(dt.datetime) for t in ts])
+    # elif interval_info == 'pd':
+    #     ts = pd.date_range(startTime, endTime, freq=interval, closed=None)
+    #     ts = np.asarray([t.to_pydatetime() for t in ts])
+    # return ts
+
+def JDateToDatetime(dates, startyear):
+    '''
+    converts jdate dates to datetime values
+    :param dates: list of jdate dates
+    :return:
+        dtimes: list of dates
+        dtime: single date
+        dates: original date if unable to convert
+    '''
+
+    # first_year_Date = dt.datetime(self.ModelAlt.dt_dates[0].year, 1, 1, 0, 0)
+    first_year_Date = dt.datetime(startyear, 1, 1, 0, 0)
+
+    if isinstance(dates, dt.datetime):
+        return dates
+    elif isinstance(dates, (list, np.ndarray)):
+        if isinstance(dates[0], dt.datetime):
+            return dates
+        dtimes = np.asarray([first_year_Date + dt.timedelta(days=n) for n in dates])
+        return dtimes
+    elif isinstance(dates, (float, int)):
+        dtime = first_year_Date + dt.timedelta(days=dates)
+        return dtime
+    else:
+        return dates
+
+def DatetimeToJDate(dates, time_offset):
+    '''
+    converts datetime dates to jdate values
+    :param dates: list of datetime dates
+    :return:
+        jdates: list of dates
+        jdate: single date
+        dates: original date if unable to convert
+    '''
+
+    if isinstance(dates, (float, int)):
+        return dates
+    elif isinstance(dates, (list, np.ndarray)):
+        if isinstance(dates[0], (float, int)):
+            return dates
+        # jdates = np.asarray([(datetime2Ordinal(n) - ModelAlt.t_offset) + 1 for n in dates])
+        jdates = np.asarray([(datetime2Ordinal(n) - time_offset) + 1 for n in dates])
+        return jdates
+    elif isinstance(dates, dt.datetime):
+        jdate = (datetime2Ordinal(dates) - time_offset) + 1
+        return jdate
+    else:
+        return dates
+
+def mergeLines(data, settings):
+    '''
+    reads in mergeline settings and combines time series as defined. returns a single time series based on the
+    controller flag. then removes lines if dictated.
+    :param data: dictionary containing data
+    :param settings: list of settings including mergeline settings
+    :return: updated data dictionary
+    '''
+
+    removekeys = []
+    if 'mergelines' in settings.keys():
+        for mergeline in settings['mergelines']:
+            dataflags = mergeline['flags']
+            if 'controller' in mergeline.keys():
+                controller = mergeline['controller']
+                if controller not in data.keys():
+                    controller = dataflags[0]
+            else:
+                controller = dataflags[0]
+            otherflags = [n for n in dataflags if n != controller]
+            if controller not in data.keys():
+                print('Mergeline Controller {0} not found in data {1}'.format(controller, data.keys()))
+                continue
+            flagnotfound = False
+            for OF in otherflags:
+                if OF not in data.keys():
+                    print('Mergeline flag {0} not found in data {1}'.format(OF, data.keys()))
+                    flagnotfound = True
+            if flagnotfound:
+                continue
+            if 'math' in mergeline.keys():
+                math = mergeline['math'].lower()
+            else:
+                math = 'add'
+            baseunits = data[controller]['units']
+            for flag in otherflags:
+                if data[flag]['units'] != baseunits:
+                    print('WARNING: Attempting to merge lines with differing units')
+                    print('{0}: {1} and {2}: {3}'.format(flag, data[flag]['units'], controller, baseunits))
+                    print('If incorrect, please modify/append input settings to ensure lines '
+                          'are converted prior to merging.')
+                data[controller], data[flag] = matchData(data[controller], data[flag])
+                if math == 'add':
+                    data[controller]['values'] += data[flag]['values']
+                elif math == 'multiply':
+                    data[controller]['values'] *= data[flag]['values']
+                elif math == 'divide':
+                    data[controller]['values'] /= data[flag]['values']
+                elif math == 'subtract':
+                    data[controller]['values'] -= data[flag]['values']
+            if 'keeplines' in mergeline.keys():
+                if mergeline['keeplines'].lower() == 'false':
+                    for flag in otherflags:
+                        removekeys.append(flag)
+        for flag in removekeys:
+            data.pop(flag)
+    return data
+
+def filterDataByYear(data, year, extraflag=None):
+    '''
+    filters data by a given year. Used when splitting by year
+    :param data: dictionary containing data to use
+    :param year: selected year
+    :return:dictionary containing fultered data
+    '''
+    if year != 'ALLYEARS':
+        for flag in data.keys():
+            if len(data[flag]['dates']) > 0:
+                s_idx, e_idx = getYearlyFilterIdx(data[flag]['dates'], year)
+                data[flag]['values'] = data[flag]['values'][s_idx:e_idx+1]
+                data[flag]['dates'] = data[flag]['dates'][s_idx:e_idx+1]
+                if extraflag != None:
+                    data[flag][extraflag] = data[flag][extraflag][s_idx:e_idx+1]
+    return data
+
+def getYearlyFilterIdx(dates, year):
+    '''
+    finds start and end index for a given year for a list of dates
+    :param dates: list of datetime objects
+    :param year: target year
+    :return: start and end index for that year
+    '''
+
+    start_date = dates[0]
+    end_date = dates[-1]
+    e_year_date = dt.datetime(year,12,31,23,59)
+    s_year_date = dt.datetime(year,1,1,0,0)
+    interval = (dates[1] - start_date).total_seconds()
+    if start_date.year == year:
+        s_idx = 0
+    else:
+        s_idx = round(int((s_year_date - start_date).total_seconds() / interval))
+    if end_date.year == year:
+        e_idx = len(dates)
+    else:
+        e_idx = round(int((e_year_date - start_date).total_seconds() / interval))
+
+    return s_idx, e_idx
+
+def getMonthlyFilterIdx(dates, month):
+    '''
+    finds start and end index for a given month for a list of dates
+    :param dates: list of datetime objects
+    :param month: target month
+    :return: start and end index for that year
+    '''
+
+    start_date = dates[0]
+    end_date = dates[-1]
+    s_month_date = dt.datetime(start_date.year, month,1,0,0)
+    if month == 12:
+        e_month_date = dt.datetime(start_date.year+1,1,1,0,0) - dt.timedelta(seconds=1)
+    else:
+        e_month_date = dt.datetime(start_date.year,month+1,1,0,0) - dt.timedelta(seconds=1)
+
+    interval = (dates[1] - start_date).total_seconds()
+    if start_date.month == month:
+        s_idx = 0
+    else:
+        s_idx = round(int((s_month_date - start_date).total_seconds() / interval))
+    if end_date.month == month:
+        e_idx = len(dates)
+    else:
+        e_idx = round(int((e_month_date - start_date).total_seconds() / interval))
+
+    return s_idx, e_idx
+
+def getUnitsList(line_settings):
+    '''
+    creates a list of units from defined lines in user defined settings
+    :param object_settings: currently selected object settings dictionary
+    :return: units_list: list of used units
+    '''
+
+    units_list = []
+    for flag in line_settings.keys():
+        units = line_settings[flag]['units']
+        if units != None:
+            units_list.append(units)
+    return units_list
+
+def getUsedIDs(data):
+    '''
+    Finds all IDs that are actually used by data
+    :param data: dictionary for data
+    :return: list of IDs
+    '''
+
+    IDs = []
+    for key in data.keys():
+        ID = data[key]['ID']
+        if ID not in IDs:
+            IDs.append(ID)
+    return IDs
+
+def getAllMonthIdx(timestamp_indexes, i):
+    '''
+    collects all indecies for all years for a given month
+    :param timestamp_indexes: list of indicies that fall in every month for every year ([[], [], []])
+    :param i: month index (0-11)
+    :return: list of indicies for a month for all years
+    '''
+
+    out_idx = []
+    for yearlist in timestamp_indexes:
+        out_idx += yearlist[i]
+    return out_idx
