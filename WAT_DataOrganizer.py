@@ -21,6 +21,7 @@ import pickle
 import WAT_Functions as WF
 import WAT_Reader as WDR
 
+
 class DataOrganizer(object):
 
     def __init__(self, Report):
@@ -42,8 +43,6 @@ class DataOrganizer(object):
 
         if 'dss_path' in Data_info.keys(): #Get data from DSS record
             if 'dss_filename' in Data_info.keys():
-                # outname = '{0}_{1}'.format(os.path.basename(Line_info['dss_filename']).split('.')[0],
-                #                         Line_info['dss_path'].replace('/', '').replace(':', ''))
                 outname = f"{os.path.basename(Data_info['dss_filename']).split('.')[0]}_" \
                           f"{Data_info['dss_path'].replace('/', '').replace(':', '')}_" \
                           f"{very_special_flags}"
@@ -87,6 +86,7 @@ class DataOrganizer(object):
         elif 'ressimresname' in Data_info.keys():
             outname = '{0}_{1}_{2}'.format(os.path.basename(self.Report.ModelAlt.h5fname).split('.')[0] +'_h5',
                                            Data_info['parameter'], Data_info['ressimresname']) + f'_{very_special_flags}'
+
             return outname
 
         return 'NULL'
@@ -159,7 +159,7 @@ class DataOrganizer(object):
                     if self.Report.currentlyloadedID != 'base':
                         line = self.Report.configureSettingsForID('base', line)
                     else:
-                        line = self.Report.replaceflaggedValues(line, 'modelspecific')
+                        line = WF.replaceflaggedValues(self.Report, line, 'modelspecific')
                     line['numtimesused'] = 0
                     if not self.Report.checkModelType(line):
                         continue
@@ -330,7 +330,7 @@ class DataOrganizer(object):
                 if self.Report.currentlyloadedID != 'base':
                     line = self.Report.configureSettingsForID('base', line)
                 else:
-                    line = self.Report.replaceflaggedValues(line, 'modelspecific')
+                    line = WF.replaceflaggedValues(self.Report, line, 'modelspecific')
                 line['numtimesused'] = 0
                 if not self.Report.checkModelType(line):
                     continue
@@ -587,6 +587,46 @@ class DataOrganizer(object):
         return []
 
     #################################################################
+    #Table Functions
+    #################################################################
+
+    def getTableDataDictionary(self, object_settings):
+        '''
+        Grabs data from time series data to be used in tables
+        :param object_settings: currently selected object settings dictionary
+        :return: dictionary object containing info from each data source and list of units
+        '''
+
+        data = {}
+        for dp in object_settings['datapaths']:
+            numtimesused = 0
+            if 'flag' not in dp.keys():
+                print('Flag not set for line (Computed/Observed/etc)')
+                print('Not using Line:', dp)
+                continue
+            elif dp['flag'].lower() == 'computed':
+                for ID in self.Report.accepted_IDs:
+                    cur_dp = pickle.loads(pickle.dumps(dp, -1))
+                    cur_dp = self.Report.configureSettingsForID(ID, cur_dp)
+                    cur_dp['numtimesused'] = numtimesused
+                    cur_dp['ID'] = ID
+                    if not self.Report.checkModelType(cur_dp):
+                        continue
+                    numtimesused += 1
+                    data = self.updateTimeSeriesDataDictionary(data, cur_dp)
+            else:
+                if self.Report.currentlyloadedID != 'base':
+                    dp = self.Report.configureSettingsForID('base', dp)
+                else:
+                    dp = WF.replaceflaggedValues(self, dp, 'modelspecific')
+                dp['numtimesused'] = 0
+                if not self.Report.checkModelType(dp):
+                    continue
+                data = self.updateTimeSeriesDataDictionary(data, dp)
+
+        return data
+
+    #################################################################
     #Contour Functions
     #################################################################
 
@@ -835,3 +875,4 @@ class DataOrganizer(object):
                 print(traceback.format_exc())
                 with open(csv_name, 'w') as inf:
                     inf.write('ERROR WRITING FILE.')
+
