@@ -49,6 +49,20 @@ class WAT_Constants(object):
                       'sal': {'metric': 'psu', 'english': 'psu'},
                       }
 
+        self.unit_alt_names = {'f': ['f', 'faren', 'degf', 'fahrenheit', 'fahren', 'deg f'],
+                                'c': ['c', 'cel', 'celsius', 'deg c', 'degc'],
+                                'm3/s': ['m3/s', 'm3s', 'metercubedpersecond', 'cms'],
+                                'cfs': ['cfs', 'cubicftpersecond', 'f3/s', 'f3s'],
+                                'm': ['m', 'meters', 'mtrs'],
+                                'ft': ['ft', 'feet'],
+                                'm3': ['m3', 'meters cubed', 'meters3', 'meterscubed', 'meters-cubed'],
+                                'af': ['af', 'acrefeet', 'acre-feet', 'acfeet', 'acft', 'ac-ft', 'ac/ft'],
+                                'm/s': ['mps', 'm/s', 'meterspersecond', 'm/second'],
+                                'ft/s': ['ft/s', 'fps', 'feetpersecond', 'feet/s']}
+
+        self.english_units = {self.units[key]['metric']: self.units[key]['english'] for key in self.units.keys()}
+        self.metric_units = {v: k for k, v in self.english_units.items()}
+
     def defineDefaultColors(self):
         '''
         sets up a list of default colors to use in the event that colors are not set up in the graphics default file

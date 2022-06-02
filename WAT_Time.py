@@ -1,0 +1,445 @@
+'''
+* Copyright 2022 United States Bureau of Reclamation (USBR).
+* United States Department of the Interior
+* All Rights Reserved. USBR PROPRIETARY/CONFIDENTIAL.
+* Source may not be released without written approval
+* from USBR
+
+Created on 7/15/2021
+@author: scott
+@organization: Resource Management Associates
+@contact: scott@rmanet.com
+@note:
+'''
+
+import pandas as pd
+import numpy as np
+import datetime as dt
+import pendulum
+
+import WAT_Functions as WF
+
+def changeTimeSeriesInterval(times, values, Line_info, t_offset, startYear):
+    '''
+    changes time series of time series data. If type is defined, use that to average data. default is INST-VAL
+    :param times: list of times
+    :param values: list of values
+    :param Line_info: settings dictionary for line
+    :return: new times and values
+    '''
+
+    convert_to_jdate = False
+
+    if isinstance(times[0], (int, float)): #check for jdate, this is easier in dt..
+        times = JDateToDatetime(times, startYear)
+        convert_to_jdate = True
+
+    if 'type' in Line_info.keys() and 'interval' not in Line_info.keys():
+        WF.print2stdout('Defined Type but no interval..')
+        if convert_to_jdate:
+            return DatetimeToJDate(times, t_offset), values
+        else:
+            return times, values
+
+    # INST-CUM, INST-VAL, PER-AVER, PER-CUM)
+    if 'type' in Line_info:
+        avgtype = Line_info['type'].upper()
+    else:
+        avgtype = 'INST-VAL'
+        # avgtype = 'PER-AVER'
+
+    if isinstance(values, dict):
+        new_values = {}
+        for key in values:
+            new_times, new_values[key] = changeTimeSeriesInterval(times, values[key], Line_info, t_offset, startYear)
+    else:
+
+        if 'interval' in Line_info:
+            interval = Line_info['interval'].upper()
+            pd_interval = getPandasTimeFreq(interval)
+        else:
+            WF.print2stdout('No time interval Defined.')
+            return times, values
+
+        if avgtype == 'INST-VAL':
+            #at the point in time, find intervals and use values
+            if len(values.shape) == 1:
+                df = pd.DataFrame({'times': times, 'values': values})
+                df = df.set_index('times')
+                if df.index.inferred_freq != pd_interval:
+                    df = df.resample(pd_interval, origin='end_day').asfreq().fillna(method='bfill')
+                new_values = df['values'].to_numpy()
+                new_times = df.index.to_pydatetime()
+
+            elif len(values.shape) == 2:
+                tvals = values.T #transpose so now were [distances, times]
+                new_values = []
+                for i in range(tvals.shape[0]):#for each depth profile..
+                    df = pd.DataFrame({'times': times, 'values': tvals[i]})
+                    df = df.set_index('times')
+                    if df.index.inferred_freq != pd_interval:
+                        df = df.resample(pd_interval, origin='end_day').asfreq().fillna(method='bfill')
+                    new_values.append(df['values'].to_numpy())
+                    new_times = df.index.to_pydatetime()
+                new_values = np.asarray(new_values).T #transpose back..
+
+        elif avgtype == 'INST-CUM':
+            if len(values.shape) == 1:
+                df = pd.DataFrame({'times': times, 'values': values})
+                df = df.set_index('times')
+                df = df.cumsum(skipna=True).resample(pd_interval, origin='end_day').asfreq().fillna(method='bfill')
+                new_values = df['values'].to_numpy()
+                new_times = df.index.to_pydatetime()
+            elif len(values.shape) == 2:
+                tvals = values.T #transpose so now were [distances, times]
+                new_values = []
+                for i in range(tvals.shape[0]):#for each depth profile..
+                    df = pd.DataFrame({'times': times, 'values': tvals[i]})
+                    df = df.set_index('times')
+                    df = df.cumsum(skipna=True).resample(pd_interval, origin='end_day').asfreq().fillna(method='bfill')
+                    new_values.append(df['values'].to_numpy())
+                    new_times = df.index.to_pydatetime()
+                new_values = np.asarray(new_values).T #transpose back..
+
+        elif avgtype == 'PER-AVER':
+            #average over the period
+            if len(values.shape) == 1:
+                df = pd.DataFrame({'times': times, 'values': values})
+                df = df.set_index('times')
+                if df.index.inferred_freq != pd_interval:
+                    df = df.resample(pd_interval, origin='end_day').mean().fillna(method='bfill')
+                new_values = df['values'].to_numpy()
+                new_times = df.index.to_pydatetime()
+            elif len(values.shape) == 2:
+                tvals = values.T #transpose so now were [distances, times]
+                new_values = []
+                for i in range(tvals.shape[0]):#for each depth profile..
+                    df = pd.DataFrame({'times': times, 'values': tvals[i]})
+                    df = df.set_index('times')
+                    if df.index.inferred_freq != pd_interval:
+                        df = df.resample(pd_interval, origin='end_day').mean().fillna(method='bfill')
+                    new_values.append(df['values'].to_numpy())
+                    new_times = df.index.to_pydatetime()
+                new_values = np.asarray(new_values).T #transpose back..
+
+        elif avgtype == 'PER-CUM':
+            #cum over the period
+            if len(values.shape) == 1:
+                df = pd.DataFrame({'times': times, 'values': values})
+                df = df.set_index('times')
+                if df.index.inferred_freq != pd_interval:
+                    df = df.resample(pd_interval, origin='end_day').sum().fillna(method='bfill')
+                new_values = df['values'].to_numpy()
+                new_times = df.index.to_pydatetime()
+            elif len(values.shape) == 2:
+                tvals = values.T #transpose so now were [distances, times]
+                new_values = []
+                for i in range(tvals.shape[0]):#for each depth profile..
+                    df = pd.DataFrame({'times': times, 'values': tvals[i]})
+                    df = df.set_index('times')
+                    if df.index.inferred_freq != pd_interval:
+                        df = df.resample(pd_interval, origin='end_day').sum().fillna(method='bfill')
+                    new_values.append(df['values'].to_numpy())
+                    new_times = df.index.to_pydatetime()
+                new_values = np.asarray(new_values).T #transpose back..
+
+        else:
+            WF.print2stdout('INVALID INPUT TYPE DETECTED', avgtype)
+            return times, values
+
+    if convert_to_jdate:
+        return WT.DatetimeToJDate(new_times, t_offset), np.asarray(new_values)
+    else:
+        return new_times, np.asarray(new_values)
+
+def defineStartEndYears(self):
+    '''
+    defines start and end years for the simulation so they can be replaced by flagged values.
+    end dates that end on the first of the year with no min seconds (aka Dec 31 @ 24:00) have their end
+    years set to be the year prior, as its not fair to really call them that next year
+    self.years is a list of all years used
+    self.years_str is a string representation of the years, either as a single year, or range, aka 2003-2005
+    :return: class variables
+                self.startYear
+                self.endYear
+                self.years
+                self.years_str
+    '''
+
+    tw_start = self.StartTime
+    tw_end = self.EndTime
+    if tw_end == dt.datetime(tw_end.year, 1, 1, 0, 0):
+        tw_end += dt.timedelta(seconds=-1) #if its this day just go back
+
+    self.startYear = tw_start.year
+    self.endYear = tw_end.year
+    if self.startYear == self.endYear:
+        self.years_str = str(self.startYear)
+        self.years = [self.startYear]
+    else:
+        self.years = range(tw_start.year, tw_end.year+1)
+        self.years_str = "{0}-{1}".format(self.startYear, self.endYear)
+
+def setMultiRunStartEndYears(self):
+    '''
+    sets start and end times by looking at all possible runs. Picks overlapping time periods only.
+    '''
+
+    for simID in self.SimulationVariables.keys():
+        if self.SimulationVariables[simID]['StartTime'] > self.StartTime:
+            self.StartTime = self.SimulationVariables[simID]['StartTime']
+        if self.SimulationVariables[simID]['EndTime'] < self.EndTime:
+            self.EndTime = self.SimulationVariables[simID]['EndTime']
+    WF.print2stdout('Start and End time set to {0} - {1}'.format(self.StartTime, self.EndTime))
+
+def setSimulationDateTimes(self, ID):
+    '''
+    sets the simulation start time and dates from string format. If timestamp says 24:00, converts it to be correct
+    Datetime format of the next day at 00:00
+    :return: class varables
+                self.StartTime
+                self.EndTime
+    '''
+
+    StartTimeStr = self.SimulationVariables[ID]['StartTimeStr']
+    EndTimeStr = self.SimulationVariables[ID]['EndTimeStr']
+
+    if '24:00' in StartTimeStr:
+        tstrtmp = StartTimeStr.replace('24:00', '23:00')
+        StartTime = dt.datetime.strptime(tstrtmp, '%d %B %Y, %H:%M')
+        StartTime += dt.timedelta(hours=1)
+    else:
+        StartTime = dt.datetime.strptime(StartTimeStr, '%d %B %Y, %H:%M')
+    self.SimulationVariables[ID]['StartTime'] = StartTime
+
+    if '24:00' in EndTimeStr:
+        tstrtmp = EndTimeStr.replace('24:00', '23:00')
+        EndTime = dt.datetime.strptime(tstrtmp, '%d %B %Y, %H:%M')
+        EndTime += dt.timedelta(hours=1)
+    else:
+        EndTime = dt.datetime.strptime(EndTimeStr, '%d %B %Y, %H:%M')
+    self.SimulationVariables[ID]['EndTime'] = EndTime
+
+def makeRegularTimesteps(starttime, endtime, days=15):
+    '''
+    makes regular time series for profile plots if there are no times defined
+    :param days: day interval
+    :return: timestep list
+    '''
+
+    timesteps = []
+    WF.print2stdout('No Timesteps found. Setting to Regular interval')
+    cur_date = starttime
+    while cur_date < endtime:
+        timesteps.append(cur_date)
+        cur_date += dt.timedelta(days=days)
+    return np.asarray(timesteps)
+
+def datetime2Ordinal(indate):
+    '''
+    converts datetime objects to ordinal values
+    :param indate: datetime object
+    :return: ordinal
+    '''
+
+    ord = indate.toordinal() + float(indate.hour) / 24. + float(indate.minute) / (24. * 60.)
+    return ord
+
+def getIdxForTimestamp(time_Array, t_in, offset):
+    '''
+    finds timestep for date
+    :param time_Array: array of time values
+    :param t_in: time step
+    :param offset: time series offset for ordinal
+    :return: timestep index
+    '''
+
+    ttmp = t_in.toordinal() + float(t_in.hour) / 24. + float(t_in.minute) / (24. * 60.) - offset
+    min_diff = np.min(np.abs(time_Array - ttmp))
+    tol = 1. / (24. * 60.)  # 1 minute tolerance
+    timestep = np.where((np.abs(time_Array - ttmp) - min_diff) < tol)[0][0]
+    if min_diff > 1.:
+        WF.print2stdout('nearest time step > 1 day away')
+        return -1
+    return timestep
+
+def filterTimestepByYear(timestamps, year):
+    '''
+    returns only timestamps from the given year. Otherwise, just return all timestamps
+    :param timestamps: list of dates
+    :param year: target year
+    :return:
+        timestamps: list of selected timestamps
+    '''
+
+    if year == 'ALLYEARS':
+        return timestamps
+    return [n for n in timestamps if n.year == year]
+
+def getPandasTimeFreq(intervalstring):
+    '''
+    Reads in the DSS formatted time intervals and translates them to a format pandas.resample() understands
+    bases off of the time interval, so 15MIN becomes 15T, or 6MON becomes 6M
+    :param intervalstring: DSS interval string such as 1HOUR or 1DAY
+    :return: pandas time interval
+    '''
+
+    intervalstring = intervalstring.lower()
+    if 'min' in intervalstring:
+        timeint = intervalstring.replace('min','') + 'T'
+        return timeint
+    elif 'hour' in intervalstring:
+        timeint = intervalstring.replace('hour','') + 'H'
+        return timeint
+    elif 'day' in intervalstring:
+        timeint = intervalstring.replace('day','') + 'D'
+        return timeint
+    elif 'mon' in intervalstring:
+        timeint = intervalstring.replace('mon','') + 'M'
+        return timeint
+    elif 'week' in intervalstring:
+        timeint = intervalstring.replace('week','') + 'W'
+        return timeint
+    elif 'year' in intervalstring:
+        timeint = intervalstring.replace('year','') + 'A'
+        return timeint
+    else:
+        print('Unidentified time interval')
+        return 0
+
+def buildTimeSeries(startTime, endTime, interval):
+    '''
+    builds a regular time series using the start and end time and a given interval
+    #TODO: if start time isnt on the hour, but the interval is, change start time to be hourly?
+    :param startTime: datetime object
+    :param endTime: datetime object
+    :param interval: DSS interval
+    :return: list of time series dates
+    '''
+
+    intervalinfo = getPandasTimeFreq(interval)
+    ts = pd.date_range(startTime, endTime, freq=intervalinfo, closed=None)
+    ts = np.asarray([t.to_pydatetime() for t in ts])
+    return ts
+
+def JDateToDatetime(dates, startyear):
+    '''
+    converts jdate dates to datetime values
+    :param dates: list of jdate dates
+    :return:
+        dtimes: list of dates
+        dtime: single date
+        dates: original date if unable to convert
+    '''
+
+    # first_year_Date = dt.datetime(self.ModelAlt.dt_dates[0].year, 1, 1, 0, 0)
+    first_year_Date = dt.datetime(startyear, 1, 1, 0, 0)
+
+    if isinstance(dates, dt.datetime):
+        return dates
+    elif isinstance(dates, (list, np.ndarray)):
+        if isinstance(dates[0], dt.datetime):
+            return dates
+        dtimes = np.asarray([first_year_Date + dt.timedelta(days=n) for n in dates])
+        return dtimes
+    elif isinstance(dates, (float, int)):
+        dtime = first_year_Date + dt.timedelta(days=dates)
+        return dtime
+    else:
+        return dates
+
+def DatetimeToJDate(dates, time_offset):
+    '''
+    converts datetime dates to jdate values
+    :param dates: list of datetime dates
+    :return:
+        jdates: list of dates
+        jdate: single date
+        dates: original date if unable to convert
+    '''
+
+    if isinstance(dates, (float, int)):
+        return dates
+    elif isinstance(dates, (list, np.ndarray)):
+        if isinstance(dates[0], (float, int)):
+            return dates
+        # jdates = np.asarray([(WT.datetime2Ordinal(n) - ModelAlt.t_offset) + 1 for n in dates])
+        jdates = np.asarray([(datetime2Ordinal(n) - time_offset) + 1 for n in dates])
+        return jdates
+    elif isinstance(dates, dt.datetime):
+        jdate = (datetime2Ordinal(dates) - time_offset) + 1
+        return jdate
+    else:
+        return dates
+
+def translateDateFormat(lim, dateformat, fallback, StartTime, EndTime, time_offset):
+    '''
+    translates date formats between datetime and jdate, as desired
+    :param lim: limit value, either int or datetime
+    :param dateformat: desired date format, either 'datetime' or 'jdate'
+    :param fallback: if setting translation fails, use backup, usually starttime or endtime
+    :return:
+        lim: original limit, if translate fails
+        lim_fmrt: translated limit
+    '''
+
+    if dateformat.lower() == 'datetime': #if want datetime
+        if isinstance(lim, dt.datetime):
+            return lim
+        else:
+            try:
+                lim_frmt = pendulum.parse(lim, strict=False).replace(tzinfo=None)#try simple date formatting.
+                if not StartTime <= lim_frmt <= EndTime: #check for false negative
+                    raise IndexError
+                return lim_frmt
+            except IndexError:
+                WF.print2stdout('Xlim of {0} not between start and endtime {1} - {2}'.format(lim_frmt, StartTime,
+                                                                                          EndTime))
+            except:
+                WF.print2stdout('Error Reading Limit: {0} as a dt.datetime object.'.format(lim))
+                WF.print2stdout('If this is wrong, try format: Apr 2014 1 12:00')
+
+            WF.print2stdout('Trying as Jdate..')
+            try:
+                lim_frmt = float(lim)
+                lim_frmt = JDateToDatetime(lim_frmt, StartTime.year)
+                WF.print2stdout('JDate {0} as {1} Accepted!'.format(lim, lim_frmt))
+                return lim_frmt
+            except:
+                WF.print2stdout('Limit value of {0} also invalid as jdate.'.format(lim))
+
+            if fallback != None and fallback != '':
+                WF.print2stdout('Setting to fallback {0}.'.format(fallback))
+            else:
+                WF.print2stdout('Setting to fallback.')
+            return fallback
+
+    elif dateformat.lower() == 'jdate':
+        try:
+            return float(lim)
+        except:
+            WF.print2stdout('Error Reading Limit: {0} as a jdate.'.format(lim))
+            WF.print2stdout('If this is wrong, try format: 180')
+            WF.print2stdout('Trying as Datetime..')
+            if isinstance(lim, (dt.datetime, str)):
+                try:
+                    if isinstance(lim, str):
+                        lim_frmt = pendulum.parse(lim, strict=False).replace(tzinfo=None)
+                        WF.print2stdout('Datetime {0} as {1} Accepted!'.format(lim, lim_frmt))
+                    else:
+                        lim_frmt = lim
+                    WF.print2stdout('converting to jdate..')
+                    lim_frmt = DatetimeToJDate(lim_frmt, time_offset)
+                    WF.print2stdout('Converted to jdate!', lim_frmt)
+                    return lim_frmt
+                except:
+                    WF.print2stdout('Error Reading Limit: {0} as a dt.datetime object.'.format(lim))
+                    WF.print2stdout('If this is wrong, try format: Apr 2014 1 12:00')
+
+                fallback = DatetimeToJDate(fallback, time_offset)
+
+                if fallback != None and fallback != '':
+                    WF.print2stdout('Setting to fallback {0}.'.format(fallback))
+                else:
+                    WF.print2stdout('Setting to fallback.')
+                return fallback

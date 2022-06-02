@@ -14,12 +14,14 @@ Created on 7/15/2021
 
 import os
 import numpy as np
-import WAT_Functions as WF
 import datetime as dt
 import pandas as pd
 from scipy.interpolate import interp1d
 from collections import Counter
 import linecache
+
+import WAT_Functions as WF
+import WAT_Time as WT
 
 class W2_Results(object):
 
@@ -155,9 +157,9 @@ class W2_Results(object):
             try:
                 outputs.append(np.asarray(cur_otpt).astype(pref_output_type))
             except ValueError:
-                print('Array values not able to be converted to {0}'.format(pref_output_type))
-                print('Reverting to strings.')
-                print('Array:', cur_otpt)
+                WF.print2stdout('Array values not able to be converted to {0}'.format(pref_output_type))
+                WF.print2stdout('Reverting to strings.')
+                WF.print2stdout('Array:', cur_otpt)
                 outputs.append(np.asarray(cur_otpt).astype(np.string))
         if len(outputs) == 1:
             return outputs[0]
@@ -179,10 +181,10 @@ class W2_Results(object):
 
         #Get the offset
         year = start_day.year
-        t_offset = WF.datetime2Ordinal(dt.datetime(year, 1, 1, 0, 0))
+        t_offset = WT.datetime2Ordinal(dt.datetime(year, 1, 1, 0, 0))
         interval_perc_day = interval_min / (60 * 24)
-        start_jdate = (WF.datetime2Ordinal(start_day) - t_offset) + 1
-        end_jdate = (WF.datetime2Ordinal(end_day) - t_offset) + 1
+        start_jdate = (WT.datetime2Ordinal(start_day) - t_offset) + 1
+        end_jdate = (WT.datetime2Ordinal(end_day) - t_offset) + 1
         jd_dates = np.arange(start_jdate, end_jdate, interval_perc_day)
         dt_dates = [start_day+dt.timedelta(days=n-1) for n in jd_dates]
 
@@ -203,7 +205,7 @@ class W2_Results(object):
         '''
 
         # unique_times = timesteps
-        # print('Num unique times:', len(unique_times))
+        # WF.print2stdout('Num unique times:', len(unique_times))
 
         self.get_tempprofile_layers() #get the output layers. out at 2m depths
 
@@ -211,14 +213,14 @@ class W2_Results(object):
         WS_Elev = np.full((len(self.layers), len(self.jd_dates)), np.nan)
 
         for i in range(1,len(self.layers)+1):
-            # print('{0} of {1}'.format(i, len(self.layers)+1))
+            # WF.print2stdout('{0} of {1}'.format(i, len(self.layers)+1))
             ofn = '{0}_{1}_seg{2}.{3}'.format(self.output_file_name.split('.')[0],
                                               i,
                                               seg,
                                               self.output_file_name.split('.')[1])
             ofn_path = os.path.join(self.run_path, ofn)
             if not os.path.exists(ofn_path):
-                print('File {0} not found'.format(ofn_path))
+                WF.print2stdout('File {0} not found'.format(ofn_path))
                 continue
             headerline=0
             with open(ofn_path) as ofnf:
@@ -261,9 +263,9 @@ class W2_Results(object):
             depths = []
             times = []
             for t, time in enumerate(timesteps):
-                # print('{0} of {1}'.format(t, len(unique_times)))
+                # WF.print2stdout('{0} of {1}'.format(t, len(unique_times)))
                 e = []
-                timestep = WF.getIdxForTimestamp(self.jd_dates, time, self.t_offset)
+                timestep = WT.getIdxForTimestamp(self.jd_dates, time, self.t_offset)
                 if timestep > -1:#timestep in model
                     WSE = WS_Elev[timestep] #Meters #get WSE
                     if not WF.checkData(WSE): #if WSE is bad, skip usually first timestep...
@@ -309,14 +311,14 @@ class W2_Results(object):
         WS_Elev = np.full((len(self.layers), len(self.jd_dates)), np.nan)
 
         for i in range(1,len(self.layers)+1):
-            # print('{0} of {1}'.format(i, len(self.layers)+1))
+            # WF.print2stdout('{0} of {1}'.format(i, len(self.layers)+1))
             ofn = '{0}_{1}_seg{2}.{3}'.format(self.output_file_name.split('.')[0],
                                               i,
                                               seg,
                                               self.output_file_name.split('.')[1])
             ofn_path = os.path.join(self.run_path, ofn)
             if not os.path.exists(ofn_path):
-                print('File {0} not found'.format(ofn_path))
+                WF.print2stdout('File {0} not found'.format(ofn_path))
                 continue
             headerline=0
             with open(ofn_path) as ofnf:
@@ -343,8 +345,8 @@ class W2_Results(object):
 
             WSE_out = []
             for t, time in enumerate(timesteps):
-                # print('{0} of {1}'.format(t, len(unique_times)))
-                timestep = WF.getIdxForTimestamp(self.jd_dates, time, self.t_offset)
+                # WF.print2stdout('{0} of {1}'.format(t, len(unique_times)))
+                timestep = WT.getIdxForTimestamp(self.jd_dates, time, self.t_offset)
                 if timestep > -1:#timestep in model
                     WSE = WS_Elev[timestep] #Meters #get WSE
                     if not WF.checkData(WSE): #if WSE is bad, skip usually first timestep...
@@ -374,7 +376,7 @@ class W2_Results(object):
 
         ofn_path = os.path.join(self.run_path, output_file_name)
         if not os.path.exists(ofn_path):
-            print('Data File not found!', ofn_path)
+            WF.print2stdout('Data File not found!', ofn_path)
             return [], []
         if isinstance(structure_nums, dict):
             structure_nums = [structure_nums['structurenumber']]
@@ -427,8 +429,8 @@ class W2_Results(object):
                        'waterlevel': 'elevcl'}
 
         if 'parameter' not in Line_info.keys():
-            print('Parameter not specified.')
-            print('Line Info:', Line_info)
+            WF.print2stdout('Parameter not specified.')
+            WF.print2stdout('Line Info:', Line_info)
             return values, ''
         new_values = {}
         target_header = headerparam[Line_info['parameter']]
