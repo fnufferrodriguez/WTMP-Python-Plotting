@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '5.0.1'
+VERSIONNUMBER = '5.0.4'
 
 import datetime as dt
 import os
@@ -40,10 +40,17 @@ import WAT_Functions as WF
 import WAT_XML_Utils as WXMLU
 import WAT_Logger as WL
 import WAT_Constants as WC
-import WAT_DataOrganizer as WD
+import WAT_Time as WT
+import WAT_Defaults as WD
+import WAT_DataOrganizer as WDO
+
 import WAT_ResSim_Results as WRSS
 import WAT_W2_Results as WW2
-import WAT_Tables as WT
+
+import WAT_Profiles as WProfile
+import WAT_Tables as WTable
+import WAT_Plots as WPlot
+import WAT_Gates as WGates
 
 
 class MakeAutomatedReport(object):
@@ -57,26 +64,26 @@ class MakeAutomatedReport(object):
         organizes input data and generates XML report
         :param simulationInfoFile: full path to simulation information XML file output from WAT.
         '''
-        self.printVersion()
+        WF.printVersion(VERSIONNUMBER)
         self.simulationInfoFile = simulationInfoFile
         self.WriteLog = True #TODO we're testing this.
         self.batdir = batdir
         WR.readSimulationInfo(self, simulationInfoFile) #read file output by WAT
-        # self.EnsureDefaultFiles() #TODO: turn this back on for copying
         self.definePaths()
         self.Constants = WC.WAT_Constants()
         self.cleanOutputDirs()
         WR.readGraphicsDefaultFile(self) #read graphical component defaults
-        WR.readDefaultLineStylesFile(self)
+        self.defaultLineStyles = WD.readDefaultLineStylesFile(self)
         self.WAT_log = WL.WAT_Logger()
 
         if self.reportType == 'single': #Eventually be able to do comparison reports, put that here
             for simulation in self.Simulations:
-                print('Running Simulation:', simulation)
+                WF.print2stdout('Running Simulation:', simulation)
                 self.initSimulationDict()
                 self.setSimulationVariables(simulation)
                 self.loadCurrentID('base') #load the data for the current sim, we do 1 at a time here..
-                self.defineStartEndYears()
+                WF.checkExists(self.SimulationDir)
+                WT.defineStartEndYears(self)
                 WR.readSimulationsCSV(self) #read to determine order/sims/regions in report
                 self.cleanOutputDirs()
                 self.initializeXML()
@@ -97,9 +104,10 @@ class MakeAutomatedReport(object):
             self.initSimulationDict()
             for simulation in self.Simulations:
                 self.setSimulationVariables(simulation)
+                WF.checkExists(simulation['directory'])
             self.loadCurrentID('base') #load the data for the current sim, we do 1 at a time here..
-            self.setMultiRunStartEndYears() #find the start and end time
-            self.defineStartEndYears() #format the years correctly after theyre set
+            WT.setMultiRunStartEndYears(self) #find the start and end time
+            WT.defineStartEndYears(self) #format the years correctly after theyre set
             WR.readComparisonSimulationsCSV(self) #read to determine order/sims/regions in report
             self.cleanOutputDirs()
             self.initializeXML()
@@ -117,38 +125,10 @@ class MakeAutomatedReport(object):
             self.XML.writeReportEnd()
             self.WAT_log.equalizeLog()
         else:
-            print('UNKNOWN REPORT TYPE:', self.reportType)
-            sys.exit()
+            WF.print2stderr('UNKNOWN REPORT TYPE:', self.reportType)
+            sys.exit(1)
         self.WAT_log.writeLogFile(self.images_path)
         self.Data.writeDataFiles()
-
-    def defineStartEndYears(self):
-        '''
-        defines start and end years for the simulation so they can be replaced by flagged values.
-        end dates that end on the first of the year with no min seconds (aka Dec 31 @ 24:00) have their end
-        years set to be the year prior, as its not fair to really call them that next year
-        self.years is a list of all years used
-        self.years_str is a string representation of the years, either as a single year, or range, aka 2003-2005
-        :return: class variables
-                    self.startYear
-                    self.endYear
-                    self.years
-                    self.years_str
-        '''
-
-        tw_start = self.StartTime
-        tw_end = self.EndTime
-        if tw_end == dt.datetime(tw_end.year, 1, 1, 0, 0):
-            tw_end += dt.timedelta(seconds=-1) #if its this day just go back
-
-        self.startYear = tw_start.year
-        self.endYear = tw_end.year
-        if self.startYear == self.endYear:
-            self.years_str = str(self.startYear)
-            self.years = [self.startYear]
-        else:
-            self.years = range(tw_start.year, tw_end.year+1)
-            self.years_str = "{0}-{1}".format(self.startYear, self.endYear)
 
     def definePaths(self):
         '''
@@ -159,8 +139,10 @@ class MakeAutomatedReport(object):
         '''
 
         self.images_path = os.path.join(self.studyDir, 'reports', 'Images')
+        WF.checkExists(self.images_path)
+
         self.CSVPath = os.path.join(self.studyDir, 'reports', 'CSVData')
-        self.default_dir = os.path.join(os.path.split(self.batdir)[0], 'Default')
+        WF.checkExists(self.CSVPath)
 
     def makeTimeSeriesPlot(self, object_settings):
         '''
@@ -169,16 +151,18 @@ class MakeAutomatedReport(object):
         :return: creates png in images dir and writes to XML file
         '''
 
-        print('\n################################')
-        print('Now making TimeSeries Plot.')
-        print('################################\n')
+        WF.print2stdout('\n################################')
+        WF.print2stdout('Now making TimeSeries Plot.')
+        WF.print2stdout('################################\n')
+
+        Plots = WPlot.Plots(self)
 
         default_settings = self.loadDefaultPlotObject('timeseriesplot') #get default TS plot items
-        object_settings = self.replaceDefaults(default_settings, object_settings) #overwrite the defaults with chapter file
+        object_settings = WF.replaceDefaults(self, default_settings, object_settings) #overwrite the defaults with chapter file
 
-        object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = self.getPlotYears(object_settings)
+        object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = WF.getObjectYears(self, object_settings)
 
-        object_settings = self.confirmAxis(object_settings)
+        object_settings = Plots.confirmAxis(object_settings)
 
         for yi, year in enumerate(object_settings['years']):
             cur_obj_settings = pickle.loads(pickle.dumps(object_settings, -1))
@@ -186,7 +170,7 @@ class MakeAutomatedReport(object):
                 yearstr = str(year)
             else:
                 yearstr = object_settings['yearstr']
-            cur_obj_settings = self.updateFlaggedValues(cur_obj_settings, '%%year%%', yearstr)
+            cur_obj_settings = WF.updateFlaggedValues(cur_obj_settings, '%%year%%', yearstr)
 
             if len(cur_obj_settings['axs']) == 1:
                 figsize=(12, 6)
@@ -219,17 +203,16 @@ class MakeAutomatedReport(object):
             legend_right = False
             right_sided_axes = []
 
-
             for axi, ax_settings in enumerate(cur_obj_settings['axs']):
 
-                ax_settings = self.copyObjectSettingsToAxSetting(ax_settings, cur_obj_settings, ignore=['axs'])
+                ax_settings = WF.copyKeysBetweenDicts(ax_settings, cur_obj_settings, ignore=['axs'])
 
                 if len(cur_obj_settings['axs']) == 1:
                     ax = axes
                 else:
                     ax = axes[axi]
 
-                ax_settings = self.setTimeSeriesXlims(ax_settings, yearstr, object_settings['years'])
+                ax_settings = Plots.setTimeSeriesXlims(ax_settings, yearstr, object_settings['years'])
 
                 ### Make Twin axis ###
                 _usetwinx = False
@@ -247,21 +230,21 @@ class MakeAutomatedReport(object):
                 ax_settings = self.configureSettingsForID('base', ax_settings)
                 gatedata = self.Data.getGateDataDictionary(ax_settings, makecopy=False)
                 linedata = WF.filterDataByYear(linedata, year)
-                linedata = self.correctDuplicateLabels(linedata)
+                linedata = WF.correctDuplicateLabels(linedata)
                 for gateop in gatedata.keys():
                     gatedata[gateop]['gates'] = WF.filterDataByYear(gatedata[gateop]['gates'], year)
 
                 if 'relative' in ax_settings.keys():
                     if ax_settings['relative'].lower() == 'true':
-                        RelativeMasterSet, RelativeLineSettings = self.getRelativeMasterSet(linedata)
+                        RelativeMasterSet, RelativeLineSettings = Plots.getRelativeMasterSet(linedata)
                         if 'unitsystem' in ax_settings.keys():
-                            RelativeMasterSet, RelativeLineSettings['units'] = self.convertUnitSystem(RelativeMasterSet,
-                                                                                                      RelativeLineSettings['units'],
-                                                                                                      ax_settings['unitsystem'])
+                            RelativeMasterSet, RelativeLineSettings['units'] = WF.convertUnitSystem(RelativeMasterSet,
+                                                                                                    RelativeLineSettings['units'],
+                                                                                                    ax_settings['unitsystem'])
                 # LINE DATA #
                 for line in linedata:
                     curline = linedata[line]
-                    parameter, ax_settings['param_count'] = self.getParameterCount(curline, ax_settings)
+                    parameter, ax_settings['param_count'] = WF.getParameterCount(curline, ax_settings)
                     i = ax_settings['param_count'][parameter]
 
                     values = curline['values']
@@ -282,28 +265,27 @@ class MakeAutomatedReport(object):
                             units = None
 
                     if 'unitsystem' in ax_settings.keys():
-                        values, units = self.convertUnitSystem(values, units, ax_settings['unitsystem'])
+                        values, units = WF.convertUnitSystem(values, units, ax_settings['unitsystem'])
 
                     chkvals = WF.checkData(values)
                     if not chkvals:
-                        print('Invalid Data settings for line:', line)
+                        WF.print2stdout('Invalid Data settings for line:', line)
                         continue
 
                     if 'dateformat' in ax_settings.keys():
                         if ax_settings['dateformat'].lower() == 'jdate':
                             if isinstance(dates[0], dt.datetime):
-                                dates = WF.DatetimeToJDate(dates, self.ModelAlt.t_offset)
+                                dates = WT.DatetimeToJDate(dates, self.ModelAlt.t_offset)
                         elif ax_settings['dateformat'].lower() == 'datetime':
                             if isinstance(dates[0], (int,float)):
-                                dates = WF.JDateToDatetime(dates, self.startYear)
+                                dates = WT.JDateToDatetime(dates, self.startYear)
                     else:
                         ax_settings['dateformat'] = 'datetime'
-                        if isinstance(dates[0], (int,float)):
-                            dates = WF.JDateToDatetime(dates, self.startYear)
+                        if isinstance(dates[0], (int, float)):
+                            dates = WT.JDateToDatetime(dates, self.startYear)
 
-                    line_settings = self.getDefaultLineSettings(curline, parameter, i)
-                    line_settings = self.fixDuplicateColors(line_settings) #used the line, used param, then double up so subtract 1
-
+                    line_settings = WD.getDefaultLineSettings(self.defaultLineStyles, curline, parameter, i)
+                    line_settings = WF.fixDuplicateColors(line_settings) #used the line, used param, then double up so subtract 1
 
                     if 'zorder' not in line_settings.keys():
                         line_settings['zorder'] = 4
@@ -316,9 +298,9 @@ class MakeAutomatedReport(object):
 
                     if line_settings['filterbylimits'].lower() == 'true':
                         if 'xlims' in object_settings.keys():
-                            dates, values = self.limitXdata(dates, values, cur_obj_settings['xlims'])
+                            dates, values = WF.applyXLimits(self, dates, values, cur_obj_settings['xlims'])
                         if 'ylims' in object_settings.keys():
-                            dates, values = self.limitYdata(dates, values, cur_obj_settings['ylims'])
+                            dates, values = WF.applyYLimits(dates, values, cur_obj_settings['ylims'])
 
                     curax = ax
                     axis2 = False
@@ -337,37 +319,31 @@ class MakeAutomatedReport(object):
                     if 'relative' in ax_settings:
                         if ax_settings['relative'].lower() == 'true':
                             if RelativeLineSettings['interval'] != None:
-                                dates, values = self.changeTimeSeriesInterval(dates, values, RelativeLineSettings)
+                                dates, values = WT.changeTimeSeriesInterval(dates, values, RelativeLineSettings,
+                                                                              self.ModelAlt.t_offset,
+                                                                              self.startYear)
                             values = values/RelativeMasterSet
 
                     if line_settings['drawline'].lower() == 'true' and line_settings['drawpoints'].lower() == 'true':
-                        curax.plot(dates, values, label=line_settings['label'], c=line_settings['linecolor'],
-                                   lw=line_settings['linewidth'], ls=line_settings['linestylepattern'],
-                                   marker=line_settings['symboltype'], markerfacecolor=line_settings['pointfillcolor'],
-                                   markeredgecolor=line_settings['pointlinecolor'], markersize=float(line_settings['symbolsize']),
-                                   markevery=int(line_settings['numptsskip']), zorder=float(line_settings['zorder']),
-                                   alpha=float(line_settings['alpha']))
+                        Plots.plotLinesAndPoints(dates, values, curax, line_settings)
 
                     elif line_settings['drawline'].lower() == 'true':
-                        curax.plot(dates, values, label=line_settings['label'], c=line_settings['linecolor'],
-                                   lw=line_settings['linewidth'], ls=line_settings['linestylepattern'],
-                                   zorder=float(line_settings['zorder']),
-                                   alpha=float(line_settings['alpha']))
+                        Plots.plotLines(dates, values, curax, line_settings)
 
                     elif line_settings['drawpoints'].lower() == 'true':
-                        curax.scatter(dates[::int(line_settings['numptsskip'])], values[::int(line_settings['numptsskip'])],
-                                      marker=line_settings['symboltype'], facecolor=line_settings['pointfillcolor'],
-                                      edgecolor=line_settings['pointlinecolor'], s=float(line_settings['symbolsize']),
-                                      label=line_settings['label'], zorder=float(line_settings['zorder']),
-                                      alpha=float(line_settings['alpha']))
+                        Plots.plotPoints(dates, values, curax, line_settings)
 
 
                     self.WAT_log.addLogEntry({'type': line_settings['label'] + '_TimeSeries' if line_settings['label'] != '' else 'Timeseries',
                                               'name': self.ChapterRegion+'_'+yearstr,
                                               'description': ax_settings['description'],
                                               'units': units,
-                                              'value_start_date': self.translateDateFormat(dates[0], 'datetime', '').strftime('%d %b %Y'),
-                                              'value_end_date': self.translateDateFormat(dates[-1], 'datetime', '').strftime('%d %b %Y'),
+                                              'value_start_date': WT.translateDateFormat(dates[0], 'datetime', '',
+                                                                                         self.StartTime, self.EndTime,
+                                                                                         self.ModelAlt.t_offset).strftime('%d %b %Y'),
+                                              'value_end_date': WT.translateDateFormat(dates[-1], 'datetime', '',
+                                                                                       self.StartTime, self.EndTime,
+                                                                                       self.ModelAlt.t_offset).strftime('%d %b %Y'),
                                               'logoutputfilename': curline['logoutputfilename']
                                              },
                                              isdata=True)
@@ -405,12 +381,12 @@ class MakeAutomatedReport(object):
                             if 'dateformat' in ax_settings.keys():
                                 if ax_settings['dateformat'].lower() == 'jdate':
                                     if isinstance(dates[0], dt.datetime):
-                                        dates = WF.DatetimeToJDate(dates, self.ModelAlt.t_offset)
+                                        dates = WT.DatetimeToJDate(dates, self.ModelAlt.t_offset)
                                 elif ax_settings['dateformat'].lower() == 'datetime':
                                     if isinstance(dates[0], (int,float)):
-                                        dates = WF.JDateToDatetime(dates, self.startYear)
+                                        dates = WT.JDateToDatetime(dates, self.startYear)
 
-                            gate_line_settings = self.getDefaultGateLineSettings(curgate, gate_count)
+                            gate_line_settings = WD.getDefaultGateLineSettings(curgate, gate_count)
 
                             if 'zorder' not in gate_line_settings.keys():
                                 gate_line_settings['zorder'] = 4
@@ -423,7 +399,7 @@ class MakeAutomatedReport(object):
 
                             if gate_line_settings['filterbylimits'].lower() == 'true':
                                 if 'xlims' in ax_settings.keys():
-                                    dates, values = self.limitXdata(dates, values, ax_settings['xlims'])
+                                    dates, values = WF.applyXLimits(self, dates, values, ax_settings['xlims'])
 
                             if 'placement' in gate_line_settings.keys():
                                 line_placement = float(gate_line_settings['placement'])
@@ -440,25 +416,13 @@ class MakeAutomatedReport(object):
                                         curax = ax2
 
                             if gate_line_settings['drawline'].lower() == 'true' and gate_line_settings['drawpoints'].lower() == 'true':
-                                curax.plot(dates, values, label=gate_line_settings['label'], c=gate_line_settings['linecolor'],
-                                           lw=gate_line_settings['linewidth'], ls=gate_line_settings['linestylepattern'],
-                                           marker=gate_line_settings['symboltype'], markerfacecolor=gate_line_settings['pointfillcolor'],
-                                           markeredgecolor=gate_line_settings['pointlinecolor'], markersize=float(gate_line_settings['symbolsize']),
-                                           markevery=int(gate_line_settings['numptsskip']), zorder=float(gate_line_settings['zorder']),
-                                           alpha=float(gate_line_settings['alpha']))
+                                Plots.plotLinesAndPoints(dates, values, curax, gate_line_settings)
 
                             elif gate_line_settings['drawline'].lower() == 'true':
-                                curax.plot(dates, values, label=gate_line_settings['label'], c=gate_line_settings['linecolor'],
-                                           lw=gate_line_settings['linewidth'], ls=gate_line_settings['linestylepattern'],
-                                           zorder=float(gate_line_settings['zorder']),
-                                           alpha=float(gate_line_settings['alpha']))
+                                Plots.plotLines(dates, values, curax, gate_line_settings)
 
                             elif gate_line_settings['drawpoints'].lower() == 'true':
-                                curax.scatter(dates[::int(gate_line_settings['numptsskip'])], values[::int(gate_line_settings['numptsskip'])],
-                                              marker=gate_line_settings['symboltype'], facecolor=gate_line_settings['pointfillcolor'],
-                                              edgecolor=gate_line_settings['pointlinecolor'], s=float(gate_line_settings['symbolsize']),
-                                              label=gate_line_settings['label'], zorder=float(gate_line_settings['zorder']),
-                                              alpha=float(gate_line_settings['alpha']))
+                                Plots.plotPoints(dates, values, curax, gate_line_settings)
 
                             gate_count += 1 #keep track of gate number in group
                             gate_placement += 1 #keep track of gate palcement in space
@@ -466,8 +430,12 @@ class MakeAutomatedReport(object):
                                                       'name': self.ChapterRegion+'_'+yearstr,
                                                       'description': ax_settings['description'],
                                                       'units': 'BINARY',
-                                                      'value_start_date': self.translateDateFormat(dates[0], 'datetime', '').strftime('%d %b %Y'),
-                                                      'value_end_date': self.translateDateFormat(dates[-1], 'datetime', '').strftime('%d %b %Y'),
+                                                      'value_start_date': WT.translateDateFormat(dates[0], 'datetime', '',
+                                                                                                 self.StartTime, self.EndTime,
+                                                                                                 self.ModelAlt.t_offset).strftime('%d %b %Y'),
+                                                      'value_end_date': WT.translateDateFormat(dates[-1], 'datetime', '',
+                                                                                               self.StartTime, self.EndTime,
+                                                                                               self.ModelAlt.t_offset).strftime('%d %b %Y'),
                                                       'logoutputfilename': curgate['logoutputfilename']
                                                       },
                                                      isdata=True)
@@ -476,33 +444,39 @@ class MakeAutomatedReport(object):
                     gate_placement += gatespacing
 
                 if 'operationlines' in ax_settings.keys():
-                    operationtimes = self.getGateOperationTimes(gatedata)
+                    operationtimes = WF.getGateOperationTimes(gatedata)
                     axs_to_add_line = [ax]
                     if 'allaxis' in ax_settings['operationlines'].keys():
                         if ax_settings['operationlines']['allaxis'].lower() == 'true':
                             axs_to_add_line = axes
 
-                    opline_settings = self.getDefaultStraightLineSettings(ax_settings['operationlines'])
+                    opline_settings = WD.getDefaultStraightLineSettings(ax_settings['operationlines'])
 
                     for ax_to_add_line in axs_to_add_line:
                         for operationTime in operationtimes:
                             if 'dateformat' in ax_settings.keys():
                                 if ax_settings['dateformat'].lower() == 'jdate':
                                     if isinstance(operationTime, dt.datetime):
-                                        operationTime = WF.DatetimeToJDate(operationTime, self.ModelAlt.t_offset)
+                                        operationTime = WT.DatetimeToJDate(operationTime, self.ModelAlt.t_offset)
                                     elif isinstance(operationTime, str):
                                         try:
                                             operationTime = float(operationTime)
                                         except:
-                                            operationTime = self.translateDateFormat(operationTime, 'datetime', '')
-                                            operationTime = WF.DatetimeToJDate(operationTime, self.ModelAlt.t_offset)
+                                            operationTime = WT.translateDateFormat(operationTime, 'datetime', '',
+                                                                                   self.StartTime, self.EndTime,
+                                                                                   self.ModelAlt.t_offset)
+                                            operationTime = WT.DatetimeToJDate(operationTime, self.ModelAlt.t_offset)
                                 elif ax_settings['dateformat'].lower() == 'datetime':
                                     if isinstance(operationTime, (int,float)):
-                                        operationTime = WF.JDateToDatetime(operationTime, self.startYear)
+                                        operationTime = WT.JDateToDatetime(operationTime, self.startYear)
                                     elif isinstance(operationTime, str):
-                                        operationTime = self.translateDateFormat(operationTime, 'datetime', '')
+                                        operationTime = WT.translateDateFormat(operationTime, 'datetime', '',
+                                                                               self.StartTime, self.EndTime,
+                                                                               self.ModelAlt.t_offset)
                             else:
-                                operationTime = self.translateDateFormat(operationTime, 'datetime', '')
+                                operationTime = WT.translateDateFormat(operationTime, 'datetime', '',
+                                                                       self.StartTime, self.EndTime,
+                                                                       self.ModelAlt.t_offset)
 
                             if 'zorder' not in opline_settings.keys():
                                 opline_settings['zorder'] = 3
@@ -515,29 +489,37 @@ class MakeAutomatedReport(object):
                 ### VERTICAL LINES ###
                 if 'vlines' in ax_settings.keys():
                     for vline in ax_settings['vlines']:
-                        vline_settings = self.getDefaultStraightLineSettings(vline)
+                        vline_settings = WD.getDefaultStraightLineSettings(vline)
                         try:
                             vline_settings['value'] = float(vline_settings['value'])
                         except:
-                            vline_settings['value'] = self.translateDateFormat(vline_settings['value'], 'datetime', '')
+                            vline_settings['value'] = WT.translateDateFormat(vline_settings['value'], 'datetime', '',
+                                                                             self.StartTime, self.EndTime,
+                                                                             self.ModelAlt.t_offset)
 
                         if 'dateformat' in ax_settings.keys():
                             if ax_settings['dateformat'].lower() == 'jdate':
                                 if isinstance(vline_settings['value'], dt.datetime):
-                                    vline_settings['value'] = WF.DatetimeToJDate(vline_settings['value'], self.ModelAlt.t_offset)
+                                    vline_settings['value'] = WT.DatetimeToJDate(vline_settings['value'], self.ModelAlt.t_offset)
                                 elif isinstance(vline_settings['value'], str):
                                     try:
                                         vline_settings['value'] = float(vline_settings['value'])
                                     except:
-                                        vline_settings['value'] = self.translateDateFormat(vline_settings['value'], 'datetime', '')
-                                        vline_settings['value'] = WF.DatetimeToJDate(vline_settings['value'], self.ModelAlt.t_offset)
+                                        vline_settings['value'] = WT.translateDateFormat(vline_settings['value'], 'datetime', '',
+                                                                                         self.StartTime, self.EndTime,
+                                                                                         self.ModelAlt.t_offset)
+                                        vline_settings['value'] = WT.DatetimeToJDate(vline_settings['value'], self.ModelAlt.t_offset)
                             elif ax_settings['dateformat'].lower() == 'datetime':
                                 if isinstance(vline_settings['value'], (int,float)):
-                                    vline_settings['value'] = WF.JDateToDatetime(vline_settings['value'], self.startYear)
+                                    vline_settings['value'] = WT.JDateToDatetime(vline_settings['value'], self.startYear)
                                 elif isinstance(vline_settings['value'], str):
-                                    vline_settings['value'] = self.translateDateFormat(vline_settings['value'], 'datetime', '')
+                                    vline_settings['value'] = WT.translateDateFormat(vline_settings['value'], 'datetime', '',
+                                                                                     self.StartTime, self.EndTime,
+                                                                                     self.ModelAlt.t_offset)
                         else:
-                            vline_settings['value'] = self.translateDateFormat(vline_settings['value'], 'datetime', '')
+                            vline_settings['value'] = WT.translateDateFormat(vline_settings['value'], 'datetime', '',
+                                                                             self.StartTime, self.EndTime,
+                                                                             self.ModelAlt.t_offset)
 
                         if 'label' not in vline_settings.keys():
                             vline_settings['label'] = None
@@ -552,7 +534,7 @@ class MakeAutomatedReport(object):
                 ### Horizontal LINES ###
                 if 'hlines' in ax_settings.keys():
                     for hline in ax_settings['hlines']:
-                        hline_settings = self.getDefaultStraightLineSettings(hline)
+                        hline_settings = WD.getDefaultStraightLineSettings(hline)
                         if 'label' not in hline_settings.keys():
                             hline_settings['label'] = None
                         if 'zorder' not in hline_settings.keys():
@@ -564,10 +546,10 @@ class MakeAutomatedReport(object):
                                    zorder=float(hline_settings['zorder']),
                                    alpha=float(hline_settings['alpha']))
 
-                plotunits = self.getPlotUnits(unitslist, ax_settings)
-                plotunits2 = self.getPlotUnits(unitslist2, ax_settings)
-                ax_settings = self.updateFlaggedValues(ax_settings, '%%units%%', plotunits)
-                ax_settings = self.updateFlaggedValues(ax_settings, '%%units2%%', plotunits2)
+                plotunits = WF.getPlotUnits(unitslist, ax_settings)
+                plotunits2 = WF.getPlotUnits(unitslist2, ax_settings)
+                ax_settings = WF.updateFlaggedValues(ax_settings, '%%units%%', plotunits)
+                ax_settings = WF.updateFlaggedValues(ax_settings, '%%units2%%', plotunits2)
 
                 if axi == 0:
                     if 'title' in ax_settings.keys():
@@ -635,7 +617,7 @@ class MakeAutomatedReport(object):
 
                 ############# xticks and lims #############
 
-                self.formatDateXAxis(ax, ax_settings)
+                Plots.formatDateXAxis(ax, ax_settings)
                 xmin, xmax = ax.get_xlim()
 
                 if ax_settings['dateformat'].lower() == 'datetime':
@@ -645,7 +627,7 @@ class MakeAutomatedReport(object):
                 if 'xticks' in ax_settings.keys():
                     xtick_settings = ax_settings['xticks']
 
-                    self.formatTimeSeriesXticks(ax, xtick_settings, ax_settings)
+                    Plots.formatTimeSeriesXticks(ax, xtick_settings, ax_settings)
 
                 ax.set_xlim(left=xmin)
                 ax.set_xlim(right=xmax)
@@ -681,7 +663,7 @@ class MakeAutomatedReport(object):
                             ytickspacing = int(ytickspacing)
 
                         newyticks = np.arange(ymin, (ymax+ytickspacing), ytickspacing)
-                        newyticklabels = self.formatTickLabels(newyticks, ytick_settings)
+                        newyticklabels = Plots.formatTickLabels(newyticks, ytick_settings)
                         ax.set_yticks(newyticks)
                         ax.set_yticklabels(newyticklabels)
 
@@ -728,7 +710,7 @@ class MakeAutomatedReport(object):
                                 ytickspacing = int(ytickspacing)
 
                             newyticks = np.arange(ymin2, (ymax2+ytickspacing), ytickspacing)
-                            newyticklabels = self.formatTickLabels(newyticks, ytick2_settings)
+                            newyticklabels = Plots.formatTickLabels(newyticks, ytick2_settings)
                             ax2.set_yticks(newyticks)
                             ax2.set_yticklabels(newyticklabels)
 
@@ -788,63 +770,63 @@ class MakeAutomatedReport(object):
         :param object_settings: currently selected object settings dictionary
         :return: writes table to XML
         '''
-        print('\n################################')
-        print('Now making Profile Stats Table.')
-        print('################################\n')
+        WF.print2stdout('\n################################')
+        WF.print2stdout('Now making Profile Stats Table.')
+        WF.print2stdout('################################\n')
 
-        tableFuncs = WT.Tables(self)
+        Tables = WTable.Tables(self)
 
         default_settings = self.loadDefaultPlotObject('profilestatisticstable')
-        object_settings = self.replaceDefaults(default_settings, object_settings)
+        object_settings = WF.replaceDefaults(self, default_settings, object_settings)
         object_settings['datakey'] = 'datapaths'
 
         ################# Get timestamps #################
-        object_settings['datessource_flag'] = self.getDateSourceFlag(object_settings)
-        object_settings['timestamps'] = self.getProfileTimestamps(object_settings)
+        object_settings['datessource_flag'] = WF.getDateSourceFlag(object_settings)
+        object_settings['timestamps'] = WProfile.getProfileTimestamps(object_settings, self.StartTime, self.EndTime)
 
         ################# Get units #################
         object_settings['plot_parameter'] = self.getPlotParameter(object_settings)
 
         ################# Get data #################
         data, line_settings = self.Data.getProfileDataDictionary(object_settings)
-        line_settings = self.correctDuplicateLabels(line_settings)
+        line_settings = WF.correctDuplicateLabels(line_settings)
         table_blueprint = pickle.loads(pickle.dumps(object_settings, -1))
 
         object_settings = self.configureSettingsForID('base', object_settings)
 
         ################ convert yflags ################
         if object_settings['usedepth'].lower() == 'false':
-            data, object_settings = self.convertDepthsToElevations(data, object_settings)
+            data, object_settings = WProfile.convertDepthsToElevations(data, object_settings)
         elif object_settings['usedepth'].lower() == 'true':
-            data, object_settings = self.convertElevationsToDepths(data, object_settings)
+            data, object_settings = WProfile.convertElevationsToDepths(data, object_settings)
 
         ################# Get plot units #################
-        data, line_settings = self.convertProfileDataUnits(object_settings, data, line_settings)
+        data, line_settings = WProfile.convertProfileDataUnits(object_settings, data, line_settings)
         object_settings['units_list'] = WF.getUnitsList(line_settings)
-        object_settings['plot_units'] = self.getPlotUnits(object_settings['units_list'], object_settings)
-        object_settings = self.updateFlaggedValues(object_settings, '%%units%%', object_settings['plot_units'])
+        object_settings['plot_units'] = WF.getPlotUnits(object_settings['units_list'], object_settings)
+        object_settings = WF.updateFlaggedValues(object_settings, '%%units%%', object_settings['plot_units'])
         # table_blueprint = pickle.loads(pickle.dumps(object_settings, -1))
 
-        table_blueprint = self.updateFlaggedValues(table_blueprint, '%%units%%', object_settings['plot_units'])
+        table_blueprint = WF.updateFlaggedValues(table_blueprint, '%%units%%', object_settings['plot_units'])
 
-        self.commitProfileDataToMemory(data, line_settings, object_settings)
-        data, object_settings = self.filterProfileData(data, line_settings, object_settings)
+        self.Data.commitProfileDataToMemory(data, line_settings, object_settings)
+        data, object_settings = WProfile.filterProfileData(data, line_settings, object_settings)
 
-        object_settings['resolution'] = self.getProfileInterpResolution(object_settings)
+        object_settings['resolution'] = WProfile.getProfileInterpResolution(object_settings)
 
-        object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = self.getPlotYears(object_settings)
+        object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = WF.getObjectYears(self, object_settings)
 
-        yrheaders, yrheaders_i = tableFuncs.buildHeadersByTimestamps(object_settings['timestamps'], self.years)
-        yrheaders = self.convertHeaderFormats(yrheaders, object_settings)
+        yrheaders, yrheaders_i = Tables.buildHeadersByTimestamps(object_settings['timestamps'], self.years)
+        yrheaders = Tables.convertHeaderFormats(yrheaders, object_settings)
         if not object_settings['split_by_year']: #if we dont want to split by year, just make a big ass list
             yrheaders = [list(itertools.chain.from_iterable(yrheaders))]
             yrheaders_i = [list(itertools.chain.from_iterable(yrheaders_i))]
         for yi, year in enumerate(self.years):
             if len(yrheaders[yi]) == 0:
-                print('No data for', year)
+                WF.print2stdout('No data for', year)
                 continue
             yearstr = object_settings['yearstr'][yi]
-            object_desc = self.updateFlaggedValues(object_settings['description'], '%%year%%', yearstr)
+            object_desc = WF.updateFlaggedValues(object_settings['description'], '%%year%%', yearstr)
             if self.iscomp:
                 self.XML.writeDateControlledTableStart(object_desc, 'Statistics')
             else:
@@ -854,7 +836,7 @@ class MakeAutomatedReport(object):
                     #if a comparison, write the date column. Otherwise, this will be our header
                     self.XML.writeDateColumn(yrheader)
                 header_i = yrheaders_i[yi][yhi]
-                headings, rows = tableFuncs.buildProfileStatsTable(table_blueprint, yrheaders[yi][yhi], line_settings)
+                headings, rows = Tables.buildProfileStatsTable(table_blueprint, yrheaders[yi][yhi], line_settings)
                 for hi,heading in enumerate(headings):
                     frmt_rows = []
                     threshold_colors = np.full(len(rows), None)
@@ -864,11 +846,11 @@ class MakeAutomatedReport(object):
                         row_val = s_row[hi+1]
                         if '%%' in row_val:
 
-                            stats_data = self.formatStatsProfileLineData(row_val, data, object_settings['resolution'],
+                            stats_data = Tables.formatStatsProfileLineData(row_val, data, object_settings['resolution'],
                                                                          object_settings['usedepth'], header_i)
-                            row_val, stat = self.getStatsLine(row_val, stats_data)
+                            row_val, stat = Tables.getStatsLine(row_val, stats_data)
                             if not np.isnan(row_val) and row_val != None:
-                                thresholdsettings = self.matchThresholdToStat(stat, object_settings)
+                                thresholdsettings = Tables.matchThresholdToStat(stat, object_settings)
                                 for thresh in thresholdsettings:
                                     if thresh['colorwhen'] == 'under':
                                         if row_val < thresh['value']:
@@ -902,47 +884,49 @@ class MakeAutomatedReport(object):
         :return: creates png in images dir and writes to XML file
         '''
 
-        print('\n################################')
-        print('Now making Profile Plot.')
-        print('################################\n')
+        WF.print2stdout('\n################################')
+        WF.print2stdout('Now making Profile Plot.')
+        WF.print2stdout('################################\n')
+
+        Plots = WPlot.Plots(self)
 
         default_settings = self.loadDefaultPlotObject('profileplot')
-        object_settings = self.replaceDefaults(default_settings, object_settings)
+        object_settings = WF.replaceDefaults(self, default_settings, object_settings)
         object_settings['datakey'] = 'lines'
 
-        obj_desc = self.updateFlaggedValues(object_settings['description'], '%%year%%', self.years_str)
+        obj_desc = WF.updateFlaggedValues(object_settings['description'], '%%year%%', self.years_str)
         self.XML.writeProfilePlotStart(obj_desc)
 
         ################# Get timestamps #################
-        object_settings['datessource_flag'] = self.getDateSourceFlag(object_settings)
-        object_settings['timestamps'] = self.getProfileTimestamps(object_settings)
+        object_settings['datessource_flag'] = WF.getDateSourceFlag(object_settings)
+        object_settings['timestamps'] = WProfile.getProfileTimestamps(object_settings, self.StartTime, self.EndTime)
 
         ################# Get units #################
         object_settings['plot_parameter'] = self.getPlotParameter(object_settings)
 
         ################# Get data #################
         data, line_settings = self.Data.getProfileDataDictionary(object_settings)
-        line_settings = self.correctDuplicateLabels(line_settings)
+        line_settings = WF.correctDuplicateLabels(line_settings)
 
         object_settings = self.configureSettingsForID('base', object_settings)
         gatedata = self.Data.getGateDataDictionary(object_settings, makecopy=False)
 
         ################# Get plot units #################
-        data, line_settings = self.convertProfileDataUnits(object_settings, data, line_settings)
+        data, line_settings = WProfile.convertProfileDataUnits(object_settings, data, line_settings)
         object_settings['units_list'] = WF.getUnitsList(line_settings)
-        object_settings['plot_units'] = self.getPlotUnits(object_settings['units_list'], object_settings)
-        object_settings = self.updateFlaggedValues(object_settings, '%%units%%', object_settings['plot_units'])
+        object_settings['plot_units'] = WF.getPlotUnits(object_settings['units_list'], object_settings)
+        object_settings = WF.updateFlaggedValues(object_settings, '%%units%%', object_settings['plot_units'])
 
         ################ convert yflags ################
         if object_settings['usedepth'].lower() == 'false':
-            data, object_settings = self.convertDepthsToElevations(data, object_settings)
+            data, object_settings = WProfile.convertDepthsToElevations(data, object_settings)
         elif object_settings['usedepth'].lower() == 'true':
-            data, object_settings = self.convertElevationsToDepths(data, object_settings)
+            data, object_settings = WProfile.convertElevationsToDepths(data, object_settings)
 
-        self.commitProfileDataToMemory(data, line_settings, object_settings)
-        linedata, object_settings = self.filterProfileData(data, line_settings, object_settings)
+        self.Data.commitProfileDataToMemory(data, line_settings, object_settings)
+        linedata, object_settings = WProfile.filterProfileData(data, line_settings, object_settings)
 
-        object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = self.getPlotYears(object_settings)
+        object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = WF.getObjectYears(self, object_settings)
 
         ################ Build Plots ################
         for yi, year in enumerate(object_settings['years']):
@@ -951,13 +935,13 @@ class MakeAutomatedReport(object):
             else:
                 yearstr = object_settings['yearstr']
 
-            t_stmps = WF.filterTimestepByYear(object_settings['timestamps'], year)
+            t_stmps = WT.filterTimestepByYear(object_settings['timestamps'], year)
 
             prof_indices = [np.where(object_settings['timestamps'] == n)[0][0] for n in t_stmps]
             n = int(object_settings['profilesperrow']) * int(object_settings['rowsperpage']) #Get number of plots on page
             page_indices = [prof_indices[i * n:(i + 1) * n] for i in range((len(prof_indices) + n - 1) // n)]
             cur_obj_settings = pickle.loads(pickle.dumps(object_settings, -1))
-            cur_obj_settings = self.updateFlaggedValues(cur_obj_settings, '%%year%%', yearstr) #TODO: reudce the settings
+            cur_obj_settings = WF.updateFlaggedValues(cur_obj_settings, '%%year%%', yearstr) #TODO: reudce the settings
 
             for page_i, pgi in enumerate(page_indices):
 
@@ -985,12 +969,12 @@ class MakeAutomatedReport(object):
                         try:
                             values = data[line]['values'][j]
                             if len(values) == 0:
-                                print('No values for {0} on {1}'.format(line, object_settings['timestamps'][j]))
+                                WF.print2stdout('No values for {0} on {1}'.format(line, object_settings['timestamps'][j]))
                                 continue
                             msk = np.where(~np.isnan(values))
                             values = values[msk]
                         except IndexError:
-                            print('No values for {0} on {1}'.format(line, object_settings['timestamps'][j]))
+                            WF.print2stdout('No values for {0} on {1}'.format(line, object_settings['timestamps'][j]))
                             continue
 
                         try:
@@ -999,39 +983,27 @@ class MakeAutomatedReport(object):
                             else:
                                 levels = data[line]['elevations'][j][msk]
                             if not WF.checkData(levels):
-                                print('Non Viable depths/elevations for {0} on {1}'.format(line, object_settings['timestamps'][j]))
+                                WF.print2stdout('Non Viable depths/elevations for {0} on {1}'.format(line, object_settings['timestamps'][j]))
                                 continue
                         except IndexError:
-                            print('Non Viable depths/elevations for {0} on {1}'.format(line, object_settings['timestamps'][j]))
+                            WF.print2stdout('Non Viable depths/elevations for {0} on {1}'.format(line, object_settings['timestamps'][j]))
                             continue
 
                         if not WF.checkData(values):
                             continue
 
                         current_ls = line_settings[line] #we have all the settings we need..
-                        current_ls = self.getDefaultLineSettings(current_ls, object_settings['plot_parameter'], li)
-                        current_ls = self.fixDuplicateColors(current_ls) #used the line, used param, then double up so subtract 1
+                        current_ls = WD.getDefaultLineSettings(self.defaultLineStyles, current_ls, object_settings['plot_parameter'], li)
+                        current_ls = WF.fixDuplicateColors(current_ls) #used the line, used param, then double up so subtract 1
 
                         if current_ls['drawline'].lower() == 'true' and current_ls['drawpoints'].lower() == 'true':
-                            ax.plot(values, levels, label=current_ls['label'], c=current_ls['linecolor'],
-                                    lw=current_ls['linewidth'], ls=current_ls['linestylepattern'],
-                                    marker=current_ls['symboltype'], markerfacecolor=current_ls['pointfillcolor'],
-                                    markeredgecolor=current_ls['pointlinecolor'], markersize=float(current_ls['symbolsize']),
-                                    markevery=int(current_ls['numptsskip']), zorder=int(current_ls['zorder']),
-                                    alpha=float(current_ls['alpha']))
+                            Plots.plotLinesAndPoints(values, levels, ax, current_ls)
 
                         elif current_ls['drawline'].lower() == 'true':
-                            ax.plot(values, levels, label=current_ls['label'], c=current_ls['linecolor'],
-                                    lw=current_ls['linewidth'], ls=current_ls['linestylepattern'],
-                                    zorder=int(current_ls['zorder']),
-                                    alpha=float(current_ls['alpha']))
+                            Plots.plotLines(values, levels, ax, current_ls)
 
                         elif current_ls['drawpoints'].lower() == 'true':
-                            ax.scatter(values[::int(current_ls['numptsskip'])], levels[::int(current_ls['numptsskip'])],
-                                       marker=current_ls['symboltype'], facecolor=current_ls['pointfillcolor'],
-                                       edgecolor=current_ls['pointlinecolor'], s=float(current_ls['symbolsize']),
-                                       label=current_ls['label'], zorder=int(current_ls['zorder']),
-                                       alpha=float(current_ls['alpha']))
+                            Plots.plotPoints(values, levels, ax, current_ls)
 
                     ### HLINES ###
                     if 'hlines' in cur_obj_settings.keys():
@@ -1054,20 +1026,20 @@ class MakeAutomatedReport(object):
                                         value = 0 #top of the water, should always be 0
                                 elif object_settings['usedepth'].lower() == 'false':
                                     if hline_settings['parameter'].lower() == 'depth':
-                                        valueconv = self.convertDepthsToElevations({'hline': {'depths': [value],
+                                        valueconv = WProfile.convertDepthsToElevations({'hline': {'depths': [value],
                                                                                               'elevations': []}})
                                         value = valueconv['hline']['elevation'][0]
 
                             #currently cant convert these units..
                             # if units != None:
-                            #     valueconv, units = self.convertUnitSystem(value, units, object_settings['unitsystem'])
+                            #     valueconv, units = WF.convertUnitSystem(value, units, object_settings['unitsystem'])
                             #     value = valueconv[0]
 
                             ### instead, use scalar to be manual
                             if 'scalar' in hline_settings.keys():
                                 value *= float(hline_settings['scalar'])
 
-                            hline_settings = self.getDefaultStraightLineSettings(hline_settings)
+                            hline_settings = WD.getDefaultStraightLineSettings(hline_settings)
                             if 'label' not in hline_settings.keys():
                                 hline_settings['label'] = None
                             if 'zorder' not in hline_settings.keys():
@@ -1081,7 +1053,7 @@ class MakeAutomatedReport(object):
                     ### VERTICAL LINES ###
                     if 'vlines' in cur_obj_settings.keys():
                         for vline in cur_obj_settings['vlines']:
-                            vline_settings = self.getDefaultStraightLineSettings(vline)
+                            vline_settings = WD.getDefaultStraightLineSettings(vline)
                             if 'value' in vline_settings.keys():
                                 value = float(vline_settings['value'])
                                 units = None
@@ -1163,7 +1135,7 @@ class MakeAutomatedReport(object):
                             else:
                                 xtickspacing = int(xtickspacing)
                             newxticks = np.arange(xmin, (xmax+xtickspacing), xtickspacing)
-                            newxticklabels = self.formatTickLabels(newxticks, xtick_settings)
+                            newxticklabels = Plots.formatTickLabels(newxticks, xtick_settings)
                             # ax.xaxis.set_major_locator(mticker.FixedLocator(newxticks))
                             ax.set_xticks(newxticks)
                             ax.set_xticklabels(newxticklabels)
@@ -1205,7 +1177,7 @@ class MakeAutomatedReport(object):
                             else:
                                 ytickspacing = int(ytickspacing)
                             newyticks = np.arange(ymin, (ymax+ytickspacing), ytickspacing)
-                            newyticklabels = self.formatTickLabels(newyticks, ytick_settings)
+                            newyticklabels = Plots.formatTickLabels(newyticks, ytick_settings)
                             ax.set_yticks(newyticks)
                             ax.set_yticklabels(newyticklabels)
 
@@ -1266,7 +1238,7 @@ class MakeAutomatedReport(object):
                                 if 'dateformat' in cur_obj_settings.keys():
                                     if cur_obj_settings['dateformat'].lower() == 'datetime':
                                         if isinstance(dates[0], (int,float)):
-                                            dates = WF.JDateToDatetime(dates, self.startYear)
+                                            dates = WT.JDateToDatetime(dates, self.startYear)
 
                                 # gatemsk = np.where(object_settings['timestamps'][j] == dates)
                                 if gatemsk == None:
@@ -1300,8 +1272,12 @@ class MakeAutomatedReport(object):
                                                           'name': self.ChapterRegion+'_'+yearstr,
                                                           'description': cur_obj_settings['description'],
                                                           'units': 'BINARY',
-                                                          'value_start_date': self.translateDateFormat(dates[0], 'datetime', '').strftime('%d %b %Y'),
-                                                          'value_end_date': self.translateDateFormat(dates[-1], 'datetime', '').strftime('%d %b %Y'),
+                                                          'value_start_date': WT.translateDateFormat(dates[0], 'datetime', '',
+                                                                                                     self.StartTime, self.EndTime,
+                                                                                                     self.ModelAlt.t_offset).strftime('%d %b %Y'),
+                                                          'value_end_date': WT.translateDateFormat(dates[-1], 'datetime', '',
+                                                                                                   self.StartTime, self.EndTime,
+                                                                                                   self.ModelAlt.t_offset).strftime('%d %b %Y'),
                                                           'logoutputfilename': curgate['logoutputfilename']
                                                           },
                                                          isdata=True)
@@ -1309,7 +1285,7 @@ class MakeAutomatedReport(object):
                             if 'color' in cur_gateop.keys():
                                 color = cur_gateop['color']
                                 default_color = self.Constants.def_colors[ggi]
-                                color = self.confirmColor(color, default_color)
+                                color = WF.confirmColor(color, default_color)
                             if 'top' in cur_gateop.keys():
                                 ax.axhline(gatetop, color=color, zorder=-7)
                             if 'bottom' in cur_gateop.keys():
@@ -1323,10 +1299,14 @@ class MakeAutomatedReport(object):
                     cur_timestamp = object_settings['timestamps'][j]
                     if 'dateformat' in object_settings:
                         if object_settings['dateformat'].lower() == 'datetime':
-                            cur_timestamp = self.translateDateFormat(cur_timestamp, 'datetime', '')
+                            cur_timestamp = WT.translateDateFormat(cur_timestamp, 'datetime', '',
+                                                                   self.StartTime, self.EndTime,
+                                                                   self.ModelAlt.t_offset)
                             ttl_str = cur_timestamp.strftime('%d %b %Y')
                         elif object_settings['dateformat'].lower() == 'jdate':
-                            cur_timestamp = self.translateDateFormat(cur_timestamp, 'jdate', '')
+                            cur_timestamp = WT.translateDateFormat(cur_timestamp, 'jdate', '',
+                                                                   self.StartTime, self.EndTime,
+                                                                   self.ModelAlt.t_offset)
                             ttl_str = str(cur_timestamp)
                         else:
                             ttl_str = cur_timestamp
@@ -1351,10 +1331,10 @@ class MakeAutomatedReport(object):
                             if text.lower() == 'date':
                                 bottomtext_str.append(object_settings['timestamps'][j].strftime('%m/%d/%Y'))
                             elif text.lower() == 'gateconfiguration':
-                                gateconfignum = self.getGateConfigurationDays(gateconfig, gatedata, object_settings['timestamps'][j])
+                                gateconfignum = WGates.getGateConfigurationDays(gateconfig, gatedata, object_settings['timestamps'][j])
                                 bottomtext_str.append(str(gateconfignum))
                             elif text.lower() == 'gateblend':
-                                gateblendnum = self.getGateBlendDays(gateconfig, gatedata, object_settings['timestamps'][j])
+                                gateblendnum = WGates.getGateBlendDays(gateconfig, gatedata, object_settings['timestamps'][j])
                                 bottomtext_str.append(str(gateblendnum))
                             else:
                                 bottomtext_str.append(text)
@@ -1372,7 +1352,7 @@ class MakeAutomatedReport(object):
                         else:
                             bottomtextfontsize = 6
                         if 'bottomtextfontcolor' in cur_obj_settings.keys():
-                            bottomtextfontcolor = self.confirmColor(cur_obj_settings['bottomtextfontcolor'], 'red')
+                            bottomtextfontcolor = WF.confirmColor(cur_obj_settings['bottomtextfontcolor'], 'red')
                         else:
                             bottomtextfontcolor = 'red'
                         ax.annotate(bottomtext, xy=(0.02, bottomtext_y), fontsize=bottomtextfontsize, color=bottomtextfontcolor, xycoords='axes points')
@@ -1442,10 +1422,14 @@ class MakeAutomatedReport(object):
                                           'name': self.ChapterRegion,
                                           'description': description,
                                           'units': object_settings['plot_units'],
-                                          'value_start_date': self.translateDateFormat(object_settings['timestamps'][pgi[0]],
-                                                                               'datetime', '').strftime('%d %b %Y'),
-                                          'value_end_date': self.translateDateFormat(object_settings['timestamps'][pgi[-1]],
-                                                                             'datetime', '').strftime('%d %b %Y'),
+                                          'value_start_date': WT.translateDateFormat(object_settings['timestamps'][pgi[0]],
+                                                                                     'datetime', '',
+                                                                                     self.StartTime, self.EndTime,
+                                                                                     self.ModelAlt.t_offset).strftime('%d %b %Y'),
+                                          'value_end_date': WT.translateDateFormat(object_settings['timestamps'][pgi[-1]],
+                                                                                   'datetime', '',
+                                                                                   self.StartTime, self.EndTime,
+                                                                                   self.ModelAlt.t_offset).strftime('%d %b %Y'),
                                           'logoutputfilename': ', '.join([line_settings[flag]['logoutputfilename'] for flag in line_settings])
                                           },
                                          isdata=True)
@@ -1459,40 +1443,40 @@ class MakeAutomatedReport(object):
         :return: writes to XML file
         '''
 
-        print('\n################################')
-        print('Now making Error Stats table.')
-        print('################################\n')
+        WF.print2stdout('\n################################')
+        WF.print2stdout('Now making Error Stats table.')
+        WF.print2stdout('################################\n')
 
-        tableFuncs = WT.Tables(self)
+        Tables = WTable.Tables(self)
 
         default_settings = self.loadDefaultPlotObject('errorstatisticstable')
-        object_settings = self.replaceDefaults(default_settings, object_settings)
+        object_settings = WF.replaceDefaults(self, default_settings, object_settings)
 
-        object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = self.getPlotYears(object_settings)
+        object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = WF.getObjectYears(self, object_settings)
 
         data = self.Data.getTableDataDictionary(object_settings)
         data = WF.mergeLines(data, object_settings)
 
-        headings, rows = tableFuncs.buildTable(object_settings, object_settings['split_by_year'], data)
+        headings, rows = Tables.buildTable(object_settings, object_settings['split_by_year'], data)
 
         object_settings = self.configureSettingsForID('base', object_settings)
 
         object_settings['units_list'] = WF.getUnitsList(data)
-        object_settings['plot_units'] = self.getPlotUnits(object_settings['units_list'], object_settings)
+        object_settings['plot_units'] = WF.getPlotUnits(object_settings['units_list'], object_settings)
 
-        object_settings = self.updateFlaggedValues(object_settings, '%%units%%', object_settings['plot_units'])
-        rows = self.updateFlaggedValues(rows, '%%units%%', object_settings['plot_units'])
-        headings = self.updateFlaggedValues(headings, '%%units%%', object_settings['plot_units'])
+        object_settings = WF.updateFlaggedValues(object_settings, '%%units%%', object_settings['plot_units'])
+        rows = WF.updateFlaggedValues(rows, '%%units%%', object_settings['plot_units'])
+        headings = WF.updateFlaggedValues(headings, '%%units%%', object_settings['plot_units'])
 
-        data = self.filterTableData(data, object_settings)
-        data = self.correctTableUnits(data, object_settings)
+        data = Tables.filterTableData(data, object_settings)
+        data = Tables.correctTableUnits(data, object_settings)
 
         if 'description' in object_settings.keys():
             desc = object_settings['description']
         else:
             desc = ''
 
-        desc = self.updateFlaggedValues(desc, '%%year%%', object_settings['yearstr'])
+        desc = WF.updateFlaggedValues(desc, '%%year%%', object_settings['yearstr'])
 
         self.XML.writeTableStart(desc, 'Statistics')
         for i, yearheader in enumerate(headings):
@@ -1505,13 +1489,13 @@ class MakeAutomatedReport(object):
                 rowname = s_row[0]
                 row_val = s_row[i+1]
                 if '%%' in row_val:
-                    rowdata, sr_month = self.getStatsLineData(row_val, data, year=year)
+                    rowdata, sr_month = Tables.getStatsLineData(row_val, data, year=year)
                     if len(rowdata) == 0:
                         row_val = None
                     else:
-                        row_val, stat = self.getStatsLine(row_val, rowdata)
+                        row_val, stat = Tables.getStatsLine(row_val, rowdata)
                         if not np.isnan(row_val) and row_val != None:
-                            thresholdsettings = self.matchThresholdToStat(stat, object_settings)
+                            thresholdsettings = Tables.matchThresholdToStat(stat, object_settings)
                             for thresh in thresholdsettings:
                                 if thresh['colorwhen'] == 'under':
                                     if row_val < thresh['value']:
@@ -1519,15 +1503,19 @@ class MakeAutomatedReport(object):
                                 elif thresh['colorwhen'] == 'over':
                                     if row_val > thresh['value']:
                                         threshold_colors[ri] = thresh['color']
-                        data_start_date, data_end_date = self.getTableDates(year, object_settings)
+                        data_start_date, data_end_date = Tables.getTableDates(year, object_settings)
                         self.WAT_log.addLogEntry({'type': 'Statistic',
                                                   'name': ' '.join([self.ChapterRegion, header, stat]),
                                                   'description': desc,
                                                   'value': row_val,
                                                   'function': stat,
                                                   'units': object_settings['plot_units'],
-                                                  'value_start_date': self.translateDateFormat(data_start_date, 'datetime', ''),
-                                                  'value_end_date': self.translateDateFormat(data_end_date, 'datetime', ''),
+                                                  'value_start_date': WT.translateDateFormat(data_start_date, 'datetime', '',
+                                                                                             self.StartTime, self.EndTime,
+                                                                                             self.ModelAlt.t_offset),
+                                                  'value_end_date': WT.translateDateFormat(data_end_date, 'datetime', '',
+                                                                                           self.StartTime, self.EndTime,
+                                                                                           self.ModelAlt.t_offset),
                                                   'logoutputfilename': ', '.join([data[flag]['logoutputfilename'] for flag in data])
                                                   },
                                                  isdata=True)
@@ -1544,37 +1532,37 @@ class MakeAutomatedReport(object):
         :return: writes to XML file
         '''
 
-        print('\n################################')
-        print('Now making Monthly Stats Table.')
-        print('################################\n')
+        WF.print2stdout('\n################################')
+        WF.print2stdout('Now making Monthly Stats Table.')
+        WF.print2stdout('################################\n')
 
-        tableFuncs = WT.Tables(self)
+        Tables = WTable.Tables(self)
 
         default_settings = self.loadDefaultPlotObject('monthlystatisticstable')
-        object_settings = self.replaceDefaults(default_settings, object_settings)
-        object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = self.getPlotYears(object_settings)
+        object_settings = WF.replaceDefaults(self, default_settings, object_settings)
+        object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = WF.getObjectYears(self, object_settings)
 
         data = self.Data.getTableDataDictionary(object_settings)
         data = WF.mergeLines(data, object_settings)
 
-        headings, rows = tableFuncs.buildTable(object_settings, object_settings['split_by_year'], data)
+        headings, rows = Tables.buildTable(object_settings, object_settings['split_by_year'], data)
 
         object_settings= self.configureSettingsForID('base', object_settings)
         object_settings['units_list'] = WF.getUnitsList(data)
-        object_settings['plot_units'] = self.getPlotUnits(object_settings['units_list'], object_settings)
+        object_settings['plot_units'] = WF.getPlotUnits(object_settings['units_list'], object_settings)
 
-        object_settings = self.updateFlaggedValues(object_settings, '%%units%%', object_settings['plot_units'])
+        object_settings = WF.updateFlaggedValues(object_settings, '%%units%%', object_settings['plot_units'])
 
-        data = self.filterTableData(data, object_settings)
-        data = self.correctTableUnits(data, object_settings)
+        data = Tables.filterTableData(data, object_settings)
+        data = Tables.correctTableUnits(data, object_settings)
 
-        thresholds = self.formatThreshold(object_settings)
+        thresholds = Tables.formatThreshold(object_settings)
 
         if 'description' in object_settings.keys():
             desc = object_settings['description']
         else:
             desc = ''
-        desc = self.updateFlaggedValues(desc, '%%year%%', object_settings['yearstr'])
+        desc = WF.updateFlaggedValues(desc, '%%year%%', object_settings['yearstr'])
 
         self.XML.writeTableStart(desc, 'Month')
         for i, yearheader in enumerate(headings):
@@ -1587,11 +1575,11 @@ class MakeAutomatedReport(object):
                 rowname = s_row[0]
                 row_val = s_row[i+1]
                 if '%%' in row_val:
-                    rowdata, sr_month = self.getStatsLineData(row_val, data, year=year)
+                    rowdata, sr_month = Tables.getStatsLineData(row_val, data, year=year)
                     if len(rowdata) == 0:
                         row_val = None
                     else:
-                        row_val, stat = self.getStatsLine(row_val, rowdata)
+                        row_val, stat = Tables.getStatsLine(row_val, rowdata)
                         if not np.isnan(row_val) and row_val != None:
                             for thresh in thresholds:
                                 if thresh['colorwhen'] == 'under':
@@ -1600,15 +1588,19 @@ class MakeAutomatedReport(object):
                                 elif thresh['colorwhen'] == 'over':
                                     if row_val > thresh['value']:
                                         threshold_colors[ri] = thresh['color']
-                        data_start_date, data_end_date = self.getTableDates(year, object_settings, month=sr_month)
+                        data_start_date, data_end_date = Tables.getTableDates(year, object_settings, month=sr_month)
                         self.WAT_log.addLogEntry({'type': 'Statistic',
                                                   'name': ' '.join([self.ChapterRegion, header, stat]),
                                                   'description': object_settings['description'],
                                                   'value': row_val,
                                                   'units': object_settings['units_list'],
                                                   'function': stat,
-                                                  'value_start_date': self.translateDateFormat(data_start_date, 'datetime', ''),
-                                                  'value_end_date': self.translateDateFormat(data_end_date, 'datetime', ''),
+                                                  'value_start_date': WT.translateDateFormat(data_start_date, 'datetime', '',
+                                                                                             self.StartTime, self.EndTime,
+                                                                                             self.ModelAlt.t_offset),
+                                                  'value_end_date': WT.translateDateFormat(data_end_date, 'datetime', '',
+                                                                                           self.StartTime, self.EndTime,
+                                                                                           self.ModelAlt.t_offset),
                                                   'logoutputfilename': ', '.join([data[flag]['logoutputfilename'] for flag in data])
                                                   },
                                                  isdata=True)
@@ -1625,31 +1617,31 @@ class MakeAutomatedReport(object):
         :return: creates png in images dir and writes to XML file
         '''
 
-        print('\n################################')
-        print('Now making Single Statistic Table.')
-        print('################################\n')
+        WF.print2stdout('\n################################')
+        WF.print2stdout('Now making Single Statistic Table.')
+        WF.print2stdout('################################\n')
 
-        tableFuncs = WT.Tables(self)
+        Tables = WTable.Tables(self)
 
         default_settings = self.loadDefaultPlotObject('singlestatistictable') #get default SingleStat items
-        object_settings = self.replaceDefaults(default_settings, object_settings) #overwrite the defaults with chapter file
+        object_settings = WF.replaceDefaults(self, default_settings, object_settings) #overwrite the defaults with chapter file
 
         object_settings['years'] = pickle.loads(pickle.dumps(self.years, -1))
         data = self.Data.getTableDataDictionary(object_settings)
         data = WF.mergeLines(data, object_settings)
 
-        headings, rows = tableFuncs.buildSingleStatTable(object_settings, data)
+        headings, rows = Tables.buildSingleStatTable(object_settings, data)
 
         # object_settings= self.configureSettingsForID('base', object_settings) #will turn on for comparison plot later
         object_settings['units_list'] = WF.getUnitsList(data)
-        object_settings['plot_units'] = self.getPlotUnits(object_settings['units_list'], object_settings)
+        object_settings['plot_units'] = WF.getPlotUnits(object_settings['units_list'], object_settings)
 
-        object_settings = self.updateFlaggedValues(object_settings, '%%units%%', object_settings['plot_units'])
+        object_settings = WF.updateFlaggedValues(object_settings, '%%units%%', object_settings['plot_units'])
 
-        data = self.filterTableData(data, object_settings)
-        data = self.correctTableUnits(data, object_settings)
+        data = Tables.filterTableData(data, object_settings)
+        data = Tables.correctTableUnits(data, object_settings)
 
-        thresholds = self.formatThreshold(object_settings)
+        thresholds = Tables.formatThreshold(object_settings)
 
         self.XML.writeNarrowTableStart(object_settings['description'], 'Year')
         for i, header in enumerate(headings):
@@ -1664,11 +1656,11 @@ class MakeAutomatedReport(object):
                     year = 'ALL'
                 row_val = s_row[i+1]
                 if '%%' in row_val:
-                    rowdata, sr_month = self.getStatsLineData(row_val, data, year=year)
+                    rowdata, sr_month = Tables.getStatsLineData(row_val, data, year=year)
                     if len(rowdata) == 0:
                         row_val = None
                     else:
-                        row_val, stat = self.getStatsLine(row_val, rowdata)
+                        row_val, stat = Tables.getStatsLine(row_val, rowdata)
                         if np.isnan(row_val):
                             row_val = '-'
                         else:
@@ -1680,15 +1672,19 @@ class MakeAutomatedReport(object):
                                     if row_val > thresh['value']:
                                         threshold_colors[ri] = thresh['color']
 
-                        data_start_date, data_end_date = self.getTableDates(year, object_settings, month=sr_month)
+                        data_start_date, data_end_date = Tables.getTableDates(year, object_settings, month=sr_month)
                         self.WAT_log.addLogEntry({'type': 'Statistic',
                                                   'name': ' '.join([self.ChapterRegion, header, stat]),
                                                   'description': object_settings['description'],
                                                   'value': row_val,
                                                   'units': object_settings['units_list'],
                                                   'function': stat,
-                                                  'value_start_date': self.translateDateFormat(data_start_date, 'datetime', ''),
-                                                  'value_end_date': self.translateDateFormat(data_end_date, 'datetime', ''),
+                                                  'value_start_date': WT.translateDateFormat(data_start_date, 'datetime', '',
+                                                                                             self.StartTime, self.EndTime,
+                                                                                             self.ModelAlt.t_offset),
+                                                  'value_end_date': WT.translateDateFormat(data_end_date, 'datetime', '',
+                                                                                           self.StartTime, self.EndTime,
+                                                                                           self.ModelAlt.t_offset),
                                                   'logoutputfilename': ', '.join([data[flag]['logoutputfilename'] for flag in data])
                                                   },
                                                  isdata=True)
@@ -1705,49 +1701,49 @@ class MakeAutomatedReport(object):
         :return: creates png in images dir and writes to XML file
         '''
 
-        print('\n################################')
-        print('Now making Single Statistic Profile Table.')
-        print('################################\n')
+        WF.print2stdout('\n################################')
+        WF.print2stdout('Now making Single Statistic Profile Table.')
+        WF.print2stdout('################################\n')
 
-        tableFuncs = WT.Tables(self)
+        Tables = WTable.Tables(self)
 
         default_settings = self.loadDefaultPlotObject('singlestatisticprofiletable') #get default SingleStat items
-        object_settings = self.replaceDefaults(default_settings, object_settings) #overwrite the defaults with chapter file
+        object_settings = WF.replaceDefaults(self, default_settings, object_settings) #overwrite the defaults with chapter file
         object_settings['datakey'] = 'datapaths'
 
         ################# Get timestamps #################
-        object_settings['datessource_flag'] = self.getDateSourceFlag(object_settings)
-        object_settings['timestamps'] = self.getProfileTimestamps(object_settings)
-        object_settings['timestamp_index'] = self.getProfileTimestampYearMonthIndex(object_settings)
+        object_settings['datessource_flag'] = WF.getDateSourceFlag(object_settings)
+        object_settings['timestamps'] = WProfile.getProfileTimestamps(object_settings, self.StartTime, self.EndTime)
+        object_settings['timestamp_index'] = WProfile.getProfileTimestampYearMonthIndex(object_settings, self.years)
 
         object_settings['years'] = pickle.loads(pickle.dumps(self.years, -1))
 
         data, line_settings = self.Data.getProfileDataDictionary(object_settings)
-        line_settings = self.correctDuplicateLabels(line_settings)
+        line_settings = WF.correctDuplicateLabels(line_settings)
 
         ################ convert yflags ################
         if object_settings['usedepth'].lower() == 'false':
-            data, object_settings = self.convertDepthsToElevations(data, object_settings)
+            data, object_settings = WProfile.convertDepthsToElevations(data, object_settings)
         elif object_settings['usedepth'].lower() == 'true':
-            data, object_settings = self.convertElevationsToDepths(data, object_settings)
+            data, object_settings = WProfile.convertElevationsToDepths(data, object_settings)
 
-        headings, rows = tableFuncs.buildSingleStatTable(object_settings, line_settings)
+        headings, rows = Tables.buildSingleStatTable(object_settings, line_settings)
 
         # object_settings= self.configureSettingsForID('base', object_settings) #will turn on for comparison plot later
         ################# Get plot units #################
-        data, line_settings = self.convertProfileDataUnits(object_settings, data, line_settings)
+        data, line_settings = WProfile.convertProfileDataUnits(object_settings, data, line_settings)
         object_settings['units_list'] = WF.getUnitsList(line_settings)
-        object_settings['plot_units'] = self.getPlotUnits(object_settings['units_list'], object_settings)
+        object_settings['plot_units'] = WF.getPlotUnits(object_settings['units_list'], object_settings)
 
-        object_settings = self.updateFlaggedValues(object_settings, '%%units%%', object_settings['plot_units'])
+        object_settings = WF.updateFlaggedValues(object_settings, '%%units%%', object_settings['plot_units'])
 
-        self.commitProfileDataToMemory(data, line_settings, object_settings)
+        self.Data.commitProfileDataToMemory(data, line_settings, object_settings)
 
-        data, object_settings = self.filterProfileData(data, line_settings, object_settings)
+        data, object_settings = WProfile.filterProfileData(data, line_settings, object_settings)
 
-        object_settings['resolution'] = self.getProfileInterpResolution(object_settings)
+        object_settings['resolution'] = WProfile.getProfileInterpResolution(object_settings)
 
-        thresholds = self.formatThreshold(object_settings)
+        thresholds = Tables.formatThreshold(object_settings)
 
         self.XML.writeNarrowTableStart(object_settings['description'], 'Year')
         for i, header in enumerate(headings):
@@ -1768,12 +1764,12 @@ class MakeAutomatedReport(object):
                     else:
                         data_idx = object_settings['timestamp_index'][ri][i]
                     for di in data_idx:
-                        stats_data = self.formatStatsProfileLineData(row_val, data, object_settings['resolution'],
+                        stats_data = Tables.formatStatsProfileLineData(row_val, data, object_settings['resolution'],
                                                                      object_settings['usedepth'], di)
-                        rowval_stats = WF.stackProfileIndicies(rowval_stats, stats_data)
+                        rowval_stats = WProfile.stackProfileIndicies(rowval_stats, stats_data)
 
 
-                    row_val, stat = self.getStatsLine(row_val, rowval_stats)
+                    row_val, stat = Tables.getStatsLine(row_val, rowval_stats)
                     if np.isnan(row_val):
                         row_val = '-'
                     else:
@@ -1785,7 +1781,7 @@ class MakeAutomatedReport(object):
                                 if row_val > thresh['value']:
                                     threshold_colors[ri] = thresh['color']
 
-                    data_start_date, data_end_date = self.getTableDates(year, object_settings, month=header)
+                    data_start_date, data_end_date = Tables.getTableDates(year, object_settings, month=header)
                     self.WAT_log.addLogEntry({'type': 'ProfileTableStatistic',
                                               'name': ' '.join([self.ChapterRegion, header, stat]),
                                               'description': object_settings['description'],
@@ -1811,14 +1807,16 @@ class MakeAutomatedReport(object):
         :return: creates png in images dir and writes to XML file
         '''
 
-        print('\n################################')
-        print('Now making Contour Plot.')
-        print('################################\n')
+        WF.print2stdout('\n################################')
+        WF.print2stdout('Now making Contour Plot.')
+        WF.print2stdout('################################\n')
+
+        Plots = WPlot.Plots(self)
 
         default_settings = self.loadDefaultPlotObject('contourplot') #get default TS plot items
-        object_settings = self.replaceDefaults(default_settings, object_settings) #overwrite the defaults with chapter file
+        object_settings = WF.replaceDefaults(self, default_settings, object_settings) #overwrite the defaults with chapter file
 
-        object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = self.getPlotYears(object_settings)
+        object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = WF.getObjectYears(self, object_settings)
 
         for yi, year in enumerate(object_settings['years']):
             cur_obj_settings = pickle.loads(pickle.dumps(object_settings, -1))
@@ -1827,7 +1825,7 @@ class MakeAutomatedReport(object):
             else:
                 yearstr = object_settings['yearstr']
 
-            cur_obj_settings = self.setTimeSeriesXlims(cur_obj_settings, yearstr, object_settings['years'])
+            cur_obj_settings = Plots.setTimeSeriesXlims(cur_obj_settings, yearstr, object_settings['years'])
 
             #NOTES
             #Data structure:
@@ -1875,7 +1873,7 @@ class MakeAutomatedReport(object):
 
                 for contourname in contours:
                     contour = contours[contourname]
-                    parameter, contour_settings['param_count'] = self.getParameterCount(contour, contour_settings)
+                    parameter, contour_settings['param_count'] = WF.getParameterCount(contour, contour_settings)
 
                 if 'units' in contour_settings.keys():
                     units = contour_settings['units']
@@ -1900,20 +1898,20 @@ class MakeAutomatedReport(object):
                         units = None
 
                 if 'unitsystem' in contour_settings.keys():
-                    values, units = self.convertUnitSystem(values, units, contour_settings['unitsystem']) #TODO: confirm
+                    values, units = WF.convertUnitSystem(values, units, contour_settings['unitsystem']) #TODO: confirm
 
                 chkvals = WF.checkData(values)
                 if not chkvals:
-                    print('Invalid Data settings for contour plot year {0}'.format(year))
+                    WF.print2stdout('Invalid Data settings for contour plot year {0}'.format(year))
                     continue
 
                 if 'dateformat' in contour_settings.keys():
                     if contour_settings['dateformat'].lower() == 'jdate':
                         if isinstance(dates[0], dt.datetime):
-                            dates = WF.DatetimeToJDate(dates, self.ModelAlt.t_offset)
+                            dates = WT.DatetimeToJDate(dates, self.ModelAlt.t_offset)
                     elif contour_settings['dateformat'].lower() == 'datetime':
                         if isinstance(dates[0], (int,float)):
-                            dates = WF.JDateToDatetime(dates, self.startYear)
+                            dates = WT.JDateToDatetime(dates, self.startYear)
 
                 if 'label' not in contour_settings.keys():
                     contour_settings['label'] = ''
@@ -1921,7 +1919,7 @@ class MakeAutomatedReport(object):
                 if 'description' not in contour_settings.keys():
                     contour_settings['description'] = ''
 
-                contour_settings = self.getDefaultContourSettings(contour_settings)
+                contour_settings = WD.getDefaultContourSettings(contour_settings)
 
                 if 'min' in contour_settings['colorbar']:
                     vmin = float(contour_settings['colorbar']['min'])
@@ -1942,22 +1940,26 @@ class MakeAutomatedReport(object):
                                           'name': self.ChapterRegion+'_'+yearstr,
                                           'description': contour_settings['description'],
                                           'units': units,
-                                          'value_start_date': self.translateDateFormat(dates[0], 'datetime', '').strftime('%d %b %Y'),
-                                          'value_end_date': self.translateDateFormat(dates[-1], 'datetime', '').strftime('%d %b %Y'),
+                                          'value_start_date': WT.translateDateFormat(dates[0], 'datetime', '',
+                                                                                     self.StartTime, self.EndTime,
+                                                                                     self.ModelAlt.t_offset).strftime('%d %b %Y'),
+                                          'value_end_date': WT.translateDateFormat(dates[-1], 'datetime', '',
+                                                                                   self.StartTime, self.EndTime,
+                                                                                   self.ModelAlt.t_offset).strftime('%d %b %Y'),
                                           'logoutputfilename': contour['logoutputfilename']
                                           },
                                          isdata=True)
 
-                contour_settings = self.updateFlaggedValues(contour_settings, '%%units%%', units)
+                contour_settings = WF.updateFlaggedValues(contour_settings, '%%units%%', units)
 
                 if 'contourlines' in contour_settings.keys():
                     for contourline in contour_settings['contourlines']:
                         if 'value' in contourline.keys():
                             val = float(contourline['value'])
                         else:
-                            print('No Value set for contour line.')
+                            WF.print2stdout('No Value set for contour line.')
                             continue
-                        contourline = self.getDefaultContourLineSettings(contourline)
+                        contourline = WD.getDefaultContourLineSettings(contourline)
                         cs = ax.contour(contr, levels=[val], linewidths=[float(contourline['linewidth'])], colors=[contourline['linecolor']],
                                         linestyles=contourline['linestylepattern'], alpha=float(contourline['alpha']))
                         if 'contourlinetext' in contourline.keys():
@@ -1977,28 +1979,36 @@ class MakeAutomatedReport(object):
                 ### VERTICAL LINES ###
                 if 'vlines' in contour_settings.keys():
                     for vline in contour_settings['vlines']:
-                        vline_settings = self.getDefaultStraightLineSettings(vline)
+                        vline_settings = WD.getDefaultStraightLineSettings(vline)
                         try:
                             vline_settings['value'] = float(vline_settings['value'])
                         except:
-                            vline_settings['value'] = self.translateDateFormat(vline_settings['value'], 'datetime', '')
+                            vline_settings['value'] = WT.translateDateFormat(vline_settings['value'], 'datetime', '',
+                                                                             self.StartTime, self.EndTime,
+                                                                             self.ModelAlt.t_offset)
                         if 'dateformat' in contour_settings.keys():
                             if contour_settings['dateformat'].lower() == 'jdate':
                                 if isinstance(vline_settings['value'], dt.datetime):
-                                    vline_settings['value'] = WF.DatetimeToJDate(vline_settings['value'], self.ModelAlt.t_offset)
+                                    vline_settings['value'] = WT.DatetimeToJDate(vline_settings['value'], self.ModelAlt.t_offset)
                                 elif isinstance(vline_settings['value'], str):
                                     try:
                                         vline_settings['value'] = float(vline_settings['value'])
                                     except:
-                                        vline_settings['value'] = self.translateDateFormat(vline_settings['value'], 'datetime', '')
-                                        vline_settings['value'] = WF.DatetimeToJDate(vline_settings['value'], self.ModelAlt.t_offset)
+                                        vline_settings['value'] = WT.translateDateFormat(vline_settings['value'], 'datetime', '',
+                                                                                         self.StartTime, self.EndTime,
+                                                                                         self.ModelAlt.t_offset)
+                                        vline_settings['value'] = WT.DatetimeToJDate(vline_settings['value'], self.ModelAlt.t_offset)
                             elif contour_settings['dateformat'].lower() == 'datetime':
                                 if isinstance(vline_settings['value'], (int,float)):
-                                    vline_settings['value'] = WF.JDateToDatetime(vline_settings['value'], self.startYear)
+                                    vline_settings['value'] = WT.JDateToDatetime(vline_settings['value'], self.startYear)
                                 elif isinstance(vline_settings['value'], str):
-                                    vline_settings['value'] = self.translateDateFormat(vline_settings['value'], 'datetime', '')
+                                    vline_settings['value'] = WT.translateDateFormat(vline_settings['value'], 'datetime', '',
+                                                                                     self.StartTime, self.EndTime,
+                                                                                     self.ModelAlt.t_offset)
                         else:
-                            vline_settings['value'] = self.translateDateFormat(vline_settings['value'], 'datetime', '')
+                            vline_settings['value'] = WT.translateDateFormat(vline_settings['value'], 'datetime', '',
+                                                                             self.StartTime, self.EndTime,
+                                                                             self.ModelAlt.t_offset)
 
                         if 'label' not in vline_settings.keys():
                             vline_settings['label'] = None
@@ -2013,7 +2023,7 @@ class MakeAutomatedReport(object):
                 ### Horizontal LINES ###
                 if 'hlines' in contour_settings.keys():
                     for hline in contour_settings['hlines']:
-                        hline_settings = self.getDefaultStraightLineSettings(hline)
+                        hline_settings = WD.getDefaultStraightLineSettings(hline)
                         if 'label' not in hline_settings.keys():
                             hline_settings['label'] = None
                         if 'zorder' not in hline_settings.keys():
@@ -2029,18 +2039,18 @@ class MakeAutomatedReport(object):
                     for transkey in transitions.keys():
                         transition_start = transitions[transkey]
                         trans_name = None
-                        hline = self.getDefaultStraightLineSettings(contour_settings['transitions'])
+                        hline = WD.getDefaultStraightLineSettings(contour_settings['transitions'])
 
-                        linecolor = self.prioritizeKey(contours[transkey], hline, 'linecolor')
-                        linestylepattern = self.prioritizeKey(contours[transkey], hline, 'linestylepattern')
-                        alpha = self.prioritizeKey(contours[transkey], hline, 'alpha')
-                        linewidth = self.prioritizeKey(contours[transkey], hline, 'linewidth')
+                        linecolor = WF.prioritizeKey(contours[transkey], hline, 'linecolor')
+                        linestylepattern = WF.prioritizeKey(contours[transkey], hline, 'linestylepattern')
+                        alpha = WF.prioritizeKey(contours[transkey], hline, 'alpha')
+                        linewidth = WF.prioritizeKey(contours[transkey], hline, 'linewidth')
 
                         ax.axhline(y=transition_start, c=linecolor, ls=linestylepattern, alpha=float(alpha),
                                    lw=float(linewidth))
                         if 'name' in contour_settings['transitions'].keys():
                             trans_flag = contour_settings['transitions']['name'].lower() #blue:pink:white:pink:blue
-                            text_settings = self.getDefaultTextSettings(contour_settings['transitions'])
+                            text_settings = WD.getDefaultTextSettings(contour_settings['transitions'])
 
                             if trans_flag in contours[transkey].keys():
                                 trans_name = contours[transkey][trans_flag]
@@ -2048,10 +2058,10 @@ class MakeAutomatedReport(object):
 
                                 trans_y_ratio = abs(1.0 - (transition_start / max(ax.get_ylim()) + .01)) #dont let user touch this
 
-                                fontcolor = self.prioritizeKey(contours[transkey], text_settings, 'fontcolor')
-                                fontsize = self.prioritizeKey(contours[transkey], text_settings, 'fontsize')
-                                horizontalalignment = self.prioritizeKey(contours[transkey], text_settings, 'horizontalalignment')
-                                text_x_pos = self.prioritizeKey(contours[transkey], text_settings, 'text_x_pos', backup=0.001)
+                                fontcolor = WF.prioritizeKey(contours[transkey], text_settings, 'fontcolor')
+                                fontsize = WF.prioritizeKey(contours[transkey], text_settings, 'fontsize')
+                                horizontalalignment = WF.prioritizeKey(contours[transkey], text_settings, 'horizontalalignment')
+                                text_x_pos = WF.prioritizeKey(contours[transkey], text_settings, 'text_x_pos', backup=0.001)
 
                                 ax.text(float(text_x_pos), trans_y_ratio, trans_name, c=fontcolor, size=float(fontsize),
                                         transform=ax.transAxes, horizontalalignment=horizontalalignment,
@@ -2085,7 +2095,7 @@ class MakeAutomatedReport(object):
 
                 if 'xticks' in contour_settings.keys():
                     xtick_settings = contour_settings['xticks']
-                    self.formatTimeSeriesXticks(ax, xtick_settings, contour_settings)
+                    Plots.formatTimeSeriesXticks(ax, xtick_settings, contour_settings)
 
                 yticksize = 10 #default
                 if 'fontsize' in object_settings.keys():
@@ -2111,7 +2121,7 @@ class MakeAutomatedReport(object):
                         else:
                             ytickspacing = int(ytickspacing)
                         newyticks = np.arange(ymin, (ymax+ytickspacing), ytickspacing)
-                        newyticklabels = self.formatTickLabels(newyticks, ytick_settings)
+                        newyticklabels = Plots.formatTickLabels(newyticks, ytick_settings)
                         ax.set_yticks(newyticks)
                         ax.set_yticklabels(newyticklabels)
 
@@ -2122,7 +2132,7 @@ class MakeAutomatedReport(object):
 
             # #stuff to call once per plot
             self.configureSettingsForID('base', cur_obj_settings)
-            cur_obj_settings = self.updateFlaggedValues(cur_obj_settings, '%%units%%', units)
+            cur_obj_settings = WF.updateFlaggedValues(cur_obj_settings, '%%units%%', units)
 
             if 'title' in cur_obj_settings.keys():
                 if 'titlesize' in cur_obj_settings.keys():
@@ -2142,7 +2152,7 @@ class MakeAutomatedReport(object):
                     xlabsize = 12
                 axes[-1].set_xlabel(cur_obj_settings['xlabel'], fontsize=xlabsize)
 
-            self.formatDateXAxis(axes[-1], cur_obj_settings)
+            Plots.formatDateXAxis(axes[-1], cur_obj_settings)
 
             if 'legend' in cur_obj_settings.keys():
                 if cur_obj_settings['legend'].lower() == 'true':
@@ -2203,15 +2213,17 @@ class MakeAutomatedReport(object):
         :return: creates png in images dir and writes to XML file
         '''
 
-        print('\n################################')
-        print('Now making Reservoir Contour Plot.')
-        print('################################\n')
+        WF.print2stdout('\n################################')
+        WF.print2stdout('Now making Reservoir Contour Plot.')
+        WF.print2stdout('################################\n')
+
+        Plots = WPlot.Plots(self)
 
         default_settings = self.loadDefaultPlotObject('reservoircontourplot') #get default TS plot items
-        object_settings = self.replaceDefaults(default_settings, object_settings) #overwrite the defaults with chapter file
+        object_settings = WF.replaceDefaults(self, default_settings, object_settings) #overwrite the defaults with chapter file
         object_settings['datakey'] = 'datapaths'
 
-        object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = self.getPlotYears(object_settings)
+        object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = WF.getObjectYears(self, object_settings)
 
         for yi, year in enumerate(object_settings['years']):
             cur_obj_settings = pickle.loads(pickle.dumps(object_settings, -1))
@@ -2220,7 +2232,7 @@ class MakeAutomatedReport(object):
             else:
                 yearstr = object_settings['yearstr']
 
-            cur_obj_settings = self.setTimeSeriesXlims(cur_obj_settings, yearstr, object_settings['years'])
+            cur_obj_settings = Plots.setTimeSeriesXlims(cur_obj_settings, yearstr, object_settings['years'])
 
             #NOTES
             #Data structure:
@@ -2273,7 +2285,7 @@ class MakeAutomatedReport(object):
                 ax = axes[IDi]
 
 
-                parameter, contour_settings['param_count'] = self.getParameterCount(contour, contour_settings)
+                parameter, contour_settings['param_count'] = WF.getParameterCount(contour, contour_settings)
 
                 if 'units' in contour_settings.keys():
                     units = contour_settings['units']
@@ -2298,20 +2310,20 @@ class MakeAutomatedReport(object):
                         units = None
 
                 if 'unitsystem' in contour_settings.keys():
-                    values, units = self.convertUnitSystem(values, units, contour_settings['unitsystem']) #TODO: confirm
+                    values, units = WF.convertUnitSystem(values, units, contour_settings['unitsystem']) #TODO: confirm
 
                 chkvals = WF.checkData(values)
                 if not chkvals:
-                    print('Invalid Data settings for contour plot year {0}'.format(year))
+                    WF.print2stdout('Invalid Data settings for contour plot year {0}'.format(year))
                     continue
 
                 if 'dateformat' in contour_settings.keys():
                     if contour_settings['dateformat'].lower() == 'jdate':
                         if isinstance(dates[0], dt.datetime):
-                            dates = WF.DatetimeToJDate(dates, self.ModelAlt.t_offset)
+                            dates = WT.DatetimeToJDate(dates, self.ModelAlt.t_offset)
                     elif contour_settings['dateformat'].lower() == 'datetime':
                         if isinstance(dates[0], (int,float)):
-                            dates = WF.JDateToDatetime(dates, self.startYear)
+                            dates = WT.JDateToDatetime(dates, self.startYear)
 
                 if 'label' not in contour_settings.keys():
                     contour_settings['label'] = ''
@@ -2319,7 +2331,7 @@ class MakeAutomatedReport(object):
                 if 'description' not in contour_settings.keys():
                     contour_settings['description'] = ''
 
-                contour_settings = self.getDefaultContourSettings(contour_settings)
+                contour_settings = WD.getDefaultContourSettings(contour_settings)
 
                 if 'min' in contour_settings['colorbar']:
                     vmin = float(contour_settings['colorbar']['min'])
@@ -2342,22 +2354,26 @@ class MakeAutomatedReport(object):
                                           'name': self.ChapterRegion+'_'+yearstr,
                                           'description': contour_settings['description'],
                                           'units': units,
-                                          'value_start_date': self.translateDateFormat(dates[0], 'datetime', '').strftime('%d %b %Y'),
-                                          'value_end_date': self.translateDateFormat(dates[-1], 'datetime', '').strftime('%d %b %Y'),
+                                          'value_start_date': WT.translateDateFormat(dates[0], 'datetime', '',
+                                                                                     self.StartTime, self.EndTime,
+                                                                                     self.ModelAlt.t_offset).strftime('%d %b %Y'),
+                                          'value_end_date': WT.translateDateFormat(dates[-1], 'datetime', '',
+                                                                                   self.StartTime, self.EndTime,
+                                                                                   self.ModelAlt.t_offset).strftime('%d %b %Y'),
                                           'logoutputfilename': contour['logoutputfilename']
                                           },
                                          isdata=True)
 
-                contour_settings = self.updateFlaggedValues(contour_settings, '%%units%%', units)
+                contour_settings = WF.updateFlaggedValues(contour_settings, '%%units%%', units)
 
                 if 'contourlines' in contour_settings.keys():
                     for contourline in contour_settings['contourlines']:
                         if 'value' in contourline.keys():
                             val = float(contourline['value'])
                         else:
-                            print('No Value set for contour line.')
+                            WF.print2stdout('No Value set for contour line.')
                             continue
-                        contourline = self.getDefaultContourLineSettings(contourline)
+                        contourline = WD.getDefaultContourLineSettings(contourline)
                         cs = ax.contour(contr, levels=[val], linewidths=[float(contourline['linewidth'])], colors=[contourline['linecolor']],
                                         linestyles=contourline['linestylepattern'], alpha=float(contourline['alpha']))
                         if 'contourlinetext' in contourline.keys():
@@ -2377,28 +2393,36 @@ class MakeAutomatedReport(object):
                 ### VERTICAL LINES ###
                 if 'vlines' in contour_settings.keys():
                     for vline in contour_settings['vlines']:
-                        vline_settings = self.getDefaultStraightLineSettings(vline)
+                        vline_settings = WD.getDefaultStraightLineSettings(vline)
                         try:
                             vline_settings['value'] = float(vline_settings['value'])
                         except:
-                            vline_settings['value'] = self.translateDateFormat(vline_settings['value'], 'datetime', '')
+                            vline_settings['value'] = WT.translateDateFormat(vline_settings['value'], 'datetime', '',
+                                                                             self.StartTime, self.EndTime,
+                                                                             self.ModelAlt.t_offset)
                         if 'dateformat' in contour_settings.keys():
                             if contour_settings['dateformat'].lower() == 'jdate':
                                 if isinstance(vline_settings['value'], dt.datetime):
-                                    vline_settings['value'] = WF.DatetimeToJDate(vline_settings['value'], self.ModelAlt.t_offset)
+                                    vline_settings['value'] = WT.DatetimeToJDate(vline_settings['value'], self.ModelAlt.t_offset)
                                 elif isinstance(vline_settings['value'], str):
                                     try:
                                         vline_settings['value'] = float(vline_settings['value'])
                                     except:
-                                        vline_settings['value'] = self.translateDateFormat(vline_settings['value'], 'datetime', '')
-                                        vline_settings['value'] = WF.DatetimeToJDate(vline_settings['value'], self.ModelAlt.t_offset)
+                                        vline_settings['value'] = WT.translateDateFormat(vline_settings['value'], 'datetime', '',
+                                                                                         self.StartTime, self.EndTime,
+                                                                                         self.ModelAlt.t_offset)
+                                        vline_settings['value'] = WT.DatetimeToJDate(vline_settings['value'], self.ModelAlt.t_offset)
                             elif contour_settings['dateformat'].lower() == 'datetime':
                                 if isinstance(vline_settings['value'], (int,float)):
-                                    vline_settings['value'] = WF.JDateToDatetime(vline_settings['value'], self.startYear)
+                                    vline_settings['value'] = WT.JDateToDatetime(vline_settings['value'], self.startYear)
                                 elif isinstance(vline_settings['value'], str):
-                                    vline_settings['value'] = self.translateDateFormat(vline_settings['value'], 'datetime', '')
+                                    vline_settings['value'] = WT.translateDateFormat(vline_settings['value'], 'datetime', '',
+                                                                                     self.StartTime, self.EndTime,
+                                                                                     self.ModelAlt.t_offset)
                         else:
-                            vline_settings['value'] = self.translateDateFormat(vline_settings['value'], 'datetime', '')
+                            vline_settings['value'] = WT.translateDateFormat(vline_settings['value'], 'datetime', '',
+                                                                             self.StartTime, self.EndTime,
+                                                                             self.ModelAlt.t_offset)
 
                         if 'label' not in vline_settings.keys():
                             vline_settings['label'] = None
@@ -2413,7 +2437,7 @@ class MakeAutomatedReport(object):
                 ### Horizontal LINES ###
                 if 'hlines' in contour_settings.keys():
                     for hline in contour_settings['hlines']:
-                        hline_settings = self.getDefaultStraightLineSettings(hline)
+                        hline_settings = WD.getDefaultStraightLineSettings(hline)
                         if 'label' not in hline_settings.keys():
                             hline_settings['label'] = None
                         if 'zorder' not in hline_settings.keys():
@@ -2449,7 +2473,7 @@ class MakeAutomatedReport(object):
 
                 ############# xticks and lims #############
 
-                self.formatDateXAxis(ax, contour_settings)
+                Plots.formatDateXAxis(ax, contour_settings)
                 xmin, xmax = ax.get_xlim()
 
                 if contour_settings['dateformat'].lower() == 'datetime':
@@ -2459,7 +2483,7 @@ class MakeAutomatedReport(object):
                 if 'xticks' in contour_settings.keys():
                     xtick_settings = contour_settings['xticks']
 
-                    self.formatTimeSeriesXticks(ax, xtick_settings, contour_settings)
+                    Plots.formatTimeSeriesXticks(ax, xtick_settings, contour_settings)
 
                 ax.set_xlim(left=xmin)
                 ax.set_xlim(right=xmax)
@@ -2491,7 +2515,7 @@ class MakeAutomatedReport(object):
                             ytickspacing = int(ytickspacing)
 
                         newyticks = np.arange(ymin, (ymax+ytickspacing), ytickspacing)
-                        newyticklabels = self.formatTickLabels(newyticks, ytick_settings)
+                        newyticklabels = Plots.formatTickLabels(newyticks, ytick_settings)
                         ax.set_yticks(newyticks)
                         ax.set_yticklabels(newyticklabels)
 
@@ -2500,7 +2524,7 @@ class MakeAutomatedReport(object):
 
             # #stuff to call once per plot
             self.configureSettingsForID('base', cur_obj_settings)
-            cur_obj_settings = self.updateFlaggedValues(cur_obj_settings, '%%units%%', units)
+            cur_obj_settings = WF.updateFlaggedValues(cur_obj_settings, '%%units%%', units)
 
             if 'title' in cur_obj_settings.keys():
                 if 'titlesize' in cur_obj_settings.keys():
@@ -2520,7 +2544,7 @@ class MakeAutomatedReport(object):
                     xlabsize = 12
                 axes[-1].set_xlabel(cur_obj_settings['xlabel'], fontsize=xlabsize)
 
-            self.formatDateXAxis(axes[-1], cur_obj_settings)
+            Plots.formatDateXAxis(axes[-1], cur_obj_settings)
 
             if 'legend' in cur_obj_settings.keys():
                 if cur_obj_settings['legend'].lower() == 'true':
@@ -2580,12 +2604,14 @@ class MakeAutomatedReport(object):
         :return: creates png in images dir and writes to XML file
         '''
 
-        print('\n################################')
-        print('Now making Buzz Plot.')
-        print('################################\n')
+        WF.print2stdout('\n################################')
+        WF.print2stdout('Now making Buzz Plot.')
+        WF.print2stdout('################################\n')
+
+        Plots = WPlot.Plots(self)
 
         default_settings = self.loadDefaultPlotObject('buzzplot')
-        object_settings = self.replaceDefaults(default_settings, object_settings)
+        object_settings = WF.replaceDefaults(self, default_settings, object_settings)
         fig = plt.figure(figsize=(12, 6))
         ax = fig.add_subplot()
 
@@ -2645,48 +2671,48 @@ class MakeAutomatedReport(object):
             dates = curline['dates']
 
             if 'target' in line.keys():
-                values = self.buzzTargetSum(dates, values, float(line['target']))
+                values = WF.buzzTargetSum(dates, values, float(line['target']))
             else:
                 if isinstance(values, dict):
                     if len(values.keys()) == 1: #single struct station, like leakage..
                         values = values[list(values.keys())[0]]
-                        values = self.pickByParameter(values, line)
+                        values = WF.pickByParameter(values, line)
                     else:
-                        print('Too many values to iterate. check if line should have a target, or an incorrect number')
-                        print('of structures are defined.')
-                        print('Line:', line)
+                        WF.print2stdout('Too many values to iterate. check if line should have a target, or an incorrect number')
+                        WF.print2stdout('of structures are defined.')
+                        WF.print2stdout('Line:', line)
                         continue
 
             chkvals = WF.checkData(values)
             if not chkvals:
-                print('Invalid Data settings for line:', line)
+                WF.print2stdout('Invalid Data settings for line:', line)
                 continue
 
             if 'dateformat' in object_settings.keys():
                 if object_settings['dateformat'].lower() == 'jdate':
                     if isinstance(dates[0], dt.datetime):
-                        dates = WF.DatetimeToJDate(dates, self.ModelAlt.t_offset)
+                        dates = WT.DatetimeToJDate(dates, self.ModelAlt.t_offset)
                 elif object_settings['dateformat'].lower() == 'datetime':
                     if isinstance(dates[0], (float, int)):
-                        dates = WF.JDateToDatetime(dates, self.startYear)
+                        dates = WT.JDateToDatetime(dates, self.startYear)
                 else:
                     if isinstance(dates[0], (float, int)):
-                        dates = WF.JDateToDatetime(dates, self.startYear)
+                        dates = WT.JDateToDatetime(dates, self.startYear)
 
             if 'unitsystem' in object_settings.keys():
-                values, units = self.convertUnitSystem(values, units, object_settings['unitsystem'])
+                values, units = WF.convertUnitSystem(values, units, object_settings['unitsystem'])
 
             if 'parameter' in line.keys():
-                line_settings = self.getDefaultLineSettings(line, line['parameter'], i)
+                line_settings = WD.getDefaultLineSettings(self.defaultLineStyles, line, line['parameter'], i)
             else:
-                line_settings = self.getDefaultLineSettings(line, None, i)
+                line_settings = WD.getDefaultLineSettings(self.defaultLineStyles, line, None, i)
 
             if 'scalar' in line.keys():
                 try:
                     scalar = float(line['scalar'])
                     values = scalar * values
                 except ValueError:
-                    print('Invalid Scalar. {0}'.format(line['scalar']))
+                    WF.print2stdout('Invalid Scalar. {0}'.format(line['scalar']))
                     continue
 
             if 'filterbylimits' not in line_settings.keys():
@@ -2706,14 +2732,14 @@ class MakeAutomatedReport(object):
 
                 if xaxis == 'left':
                     if 'xlims' in object_settings.keys():
-                        dates, values = self.limitXdata(dates, values, object_settings['xlims'])
+                        dates, values = WF.applyXLimits(self, dates, values, object_settings['xlims'])
                     if 'ylims' in object_settings.keys():
-                        dates, values = self.limitYdata(dates, values, object_settings['ylims'])
+                        dates, values = WF.applyYLimits(dates, values, object_settings['ylims'])
                 else:
                     if 'xlims2' in object_settings.keys():
-                        dates, values = self.limitXdata(dates, values, object_settings['xlims'])
+                        dates, values = WF.applyXLimits(self, dates, values, object_settings['xlims'])
                     if 'ylims' in object_settings.keys():
-                        dates, values = self.limitYdata(dates, values, object_settings['ylims2'])
+                        dates, values = WF.applyYLimits(dates, values, object_settings['ylims2'])
 
             if 'linetype' in line.keys():
                 if line['linetype'].lower() == 'stacked': #stacked plots need to be added at the end..
@@ -2744,32 +2770,24 @@ class MakeAutomatedReport(object):
                     line_settings['zorder'] = 4
 
                 if line_settings['drawline'].lower() == 'true' and line_settings['drawpoints'].lower() == 'true':
-                    curax.plot(dates, values, label=line_settings['label'], c=line_settings['linecolor'],
-                               lw=line_settings['linewidth'], ls=line_settings['linestylepattern'],
-                               marker=line_settings['symboltype'], markerfacecolor=line_settings['pointfillcolor'],
-                               markeredgecolor=line_settings['pointlinecolor'], markersize=float(line_settings['symbolsize']),
-                               markevery=int(line_settings['numptsskip']), zorder=int(line_settings['zorder']),
-                               alpha=float(line_settings['alpha']))
+                    Plots.plotLinesAndPoints(dates, values, curax, line_settings)
 
                 elif line_settings['drawline'].lower() == 'true':
-                    curax.plot(dates, values, label=line_settings['label'], c=line_settings['linecolor'],
-                               lw=line_settings['linewidth'], ls=line_settings['linestylepattern'],
-                               zorder=int(line_settings['zorder']),
-                               alpha=float(line_settings['alpha']))
+                    Plots.plotLines(dates, values, curax, line_settings)
 
                 elif line_settings['drawpoints'].lower() == 'true':
-                    curax.scatter(dates[::int(line_settings['numptsskip'])], values[::int(line_settings['numptsskip'])],
-                                  marker=line_settings['symboltype'], facecolor=line_settings['pointfillcolor'],
-                                  edgecolor=line_settings['pointlinecolor'], s=float(line_settings['symbolsize']),
-                                  label=line_settings['label'], zorder=int(line_settings['zorder']),
-                                  alpha=float(line_settings['alpha']))
+                    Plots.plotPoints(dates, values, curax, line_settings)
 
                 self.WAT_log.addLogEntry({'type': line_settings['label'] + '_BuzzPlot' if line_settings['label'] != '' else 'BuzzPlot',
                                           'name': self.ChapterRegion,
                                           'description': object_settings['description'],
                                           'units': units,
-                                          'value_start_date': self.translateDateFormat(dates[0], 'datetime', '').strftime('%d %b %Y'),
-                                          'value_end_date': self.translateDateFormat(dates[-1], 'datetime', '').strftime('%d %b %Y'),
+                                          'value_start_date': WT.translateDateFormat(dates[0], 'datetime', '',
+                                                                                     self.StartTime, self.EndTime,
+                                                                                     self.ModelAlt.t_offset).strftime('%d %b %Y'),
+                                          'value_end_date': WT.translateDateFormat(dates[-1], 'datetime', '',
+                                                                                   self.StartTime, self.EndTime,
+                                                                                   self.ModelAlt.t_offset).strftime('%d %b %Y'),
                                           'logoutputfilename': line['logoutputfilename']
                                           },
                                          isdata=True)
@@ -2852,7 +2870,7 @@ class MakeAutomatedReport(object):
             ax.legend(leg_lines, leg_labels, fontsize=legsize).set_zorder(102) #always on top)
 
         ### Xaxis formatting ###
-        self.formatDateXAxis(ax, object_settings)
+        Plots.formatDateXAxis(ax, object_settings)
 
         if 'ylims' in object_settings.keys():
             if 'min' in object_settings['ylims']:
@@ -2871,7 +2889,7 @@ class MakeAutomatedReport(object):
                     xlabelsize2 = 12
                 ax2.set_xlabel(object_settings['xlabel2'], fontsize=xlabelsize2)
 
-            self.formatDateXAxis(ax2, object_settings, twin=True)
+            Plots.formatDateXAxis(ax2, object_settings, twin=True)
 
             if 'xticksize2' in object_settings.keys():
                 xticksize2 = float(object_settings['xticksize2'])
@@ -2902,34 +2920,6 @@ class MakeAutomatedReport(object):
         plt.close('all')
 
         self.XML.writeTimeSeriesPlot(os.path.basename(figname), object_settings['description'])
-
-    def setSimulationDateTimes(self, ID):
-        '''
-        sets the simulation start time and dates from string format. If timestamp says 24:00, converts it to be correct
-        Datetime format of the next day at 00:00
-        :return: class varables
-                    self.StartTime
-                    self.EndTime
-        '''
-
-        StartTimeStr = self.SimulationVariables[ID]['StartTimeStr']
-        EndTimeStr = self.SimulationVariables[ID]['EndTimeStr']
-
-        if '24:00' in StartTimeStr:
-            tstrtmp = StartTimeStr.replace('24:00', '23:00')
-            StartTime = dt.datetime.strptime(tstrtmp, '%d %B %Y, %H:%M')
-            StartTime += dt.timedelta(hours=1)
-        else:
-            StartTime = dt.datetime.strptime(StartTimeStr, '%d %B %Y, %H:%M')
-        self.SimulationVariables[ID]['StartTime'] = StartTime
-
-        if '24:00' in EndTimeStr:
-            tstrtmp = EndTimeStr.replace('24:00', '23:00')
-            EndTime = dt.datetime.strptime(tstrtmp, '%d %B %Y, %H:%M')
-            EndTime += dt.timedelta(hours=1)
-        else:
-            EndTime = dt.datetime.strptime(EndTimeStr, '%d %B %Y, %H:%M')
-        self.SimulationVariables[ID]['EndTime'] = EndTime
 
     def setSimulationCSVVars(self, simlist):
         '''
@@ -2973,312 +2963,7 @@ class MakeAutomatedReport(object):
         self.SimulationVariables[ID]['EndTimeStr'] = simulation['endtime']
         self.SimulationVariables[ID]['LastComputed'] = simulation['lastcomputed']
         self.SimulationVariables[ID]['ModelAlternatives'] = simulation['modelalternatives']
-        self.setSimulationDateTimes(ID)
-
-    def setTimeSeriesXlims(self, cur_obj_settings, yearstr, years):
-        '''
-        gets the xlimits for time series. This can be dependent on year, so needs to be looped over.
-        :param cur_obj_settings: current plotting object settings dictionary
-        :param yearstr: current year string
-        :param years: list of years
-        :return: updated cur_obj_settings dict
-        '''
-
-        if 'ALLYEARS' not in years:
-            cur_obj_settings = self.updateFlaggedValues(cur_obj_settings, '%%year%%', yearstr)
-        else:
-            if 'xlims' in cur_obj_settings.keys():
-                if 'min' in cur_obj_settings['xlims']:
-                    cur_obj_settings['xlims']['min'] = self.updateFlaggedValues(cur_obj_settings['xlims']['min'],
-                                                                                '%%year%%', str(self.years[0]))
-                if 'max' in cur_obj_settings['xlims']:
-                    cur_obj_settings['xlims']['max'] = self.updateFlaggedValues(cur_obj_settings['xlims']['max'],
-                                                                                '%%year%%', str(self.years[-1]))
-            cur_obj_settings = self.updateFlaggedValues(cur_obj_settings, '%%year%%', yearstr)
-
-        return cur_obj_settings
-
-    def setMultiRunStartEndYears(self):
-        '''
-        sets start and end times by looking at all possible runs. Picks overlapping time periods only.
-        '''
-
-        for simID in self.SimulationVariables.keys():
-            if self.SimulationVariables[simID]['StartTime'] > self.StartTime:
-                self.StartTime = self.SimulationVariables[simID]['StartTime']
-            if self.SimulationVariables[simID]['EndTime'] < self.EndTime:
-                self.EndTime = self.SimulationVariables[simID]['EndTime']
-        print('Start and End time set to {0} - {1}'.format(self.StartTime, self.EndTime))
-
-
-
-    def getDefaultLineSettings(self, LineSettings, param, i):
-        '''
-        gets line settings and adds missing needed settings with defaults. Then translates java style inputs to
-        python commands. Gets colors and styles.
-        :param LineSettings: dictionary object containing settings and flags for lines/points
-        :param param: parameter of data in order to grab default
-        :param i: number of line on the plot in order to get the right sequential color
-        :return:
-            LineSettings: dictionary containing keys describing how the line/points are drawn
-        '''
-
-        LineSettings = self.getDrawFlags(LineSettings)
-        if LineSettings['drawline'].lower() == 'true':
-            if param != None:
-                if param.lower() in self.defaultLineStyles.keys():
-                    if i >= len(self.defaultLineStyles[param.lower()]['lines']):
-                        i = i - len(self.defaultLineStyles[param.lower()]['lines'])
-                    default_lines = self.defaultLineStyles[param.lower()]['lines'][i]
-                    for key in default_lines.keys():
-                        if key not in LineSettings.keys():
-                            LineSettings[key] = default_lines[key]
-
-            default_default_lines = self.getDefaultDefaultLineStyles(i)
-            for key in default_default_lines.keys():
-                if key not in LineSettings.keys():
-                    LineSettings[key] = default_default_lines[key]
-
-            LineSettings['linecolor'] = self.confirmColor(LineSettings['linecolor'], default_default_lines['linecolor'])
-            LineSettings = self.translateLineStylePatterns(LineSettings)
-
-        if LineSettings['drawpoints'] == 'true':
-            if param in self.defaultLineStyles.keys():
-                if i >= len(self.defaultLineStyles[param]['lines']):
-                    i = i - len(self.defaultLineStyles[param]['lines'])
-                default_lines = self.defaultLineStyles[param]['lines'][i]
-                for key in default_lines.keys():
-                    if key not in LineSettings.keys():
-                        LineSettings[key] = default_lines[key]
-
-            default_default_points = self.getDefaultDefaultPointStyles(i)
-
-            for key in default_default_points.keys():
-                if key not in LineSettings.keys():
-                    LineSettings[key] = default_default_points[key]
-
-            LineSettings['pointfillcolor'] = self.confirmColor(LineSettings['pointfillcolor'], default_default_points['pointfillcolor'])
-            LineSettings['pointlinecolor'] = self.confirmColor(LineSettings['pointlinecolor'], default_default_points['pointlinecolor'])
-
-            try:
-                if int(LineSettings['numptsskip']) == 0:
-                    LineSettings['numptsskip'] = 1
-            except ValueError:
-                print('Invalid setting for numptsskip.', LineSettings['numptsskip'])
-                print('defaulting to 25')
-                LineSettings['numptsskip'] = 25
-
-            LineSettings = self.translatePointStylePatterns(LineSettings)
-
-        return LineSettings
-
-    def getDefaultGateLineSettings(self, GateLineSettings, i):
-        '''
-        gets line settings and adds missing needed settings with defaults. Then translates java style inputs to
-        python commands. Gets colors and styles.
-        :param GateLineSettings: dictionary object containing settings and flags for gates
-        :param i: number of line on the plot in order to get the right sequential color
-        :return:
-            GateLineSettings: dictionary containing keys describing how the line/points are drawn
-        '''
-
-        GateLineSettings = self.getDrawFlags(GateLineSettings)
-        if GateLineSettings['drawline'] == 'true':
-            default_default_lines = self.getDefaultDefaultLineStyles(i)
-            for key in default_default_lines.keys():
-                if key not in GateLineSettings.keys():
-                    GateLineSettings[key] = default_default_lines[key]
-
-            GateLineSettings = self.translateLineStylePatterns(GateLineSettings)
-            GateLineSettings['linecolor'] = self.confirmColor(GateLineSettings['linecolor'], default_default_lines['linecolor'])
-
-        if GateLineSettings['drawpoints'] == 'true':
-            default_default_points = self.getDefaultDefaultPointStyles(i)
-            for key in default_default_points.keys():
-                if key not in GateLineSettings.keys():
-                    GateLineSettings[key] = default_default_points[key]
-            try:
-                if int(GateLineSettings['numptsskip']) == 0:
-                    GateLineSettings['numptsskip'] = 1
-            except ValueError:
-                print('Invalid setting for numptsskip.', GateLineSettings['numptsskip'])
-                print('defaulting to 25')
-                GateLineSettings['numptsskip'] = 25
-
-            GateLineSettings['pointlinecolor'] = self.confirmColor(GateLineSettings['pointlinecolor'], default_default_lines['pointlinecolor'])
-            GateLineSettings['pointfillcolor'] = self.confirmColor(GateLineSettings['pointfillcolor'], default_default_lines['pointfillcolor'])
-            GateLineSettings = self.translatePointStylePatterns(GateLineSettings)
-
-        return GateLineSettings
-
-    def getDefaultStraightLineSettings(self, LineSettings):
-        '''
-        gets line settings and adds missing needed settings with defaults. Then translates java style inputs to
-        python commands. Gets colors and styles.
-        :param LineSettings: dictionary object containing settings and flags for lines/points
-        :param param: parameter of data in order to grab default
-        :return:
-            LineSettings: dictionary containing keys describing how the line/points are drawn
-        '''
-
-        default_default_lines = self.getDefaultDefaultLineStyles(0)
-        default_default_lines['linecolor'] = 'black' #don't need different colors by default..
-        for key in default_default_lines.keys():
-            if key not in LineSettings.keys():
-                LineSettings[key] = default_default_lines[key]
-
-        LineSettings = self.translateLineStylePatterns(LineSettings)
-        LineSettings['linecolor'] = self.confirmColor(LineSettings['linecolor'], default_default_lines['linecolor'])
-
-        return LineSettings
-
-    def getDefaultTextSettings(self, TextSettings):
-        '''
-        gets text settings and adds missing needed settings with defaults. Then translates java style inputs to
-        python commands. Gets colors and styles.
-        :param TextSettings: dictionary object containing settings and flags for text
-        :return:
-            LineSettings: dictionary containing keys describing how the line/points are drawn
-        '''
-
-        default_default_text = self.getDefaultDefaultTextStyles()
-        for key in default_default_text.keys():
-            if key not in TextSettings.keys():
-                TextSettings[key] = default_default_text[key]
-
-        TextSettings['fontcolor'] = self.confirmColor(TextSettings['fontcolor'], default_default_text['fontcolor'])
-
-        return TextSettings
-
-    def getDefaultContourLineSettings(self, contour_settings):
-        '''
-        contains bare essentials for contour plots just incase nothing is specified
-        :param contour_settings: dictionary containing settings
-        :return:
-        '''
-
-        default_contour_settings = {'linecolor': 'grey',
-                                    'linewidth': 1,
-                                    'linestylepattern': 'solid',
-                                    'alpha': 1,
-                                    'contourlinetext': 'false',
-                                    'fontsize': 10,
-                                    'text_inline': 'true',
-                                    'inline_spacing': 10,
-                                    'legend': 'false'}
-
-        for key in default_contour_settings.keys():
-            if key not in contour_settings:
-                contour_settings[key] = default_contour_settings[key]
-                if key == 'text_inline':
-                    if contour_settings[key].lower() == 'true':
-                        contour_settings[key] = True
-                    else:
-                        contour_settings[key] = False
-
-        contour_settings = self.translateLineStylePatterns(contour_settings)
-
-        return contour_settings
-
-    def getDrawFlags(self, LineSettings):
-        '''
-        reads line settings dictionary to look for defined settings of lines or points to determine if either or both
-        should be drawn. If nothing is explicitly stated, then draw lines with default settings.
-        :param LineSettings: dictionary object containing settings and flags for lines/points
-        :return:
-            LineSettings: dictionary containing keys describing how the line/points are drawn
-        '''
-
-        #unless explicitly stated, look for key identifiers to draw lines or not
-        LineVars = ['linecolor', 'linestylepattern', 'linewidth']
-        PointVars = ['pointfillcolor', 'pointlinecolor', 'symboltype', 'symbolsize', 'numptsskip', 'markersize']
-
-        if 'drawline' not in LineSettings.keys():
-            for var in LineVars:
-                if var in LineSettings.keys():
-                    LineSettings['drawline'] = 'true'
-                    break
-            if 'drawline' not in LineSettings.keys():
-                LineSettings['drawline'] = 'false'
-
-        if 'drawpoints' not in LineSettings.keys():
-            for var in PointVars:
-                if var in LineSettings.keys():
-                    LineSettings['drawpoints'] = 'true'
-                    break
-            if 'drawpoints' not in LineSettings.keys():
-                LineSettings['drawpoints'] = 'false'
-
-        if LineSettings['drawpoints'] == 'false' and LineSettings['drawline'] == 'false':
-            LineSettings['drawline'] = 'true' #gotta do something..
-
-        return LineSettings
-
-    def getDefaultContourSettings(self, object_settings):
-        '''
-        gets default settings for contours adn overwrites missing settings in object settings to be sure
-        contour plots have everything that they need
-        :param object_settings: dictionary containing settings
-        :return: updated settings dictionary
-        '''
-
-        defaultColormap = mpl.cm.get_cmap('jet')
-        default_colorbar_settings = {'colormap': defaultColormap,
-                                     'bins':10,
-                                     'numticks':5}
-
-        if 'colorbar' in object_settings.keys():
-            if 'colormap' in object_settings['colorbar'].keys():
-                try:
-                    usercolormap = mpl.cm.get_cmap(object_settings['colorbar']['colormap'])
-                    object_settings['colormap'] = usercolormap
-                except ValueError:
-                    print('User selected invalid colormap:', object_settings['colorbar']['colormap'])
-                    print('Tip: make sure capitalization is correct!')
-                    print('Defaulting to Jet.')
-                    object_settings['colormap'] = defaultColormap
-        else:
-            object_settings['colorbar'] = {}
-
-        for key in default_colorbar_settings.keys():
-            if key not in object_settings['colorbar']:
-                object_settings['colorbar'][key] = default_colorbar_settings[key]
-
-        return object_settings
-
-    def getDefaultDefaultLineStyles(self, i):
-        '''
-        creates a default line style based off of the number line and default colors
-        used if param is undefined or not in defaults file
-        :param i: count of line on the plot
-        :return: dictionary with line settings
-        '''
-
-        if i >= len(self.Constants.def_colors):
-            i = i - len(self.Constants.def_colors)
-        return {'linewidth': 2, 'linecolor': self.Constants.def_colors[i], 'linestylepattern': 'solid', 'alpha': 1.0}
-
-    def getDefaultDefaultTextStyles(self):
-        '''
-        creates a default line style based off of the number line and default colors
-        used if param is undefined or not in defaults file
-        :return: dictionary with line settings
-        '''
-
-        return {'fontsize': 9, 'fontcolor': 'black', 'alpha': 1.0, 'horizontalalignment': 'left'}
-
-    def getDefaultDefaultPointStyles(self, i):
-        '''
-        creates a default point style based off of the number points and default colors
-        used if param is undefined or not in defaults file
-        :param i: count of points on the plot
-        :return: dictionary with point settings
-        '''
-
-        if i >= len(self.Constants.def_colors):
-            i = i - len(self.Constants.def_colors)
-        return {'pointfillcolor': self.Constants.def_colors[i], 'pointlinecolor': self.Constants.def_colors[i], 'symboltype': 1,
-                'symbolsize': 5, 'numptsskip': 0, 'alpha': 1.0}
+        WT.setSimulationDateTimes(self, ID)
 
     def getLineSettings(self, LineSettings, Flag):
         '''
@@ -3312,268 +2997,6 @@ class MakeAutomatedReport(object):
 
         return add_xlabel, add_ylabel
 
-    def getTimeIntervalSeconds(self, interval):
-        '''
-        converts a given time interval into seconds
-        :param interval: DSS interval (ex: 6MIN)
-        :return: time interval in seconds
-        '''
-
-        interval = interval.lower()
-        if 'min' in interval:
-            timeint = int(interval.replace('min','')) * 60 #convert to sec
-            return timeint
-        elif 'hour' in interval:
-            timeint = int(interval.replace('hour','')) * 3600 #convert to sec
-            return timeint
-        elif 'day' in interval:
-            timeint = int(interval.replace('day','')) * 86400 #convert to sec
-            return timeint
-        elif 'mon' in interval:
-            timeint = int(interval.replace('mon','')) * 2.628e+6 #convert to sec
-            return timeint
-        elif 'year' in interval:
-            timeint = int(interval.replace('year','')) * 3.154e+7 #convert to sec
-            return timeint
-        else:
-            print('Unidentified time interval')
-            return 0
-
-    def getTimeInterval(self, times):
-        '''
-        attempts to find out the time interval of the time series by finding the most common time interval
-        :param times: list of times
-        :return:
-        '''
-
-        t_ints = []
-        for i, t in enumerate(times):
-            if i == 0: #skip 1
-                last_time = t
-            else:
-                t_ints.append(t - last_time)
-
-        return self.getMostCommon(t_ints)
-
-    def getMostCommon(self, listvars):
-        '''
-        gets most common instance of a var in a list
-        :param listvars: list of variables
-        :return: value that is most common in the list
-        '''
-
-        occurence_count = Counter(listvars)
-        most_common_interval = occurence_count.most_common(1)[0][0]
-        return most_common_interval
-
-
-
-    def getProfileDates(self, Line_info):
-        '''
-        gets dates from observed text profiles
-        :param Line_info: dictionary containing line information, must include filename
-        :return: list of times
-        '''
-
-        if 'filename' in Line_info.keys(): #Get data from Observed
-            times = WR.getTextProfileDates(Line_info['filename'], self.StartTime, self.EndTime) #TODO: set up for not observed data??
-            return times
-
-        print('Illegal Dates selection. ')
-        return []
-
-    def getPlotUnits(self, unitslist, object_settings):
-        '''
-        gets units for the plot. Either looks at data already plotted units, or if there are no defined units
-        in the plotted data, look for a parameter flag
-        :param object_settings: dictionary with plot settings
-        :return: string units value
-        '''
-
-        if 'parameter' in object_settings.keys():
-            try:
-                plotunits = self.Constants.units[object_settings['parameter'].lower()]
-                if isinstance(plotunits, dict):
-                    if 'unitsystem' in object_settings.keys():
-                        plotunits = plotunits[object_settings['unitsystem'].lower()]
-                    else:
-                        plotunits = plotunits['metric']
-            except KeyError:
-                plotunits = ''
-
-        elif len(unitslist) > 0:
-            plotunits = self.getMostCommon(unitslist)
-
-        else:
-            print('No units defined.')
-            plotunits = ''
-
-        plotunits = self.translateUnits(plotunits)
-        return plotunits
-
-    def getTableDates(self, year, object_settings, month='None'):
-        '''
-        gets start and end dates from lines in tables for logging
-        :param year: selected year int or 'all' string
-        :param object_settings: dictionary of item setting
-        :param month: selected month (for monthly table) or None
-        :return: start and end date
-        '''
-
-        xmin = 'NONE'
-        xmax = 'NONE'
-        if 'xlims' in object_settings.keys():
-            if 'min' in object_settings['xlims'].keys():
-                xmin = self.translateDateFormat(object_settings['xlims']['min'], 'datetime', self.StartTime)
-                xmin = xmin.strftime('%d %b %Y')
-            if 'max' in object_settings['xlims'].keys():
-                xmax = self.translateDateFormat(object_settings['xlims']['max'], 'datetime', self.EndTime)
-                xmax = xmax.strftime('%d %b %Y')
-
-        if xmin != 'NONE':
-            start_date = xmin
-        elif year == self.startYear:
-            start_date = self.StartTime.strftime('%d %b %Y')
-        else:
-            if str(year).lower() == 'all':
-                start_date = '01 Jan {0}'.format(self.startYear)
-            else:
-                start_date = '01 Jan {0}'.format(year)
-
-        if xmax != 'NONE':
-            start_date = xmax
-        elif year == self.endYear:
-            end_date = self.EndTime.strftime('%d %b %Y')
-        else:
-            if str(year).lower() == 'all':
-                end_date = '31 Dec {0}'.format(self.endYear)
-            else:
-                end_date = '31 Dec {0}'.format(year)
-            if month != 'None':
-                try:
-                    month = int(month)
-                except ValueError:
-                    month = self.Constants.month2num[month.lower()]
-
-                try:
-                    start_date = dt.datetime.strptime(start_date, '%d %b %Y').replace(month=month).strftime('%d %b %Y')
-                except ValueError:
-                    start_date = dt.datetime.strptime(start_date, '%d %b %Y')
-                    start_date = start_date.replace(day=1)
-                    start_date = start_date.replace(month=month+1)
-                    start_date -= dt.timedelta(days=1)
-                    start_date = start_date.strftime('%d %b %Y')
-                try:
-                    end_date = dt.datetime.strptime(end_date, '%d %b %Y').replace(month=month).strftime('%d %b %Y')
-                except ValueError:
-                    end_date = dt.datetime.strptime(end_date, '%d %b %Y')
-                    end_date = end_date.replace(day=1)
-                    end_date = end_date.replace(month=month+1)
-                    end_date -= dt.timedelta(days=1)
-                    end_date = end_date.strftime('%d %b %Y')
-
-        return start_date, end_date
-
-    def getListItems(self, listvals):
-        '''
-        recursive function to convert lists of lists into single lists for logging
-        :param listvals: value object
-        :return: list of values
-        '''
-
-        if isinstance(listvals, (list, np.ndarray)):
-            outvalues = []
-            for item in listvals:
-                if isinstance(item, (list, np.ndarray)):
-                    vals = self.getListItems(item)
-                    for v in vals:
-                        outvalues.append(v)
-                else:
-                    return listvals #we just have a list of values, so we're good! return list
-        elif isinstance(listvals, dict):
-            outvalues = self.getListItemsFromDict(listvals)
-        return outvalues
-
-    def getListItemsFromDict(self, indict):
-        '''
-        recursive function to convert dictionary of lists into single dictionary for logging. Keys are determined
-        using original keys
-        :param indict: value dictionary object
-        :return: dictionary of values
-        '''
-
-        outdict = {}
-        for key in indict:
-            if isinstance(indict[key], dict):
-                returndict = self.getListItemsFromDict(indict[key])
-                returndict = {'{0}_{1}'.format(key, newkey): returndict[newkey] for newkey in returndict}
-                for key in returndict.keys():
-                    outdict[key] = returndict[key]
-            elif isinstance(indict[key], (list, np.ndarray)):
-                outdict[key] = indict[key]
-        return outdict
-
-    def getDateSourceFlag(self, object_settings):
-        '''
-        Gets the datesource from object settings
-        :param object_settings: currently selected object settings dictionary
-        :return: datessource_flag
-        '''
-
-        if 'datessource' in object_settings.keys():
-            datessource_flag = object_settings['datessource'] #determine how you want to get dates? either flag or list
-        else:
-            datessource_flag = [] #let it make timesteps
-
-        return datessource_flag
-
-    def getProfileTimestamps(self, object_settings):
-        '''
-        Gets timestamps based off of user settings in XML file and reads/builds them.
-        :param object_settings: currently selected object settings dictionary
-        :return: list of timestamp values to be plotted
-        '''
-
-        if isinstance(object_settings['datessource_flag'], str):
-            timestamps = []
-            for line in object_settings[object_settings['datakey']]:
-                if line['flag'] == object_settings['datessource_flag']:
-                    timestamps = self.getProfileDates(line)
-        elif isinstance(object_settings['datessource_flag'], dict): #single date instance..
-            timestamps = []
-            tstamp_dates = object_settings['datessource']['dates']
-            for d in tstamp_dates:
-                dfrmt = self.translateDateFormat(d, 'datetime', None)
-                if dfrmt != None:
-                    timestamps.append(dfrmt)
-                else:
-                    print('Invalid Timestamp', d)
-
-        if len(timestamps) == 0:
-            #if something fails, or not implemented, or theres just no dates in the window, make some up
-            timestamps = self.makeRegularTimesteps(days=15)
-
-        return np.asarray(timestamps)
-
-    def getProfileTimestampYearMonthIndex(self, object_settings):
-        '''
-        gets month indexes for each year based off timestamps for profile tables
-        :param object_settings: dictionary containing settings for current object
-        :return: list of lists for years/months and timestamps
-        '''
-
-        timestamp_indexes = []
-        for year in self.years:
-            year_idx = []
-            for mon in range(1,13):
-                mon_idx = []
-                for ti, timestamp in enumerate(object_settings['timestamps']):
-                    if timestamp.year == year and timestamp.month == mon:
-                        mon_idx.append(ti)
-                year_idx.append(mon_idx)
-            timestamp_indexes.append(year_idx)
-        return timestamp_indexes
-
     def getPlotParameter(self, object_settings):
         '''
         Gets the plot parameter based on user settings. If explicitly stated, uses that. Otherwise, looks at the
@@ -3594,1046 +3017,6 @@ class MakeAutomatedReport(object):
             else:
                 plot_parameter = None
         return plot_parameter
-
-    def getProfileInterpResolution(self, object_settings, default=30):
-        '''
-        Gets the resolution value to interpolate profile data over for table stats. default value of 30
-        if not defined.
-        :param object_settings: currently selected object settings dictionary
-        :param default: used if not defined in user settings
-        :return: interpolation int value
-        '''
-
-        if 'resolution' in object_settings.keys():
-            resolution = object_settings['resolution']
-        else:
-            print('Resolution not defined. Setting to default values.')
-            resolution = default
-        return int(resolution)
-
-    def getPlotYears(self, object_settings):
-        '''
-        formats years settings for plots/tables. Figures out years used, if split by year, and year strings
-        years is set to "ALLYEARS" if not split by year. This tells other parts of script to include all.
-        :param object_settings: currently selected object settings dictionary
-        :return:
-            split_by_year: boolean if plots/tables should be split up year to year or all at once
-            years: list of years that are used
-            yearstr: list of years as strings, or set of years (ex: 2013-2016)
-        '''
-
-        split_by_year = False
-        yearstr = ''
-        if 'splitbyyear' in object_settings.keys():
-            if object_settings['splitbyyear'].lower() == 'true':
-                split_by_year = True
-                years = self.years
-                yearstr = [str(year) for year in years]
-        if not split_by_year:
-            yearstr = self.years_str
-            years = ['ALLYEARS']
-
-        return split_by_year, years, yearstr
-
-    def getParameterCount(self, line, object_settings):
-        '''
-        Returns parameter used in dataset and keeps a running total of used parameters in dataset
-        :param line: current line in linedata dataset
-        :param object_settings: currently selected object settings dictionary
-        :return:
-            param: current parameter if available else None
-            param_count: running count of used parameters
-        '''
-
-        if 'param_count' not in object_settings.keys():
-            param_count = {}
-        else:
-            param_count = object_settings['param_count']
-
-        if 'parameter' in line.keys():
-            param = line['parameter'].lower()
-        else:
-            param = None
-        if param not in param_count.keys():
-            param_count[param] = 0
-        else:
-            param_count[param] += 1
-
-        return param, param_count
-
-    def getGateConfigurationDays(self, gateconfig, gatedata, timestamp):
-        '''
-        calculates gate configuration days for a given timestamp. Gate configuration days are the amount of days in the
-        simulation where the configuration of currently open gates have been open
-        :param gateconfig: dictionary containing settings for gate configurations
-        :param gatedata: dictionary containing information for gates
-        :param timestamp: current timestamp to configure to
-        :return: decimal days number
-        '''
-
-        gd_key = list(gatedata.keys())[0]
-        curgate = gatedata[gd_key]['gates'][list(gatedata[gd_key]['gates'].keys())[0]]
-        idx = WR.getClosestTime([timestamp], curgate['dates'])[0]
-        datamask = np.ones(idx+1, dtype=bool)
-
-        for gatelevel in gatedata.keys():
-            current_op_level = np.nan
-            for gatenumber in gatedata[gatelevel]['gates'].keys():
-                current_op = gateconfig[gatelevel][gatenumber]
-                if not np.isnan(current_op):
-                    current_op_level = 1
-                    break
-
-            datamask_gateLevel = np.zeros(idx+1, dtype=bool)
-            for gatenumber in gatedata[gatelevel]['gates'].keys():
-                msk = ~np.isnan(gatedata[gatelevel]['gates'][gatenumber]['values'][:idx+1]) #true when open
-                datamask_gateLevel = datamask_gateLevel | msk
-
-            if np.isnan(current_op_level): #if closed..
-                datamask = datamask & ~datamask_gateLevel
-            else:
-                datamask = datamask & datamask_gateLevel #datamsk_gateLevel if true when open
-
-        changeop = False
-        for i in reversed(range(idx)):
-            if not datamask[i]:
-                changeop = True
-                break
-        timestep = (curgate['dates'][1] - curgate['dates'][0]).total_seconds() / 86400
-        if changeop:
-            decdays = (idx - i -1) * timestep
-        else:
-            decdays = idx * timestep
-
-        return round(decdays, 3)
-
-    def getGateBlendDays(self, gateconfig, gatedata, timestamp):
-        '''
-        calculates gate blend days for a given timestamp. Gate blend days are the amount of days in the simulation where
-        the combination of currently open gates have been open
-        :param gateconfig: dictionary containing settings for gate configurations
-        :param gatedata: dictionary containing information for gates
-        :param timestamp: current timestamp to configure to
-        :return: decimal days number
-        '''
-
-        gd_key = list(gatedata.keys())[0]
-        curgate = gatedata[gd_key]['gates'][list(gatedata[gd_key]['gates'].keys())[0]]
-        idx = WR.getClosestTime([timestamp], curgate['dates'])[0]
-        datamask = np.ones(idx+1, dtype=bool)
-
-        for gatelevel in gatedata.keys():
-            for gatenumber in gatedata[gatelevel]['gates'].keys():
-                current_op = gateconfig[gatelevel][gatenumber]
-                if np.isnan(current_op):
-                    msk = np.isnan(gatedata[gatelevel]['gates'][gatenumber]['values'][:idx+1])
-                else:
-                    msk = ~np.isnan(gatedata[gatelevel]['gates'][gatenumber]['values'][:idx+1])
-                datamask = datamask & msk
-
-        changeop = False
-        for i in reversed(range(idx)):
-            if not datamask[i]:
-                changeop = True
-                break
-        timestep = (curgate['dates'][1] - curgate['dates'][0]).total_seconds() / 86400
-        if changeop:
-            decdays = (idx - i -1) * timestep
-        else:
-            decdays = idx * timestep
-
-        return round(decdays, 3)
-
-
-    def getRelativeMasterSet(self, linedata):
-        '''
-        organizes data and gets it on the same interval
-        :param linedata: dictionary containing data
-        :return: set of data on same interavl and units, settings for relative lines
-        '''
-
-        #add all thje data together. then we cna use this when plotting it to get %
-        #TODO: deal with irregular intervals
-        intervals = {}
-        biggest_interval = None
-        type = 'INST-VAL'
-        for line in linedata.keys():
-            if 'interval' in linedata[line].keys():
-                td = self.getTimeInterval(linedata[line]['dates'])
-                if linedata[line]['interval'].upper() not in intervals.keys():
-                    intervals[linedata[line]['interval'].upper()] = td
-                if biggest_interval == None:
-                    biggest_interval = linedata[line]['interval'].upper()
-                    if 'type' in linedata[line].keys():
-                        type = linedata[line]['type'].upper()
-                else:
-                    if td > intervals[biggest_interval]:
-                        biggest_interval = linedata[line]['interval'].upper()
-                        if linedata[line]['type'] in line.keys():
-                            type = linedata[line]['type'].upper()
-
-        RelativeLineSettings = {'interval': biggest_interval,
-                                'type': type}
-        RelativeMasterSet = []
-        units = []
-        for li, line in enumerate(linedata.keys()):
-            curline = pickle.loads(pickle.dumps(linedata[line], -1))
-            curline['values'], curline['units'] = self.convertUnitSystem(curline['values'], curline['units'], 'metric') #just make everything metric..
-            units.append(curline['units'])
-            if li == 0:
-                if biggest_interval != None:
-                    _, RelativeMasterSet = self.changeTimeSeriesInterval(curline['dates'], curline['values'], RelativeLineSettings)
-                else:
-                    RelativeMasterSet = curline['values']
-            else:
-                if biggest_interval != None:
-                    curline['interval'] = biggest_interval
-                    curline['type'] = type
-                    _, newvals = self.changeTimeSeriesInterval(curline['dates'], curline['values'], RelativeLineSettings)
-                    RelativeMasterSet += newvals
-                else:
-                    RelativeMasterSet += curline['values']
-
-        RelativeLineSettings['units'] = self.getMostCommon(units)
-
-        return RelativeMasterSet, RelativeLineSettings
-
-    def getGateOperationTimes(self, gatedata):
-        '''
-        gets times when gates are operational
-        :param gatedata: dictionary containing gate data
-        :return: list of dates with dates operational
-        '''
-
-        operationIndex = np.array([], dtype=int)
-        for gatelevel in gatedata.keys():
-            gate0 = list(gatedata[gatelevel]['gates'].keys())[0]
-            gateops_datamask = np.zeros(len(gatedata[gatelevel]['gates'][gate0]['values']), dtype=bool) #assume everything closed
-            for gi, gate in enumerate(gatedata[gatelevel]['gates']):
-                curgate = gatedata[gatelevel]['gates'][gate]
-                msk = ~np.isnan(curgate['values'])
-                gateops_datamask = gateops_datamask | msk #change when differnt
-
-            operationIndex = np.append(operationIndex, np.where(gateops_datamask[:-1] != gateops_datamask[1:])[0])
-
-        return curgate['dates'][np.unique(operationIndex)]
-
-    def replaceDefaults(self, default_settings, object_settings):
-        '''
-        makes deep copies of default and defined settings so no settings are accidentally carried over
-        replaces flagged values (%%) with easily identified variables
-        iterates through settings and replaces all default settings with defined settings
-        :param default_settings: default object settings dictionary
-        :param object_settings: user defined settings dictionary
-        :return:
-            default_settings: dictionary of user and default settings
-        '''
-
-        default_settings = pickle.loads(pickle.dumps(WF.replaceflaggedValues(self, default_settings, 'general'), -1))
-        object_settings = pickle.loads(pickle.dumps(WF.replaceflaggedValues(self, object_settings, 'general'), -1))
-
-        for key in object_settings.keys():
-            if key not in default_settings.keys(): #if defaults doesnt have key
-                default_settings[key] = object_settings[key]
-            elif default_settings[key] == None: #if defaults has key, but is none
-                default_settings[key] = object_settings[key]
-            elif isinstance(object_settings[key], list): #if settings is a list, aka rows or lines
-                # if key.lower() == 'rows': #if the default has rows defined, just overwrite them.
-                if key in default_settings.keys():
-                    default_settings[key] = object_settings[key]
-                elif key.lower() not in default_settings.keys():
-                    default_settings[key] = object_settings[key] #if the defaults dont have anything defined, fill it in
-            else:
-                default_settings[key] = object_settings[key]
-
-        return default_settings
-
-    def replaceOmittedValues(self, values, omitval):
-        '''
-        replaces a specified value in time series. Can be variable depending on data source (-99999, 0, 100, etc)
-        :param values: array of values
-        :param omitval: value to be omitted
-        :return: new values
-        '''
-
-        if isinstance(values, dict):
-            new_values = {}
-            for key in values:
-                new_values[key] = self.replaceOmittedValues(values[key], omitval)
-        else:
-            o_msk = np.where(values == omitval)
-            values[o_msk] = np.nan
-            new_values = np.asarray(values)
-            print('Omitted {0} values of {1}'.format(len(o_msk[0]), omitval))
-        return new_values
-
-    def translateLineStylePatterns(self, LineSettings):
-        '''
-        translates java line style patterns to python friendly commands.
-        :param LineSettings: dictionary containing keys describing how the line/points are drawn
-        :return:
-            LineSettings: dictionary containing keys describing how the line/points are drawn
-        '''
-
-        #java|python
-        linestylesdict = {'dash': 'dashed',
-                          'dash dot': 'dashdot',
-                          'dash dot-dot': (0, (3, 5, 1, 5, 1, 5)), #this one doesnt get a string name?
-                          'dot': 'dotted',
-                          'solid': 'solid'}
-
-        if 'linestylepattern' in LineSettings.keys():
-            if LineSettings['linestylepattern'].lower() in linestylesdict.values(): #existing python values
-                LineSettings['linestylepattern'] = LineSettings['linestylepattern'].lower() #use python but lower it
-            else:
-                try:
-                    LineSettings['linestylepattern'] = linestylesdict[LineSettings['linestylepattern'].lower()]
-                except KeyError:
-                    print('Invalid lineStylePattern:', LineSettings['linestylepattern'])
-                    print('Defaulting to Solid.')
-                    LineSettings['linestylepattern'] = 'solid'
-        else:
-            print('lineStylePattern undefined for line. Using solid')
-            LineSettings['linestylepattern'] = 'solid'
-
-        return LineSettings
-
-    def translatePointStylePatterns(self, LineSettings):
-        '''
-        translates java point style patterns to python friendly commands.
-        :param LineSettings: dictionary containing keys describing how the line/points are drawn
-        :return:
-            LineSettings: dictionary containing keys describing how the line/points are drawn
-        '''
-
-        #java|python
-        #https://matplotlib.org/stable/api/markers_api.html#module-matplotlib.markers
-        pointstylesdict = {1: 's', #square
-                           2: 'o', #circle
-                           3: '^', #triangle up
-                           4: 'v', #triangle down
-                           5: 'D', #diamond
-                           6: '*' #star
-                           }
-
-        if 'symboltype' in LineSettings.keys():
-            if LineSettings['symboltype'] in pointstylesdict.values(): #existing python values
-                LineSettings['symboltype'] = LineSettings['symboltype'] #needs to be case sensitive..
-            else:
-                try:
-                    LineSettings['symboltype'] = pointstylesdict[int(LineSettings['symboltype'])]
-                except:
-                    print('Invalid Symboltype:', LineSettings['symboltype'])
-                    print('Defaulting to Square.')
-                    LineSettings['symboltype'] = 's'
-
-        else:
-            print('Symbol not defined. Defaulting to Square.')
-            LineSettings['symboltype'] = 's'
-
-        return LineSettings
-
-    def translateDateFormat(self, lim, dateformat, fallback):
-        '''
-        translates date formats between datetime and jdate, as desired
-        :param lim: limit value, either int or datetime
-        :param dateformat: desired date format, either 'datetime' or 'jdate'
-        :param fallback: if setting translation fails, use backup, usually starttime or endtime
-        :return:
-            lim: original limit, if translate fails
-            lim_fmrt: translated limit
-        '''
-
-        if dateformat.lower() == 'datetime': #if want datetime
-            if isinstance(lim, dt.datetime):
-                return lim
-            else:
-                try:
-                    lim_frmt = pendulum.parse(lim, strict=False).replace(tzinfo=None)#try simple date formatting.
-                    if not self.StartTime <= lim_frmt <= self.EndTime: #check for false negative
-                        raise IndexError
-                    return lim_frmt
-                except IndexError:
-                    print('Xlim of {0} not between start and endtime {1} - {2}'.format(lim_frmt, self.StartTime,
-                                                                                       self.EndTime))
-                except:
-                    print('Error Reading Limit: {0} as a dt.datetime object.'.format(lim))
-                    print('If this is wrong, try format: Apr 2014 1 12:00')
-
-                print('Trying as Jdate..')
-                try:
-                    lim_frmt = float(lim)
-                    lim_frmt = WF.JDateToDatetime(lim_frmt, self.startYear)
-                    print('JDate {0} as {1} Accepted!'.format(lim, lim_frmt))
-                    return lim_frmt
-                except:
-                    print('Limit value of {0} also invalid as jdate.'.format(lim))
-
-                if fallback != None and fallback != '':
-                    print('Setting to fallback {0}.'.format(fallback))
-                else:
-                    print('Setting to fallback.')
-                return fallback
-
-        elif dateformat.lower() == 'jdate':
-            try:
-                return float(lim)
-            except:
-                print('Error Reading Limit: {0} as a jdate.'.format(lim))
-                print('If this is wrong, try format: 180')
-                print('Trying as Datetime..')
-                if isinstance(lim, (dt.datetime, str)):
-                    try:
-                        if isinstance(lim, str):
-                            lim_frmt = pendulum.parse(lim, strict=False).replace(tzinfo=None)
-                            print('Datetime {0} as {1} Accepted!'.format(lim, lim_frmt))
-                        else:
-                            lim_frmt = lim
-                        print('converting to jdate..')
-                        lim_frmt = WF.DatetimeToJDate(lim_frmt, self.ModelAlt.t_offset)
-                        print('Converted to jdate!', lim_frmt)
-                        return lim_frmt
-                    except:
-                        print('Error Reading Limit: {0} as a dt.datetime object.'.format(lim))
-                        print('If this is wrong, try format: Apr 2014 1 12:00')
-
-                    fallback = WF.DatetimeToJDate(fallback, self.ModelAlt.t_offset)
-
-                    if fallback != None and fallback != '':
-                        print('Setting to fallback {0}.'.format(fallback))
-                    else:
-                        print('Setting to fallback.')
-                    return fallback
-
-    def translateUnits(self, units):
-        '''
-        translates possible units to better known flags for consistancy in the script and conversion purposes
-        :param units: units string
-        :return: units string
-        '''
-
-        units_conversion = {'f': ['f', 'faren', 'degf', 'fahrenheit', 'fahren', 'deg f'],
-                            'c': ['c', 'cel', 'celsius', 'deg c', 'degc'],
-                            'm3/s': ['m3/s', 'm3s', 'metercubedpersecond', 'cms'],
-                            'cfs': ['cfs', 'cubicftpersecond', 'f3/s', 'f3s'],
-                            'm': ['m', 'meters', 'mtrs'],
-                            'ft': ['ft', 'feet'],
-                            'm3': ['m3', 'meters cubed', 'meters3', 'meterscubed', 'meters-cubed'],
-                            'af': ['af', 'acrefeet', 'acre-feet', 'acfeet', 'acft', 'ac-ft', 'ac/ft'],
-                            'm/s': ['mps', 'm/s', 'meterspersecond', 'm/second'],
-                            'ft/s': ['ft/s', 'fps', 'feetpersecond', 'feet/s']}
-
-        if units != None:
-            for key in units_conversion.keys():
-                if units.lower() in units_conversion[key]:
-                    return key
-
-        print('Units Undefined:', units)
-        return units
-
-    def forceTimeInterval(self, interval):
-        '''
-        returns time interval by parsing DSSVue word inputs like "1MON" or "15MIN"
-        :param interval: DSSVue formatted time interval
-        :return: either time delta or pd interval, and interp type (np or pd)
-        '''
-
-        numbers = []
-        letters = []
-        for n in interval:
-            if n != ' ':
-                try:
-                    numbers.append(str(int(n)))
-                except ValueError:
-                    letters.append(n)
-        number = int(''.join(numbers))
-        word = ''.join(letters)
-        if word.lower().startswith('minute'):
-            return dt.timedelta(minutes=number), 'np'
-        elif word.lower().startswith('hour'):
-            return dt.timedelta(hours=number), 'np'
-        elif word.lower().startswith('day'):
-            return dt.timedelta(days=number), 'np'
-        elif word.lower().startswith('mon'):
-            return f'{number}M', 'pd'
-        else:
-            print(f'Unhashable time interval {interval}')
-            print('Defaulting to 1 Month.')
-            return f'{number}M', 'pd'
-
-    def formatDateXAxis(self, curax, object_settings, twin=False):
-        '''
-        formats the xaxis to be jdate or datetime and sets up xlimits. also sets up secondary xaxis
-        :param curax: current plot axis
-        :param object_settings: dictionary of settings
-        :param twin: if true, will configure top axis
-        :return: sets xlimits for axis
-        '''
-
-        if twin:
-            if 'xlims2' in object_settings.keys():
-                xlims_flag = 'xlims2'
-            else:
-                print('Using Same Xlims for top and bottom.')
-                xlims_flag = 'xlims'
-            dateformat_flag = 'dateformat2'
-        else:
-            xlims_flag = 'xlims'
-            dateformat_flag = 'dateformat'
-
-        if dateformat_flag in object_settings.keys():
-            dateformat = object_settings[dateformat_flag].lower()
-        else:
-            print('Dateformat flag not set. Defaulting to datetime..')
-            dateformat = 'datetime'
-
-        if xlims_flag in object_settings.keys():
-            xlims = object_settings[xlims_flag]#should be min max flags in here
-
-            if 'min' in xlims.keys():
-                min = xlims['min']
-            else:
-                if dateformat == 'datetime':
-                    min = self.StartTime
-                elif dateformat == 'jdate':
-                    min = WF.DatetimeToJDate(self.StartTime, self.ModelAlt.t_offset)
-                else:
-                    #we've done everything we can at this point..
-                    min = self.StartTime
-
-            if 'max' in xlims.keys():
-                max = xlims['max']
-            else:
-                if dateformat == 'datetime':
-                    max = self.EndTime
-                elif dateformat == 'jdate':
-                    max = WF.DatetimeToJDate(self.EndTime, self.ModelAlt.t_offset)
-                else:
-                    #we've done everything we can at this point..
-                    max = self.StartTime
-
-            min = self.translateDateFormat(min, dateformat, self.StartTime)
-            max = self.translateDateFormat(max, dateformat, self.EndTime)
-
-            curax.set_xlim(left=min, right=max)
-
-        else:
-            print('No Xlims flag set for {0}'.format(xlims_flag))
-            print('Not setting Xlims.')
-
-    def getStatsLineData(self, row, data_dict, year='ALL'):
-        '''
-        takes rows for tables and replaces flags with the correct data, computing stat analysis if needed
-        :param row: row section string
-        :param data_dict: dictionary of data that could be used
-        :param year: selected year, or 'ALL'
-        :return: new row value
-        '''
-
-        data = {}
-
-        rrow = row.replace('%%', '')
-        s_row = rrow.split('.')
-        sr_month = ''
-        curflag = None
-        for sr in s_row:
-            if sr in data_dict.keys():
-                curflag = sr
-                curvalues = np.array(data_dict[sr]['values'])
-                curdates = np.array(data_dict[sr]['dates'])
-                data[curflag] = {'values': curvalues, 'dates': curdates}
-            else:
-                if '=' in sr:
-                    sr_spl = sr.split('=')
-                    if sr_spl[0].lower() == 'month':
-                        sr_month = sr_spl[1]
-                        try:
-                            sr_month = int(sr_month)
-                        except ValueError:
-                            try:
-                                sr_month = self.Constants.month2num[sr_month.lower()]
-                            except KeyError:
-                                print('Invalid Entry for {0}'.format(sr))
-                                print('Try using interger values or 3 letter monthly code.')
-                                print('Ex: MONTH=1 or MONTH=JAN')
-                                continue
-                        if curflag == None:
-                            print('Invalid Table row for {0}'.format(row))
-                            print('Data Key not contained within {0}'.format(data_dict.keys()))
-                            print('Please check Datapaths in the XML file, or modify the rows to have the correct flags'
-                                  ' for the data present')
-                            return data, ''
-
-                        newvals = np.array([])
-                        newdates = np.array([])
-                        if year != 'ALL':
-                            year_loops = [year]
-                        else:
-                            year_loops = self.years
-                        if len(curdates) > 0:
-                            for yearloop in year_loops:
-                                s_idx, e_idx = WF.getYearlyFilterIdx(curdates, yearloop)
-                                yearvals = curvalues[s_idx:e_idx+1]
-                                yeardates = curdates[s_idx:e_idx+1]
-
-                                if len(yeardates) > 0:
-                                    s_idx, e_idx = WF.getMonthlyFilterIdx(yeardates, sr_month)
-
-                                    newvals = np.append(newvals, yearvals[s_idx:e_idx+1])
-                                    newdates = np.append(newdates, yeardates[s_idx:e_idx+1])
-
-                        data[curflag]['values'] = newvals
-                        data[curflag]['dates'] = newdates
-
-        if year != 'ALL':
-            for flag in data.keys():
-                if len(data[flag]['dates']) == 0:
-                    continue
-                s_idx, e_idx = WF.getYearlyFilterIdx(data[flag]['dates'], year)
-                data[flag]['values'] = data[flag]['values'][s_idx:e_idx+1]
-                data[flag]['dates'] = data[flag]['dates'][s_idx:e_idx+1]
-
-        return data, sr_month
-
-    def formatStatsProfileLineData(self, row, data_dict, resolution, usedepth, index):
-        '''
-        formats Profile line statistics for table using user inputs
-        finds the highest and lowest overlapping profile points and uses them as end points, then interpolates
-        :param row: Row line from inputs. String seperated by '|' and using flags surrounded by '%%'
-        :param data_dict: dictionary containing available line data to be used
-        :param resolution: number of values to interpolate to. this way each dataset has values at the same levels
-                            and there is enough data to do stats over.
-        :param usedepth: string bool for using depth or elevation fields
-        :param index: date index for profile to use
-        :return:
-            out_data: dictionary containing values and depths/elevations
-        '''
-
-        rrow = row.replace('%%', '')
-        s_row = rrow.split('.')
-        flags = []
-        out_data = {}
-        for sr in s_row:
-            if sr in data_dict.keys():
-                flags.append(sr)
-        top = None
-        bottom = None
-
-        for flag in flags:
-            #get elevs
-            if usedepth.lower() == 'true':
-                depths = data_dict[flag]['depths'][index]
-                if len(depths) > 0:
-                    top_depth = np.min(depths)
-                    bottom_depth = np.max(depths)
-                    #find limits comparing flags so we can be sure to interpolate over the same data
-                    if top == None:
-                        top = top_depth
-                    else:
-                        if top_depth > top:
-                            top = top_depth
-
-                    if bottom == None:
-                        bottom = bottom_depth
-                    else:
-                        if bottom_depth < bottom:
-                            bottom = bottom_depth
-
-            else:
-                elevs = data_dict[flag]['elevations'][index]
-                if len(elevs) > 0:
-                    top_elev = np.max(elevs)
-                    bottom_elev = np.min(elevs)
-                    #find limits comparing flags so we can be sure to interpolate over the same data
-                    if top == None:
-                        top = top_elev
-                    else:
-                        if top_elev < top:
-                            top = top_elev
-
-                    if bottom == None:
-                        bottom = bottom_elev
-                    else:
-                        if bottom_elev > bottom:
-                            bottom = bottom_elev
-
-        if bottom != None and top != None:
-            if usedepth.lower() == 'true':
-                #build elev profiles
-                output_interp_depths = np.arange(top, bottom, (bottom-top)/float(resolution))
-            else:
-                output_interp_elevations = np.arange(bottom, top, (top-bottom)/float(resolution))
-        else:
-            output_interp_elevations = []
-
-        for flag in flags:
-            out_data[flag] = {}
-            #interpolate over all values and then get interp values
-
-            if len(data_dict[flag]['values'][index]) < 2:
-                print('Insufficient data points with current bounds for {0}'.format(flag))
-                out_data[flag]['values'] = []
-                out_data[flag]['depths'] = []
-                out_data[flag]['elevations'] = []
-            elif len(output_interp_elevations) == 0:
-                print(f'Insufficient elevation points for row {flag} in {row}')
-                out_data[flag]['values'] = []
-                out_data[flag]['depths'] = []
-                out_data[flag]['elevations'] = []
-            else:
-                if usedepth.lower() == 'true':
-                    f_interp = interpolate.interp1d(data_dict[flag]['depths'][index], data_dict[flag]['values'][index], fill_value='extrapolate')
-                    out_data[flag]['depths'] = output_interp_depths
-                    out_data[flag]['values'] = f_interp(output_interp_depths)
-                else:
-                    f_interp = interpolate.interp1d(data_dict[flag]['elevations'][index], data_dict[flag]['values'][index], fill_value='extrapolate')
-                    out_data[flag]['elevations'] = output_interp_elevations
-                    out_data[flag]['values'] = f_interp(output_interp_elevations)
-
-        return out_data
-
-    def formatThreshold(self, object_settings):
-        '''
-        organizes settings for thresholds for stat tables. Fills in missing values with defaults
-        :param object_settings: dictionary containing settings for thresholds
-        :return: list of dictionary objects for each threshold
-        '''
-
-        default_color = '#a6a6a6' #default
-        default_colorwhen = 'under' #default
-        accepted_threshold_conditions = ['under', 'over']
-        thresholds = []
-
-        if 'thresholds' in object_settings.keys():
-            for threshold in object_settings['thresholds']:
-
-                if 'value' in threshold.keys():
-                    threshold_value = float(threshold['value'])
-                else:
-                    continue #dont record this threshold
-
-                if 'color' in threshold.keys():
-                    threshold_color = self.formatThresholdColor(threshold['color'], default=default_color)
-                else:
-                    threshold_color = default_color
-
-                if 'colorwhen' in threshold.keys():
-                    if any([n.lower() == threshold['colorwhen'].lower() for n in accepted_threshold_conditions]):
-                        threshold_colorwhen = threshold['colorwhen'].lower()
-                    else:
-                        print(f"Invalid threshold setting {threshold['colorwhen']}")
-                        print(f'Please select value in {accepted_threshold_conditions}')
-                else:
-                    threshold_colorwhen =default_colorwhen
-
-                thresholds.append({'value': threshold_value, 'color': threshold_color, 'colorwhen': threshold_colorwhen})
-
-        return thresholds
-
-    def formatThresholdColor(self, in_color, default='#a6a6a6'):
-        '''
-        formats input color to either turn to hex or use default
-        :param in_color: string to test if legit
-        :param default: color to use if in_color fails
-        :return:hex color
-        '''
-
-        threshold_color=default
-        if in_color.startswith('#'):
-            threshold_color = in_color
-        else:
-            try:
-                threshold_color = to_hex(in_color)
-            except ValueError:
-                print(f'Invalid color of {in_color}')
-
-        return threshold_color
-
-    def formatTickLabels(self, ticks, ticksettings):
-        '''
-        changes ticks based on input settings
-        :param ticks: existing ticks
-        :param ticksettings: dictionary contianing settings for ticks
-        :return: formatted ticks
-        '''
-
-        newticklabels = []
-        for tick in ticks:
-            if isinstance(tick, (np.float64, int, float)):
-
-                if 'numdecimals' in ticksettings.keys():
-                    numdecimals = int(ticksettings['numdecimals'])
-                else:
-                    numdecimals = 1
-
-                if numdecimals == 0:
-                    newticklabel = int(round(tick, 0))
-                    newticklabels.append(str(newticklabel))
-                else:
-                    newticklabel = round(tick, numdecimals)
-                    if numdecimals == 1: #fix numbers like 10.0
-                        if str(newticklabel).split('.')[1].startswith('0'):
-                            newticklabel = str(newticklabel).split('.')[0]
-                            newticklabels.append(newticklabel)
-                        else:
-                            newticklabels.append(str(newticklabel))
-                                
-            elif isinstance(tick, dt.datetime):
-                if 'datetimeformat' in ticksettings.keys():
-                    datetimeformat = ticksettings['datetimeformat']
-                else:
-                    datetimeformat = '%m/%d/%Y'
-                tick_str = tick.strftime(datetimeformat)
-                newticklabels.append(tick_str)
-
-            else:
-                newticklabels.append(str(tick))
-
-        return newticklabels
-
-    def formatTimeSeriesXticks(self, curax, xtick_settings, axis_settings, dateformatflag='dateformat'):
-        '''
-        applies tick settings to Xaxis for time series
-        :param curax: current axis object
-        :param xtick_settings: dictionary containing settings for ticks
-        :param axis_settings: dictionary containing settings for ticks
-        :param dateformatflag: flag to get dateformat from settings
-        '''
-
-        xmin, xmax = curax.get_xlim()
-
-        if axis_settings[dateformatflag].lower() == 'datetime':
-            xmin = mpl.dates.num2date(xmin)
-            xmax = mpl.dates.num2date(xmax)
-
-        if 'fontsize' in xtick_settings.keys():
-            xticksize = float(xtick_settings['fontsize'])
-        elif 'fontsize' in axis_settings.keys():
-            xticksize = float(axis_settings['fontsize'])
-        else:
-            xticksize = 10
-
-        if 'rotation' in xtick_settings.keys():
-            rotation = float(xtick_settings['rotation'])
-        else:
-            rotation = 0
-
-        curax.tick_params(axis='x', labelsize=xticksize, rotation=rotation)
-
-        if 'onmonths' in xtick_settings.keys():
-            if isinstance(xtick_settings['onmonths'], dict):
-                xtick_settings['onmonths'] = [xtick_settings['onmonths']['month']]
-            bymonthday = [1]
-
-            if 'ondays' in xtick_settings.keys():
-                if isinstance(xtick_settings['ondays'], dict):
-                    xtick_settings['ondays'] = [xtick_settings['ondays']['day']]
-                bymonthday = [int(n) for n in xtick_settings['ondays']]
-
-            try:
-                locator = mpl.dates.MonthLocator([int(n) for n in xtick_settings['onmonths']], bymonthday=bymonthday)
-            except ValueError:
-                print('Invalid month values. Please use integer representation of Months (aka 1, 3, 5, etc...)')
-                formatted_months = [self.Constants.month2num[n.lower()] for n in xtick_settings['onmonths']]
-                locator = mpl.dates.MonthLocator(formatted_months, bymonthday=bymonthday)
-
-            curax.xaxis.set_major_locator(locator)
-            if axis_settings[dateformatflag].lower() == 'datetime':
-                if 'datetimeformat' in xtick_settings.keys():
-                    datetimeformat = xtick_settings['datetimeformat']
-                else:
-                    datetimeformat = '%b/%Y'
-                fmt = mpl.dates.DateFormatter(datetimeformat)
-                curax.xaxis.set_major_formatter(fmt)
-
-        elif 'ondays' in xtick_settings.keys():
-            if isinstance(xtick_settings['ondays'], dict):
-                xtick_settings['ondays'] = [xtick_settings['ondays']['day']]
-
-            locator = mpl.dates.DayLocator([int(n) for n in xtick_settings['ondays']])
-            curax.xaxis.set_major_locator(locator)
-            if axis_settings[dateformatflag].lower() == 'datetime':
-                if 'datetimeformat' in xtick_settings.keys():
-                    datetimeformat = xtick_settings['datetimeformat']
-                else:
-                    datetimeformat = '%m/%d/%Y'
-                fmt = mpl.dates.DateFormatter(datetimeformat)
-                curax.xaxis.set_major_formatter(fmt)
-
-        elif 'spacing' in xtick_settings.keys():
-            xtickspacing = xtick_settings['spacing']
-            if axis_settings[dateformatflag].lower() == 'jdate':
-                if '.' in xtickspacing:
-                    xtickspacing = float(xtickspacing)
-                else:
-                    xtickspacing = int(xtickspacing)
-                newxticks = np.arange(xmin, (xmax+xtickspacing), xtickspacing)
-            elif axis_settings[dateformatflag].lower() == 'datetime':
-                dt_xmin = WF.JDateToDatetime(xmin, self.startYear) #do everything on datetime, and we can convert later
-                dt_xmax = WF.JDateToDatetime(xmax,self.startYear) #do everything on datetime, and we can convert later
-                newxticks = self.buildTimeSeries(dt_xmin.replace(tzinfo=None), dt_xmax.replace(tzinfo=None), xtickspacing)
-
-            newxticklabels = self.formatTickLabels(newxticks, xtick_settings)
-            curax.set_xticks(newxticks)
-            curax.set_xticklabels(newxticklabels)
-
-
-    def getStatsLine(self, row, data):
-        '''
-        takes rows for tables and replaces flags with the correct data, computing stat analysis if needed
-        :param row: row section string
-        :param data_dict: dictionary of data that could be used
-        :return:
-            out_stat: stat value
-            stat: string name for stat
-        '''
-
-        stat_flag_Req = {'%%meanbias': 2,
-                         '%%mae': 2,
-                         '%%rmse': 2,
-                         '%%nse': 2,
-                         '%%count': 1,
-                         '%%mean': 1}
-
-        numFlagsReqd=2 #start with most restrictive..
-        for key in stat_flag_Req.keys():
-            if row.lower().startswith(key):
-                numFlagsReqd = stat_flag_Req[key]
-                break
-
-        flags = list(data.keys())
-
-        if len(flags) > 0:
-            getdata = True
-            if 'Computed' in flags:
-                flag1 = 'Computed'
-                if numFlagsReqd == 2:
-                    if len(flags) >= 2:
-                        if 'Observed' in flags:
-                            flag2 = 'Observed'
-                        else:
-                            flag2 = [n for n in flags if n != flag1][0] #not computed
-                    else:
-                        getdata=False
-            else:
-                flag1 = flags[0]
-                if numFlagsReqd == 2:
-                    if len(flags) >= 2:
-                        flag2 = flags[1]
-                    else:
-                        getdata = False
-        else:
-            getdata = False
-
-        out_stat = np.nan
-        if row.lower().startswith('%%meanbias'):
-            if getdata:
-                out_stat = WF.calcMeanBias(data[flag1], data[flag2])
-            stat = 'meanbias'
-        elif row.lower().startswith('%%mae'):
-            if getdata:
-                out_stat = WF.calcMAE(data[flag1], data[flag2])
-            stat = 'mae'
-        elif row.lower().startswith('%%rmse'):
-            if getdata:
-                out_stat = WF.calcRMSE(data[flag1], data[flag2])
-            stat = 'rmse'
-        elif row.lower().startswith('%%nse'):
-            if getdata:
-                out_stat = WF.calcNSE(data[flag1], data[flag2])
-            stat = 'nse'
-        elif row.lower().startswith('%%count'):
-            if getdata:
-                out_stat = WF.getCount(data[flag1])
-            stat = 'count'
-        elif row.lower().startswith('%%mean'):
-            if getdata:
-                out_stat = WF.calcMean(data[flag1])
-            stat = 'mean'
-        else:
-            if '%%' in row:
-                print('Unable to convert flag in row', row)
-            return row, ''
-
-        return out_stat, stat
-
-    def buildHeadersByYear(self, object_settings, years, split_by_year):
-        '''
-        if split by year is selected, and a header has %%year%% flag, iterate through and create a new header for
-        each year and header
-        :param object_settings: dictionary of settings
-        :param years: list of years
-        :param split_by_year: boolean if splitting up by year or not
-        :return: list of headers
-        '''
-
-        headings = []
-        header_by_year = []
-        yearstr = object_settings['yearstr']
-        for i, header in enumerate(object_settings['headers']):
-            if '%%year%%' in header:
-                if split_by_year:
-                    header_by_year.append(header)
-                else:
-                    headings.append(['ALL', self.updateFlaggedValues(header, '%%year%%', yearstr)])
-            else:
-                if len(header_by_year) > 0:
-                    for yi, year in enumerate(years):
-                        for yrhd in header_by_year:
-                            headings.append([year, self.updateFlaggedValues(yrhd, '%%year%%', yearstr[yi])])
-                    header_by_year = []
-                headings.append(['ALL', header])
-        if len(header_by_year) > 0:
-            for yi, year in enumerate(years):
-                for yrhd in header_by_year:
-                    headings.append([year, self.updateFlaggedValues(yrhd, '%%year%%', yearstr[yi])])
-        return headings
-
-    def limitXdata(self, dates, values, xlims):
-        '''
-        if the filterbylimits flag is true, filters out values outside of the xlimits
-        :param dates: list of dates
-        :param values: list of values
-        :param xlims: dictionary of xlims, containing potentially min and/or max
-        :return: filtered dates and values
-        '''
-
-        if isinstance(dates[0], (int, float)):
-            wantedformat = 'jdate'
-        elif isinstance(dates[0], dt.datetime):
-            wantedformat = 'datetime'
-        if 'min' in xlims.keys():
-            min = self.translateDateFormat(xlims['min'], wantedformat, self.StartTime)
-            for i, d in enumerate(dates):
-                if min > d:
-                    values[i] = np.nan #exclude
-        if 'max' in xlims.keys():
-            max = self.translateDateFormat(xlims['max'], wantedformat, self.EndTime)
-            for i, d in enumerate(dates):
-                if max < d:
-                    values[i] = np.nan #exclude
-
-        return dates, values
-
-    def limitYdata(self, dates, values, ylims):
-        '''
-        if the filterbylimits flag is true, filters out values outside of the ylimits
-        :param dates: list of dates
-        :param values: list of values
-        :param ylims: dictionary of ylims, containing potentially min and/or max
-        :return: filtered dates and values
-        '''
-
-        if 'min' in ylims.keys():
-            for i, v in enumerate(values):
-                if float(ylims['min']) > v:
-                    values[i] = np.nan #exclude
-        if 'max' in ylims.keys():
-            for i, v in enumerate(values):
-                if float(ylims['max']) < v:
-                    values[i] = np.nan #exclude
-
-        return dates, values
 
     def writeXMLIntroduction(self):
         '''
@@ -4685,91 +3068,13 @@ class MakeAutomatedReport(object):
                     elif objtype == 'singlestatisticprofiletable':
                         self.makeSingleStatisticProfileTable(object)
                     else:
-                        print('Section Type {0} not identified.'.format(objtype))
-                        print('Skipping Section..')
+                        WF.print2stdout('Section Type {0} not identified.'.format(objtype))
+                        WF.print2stdout('Skipping Section..')
                 self.XML.writeSectionHeaderEnd()
-            print('\n################################')
-            print('Chapter Complete.')
-            print('################################\n')
+            WF.print2stdout('\n################################')
+            WF.print2stdout('Chapter Complete.')
+            WF.print2stdout('################################\n')
             self.XML.writeChapterEnd()
-
-    def matcharrays(self, array1, array2):
-        '''
-        iterative recursive function that aims to line up arrays of different lengths. Takes in variable input so that
-        if there are lists of lists with a single date (aka profiles), alligns those so each elevation value has a date
-        assigned to it for easy output
-        :param array1: np.array or list of values, generally values
-        :param array2: np.array or list of values, generally dates
-        :return: array1 with correct length
-        '''
-
-        if isinstance(array1, (list, np.ndarray)) and isinstance(array2, (list, np.ndarray)):
-            if len(np.asarray(array1, dtype=object).shape) < len(np.asarray(array2, dtype=object).shape):
-                new_array1 = np.array([])
-                for i, ar2 in enumerate(array2):
-                    new_array1 = np.append(new_array1, np.asarray([array1[i]] * len(ar2)))
-                return new_array1
-            #if both are lists..
-            elif len(array1) < len(array2):
-                '''
-                either ['Date1', 'Date2'], ['1,2,3'] OR ['Date1'], [1,2,3] OR ['DATE1'], [[1,2,3], [1,2,3,4]]
-                 OR ['Date1', 'Date2'], [[1,2,3], [2,4,5],[6,
-                 or [], [1,2,3]
-                scenario 1: shouldnt ever happen
-                scenario 2: do Date1 for each item in array2
-                scenario 3: do date1 for each value in each subarray in 2 '''
-
-                if len(array1) == 1: #solo date
-                    new_array1 = []
-                    for subarray2 in array2:
-                        new_array1.append(self.matcharrays(array1[0], subarray2))
-                    return new_array1
-                elif len(array1) == 0: #no data
-                    new_array1 = []
-                    for subarray2 in array2:
-                        new_array1.append(self.matcharrays('', subarray2))
-                    return new_array1
-
-                else:
-                    print('ERROR') #If the Len of the arrays are offset, then there should only ever be 1 date
-            elif len(array1) == len(array2):
-                new_array1 = []
-                for i, subarray1 in enumerate(array1):
-                    new_array1.append(self.matcharrays(subarray1, array2[i]))
-                return new_array1
-            else:
-                print('Array 1 is bigger than array2')
-                print(len(array1))
-                print(len(array2))
-                new_array1 = []
-                for i in range(len(array2)):
-                    new_array1.append(array1[i])
-                return new_array1
-
-        #GOAL LOOP
-        elif isinstance(array1, (str, dt.datetime, int, float)) and isinstance(array2, (list, np.ndarray)):
-            # array1 is a single value, array2 is a list of values
-            new_array1 = []
-            for subarray2 in array2:
-                if isinstance(subarray2, (list, np.ndarray)):
-                    new_array1.append(self.matcharrays(array1, subarray2))
-                else:
-                    new_array1.append(array1)
-            return new_array1
-
-        else:
-            return array1
-
-    def matchThresholdToStat(self, stat, object_settings):
-        thresholds = []
-        if 'tablecolors' in object_settings.keys():
-            for tablecolor in object_settings['tablecolors']:
-                if 'statistic' in tablecolor.keys():
-                    if stat.lower() == tablecolor['statistic'].lower():
-                        thresholds += self.formatThreshold(tablecolor)
-                else:
-                    thresholds += self.formatThreshold(tablecolor)
-        return thresholds
 
     def cleanOutputDirs(self):
         '''
@@ -4804,7 +3109,7 @@ class MakeAutomatedReport(object):
 
             if len(approved_modelalts) > 0:
                 approved_modelalt = approved_modelalts[0]
-                print('Added {0} for ID {1}'.format(approved_modelalt['program'], ID))
+                WF.print2stdout('Added {0} for ID {1}'.format(approved_modelalt['program'], ID))
                 self.SimulationVariables[ID]['alternativeFpart'] = approved_modelalt['fpart']
                 self.SimulationVariables[ID]['alternativeDirectory'] = approved_modelalt['directory']
                 self.SimulationVariables[ID]['modelAltName'] = approved_modelalt['name']
@@ -4828,13 +3133,13 @@ class MakeAutomatedReport(object):
                 csv_file_name = '{0}_comparison.csv'.format(self.baseSimulationName.replace(' ', '_'))
             else:
                 csv_file_name = '{0}.csv'.format(self.baseSimulationName.replace(' ', '_'))
-            print('Incompatible input information from the WAT XML output file ({0})\nand Simulation CSV file ({1})'.format(self.simulationInfoFile, csv_file_name))
-            print('Please Confirm inputs and run again.')
+            WF.print2stderr('Incompatible input information from the WAT XML output file ({0})\nand Simulation CSV file ({1})'.format(self.simulationInfoFile, csv_file_name))
+            WF.print2stderr('Please Confirm inputs and run again.')
             if self.iscomp:
-                print('If comparison plot, ensure that all model alts are in {0}'.format(csv_file_name))
-                print('Example line: ResSim, TmpNFlo, CeQualW2, Shasta from DSS 15, Shasta_ResSim_TCD_comparison.XML')
-            print('Now Exiting...')
-            sys.exit()
+                WF.print2stderr('If comparison plot, ensure that all model alts are in {0}'.format(csv_file_name))
+                WF.print2stderr('Example line: ResSim, TmpNFlo, CeQualW2, Shasta from DSS 15, Shasta_ResSim_TCD_comparison.XML')
+            WF.print2stderr('Now Exiting...')
+            sys.exit(1)
 
     def loadCurrentID(self, ID):
         '''
@@ -4864,7 +3169,7 @@ class MakeAutomatedReport(object):
         self.modelAltName = self.SimulationVariables[ID]['modelAltName']
         self.plugin = self.SimulationVariables[ID]['plugin']
         self.ModelAlt = self.SimulationVariables[ID]['ModelAlt']
-        # print('Model {0} Loaded'.format(ID)) #noisy
+        # WF.print2stdout('Model {0} Loaded'.format(ID)) #noisy
 
     def initializeXML(self):
         '''
@@ -4882,7 +3187,7 @@ class MakeAutomatedReport(object):
         create Data_Memory dictionary
         '''
 
-        self.Data = WD.DataOrganizer(self)
+        self.Data = WDO.DataOrganizer(self)
 
     def initSimulationDict(self):
         '''
@@ -4890,105 +3195,6 @@ class MakeAutomatedReport(object):
         '''
 
         self.SimulationVariables = {}
-
-    def ensureDefaultFiles(self):
-        '''
-        Copies Reporting files into the main study if they dont exist. Allows for "default" reports out of the gate
-        Checks if the default directory exists in the install. if not continue
-        then look for files ending in specific extensions in the default dir and check for them in the destination
-        '''
-
-        if not os.path.exists(self.default_dir):
-            print('ERROR finding default files at {0}'.format(self.default_dir))
-            print('No default files copied.')
-            return
-
-        default_copy_dir = os.path.join(os.path.split(self.batdir)[0], 'Default', '_COPY', 'Reports')
-        to_dir = os.path.join(self.studyDir, 'Reports')
-        filetypes = ['.xml', '.csv', '.jrxml', '.png']
-        self.copyDefaultFiles(default_copy_dir, to_dir, filetypes)
-
-        default_copy_dir = os.path.join(os.path.split(self.batdir)[0], 'Default', '_COPY', 'Reports.DataSources')
-        to_dir = os.path.join(self.studyDir, 'Reports', 'DataSources')
-        filetypes = ['.xml']
-        self.copyDefaultFiles(default_copy_dir, to_dir, filetypes)
-
-    def copyDefaultFiles(self, fromdir, todir, filetypes):
-        '''
-        looks for all files of given extensions in a default directory, and if they dont exist in an output dir, copy
-        them. If the fromdir doesnt exist, return.
-        :param fromdir: default directory where the files live
-        :param todir: directory to copy files too, usually self.study_dir/reports
-        :param filetypes: list of filetype extensions of files to copy
-        '''
-
-        if not os.path.exists(fromdir):
-            print('ERROR finding default files at {0}'.format(fromdir))
-            print('No default files copied.')
-            return
-
-        files_in_directory = os.listdir(fromdir)
-        for filetype in filetypes:
-            filtered_files = [file for file in files_in_directory if file.endswith(filetype)]
-            for filtfile in filtered_files:
-                old_file_path = os.path.join(fromdir, filtfile)
-                new_file_path = os.path.join(todir, filtfile)
-                if not os.path.exists(new_file_path):
-                    shutil.copyfile(old_file_path, new_file_path)
-                    print('Successfully copied to', new_file_path)
-
-    def copyObjectSettingsToAxSetting(self, to_dict, from_dict, ignore=[]):
-        '''
-        Copies settings from an object to an Axis. That way, users can define settings once in the main flags and have
-        it cascade down to all axis, unless defined in the axis.
-        :param to_dict: settings to copy to
-        :param from_dict: settings to copy from
-        :param ignore: list of keys to not copy
-        :return: updated dictionary (to_dict)
-        '''
-
-        for key in from_dict.keys():
-            if key not in ignore:
-                if key not in to_dict.keys():
-                    to_dict[key] = from_dict[key]
-        return to_dict
-
-    def correctDuplicateLabels(self, linedata):
-        '''
-        changes the name of data internally if it is duplicated. Mostly used for comparison plots where "computed"
-        may be used several times. Appends numbers to the end
-        :param linedata: dictionary with settings
-        :return: updated dictionary
-        '''
-
-        for line in linedata.keys():
-            if 'label' in linedata[line].keys():
-                curlabel = linedata[line]['label']
-                lineidx = linedata[line]['numtimesused']
-                if lineidx > 0: #leave the first guy alone..
-                    for otherline in linedata.keys():
-                        if otherline != line:
-                            if linedata[otherline]['label'] == curlabel:
-                                linedata[line]['label'] = '{0} {1}'.format(curlabel, lineidx) #append the number
-        return linedata
-
-    def correctTableUnits(self, data, object_settings):
-        '''
-        converts units for table data
-        :param data: dictionary containing data
-        :param object_settings: settings for plot/table
-        :return: data with updated units
-        '''
-
-        for datapath in data.keys():
-            values = data[datapath]['values']
-            units = data[datapath]['units']
-            if 'parameter' in data[datapath].keys():
-                units = self.configureUnits(object_settings, data[datapath]['parameter'], units)
-            if 'unitsystem' in object_settings.keys():
-                data[datapath]['values'], data[datapath]['units'] = self.convertUnitSystem(values, units, object_settings['unitsystem'])
-
-        return data
 
     def loadDefaultPlotObject(self, plotobject):
         '''
@@ -5015,235 +3221,6 @@ class MakeAutomatedReport(object):
 
         return 'undefined' #no id either way..
 
-
-
-    def printVersion(self):
-        '''
-        print current version number
-        '''
-
-        print('VERSION:', VERSIONNUMBER)
-
-    def pickByParameter(self, values, line):
-        '''
-        some data (W2) has multiple parameters coming from a single results file, we can't know which one we want at
-        the moment. This grabs the right parameter based on input
-        :param values: dictionary of values
-        :param line: dictionary of line settings
-        :return:
-            values: list of values
-        '''
-
-        w2_param_dict = {'temperature': 't(c)',
-                         'elevation': 'elevcl',
-                         'flow': 'q(m3/s)'}
-
-        if 'parameter' not in line.keys():
-            print("Parameter not set for line.")
-            print("using the first set of values, {0}".format(list(values.keys())[0]))
-            return values[list(values.keys())[0]]
-        else:
-            if line['parameter'].lower() not in w2_param_dict.keys():
-                print('Parameter {0} not found in dict in pickByParameter(). {1}'.format(line['parameter'].lower(), w2_param_dict.keys()))
-                print("using the first set of values, {0}".format(list(values.keys())[0]))
-                return values[list(values.keys())[0]]
-            else:
-                p = line['parameter'].lower()
-                param_key = w2_param_dict[p]
-                return values[param_key]
-
-    def prioritizeKey(self, firstchoice, secondchoice, key, backup=None):
-        '''
-        looks for a key in two sets of settings. If the key is in first choice, use that one. then check the second choice.
-        if it neither, just use backup.
-        :param firstchoice: dictionary
-        :param secondchoice: dictionary
-        :param key: settings key to look for in dictionaries
-        :param backup: backup value if in neither.
-        :return: setting from prioritized dictionary
-        '''
-
-        if key in firstchoice:
-            return firstchoice[key]
-        elif key in secondchoice:
-            return secondchoice[key]
-        else:
-            return backup
-
-    def buzzTargetSum(self, dates, values, target):
-        '''
-        finds buzzplot targets defined and returns the flow sums
-        :param dates: list of dates
-        :param values: list of dicts of values @ structures
-        :param target: target value
-        :return: sum of values
-        '''
-
-        sum_vals = []
-        for i, d in enumerate(dates):
-            sum = 0
-            for sn in values.keys():
-                if values[sn]['elevcl'][i] == target:
-                    sum += values[sn]['q(m3/s)'][i]
-            sum_vals.append(sum)
-        return np.asarray(sum_vals)
-
-    def convertUnitSystem(self, values, units, target_unitsystem):
-        '''
-        converts unit systems if defined english/metric
-        :param values: list of values
-        :param units: units of select values
-        :param target_unitsystem: unit system to convert to
-        :return:
-            values: either converted units if successful, or original values if unsuccessful
-            units: original units if unsuccessful
-            new_units: new converted units if successful
-        '''
-
-        units = self.translateUnits(units)
-
-        english_units = {self.Constants.units[key]['metric']: self.Constants.units[key]['english'] for key in self.Constants.units.keys()}
-        metric_units = {v: k for k, v in english_units.items()}
-
-        if units == None:
-            print('Units undefined.')
-            return values, units
-
-        if target_unitsystem.lower() == 'english':
-            if units.lower() in english_units.keys():
-                new_units = english_units[units.lower()]
-                print('Converting {0} to {1}'.format(units, new_units))
-            elif units.lower() in english_units.values():
-                print('Values already in target unit system. {0} {1}'.format(units, target_unitsystem))
-                return values, units
-            else:
-                print('Units not found in definitions. Not Converting.')
-                return values, units
-
-        elif target_unitsystem.lower() == 'metric':
-            if units.lower() in metric_units.keys():
-                new_units = metric_units[units.lower()]
-                print('Converting {0} to {1}'.format(units, new_units))
-            elif units.lower() in metric_units.values():
-                print('Values already in target unit system. {0} {1}'.format(units, target_unitsystem))
-                return values, units
-            else:
-                print('Units not found in definitions. Not Converting.')
-                return values, units
-
-        else:
-            print('Target Unit System undefined.', target_unitsystem)
-            print('Try english or metric')
-            return values, units
-
-        if units == new_units:
-            print('data already in target unit system.')
-            return values, units
-
-        if units.lower() in ['c', 'f']:
-            values = WF.convertTempUnits(values, units)
-        elif units.lower() in self.Constants.conversion.keys():
-            conversion_factor = self.Constants.conversion[units.lower()]
-            values *= conversion_factor
-        elif new_units.lower() in self.Constants.conversion.keys():
-            conversion_factor = 1/self.Constants.conversion[units.lower()]
-            values *= conversion_factor
-        else:
-            print('Undefined Units conversion for units {0}.'.format(units))
-            print('No Conversions taking place.')
-            return values, units
-
-        return values, new_units
-
-    def convertHeaderFormats(self, headers, object_settings):
-        '''
-        converts the formats of headers for profile line data tables to the correct format
-        if the dateformat is selected, returns a formatted string.
-        if Jdate, the string of the float value is used
-        Datetime if not specified
-        :param headers: list of datetime objects for headers
-        :param object_settings: user defined settings for current object
-        :return: list of new headers
-        '''
-
-        if 'dateformat' not in object_settings.keys():
-            object_settings['dateformat'] = 'datetime'
-
-        new_headers = []
-        for headeryear in headers:
-            nh = []
-            for header in headeryear:
-                if object_settings['dateformat'].lower() == 'datetime':
-                    header = self.translateDateFormat(header, 'datetime', '')
-                    header = header.strftime('%d%b%Y')
-                elif object_settings['dateformat'].lower() == 'jdate':
-                    header = self.translateDateFormat(header, 'jdate', '')
-                    header = str(header)
-                nh.append(header)
-            new_headers.append(nh)
-
-        return new_headers
-
-    def convertProfileDataUnits(self, object_settings, data, line_settings):
-        '''
-        converts the units of profile data if unitsystem is defined
-        :param object_settings: user defined settings for current object
-        :return: object_setting dictionaries with updated units and values
-        '''
-
-        if 'unitsystem' not in object_settings.keys():
-            print('Unit system not defined.')
-            return data, line_settings
-        for flag in data.keys():
-            if line_settings[flag]['units'] == None:
-                continue
-            else:
-                profiles = data[flag]['values']
-                profileunits = line_settings[flag]['units']
-                for pi, profile in enumerate(profiles):
-                    profile, newunits = self.convertUnitSystem(profile, profileunits, object_settings['unitsystem'])
-                    profiles[pi] = profile
-                line_settings[flag]['units'] = newunits
-        return data, line_settings
-
-    def buildRowsByYear(self, object_settings, years, split_by_year):
-        '''
-        if split by year is selected, and a header has %%year%% flag, iterate through and create a new row object for
-        each year and header
-        :param object_settings: dictionary of settings
-        :param years: list of years
-        :param split_by_year: boolean if splitting up by year or not
-        :return:
-            rows: list of newly built rows
-        '''
-
-        rows = []
-        rows_by_year = []
-        for i, row in enumerate(object_settings['rows']):
-            srow = row.split('|')
-            r = [srow[0]] #<Row>Jan|%%MEAN.Computed.MONTH=JAN%%|%%MEAN.Observed.MONTH=JAN%%</Row>
-            for si, sr in enumerate(srow[1:]):
-                header = object_settings['headers'][si]
-                if '%%year%%' in header:
-                    if split_by_year:
-                        rows_by_year.append(sr)
-                    else:
-                        r.append(sr)
-                else:
-                    if len(rows_by_year) > 0:
-                        for year in years:
-                            for yrrow in rows_by_year:
-                                r.append(yrrow)
-                        rows_by_year = []
-                    r.append(sr)
-            if len(rows_by_year) > 0:
-                for year in years:
-                    for yrrow in rows_by_year:
-                        r.append(yrrow)
-                rows_by_year = []
-            rows.append('|'.join(r))
-        return rows
-
     def fixXMLModelIntroduction(self, simorder):
         '''
         Fixes intro in XML that shows what models are used for each region.
@@ -5259,432 +3236,7 @@ class MakeAutomatedReport(object):
             outstr += ' {0}'.format(self.SimulationVariables[ID]['plugin'])
         self.XML.replaceinXML('%%REPLACEINTRO_{0}%%'.format(simorder), outstr)
 
-    def fixDuplicateColors(self, line_settings):
-        '''
-        when doing comparison runs, we can end up with multiple runs with the same lines set
-        settings can be set to a list of colors, like linecolors instead of linecolor.
-        finds the correct index for each line ,or chooses a default color
-        :param line_settings: dictionary containing line settings
-        :return: line settings with updated color settings
-        '''
 
-        lineusedcount = line_settings['numtimesused']
-        if lineusedcount > len(self.Constants.def_colors):
-            defcol_idx = lineusedcount%len(self.Constants.def_colors)
-        else:
-            defcol_idx = lineusedcount
-        if line_settings['drawline'].lower() == 'true':
-            if lineusedcount > 0: #if more than one, the color specified is already used. Use a new color..
-                if 'linecolors' in line_settings.keys():
-                    if lineusedcount > len(line_settings['linecolors']):
-                        lc_idx = lineusedcount%len(line_settings['linecolors'])
-                    else:
-                        lc_idx = lineusedcount
-                    line_settings['linecolor'] = line_settings['linecolors'][lc_idx]
-                else:
-                    line_settings['linecolor'] = self.Constants.def_colors[defcol_idx]
-            else: #case where first line, but linecolor isnt defined, but linecolorS is
-                  #so it used default color INSTEAD of the desired colro...
-                if 'linecolors' in line_settings.keys():
-                    line_settings['linecolor'] = line_settings['linecolors'][0]
-
-        if line_settings['drawpoints'].lower() == 'true':
-            if lineusedcount > 0: #if more than one, the color specified is already used. Use a new color..
-                if 'pointfillcolors' in line_settings.keys():
-                    if isinstance(line_settings['pointfillcolors'], dict):
-                        line_settings['pointfillcolors'] = [line_settings['pointfillcolors']['pointfillcolor']]
-                    # pfc_idx = copy.copy(lineusedcount_idx)
-                    if lineusedcount > len(line_settings['pointfillcolors']):
-                        pfc_idx = lineusedcount%len(line_settings['pointfillcolors'])
-                    else:
-                        pfc_idx = lineusedcount
-                    line_settings['pointfillcolor'] = line_settings['pointfillcolors'][pfc_idx]
-                if 'pointlinecolors' in line_settings.keys():
-                    if isinstance(line_settings['pointlinecolors'], dict):
-                        line_settings['pointlinecolors'] = [line_settings['pointlinecolors']['pointlinecolor']]
-                    if lineusedcount > len(line_settings['pointlinecolors']):
-                        plc_idx = lineusedcount%len(line_settings['pointlinecolors'])
-                    else:
-                        plc_idx = lineusedcount
-                    line_settings['pointlinecolor'] = line_settings['pointlinecolors'][plc_idx]
-
-                if 'pointfillcolor' not in line_settings.keys():
-                    if 'pointlinecolor' in line_settings.keys():
-                        line_settings['pointfillcolor'] = line_settings['pointlinecolor']
-                    else:
-                        line_settings['pointfillcolor'] = self.Constants.def_colors[defcol_idx]
-
-                if 'pointlinecolor' not in line_settings.keys():
-                    if 'pointfillcolor' in line_settings.keys():
-                        line_settings['pointlinecolor'] = line_settings['pointfillcolor']
-                    else:
-                        line_settings['pointlinecolor'] = self.Constants.def_colors[defcol_idx]
-
-            else: #case where first line, but linecolor isnt defined, so it used default color...
-                if 'pointfillcolors' in line_settings.keys():
-                    if isinstance(line_settings['pointfillcolors'], dict):
-                        line_settings['pointfillcolors'] = [line_settings['pointfillcolors']['pointfillcolor']]
-                    line_settings['pointfillcolor'] = line_settings['pointfillcolors'][0]
-                if 'pointlinecolors' in line_settings.keys():
-                    if isinstance(line_settings['pointlinecolors'], dict):
-                        line_settings['pointlinecolors'] = [line_settings['pointlinecolors']['pointlinecolor']]
-                    line_settings['pointlinecolor'] = line_settings['pointlinecolors'][0]
-
-        return line_settings
-
-    def filterProfileData(self, data, line_settings, object_settings):
-        '''
-        filters profile data by ylims, xlims, and omitvalues
-        :param data: dictionary containing data
-        :param line_settings: dictionary contining settings for line
-        :param object_settings: dictionary containing settings for object
-        :return: filtered profile dictionary
-        '''
-
-        xmax = None
-        xmin = None
-        ymax = None
-        ymin = None
-
-        if 'usedepth' in object_settings.keys():
-            if object_settings['usedepth'].lower() == 'true':
-                yflag = 'depths'
-            else:
-                yflag = 'elevations'
-        else:
-            print('UseDepth flag not set. Cannot filter properly.')
-            return data, object_settings
-
-        if 'xlims' in object_settings.keys():
-            if 'max' in object_settings['xlims'].keys():
-                xmax = float(object_settings['xlims']['max'])
-            if 'min' in object_settings['xlims'].keys():
-                xmin = float(object_settings['xlims']['min'])
-
-        if 'ylims' in object_settings.keys():
-            if 'max' in object_settings['ylims'].keys():
-                ymax = float(object_settings['ylims']['max'])
-            if 'min' in object_settings['ylims'].keys():
-                ymin = float(object_settings['ylims']['min'])
-
-        # Find Index of ALL acceptable values.
-        for lineflag in data.keys():
-            cur_data = data[lineflag]
-            cur_line_settings = line_settings[lineflag]
-
-            current_xmax = xmax
-            current_xmin = xmin
-            current_ymax = ymax
-            current_ymin = ymin
-            if 'xlims' in cur_line_settings.keys():
-                if 'max' in cur_line_settings['xlims'].keys():
-                    current_xmax = float(cur_line_settings['xlims']['max'])
-                if 'min' in cur_line_settings['xlims'].keys():
-                    current_xmin = float(cur_line_settings['xlims']['min'])
-            if 'ylims' in cur_line_settings.keys():
-                if 'max' in cur_line_settings['ylims'].keys():
-                    current_ymax = float(cur_line_settings['ylims']['max'])
-                if 'min' in cur_line_settings['ylims'].keys():
-                    current_ymin = float(cur_line_settings['ylims']['min'])
-
-            filtbylims = False
-            if 'filterbylimits' in cur_line_settings.keys():
-                if cur_line_settings['filterbylimits'].lower() == 'true':
-                    filtbylims = True
-            else:
-                if 'filterbylimits' in object_settings.keys():
-                    if object_settings['filterbylimits'].lower() == 'true':
-                        filtbylims = True
-
-            if 'omitvalue' in cur_line_settings.keys():
-                omitvalue = float(cur_line_settings['omitvalue'])
-            else:
-                omitvalue = None
-
-            for pi, profile in enumerate(cur_data['values']):
-                ydata = cur_data[yflag][pi]
-
-                if current_xmax != None and filtbylims:
-                    xmax_filt = np.where(profile <= current_xmax)
-                else:
-                    xmax_filt = np.arange(len(profile))
-
-                if current_xmin != None and filtbylims:
-                    xmin_filt = np.where(profile >= current_xmin)
-                else:
-                    xmin_filt = np.arange(len(profile))
-
-                if current_ymax != None and filtbylims:
-                    ymax_filt = np.where(ydata <= current_ymax)
-                else:
-                    ymax_filt = np.arange(len(ydata))
-
-                if current_ymin != None and filtbylims:
-                    ymin_filt = np.where(ydata >= current_ymin)
-                else:
-                    ymin_filt = np.arange(len(ydata))
-
-                if omitvalue != None:
-                    omitval_filt = np.where(profile != omitvalue)
-                else:
-                    omitval_filt = np.arange(len(profile))
-
-                master_filter = reduce(np.intersect1d, (xmax_filt, xmin_filt, ymax_filt, ymin_filt, omitval_filt))
-
-                data[lineflag]['values'][pi] = profile[master_filter]
-                data[lineflag][yflag][pi] = ydata[master_filter]
-
-        return data, object_settings
-
-    def filterTableData(self, data, object_settings):
-        '''
-        filters out data through xlims, ylims and omitvalues.
-        :param data: dictionary of data
-        :param object_settings: settings for current object containing limits
-        :return: filtered data dictionary
-        '''
-
-        xmax = None
-        xmin = None
-        ymax = None
-        ymin = None
-
-        if 'xlims' in object_settings.keys():
-            if 'max' in object_settings['xlims'].keys():
-                xmax = float(object_settings['xlims']['max'])
-            if 'min' in object_settings['xlims'].keys():
-                xmin = float(object_settings['xlims']['min'])
-
-        if 'ylims' in object_settings.keys():
-            if 'max' in object_settings['ylims'].keys():
-                ymax = float(object_settings['ylims']['max'])
-            if 'min' in object_settings['ylims'].keys():
-                ymin = float(object_settings['ylims']['min'])
-
-        # Find Index of ALL acceptable values.
-        for lineflag in data.keys():
-            line = data[lineflag]
-            values = line['values']
-            dates = line['dates']
-
-            filtbylims = False
-            if 'filterbylimits' in line.keys():
-                if line['filterbylimits'].lower() == 'true':
-                    filtbylims = True
-            else:
-                if 'filterbylimits' in object_settings.keys():
-                    if object_settings['filterbylimits'].lower() == 'true':
-                        filtbylims = True
-
-            if 'omitvalue' in line.keys():
-                omitvalue = float(line['omitvalue'])
-            else:
-                omitvalue = None
-
-            if xmax != None and filtbylims:
-                xmax_filt = np.where(values <= xmax)
-            else:
-                xmax_filt = np.arange(len(values))
-
-            if xmin != None and filtbylims:
-                xmin_filt = np.where(values >= xmin)
-            else:
-                xmin_filt = np.arange(len(values))
-
-            if ymax != None and filtbylims:
-                ymax_filt = np.where(dates <= ymax)
-            else:
-                ymax_filt = np.arange(len(dates))
-
-            if ymin != None and filtbylims:
-                ymin_filt = np.where(dates >= ymin)
-            else:
-                ymin_filt = np.arange(len(dates))
-
-            if omitvalue != None:
-                omitval_filt = np.where(values != omitvalue)
-            else:
-                omitval_filt = np.arange(len(values))
-
-            master_filter = reduce(np.intersect1d, (xmax_filt, xmin_filt, ymax_filt, ymin_filt, omitval_filt))
-
-            data[lineflag]['values'] = values[master_filter]
-            data[lineflag]['dates'] = dates[master_filter]
-
-        return data
-
-    def updateFlaggedValues(self, settings, flaggedvalue, replacevalue):
-        '''
-        iterates and updates specific flagged values with a replacement value
-        :param settings: dictionary, list or str settings
-        :param flaggedvalue: flagged value to look for and replace
-        :param replacevalue: value to replace flagged value with
-        :return: updated settings
-        '''
-
-        if isinstance(settings, list):
-            new_list = []
-            for item in settings:
-                item = self.updateFlaggedValues(item, flaggedvalue, replacevalue)
-                new_list.append(item)
-            return new_list
-
-        if isinstance(settings, np.ndarray):
-            new_list = []
-            for item in settings:
-                item = self.updateFlaggedValues(item, flaggedvalue, replacevalue)
-                new_list.append(item)
-            return np.asarray(new_list, dtype=settings.dtype)
-
-        elif isinstance(settings, dict):
-            for key in settings.keys():
-                settings[key] = self.updateFlaggedValues(settings[key], flaggedvalue, replacevalue)
-            return settings
-
-        elif isinstance(settings, str):
-            pattern = re.compile(re.escape(flaggedvalue), re.IGNORECASE)
-            settings = pattern.sub(repr(replacevalue)[1:-1], settings) #this seems weird with [1:-1] but paths wont work otherwise
-            return settings
-
-        else:
-            #this gets REALLY noisy.
-            #lots is set up to not be replaceable, so uncomment at your own risk
-            # print('Cannot set {0}'.format(flaggedvalue))
-            # print('Input Not recognized type', settings)
-            return settings
-
-    def changeTimeSeriesInterval(self, times, values, Line_info):
-        '''
-        changes time series of time series data. If type is defined, use that to average data. default is INST-VAL
-        :param times: list of times
-        :param values: list of values
-        :param Line_info: settings dictionary for line
-        :return: new times and values
-        '''
-
-        convert_to_jdate = False
-
-        if isinstance(times[0], (int, float)): #check for jdate, this is easier in dt..
-            times = WF.JDateToDatetime(times, self.startyear)
-            convert_to_jdate = True
-
-        if 'type' in Line_info.keys() and 'interval' not in Line_info.keys():
-            print('Defined Type but no interval..')
-            if convert_to_jdate:
-                return WF.DatetimeToJDate(times, self.ModelAlt.t_offset), values
-            else:
-                return times, values
-
-        # INST-CUM, INST-VAL, PER-AVER, PER-CUM)
-        if 'type' in Line_info:
-            avgtype = Line_info['type'].upper()
-        else:
-            avgtype = 'INST-VAL'
-            # avgtype = 'PER-AVER'
-
-        if isinstance(values, dict):
-            new_values = {}
-            for key in values:
-                new_times, new_values[key] = self.changeTimeSeriesInterval(times, values[key], Line_info)
-        else:
-
-            if 'interval' in Line_info:
-                interval = Line_info['interval'].upper()
-                pd_interval = WF.getPandasTimeFreq(interval)
-            else:
-                print('No time interval Defined.')
-                return times, values
-
-            if avgtype == 'INST-VAL':
-                #at the point in time, find intervals and use values
-                if len(values.shape) == 1:
-                    df = pd.DataFrame({'times': times, 'values': values})
-                    df = df.set_index('times')
-                    if df.index.inferred_freq != pd_interval:
-                        df = df.resample(pd_interval, origin='end_day').asfreq().fillna(method='bfill')
-                    new_values = df['values'].to_numpy()
-                    new_times = df.index.to_pydatetime()
-
-                elif len(values.shape) == 2:
-                    tvals = values.T #transpose so now were [distances, times]
-                    new_values = []
-                    for i in range(tvals.shape[0]):#for each depth profile..
-                        df = pd.DataFrame({'times': times, 'values': tvals[i]})
-                        df = df.set_index('times')
-                        if df.index.inferred_freq != pd_interval:
-                            df = df.resample(pd_interval, origin='end_day').asfreq().fillna(method='bfill')
-                        new_values.append(df['values'].to_numpy())
-                        new_times = df.index.to_pydatetime()
-                    new_values = np.asarray(new_values).T #transpose back..
-
-            elif avgtype == 'INST-CUM':
-                if len(values.shape) == 1:
-                    df = pd.DataFrame({'times': times, 'values': values})
-                    df = df.set_index('times')
-                    df = df.cumsum(skipna=True).resample(pd_interval, origin='end_day').asfreq().fillna(method='bfill')
-                    new_values = df['values'].to_numpy()
-                    new_times = df.index.to_pydatetime()
-                elif len(values.shape) == 2:
-                    tvals = values.T #transpose so now were [distances, times]
-                    new_values = []
-                    for i in range(tvals.shape[0]):#for each depth profile..
-                        df = pd.DataFrame({'times': times, 'values': tvals[i]})
-                        df = df.set_index('times')
-                        df = df.cumsum(skipna=True).resample(pd_interval, origin='end_day').asfreq().fillna(method='bfill')
-                        new_values.append(df['values'].to_numpy())
-                        new_times = df.index.to_pydatetime()
-                    new_values = np.asarray(new_values).T #transpose back..
-
-            elif avgtype == 'PER-AVER':
-                #average over the period
-                if len(values.shape) == 1:
-                    df = pd.DataFrame({'times': times, 'values': values})
-                    df = df.set_index('times')
-                    if df.index.inferred_freq != pd_interval:
-                        df = df.resample(pd_interval, origin='end_day').mean().fillna(method='bfill')
-                    new_values = df['values'].to_numpy()
-                    new_times = df.index.to_pydatetime()
-                elif len(values.shape) == 2:
-                    tvals = values.T #transpose so now were [distances, times]
-                    new_values = []
-                    for i in range(tvals.shape[0]):#for each depth profile..
-                        df = pd.DataFrame({'times': times, 'values': tvals[i]})
-                        df = df.set_index('times')
-                        if df.index.inferred_freq != pd_interval:
-                            df = df.resample(pd_interval, origin='end_day').mean().fillna(method='bfill')
-                        new_values.append(df['values'].to_numpy())
-                        new_times = df.index.to_pydatetime()
-                    new_values = np.asarray(new_values).T #transpose back..
-
-            elif avgtype == 'PER-CUM':
-                #cum over the period
-                if len(values.shape) == 1:
-                    df = pd.DataFrame({'times': times, 'values': values})
-                    df = df.set_index('times')
-                    if df.index.inferred_freq != pd_interval:
-                        df = df.resample(pd_interval, origin='end_day').sum().fillna(method='bfill')
-                    new_values = df['values'].to_numpy()
-                    new_times = df.index.to_pydatetime()
-                elif len(values.shape) == 2:
-                    tvals = values.T #transpose so now were [distances, times]
-                    new_values = []
-                    for i in range(tvals.shape[0]):#for each depth profile..
-                        df = pd.DataFrame({'times': times, 'values': tvals[i]})
-                        df = df.set_index('times')
-                        if df.index.inferred_freq != pd_interval:
-                            df = df.resample(pd_interval, origin='end_day').sum().fillna(method='bfill')
-                        new_values.append(df['values'].to_numpy())
-                        new_times = df.index.to_pydatetime()
-                    new_values = np.asarray(new_values).T #transpose back..
-
-            else:
-                print('INVALID INPUT TYPE DETECTED', avgtype)
-                return times, values
-
-        if convert_to_jdate:
-            return WF.DatetimeToJDate(new_times, self.ModelAlt.t_offset), np.asarray(new_values)
-        else:
-            return new_times, np.asarray(new_values)
 
     def checkModelType(self, line_info):
         '''
@@ -5700,118 +3252,6 @@ class MakeAutomatedReport(object):
             return False
         return True
 
-    def makeRegularTimesteps(self, days=15):
-        '''
-        makes regular time series for profile plots if there are no times defined
-        :param days: day interval
-        :return: timestep list
-        '''
-
-        timesteps = []
-        print('No Timesteps found. Setting to Regular interval')
-        cur_date = self.StartTime
-        while cur_date < self.EndTime:
-            timesteps.append(cur_date)
-            cur_date += dt.timedelta(days=days)
-        return np.asarray(timesteps)
-
-    def convertDepthsToElevations(self, data, object_settings):
-        '''
-        handles data to convert depths into elevations for observed data
-        :param object_settings: dicitonary of user defined settings for current object
-        :return: object settings dictionary with updated elevation data
-        '''
-
-        elev_flag = 'NOVALID'
-        for ld in data.keys():
-            if data[ld]['elevations'] == []:
-                noelev_flag = ld
-                for old in data.keys():
-                    if len(data[old]['elevations']) > 0:
-                        elev_flag = old
-                        break
-
-                if elev_flag != 'NOVALID':
-                    data[noelev_flag]['elevations'] = WF.convertObsDepths2Elevations(data[noelev_flag]['depths'],
-                                                                                     data[elev_flag]['elevations'])
-                else:
-                    object_settings['usedepth'] = 'true'
-        return data, object_settings
-
-    def convertElevationsToDepths(self, data, object_settings):
-        '''
-        handles data to convert depths into elevations for observed data
-        :param object_settings: dicitonary of user defined settings for current object
-        :return: object settings dictionary with updated elevation data
-        '''
-
-        depth_flag = 'NOVALID'
-        for ld in data.keys():
-            if data[ld]['depths'] == []:
-                nodepth_flag = ld
-                for old in data.keys():
-                    if len(data[old]['depths']) > 0:
-                        depth_flag = old
-                        break
-
-                if depth_flag != 'NOVALID':
-                    data[nodepth_flag]['depths'] = WF.convertObsElevations2Depths(data[nodepth_flag]['elevations'],
-                                                                                       data[depth_flag]['depths'],
-                                                                                       data[depth_flag]['elevations'])
-                else:
-                    object_settings['usedepth'] = 'false'
-        return data, object_settings
-
-    def commitProfileDataToMemory(self, data, line_settings, object_settings):
-        '''
-        commits updated data to data memory dictionary that keeps track of data
-        :param object_settings:  dicitonary of user defined settings for current object
-        '''
-
-        for line in data.keys():
-            write = False
-            values = pickle.loads(pickle.dumps(data[line]['values'], -1))
-            depths = pickle.loads(pickle.dumps(data[line]['depths'], -1))
-            elevations = pickle.loads(pickle.dumps(data[line]['elevations'], -1))
-            subset = pickle.loads(pickle.dumps(line_settings[line]['subset'], -1))
-            datamem_key = line_settings[line]['logoutputfilename']
-            if datamem_key not in self.Data.Memory.keys():
-                write = True
-            else:
-                if not np.array_equal(object_settings['timestamps'], self.Data.Memory[datamem_key]['times']):
-                    write = True
-            if write:
-                self.Data.Memory[datamem_key] = {'times': object_settings['timestamps'],
-                                                 'values': values,
-                                                 'elevations': elevations,
-                                                 'depths': depths,
-                                                 'units': object_settings['plot_units'],
-                                                 'isprofile': True,
-                                                 'subset': subset
-                                                 }
-
-    def configureUnits(self, object_settings, parameter, units):
-        '''
-        configure units from line settings
-        :param object_settings:  dicitonary of user defined settings for current object
-        :param line: current line settings
-        :param units: current units of line
-        :return: units
-        '''
-
-        if units == None:
-            try:
-                units = self.Constants.units[parameter.lower()]
-            except KeyError:
-                units = None
-
-        if isinstance(units, dict):
-            if 'unitsystem' in object_settings.keys():
-                units = units[object_settings['unitsystem'].lower()]
-            else:
-                units = None
-        return units
-
     def configureSettingsForID(self, ID, settings):
         '''
         loads settings for selected run ID. Mainly for comparison plots. The replaces model specific flags in settings
@@ -5826,37 +3266,7 @@ class MakeAutomatedReport(object):
         settings = WF.replaceflaggedValues(self, settings, 'modelspecific')
         return settings
 
-    def confirmColor(self, user_color, default_color):
-        '''
-        confirms the color choice is valid. If not, checks to see if common mistake with spaces.
-        If neither work, return a default color.
-        :param user_color: desired color for line to check
-        :param default_color: backup color we know works
-        :return: color string
-        '''
 
-        if not is_color_like(user_color):
-            if not is_color_like(user_color.replace(' ', '')):
-                print('Invalid color with {0}'.format(user_color))
-                print('Replacing with default color')
-                return default_color
-            else:
-                print('Misspelling in color with {0}'.format(user_color))
-                print('Replacing with {0}'.format(user_color.replace(' ', '')))
-                return user_color.replace(' ', '')
-        else:
-            return user_color
-
-    def confirmAxis(self, object_settings):
-        '''
-        Checks for an axis item in object settings. If not, make one.
-        :param object_settings: dictionary containing settings for current object
-        :return: object settings but with empty axis.
-        '''
-
-        if 'axs' not in object_settings.keys():
-            object_settings['axs'] = [{}] #empty axis object
-        return object_settings
 
 if __name__ == '__main__':
     rundir = sys.argv[0]
@@ -5866,7 +3276,6 @@ if __name__ == '__main__':
     try:
         MakeAutomatedReport(simInfoFile, rundir)
     except:
-        print('ERROR: Report Generator Failed.')
-        print(traceback.format_exc())
+        WF.print2stderr(traceback.format_exc())
         sys.exit(1)
 

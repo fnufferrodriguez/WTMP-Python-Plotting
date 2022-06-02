@@ -1,16 +1,4 @@
-'''
-* Copyright 2022 United States Bureau of Reclamation (USBR).
-* United States Department of the Interior
-* All Rights Reserved. USBR PROPRIETARY/CONFIDENTIAL.
-* Source may not be released without written approval
-* from USBR
 
-Created on 7/15/2021
-@author: scott
-@organization: Resource Management Associates
-@contact: scott@rmanet.com
-@note:
-'''
 
 import os
 import numpy as np
@@ -18,6 +6,7 @@ import datetime as dt
 import h5py
 
 import WAT_Functions as WF
+import WAT_Time as WT
 
 class ResSim_Results(object):
 
@@ -118,11 +107,11 @@ class ResSim_Results(object):
         elevations = []
         depths = []
         times = []
-        # print('UNIQUE TIMES:', unique_times)
+        # WF.print2stdout('UNIQUE TIMES:', unique_times)
         if isinstance(timestamps, (list, np.ndarray)):
             unique_times = [n for n in timestamps]
             for j, time_in in enumerate(unique_times):
-                timestep = WF.getIdxForTimestamp(self.jd_dates, time_in, self.t_offset)
+                timestep = WT.getIdxForTimestamp(self.jd_dates, time_in, self.t_offset)
                 if timestep == -1:
                     depths.append(np.asarray([]))
                     elevations.append(np.asarray([]))
@@ -130,7 +119,7 @@ class ResSim_Results(object):
                     times.append(time_in)
                     # continue
                 else:
-                    # print('finding time for', time_in)
+                    # WF.print2stdout('finding time for', time_in)
                     self.loadResults(time_in, metric.lower(), alt_subdomain_name=resname)
                     ktop = self.getTopLayer(timestep) #get waterlevel top layer to know where to grab data from
                     v_el = self.vals[:ktop + 1]
@@ -242,9 +231,9 @@ class ResSim_Results(object):
             vals = WF.calcComputedDOSat(vt, vdo, self.Report.Constants.satDO_interp)
 
         if t_in != 'all':
-            timestep = WF.getIdxForTimestamp(self.jd_dates, t_in, self.t_offset) #get timestep index for current date
+            timestep = WT.getIdxForTimestamp(self.jd_dates, t_in, self.t_offset) #get timestep index for current date
             if timestep == -1:
-                print('should never be here..')
+                WF.print2stdout('should never be here..')
             self.t_data = t_in
             self.vals = np.array([vals[timestep][i] for i in range(self.ncells)])
         else:
@@ -313,7 +302,7 @@ class ResSim_Results(object):
             topwater = []
             unique_times = [n for n in timestamps]
             for j, time_in in enumerate(unique_times):
-                timestep = WF.getIdxForTimestamp(self.jd_dates, time_in, self.t_offset)
+                timestep = WT.getIdxForTimestamp(self.jd_dates, time_in, self.t_offset)
                 if timestep == -1:
                     topwater.append(np.nan)
                     # continue

@@ -20,7 +20,8 @@ import pickle
 
 import WAT_Functions as WF
 import WAT_Reader as WDR
-
+import WAT_Time as WT
+import WAT_Profiles as WProfile
 
 class DataOrganizer(object):
 
@@ -114,7 +115,7 @@ class DataOrganizer(object):
                     count += 1
                     newflag = flag + '_{0}'.format(count)
                 flag = newflag
-                print('The new flag is {0}'.format(newflag))
+                WF.print2stdout('The new flag is {0}'.format(newflag))
             datamem_key = self.buildMemoryKey(line)
             if 'units' in line.keys() and units != None:
                 units = line['units']
@@ -142,8 +143,8 @@ class DataOrganizer(object):
             for line in settings['lines']:
                 numtimesused = 0
                 if 'flag' not in line.keys():
-                    print('Flag not set for line (Computed/Observed/etc)')
-                    print('Not plotting Line:', line)
+                    WF.print2stdout('Flag not set for line (Computed/Observed/etc)')
+                    WF.print2stdout('Not plotting Line:', line)
                     continue
 
                 elif line['flag'].lower() == 'computed':
@@ -176,12 +177,12 @@ class DataOrganizer(object):
 
         if 'dss_path' in Line_info.keys(): #Get data from DSS record
             if 'dss_filename' not in Line_info.keys():
-                print('DSS_Filename not set for Line: {0}'.format(Line_info))
+                WF.print2stdout('DSS_Filename not set for Line: {0}'.format(Line_info))
                 return np.array([]), np.array([]), None
             else:
                 datamem_key = self.buildMemoryKey(Line_info)
                 if datamem_key in self.Memory.keys():
-                    # print('Reading {0} from memory'.format(datamem_key))
+                    # WF.print2stdout('Reading {0} from memory'.format(datamem_key))
                     if makecopy:
                         datamementry = pickle.loads(pickle.dumps(self.Memory[datamem_key], -1))
                     else:
@@ -207,7 +208,7 @@ class DataOrganizer(object):
                 return np.array([]), np.array([]), None
             datamem_key = self.buildMemoryKey(Line_info)
             if datamem_key in self.Memory.keys():
-                # print('READING {0} FROM MEMORY'.format(datamem_key))
+                # WF.print2stdout('READING {0} FROM MEMORY'.format(datamem_key))
                 datamementry = pickle.loads(pickle.dumps(self.Memory[datamem_key], -1))
                 times = datamementry['times']
                 values = datamementry['values']
@@ -232,7 +233,7 @@ class DataOrganizer(object):
             datamem_key = self.buildMemoryKey(Line_info)
 
             if datamem_key in self.Memory.keys():
-                # print('READING {0} FROM MEMORY'.format(datamem_key))
+                # WF.print2stdout('READING {0} FROM MEMORY'.format(datamem_key))
                 datamementry = pickle.loads(pickle.dumps(self.Memory[datamem_key], -1))
                 times = datamementry['times']
                 values = datamementry['values']
@@ -241,7 +242,7 @@ class DataOrganizer(object):
             else:
                 filename = Line_info['h5file']
                 if not os.path.exists(filename):
-                    print('ERROR: H5 file does not exist:', filename)
+                    WF.print2stdout('ERROR: H5 file does not exist:', filename)
                     return [], [], None
                 externalResSim = WDR.ResSim_Results('', '', '', '', self.Report, external=True)
                 externalResSim.openH5File(filename)
@@ -262,7 +263,7 @@ class DataOrganizer(object):
         elif 'easting' in Line_info.keys() and 'northing' in Line_info.keys():
             datamem_key = self.buildMemoryKey(Line_info)
             if datamem_key in self.Memory.keys():
-                # print('READING {0} FROM MEMORY'.format(datamem_key))
+                # WF.print2stdout('READING {0} FROM MEMORY'.format(datamem_key))
                 datamementry = pickle.loads(pickle.dumps(self.Memory[datamem_key], -1))
                 times = datamementry['times']
                 values = datamementry['values']
@@ -278,19 +279,19 @@ class DataOrganizer(object):
                     units = None
 
                 self.Memory[datamem_key] = {'times': pickle.loads(pickle.dumps(times, -1)),
-                                                 'values': pickle.loads(pickle.dumps(values, -1)),
-                                                 'units': pickle.loads(pickle.dumps(units, -1))}
+                                             'values': pickle.loads(pickle.dumps(values, -1)),
+                                             'units': pickle.loads(pickle.dumps(units, -1))}
 
         else:
-            print('No Data Defined for line')
+            WF.print2stdout('No Data Defined for line')
             return np.array([]), np.array([]), None
 
         if 'omitvalue' in Line_info.keys():
             omitval = float(Line_info['omitvalue'])
-            values = self.Report.replaceOmittedValues(values, omitval)
+            values = WF.replaceOmittedValues(values, omitval)
 
         if 'interval' in Line_info.keys():
-            times, values = self.Report.changeTimeSeriesInterval(times, values, Line_info)
+            times, values = WT.changeTimeSeriesInterval(times, values, Line_info, self.Report.ModelAlt.t_offset, self.Report.startYear)
 
         return times, values, units
 
@@ -312,7 +313,7 @@ class DataOrganizer(object):
         for line in settings[settings['datakey']]:
             numtimesused = 0
             if 'flag' not in line.keys():
-                print('Flag not set for line (Computed/Observed/etc)')
+                WF.print2stdout('Flag not set for line (Computed/Observed/etc)')
                 print('Not plotting Line:', line)
                 continue
             elif line['flag'].lower() == 'computed':
@@ -443,7 +444,7 @@ class DataOrganizer(object):
                 return [], [], [], [], None
             vals, elevations, depths, times = self.Report.ModelAlt.readProfileData(Profile_info['w2_segment'], timesteps)
             if isinstance(timesteps, str):
-                vals, elevations = WF.normalize2DElevations(vals, elevations)
+                vals, elevations = WProfile.normalize2DElevations(vals, elevations)
             return vals, elevations, depths, times, Profile_info['flag']
 
         elif 'ressimresname' in Profile_info.keys():
@@ -475,8 +476,12 @@ class DataOrganizer(object):
                 values, elevations, depths, dates, flag = self.getProfileValues(curreach, 'all')
                 topwater = self.getProfileTopWater(curreach, 'all')
                 if 'interval' in curreach.keys():
-                    dates_change, values = self.Report.changeTimeSeriesInterval(dates, values, curreach)
-                    dates_change, topwater = self.Report.changeTimeSeriesInterval(dates, topwater, curreach)
+                    dates_change, values = WT.changeTimeSeriesInterval(dates, values, curreach,
+                                                                       self.Report.ModelAlt.t_offset,
+                                                                       self.Report.startYear)
+                    dates_change, topwater = WT.changeTimeSeriesInterval(dates, topwater, curreach,
+                                                                         self.Report.ModelAlt.t_offset,
+                                                                         self.Report.startYear)
                     dates = dates_change
                 if WF.checkData(values):
                     if 'flag' in datapath.keys():
@@ -586,6 +591,34 @@ class DataOrganizer(object):
         print('Profile:', profile)
         return []
 
+    def commitProfileDataToMemory(self, data, line_settings, object_settings):
+        '''
+        commits updated data to data memory dictionary that keeps track of data
+        :param object_settings:  dicitonary of user defined settings for current object
+        '''
+
+        for line in data.keys():
+            write = False
+            values = pickle.loads(pickle.dumps(data[line]['values'], -1))
+            depths = pickle.loads(pickle.dumps(data[line]['depths'], -1))
+            elevations = pickle.loads(pickle.dumps(data[line]['elevations'], -1))
+            subset = pickle.loads(pickle.dumps(line_settings[line]['subset'], -1))
+            datamem_key = line_settings[line]['logoutputfilename']
+            if datamem_key not in self.Memory.keys():
+                write = True
+            else:
+                if not np.array_equal(object_settings['timestamps'], self.Memory[datamem_key]['times']):
+                    write = True
+            if write:
+                self.Memory[datamem_key] = {'times': object_settings['timestamps'],
+                                             'values': values,
+                                             'elevations': elevations,
+                                             'depths': depths,
+                                             'units': object_settings['plot_units'],
+                                             'isprofile': True,
+                                             'subset': subset
+                                             }
+
     #################################################################
     #Table Functions
     #################################################################
@@ -679,7 +712,8 @@ class DataOrganizer(object):
                                                                     settings['parameter'])
 
         if 'interval' in settings.keys():
-            times, values = self.Report.changeTimeSeriesInterval(times, values, settings)
+            times, values = WT.changeTimeSeriesInterval(times, values, settings, self.Report.ModelAlt.t_offset,
+                                                         self.Report.startYear)
 
         return times, values, units, distance
 
@@ -819,16 +853,16 @@ class DataOrganizer(object):
                     if self.Memory[key]['isprofile'] == True:
                         alltimes = self.Memory[key]['times']
                         allvalues = self.Memory[key]['values']
-                        alltimes = self.Report.matcharrays(alltimes, allvalues)
+                        alltimes = WF.matcharrays(alltimes, allvalues)
                         allelevs = self.Memory[key]['elevations']
                         alldepths = self.Memory[key]['depths']
                         if len(allelevs) == 0: #elevations may not always fall out
-                            allelevs = self.Report.matcharrays(allelevs, alldepths)
+                            allelevs = WF.matcharrays(allelevs, alldepths)
                         units = self.Memory[key]['units']
-                        values = self.Report.getListItems(allvalues)
-                        times = self.Report.getListItems(alltimes)
-                        elevs = self.Report.getListItems(allelevs)
-                        depths = self.Report.getListItems(alldepths)
+                        values = WF.getListItems(allvalues)
+                        times = WF.getListItems(alltimes)
+                        elevs = WF.getListItems(allelevs)
+                        depths = WF.getListItems(alldepths)
                         if isinstance(values, (list, np.ndarray)):
                             df = pd.DataFrame({'Dates': times, 'Values ({0})'.format(units): values, 'Elevations': elevs,
                                                'Depths': depths})
@@ -846,9 +880,9 @@ class DataOrganizer(object):
                     #     alltimes = self.Data.Memory[key]['dates']
                     #     allvalues = self.Data.Memory[key]['values'].T #this gets transposed a few times.. we want distance/date
                     #     alldistance = self.Data.Memory[key]['distance']
-                    #     times = self.matcharrays(alltimes, allvalues)
-                    #     distances = self.matcharrays(alldistance, allvalues)
-                    #     values = self.getListItems(allvalues)
+                    #     times = WF.matcharrays(alltimes, allvalues)
+                    #     distances = WF.matcharrays(alldistance, allvalues)
+                    #     values = WF.getListItems(allvalues)
                     #     units = self.Data.Memory[key]['units']
                     #     newstime = time.time()
                     #     df = pd.DataFrame({'Dates': times, 'Values ({0})'.format(units): values, 'Distances': distances,
@@ -857,8 +891,8 @@ class DataOrganizer(object):
                     allvalues = self.Memory[key]['values']
                     alltimes = self.Memory[key]['times']
                     units = self.Memory[key]['units']
-                    values = self.Report.getListItems(allvalues)
-                    times = self.Report.getListItems(alltimes)
+                    values = WF.getListItems(allvalues)
+                    times = WF.getListItems(alltimes)
                     if isinstance(values, (list, np.ndarray)):
                         df = pd.DataFrame({'Dates': times, 'Values ({0})'.format(units): values})
                     elif isinstance(values, dict):

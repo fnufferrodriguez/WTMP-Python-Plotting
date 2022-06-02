@@ -15,6 +15,8 @@ Created on 7/15/2021
 import os
 import pandas as pd
 
+import WAT_Functions as WF
+
 class WAT_Logger(object):
 
     def __init__(self):
@@ -94,8 +96,8 @@ class WAT_Logger(object):
         '''
 
         for ID in accepted_IDs:
-            print('ID:', ID)
-            print('Simvars:', SimulationVariables[ID])
+            WF.print2stdout('ID:', ID)
+            WF.print2stdout('Simvars:', SimulationVariables[ID])
             self.Log['observed_data_path'].append(observedDir)
             self.Log['start_time'].append(SimulationVariables[ID]['StartTimeStr'])
             self.Log['end_time'].append(SimulationVariables[ID]['EndTimeStr'])

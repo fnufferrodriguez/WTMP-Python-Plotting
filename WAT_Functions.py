@@ -14,7 +14,7 @@ Created on 7/16/2021
 
 import numpy as np
 import math
-import os
+import os, sys
 from scipy import interpolate
 from scipy.constants import convert_temperature
 from sklearn.metrics import mean_absolute_error
@@ -22,16 +22,32 @@ import re
 import pickle
 import pandas as pd
 import datetime as dt
+from collections import Counter
+import pendulum
+from matplotlib.colors import is_color_like
 
-def datetime2Ordinal(indate):
+import WAT_Constants as WC
+import WAT_Time as WT
+
+constants = WC.WAT_Constants()
+
+def print2stdout(*a):
+    print(*a, file=sys.stdout)
+
+def print2stderr(*a):
+    print(*a, file=sys.stderr)
+
+def printVersion(VERSIONNUMBER):
     '''
-    converts datetime objects to ordinal values
-    :param indate: datetime object
-    :return: ordinal
+    print current version number
     '''
 
-    ord = indate.toordinal() + float(indate.hour) / 24. + float(indate.minute) / (24. * 60.)
-    return ord
+    print2stdout('VERSION:', VERSIONNUMBER)
+
+def checkExists(infile):
+    if not os.path.exists(infile):
+        print2stderr(f'ERROR: {infile} does not exist')
+        sys.exit(1)
 
 def cleanMissing(indata):
     '''
@@ -71,8 +87,8 @@ def cleanOutputDirectory(dir_name, filetype):
         try:
             os.remove(path_to_file)
         except:
-            print('Failed to delete', path_to_file)
-            print('Continuing..')
+            print2stdout('Failed to delete', path_to_file)
+            print2stdout('Continuing..')
 
 def calcDOSaturation(temp, diss_ox, DOSat_Interp):
     '''
@@ -117,44 +133,6 @@ def calcObservedDOSat(ttemp, vtemp, vdo, ):
         else:
             v[j] = calcDOSaturation(vtemp[j], vdo[j])
     return ttemp, v
-
-# def convertDepths2Elevations(obs_depths, model_elevs):
-#     '''
-#     calculate observed elevations based on model elevations and obs depths
-#     :param obs_depths: array of depths for observed data at timestep
-#     :param model_elevs: array of model elevations at timestep
-#     :return: array of observed elevations
-#     '''
-#
-#     obs_elev = []
-#     for i, d in enumerate(obs_depths):
-#         e = []
-#         topwater_elev = max(model_elevs[i])
-#         for depth in d:
-#             e.append(topwater_elev - depth)
-#         obs_elev.append(np.asarray(e))
-#     return obs_elev
-
-def getIdxForTimestamp(time_Array, t_in, offset):
-    '''
-    finds timestep for date
-    :param time_Array: array of time values
-    :param t_in: time step
-    :param offset: time series offset for ordinal
-    :return: timestep index
-    '''
-
-    ttmp = t_in.toordinal() + float(t_in.hour) / 24. + float(t_in.minute) / (24. * 60.) - offset
-    min_diff = np.min(np.abs(time_Array - ttmp))
-    tol = 1. / (24. * 60.)  # 1 minute tolerance
-    timestep = np.where((np.abs(time_Array - ttmp) - min_diff) < tol)[0][0]
-    if min_diff > 1.:
-        print('nearest time step > 1 day away')
-        # print('t_in:', t_in)
-        # print('ttmp:', ttmp)
-        # print('Available times:', [n for n in time_Array])
-        return -1
-    return timestep
 
 def getSubplotConfig(n_profiles, plots_per_row):
     '''
@@ -230,24 +208,6 @@ def matchData(data1, data2):
         data2[y_key] = data2[y_key][msk]
         data2['values'] = v_2_msk
         return data1, data2
-
-def normalize2DElevations(vals, elevations):
-    '''
-    interpolates reservoir data in order to normalize the list of elevations for W2 runs
-    :param vals: list of lists of values at timestamps/elevations
-    :param elevations: list of lists of elevations at timestamps
-    :return: new values, new elevations
-    '''
-
-    newvals = []
-    top_elev = np.nanmax([np.nanmax(n) for n in elevations if ~np.all(np.isnan(n))])
-    bottom_elev = np.nanmin([np.nanmin(n) for n in elevations if ~np.all(np.isnan(n))])
-    new_elevations = np.linspace(bottom_elev, top_elev, elevations.shape[1])
-    for vi, v in enumerate(vals):
-        # valelev_interp = interpolate.interp1d(elevations[vi], v, bounds_error=False, fill_value = np.nan)
-        valelev_interp = interpolate.interp1d(elevations[vi], v, bounds_error=False, fill_value ="extrapolate")
-        newvals.append(valelev_interp(new_elevations))
-    return np.asarray(newvals), np.asarray(new_elevations)
 
 def checkData(dataset, flag='values'):
     '''
@@ -446,50 +406,6 @@ def calcMean(data1):
         return np.nan
     return(np.nanmean(data1['values']))
 
-def convertObsDepths2Elevations(obs_depths, model_elevs):
-    '''
-    calculate observed elevations based on model elevations and obs depths
-    :param obs_depths: array of depths for observed data at timestep
-    :param model_elevs: array of model elevations at timestep
-    :return: array of observed elevations
-    '''
-
-    obs_elev = []
-    for i, d in enumerate(obs_depths):
-        e = []
-        modeled_elevs = model_elevs[i]
-        if len(modeled_elevs) == 0:
-            obs_elev.append(np.full(len(d), np.nan)) #make nan boys
-        else:
-            topwater_elev = max(model_elevs[i])
-
-            for depth in d:
-                e.append(topwater_elev - depth)
-            obs_elev.append(np.asarray(e))
-    return obs_elev
-
-def convertObsElevations2Depths(obs_elevs, model_depths, model_elevations):
-    '''
-    calculate observed elevations based on model elevations and obs depths
-    :param obs_depths: array of depths for observed data at timestep
-    :param model_elevs: array of model elevations at timestep
-    :return: array of observed elevations
-    '''
-
-    obs_depth = []
-    for i, e in enumerate(obs_elevs):
-        d = []
-        modeled_depths = model_depths[i]
-        if len(modeled_depths) == 0 or len(model_elevations[i]) == 0:
-            obs_depth.append(np.full(len(e), np.nan)) #make nan boys
-        else:
-            topwater_elev = max(model_elevations[i])
-
-            for elev in e:
-                d.append(topwater_elev - elev)
-            obs_depth.append(np.asarray(d))
-    return obs_depth
-
 def convertTempUnits(values, units):
     '''
     convert temperature units between c and f
@@ -522,19 +438,6 @@ def filterContourOverTopWater(values, elevations, topwater):
         elevationtopwateridx = (np.abs(elevations - tw)).argmin()
         values[twi][elevationtopwateridx+1:] = np.nan
     return values
-
-def filterTimestepByYear(timestamps, year):
-    '''
-    returns only timestamps from the given year. Otherwise, just return all timestamps
-    :param timestamps: list of dates
-    :param year: target year
-    :return:
-        timestamps: list of selected timestamps
-    '''
-
-    if year == 'ALLYEARS':
-        return timestamps
-    return [n for n in timestamps if n.year == year]
 
 def replaceflaggedValues(Report, settings, itemset):
     '''
@@ -666,141 +569,6 @@ def stackContours(contours):
             output_distance = np.append(output_distance, current_distances)
             transitions[contourname] = current_distances[0]
     return output_values, output_dates, output_distance, transitions
-
-def stackProfileIndicies(exist_data, new_data):
-    '''
-    takes an existing array of data and adds another array
-    for contour plots of several reaches split into different groups
-    stacks them together so they function as a single reach
-    exist_data is existing array
-    new data is data to be added to it
-    :param exist_data: dictionary containing existing data
-    :param new_data: data to be added to existing data
-    :return: modified exist_data
-    '''
-
-    for runflag in new_data.keys():
-        if runflag not in exist_data.keys():
-            exist_data[runflag] = {}
-        for itemflag in new_data[runflag]:
-            if itemflag not in exist_data[runflag].keys():
-                exist_data[runflag][itemflag] = new_data[runflag][itemflag]
-            else:
-                if isinstance(new_data[runflag][itemflag], list):
-                    exist_data[runflag][itemflag] += new_data[runflag][itemflag]
-                elif isinstance(new_data[runflag][itemflag], np.ndarray):
-                    exist_data[runflag][itemflag] = np.append(exist_data[runflag][itemflag], new_data[runflag][itemflag])
-    return exist_data
-
-def getPandasTimeFreq(intervalstring):
-    '''
-    Reads in the DSS formatted time intervals and translates them to a format pandas.resample() understands
-    bases off of the time interval, so 15MIN becomes 15T, or 6MON becomes 6M
-    :param intervalstring: DSS interval string such as 1HOUR or 1DAY
-    :return: pandas time interval
-    '''
-
-    intervalstring = intervalstring.lower()
-    if 'min' in intervalstring:
-        timeint = intervalstring.replace('min','') + 'T'
-        return timeint
-    elif 'hour' in intervalstring:
-        timeint = intervalstring.replace('hour','') + 'H'
-        return timeint
-    elif 'day' in intervalstring:
-        timeint = intervalstring.replace('day','') + 'D'
-        return timeint
-    elif 'mon' in intervalstring:
-        timeint = intervalstring.replace('mon','') + 'M'
-        return timeint
-    elif 'week' in intervalstring:
-        timeint = intervalstring.replace('week','') + 'W'
-        return timeint
-    elif 'year' in intervalstring:
-        timeint = intervalstring.replace('year','') + 'A'
-        return timeint
-    else:
-        print('Unidentified time interval')
-        return 0
-
-def buildTimeSeries(startTime, endTime, interval):
-    '''
-    builds a regular time series using the start and end time and a given interval
-    #TODO: if start time isnt on the hour, but the interval is, change start time to be hourly?
-    :param startTime: datetime object
-    :param endTime: datetime object
-    :param interval: DSS interval
-    :return: list of time series dates
-    '''
-
-    intervalinfo = getPandasTimeFreq(interval)
-    ts = pd.date_range(startTime, endTime, freq=intervalinfo, closed=None)
-    ts = np.asarray([t.to_pydatetime() for t in ts])
-    return ts
-    # try:
-    #     # intervalinfo = self.Constants.time_intervals[interval]
-    #     interval = intervalinfo[0]
-    #     interval_info = intervalinfo[1]
-    # except KeyError:
-    #     interval, interval_info = self.forceTimeInterval(interval)
-
-    # if interval_info == 'np':
-    #     ts = np.arange(startTime, endTime, interval)
-    #     ts = np.asarray([t.astype(dt.datetime) for t in ts])
-    # elif interval_info == 'pd':
-    #     ts = pd.date_range(startTime, endTime, freq=interval, closed=None)
-    #     ts = np.asarray([t.to_pydatetime() for t in ts])
-    # return ts
-
-def JDateToDatetime(dates, startyear):
-    '''
-    converts jdate dates to datetime values
-    :param dates: list of jdate dates
-    :return:
-        dtimes: list of dates
-        dtime: single date
-        dates: original date if unable to convert
-    '''
-
-    # first_year_Date = dt.datetime(self.ModelAlt.dt_dates[0].year, 1, 1, 0, 0)
-    first_year_Date = dt.datetime(startyear, 1, 1, 0, 0)
-
-    if isinstance(dates, dt.datetime):
-        return dates
-    elif isinstance(dates, (list, np.ndarray)):
-        if isinstance(dates[0], dt.datetime):
-            return dates
-        dtimes = np.asarray([first_year_Date + dt.timedelta(days=n) for n in dates])
-        return dtimes
-    elif isinstance(dates, (float, int)):
-        dtime = first_year_Date + dt.timedelta(days=dates)
-        return dtime
-    else:
-        return dates
-
-def DatetimeToJDate(dates, time_offset):
-    '''
-    converts datetime dates to jdate values
-    :param dates: list of datetime dates
-    :return:
-        jdates: list of dates
-        jdate: single date
-        dates: original date if unable to convert
-    '''
-
-    if isinstance(dates, (float, int)):
-        return dates
-    elif isinstance(dates, (list, np.ndarray)):
-        if isinstance(dates[0], (float, int)):
-            return dates
-        # jdates = np.asarray([(datetime2Ordinal(n) - ModelAlt.t_offset) + 1 for n in dates])
-        jdates = np.asarray([(datetime2Ordinal(n) - time_offset) + 1 for n in dates])
-        return jdates
-    elif isinstance(dates, dt.datetime):
-        jdate = (datetime2Ordinal(dates) - time_offset) + 1
-        return jdate
-    else:
-        return dates
 
 def mergeLines(data, settings):
     '''
@@ -969,3 +737,684 @@ def getAllMonthIdx(timestamp_indexes, i):
     for yearlist in timestamp_indexes:
         out_idx += yearlist[i]
     return out_idx
+
+def getPlotUnits(unitslist, object_settings):
+    '''
+    gets units for the plot. Either looks at data already plotted units, or if there are no defined units
+    in the plotted data, look for a parameter flag
+    :param object_settings: dictionary with plot settings
+    :return: string units value
+    '''
+
+    if 'parameter' in object_settings.keys():
+        try:
+            plotunits = constants.units[object_settings['parameter'].lower()]
+            if isinstance(plotunits, dict):
+                if 'unitsystem' in object_settings.keys():
+                    plotunits = plotunits[object_settings['unitsystem'].lower()]
+                else:
+                    plotunits = plotunits['metric']
+        except KeyError:
+            plotunits = ''
+
+    elif len(unitslist) > 0:
+        plotunits = getMostCommon(unitslist)
+
+    else:
+        print('No units defined.')
+        plotunits = ''
+
+    plotunits = translateUnits(plotunits)
+    return plotunits
+
+def getMostCommon(listvars):
+    '''
+    gets most common instance of a var in a list
+    :param listvars: list of variables
+    :return: value that is most common in the list
+    '''
+
+    occurence_count = Counter(listvars)
+    most_common_interval = occurence_count.most_common(1)[0][0]
+    return most_common_interval
+
+def translateUnits(units):
+    '''
+    translates possible units to better known flags for consistancy in the script and conversion purposes
+    :param units: units string
+    :return: units string
+    '''
+
+    if units != None:
+        for key in constants.unit_alt_names.keys():
+            if units.lower() in constants.unit_alt_names[key]:
+                return key
+
+    print('Units Undefined:', units)
+    return units
+
+def convertUnitSystem(values, units, target_unitsystem):
+    '''
+    converts unit systems if defined english/metric
+    :param values: list of values
+    :param units: units of select values
+    :param target_unitsystem: unit system to convert to
+    :return:
+        values: either converted units if successful, or original values if unsuccessful
+        units: original units if unsuccessful
+        new_units: new converted units if successful
+    '''
+
+    units = translateUnits(units)
+
+    english_units = constants.english_units
+    metric_units = constants.metric_units
+
+    if units == None:
+        print('Units undefined.')
+        return values, units
+
+    if target_unitsystem.lower() == 'english':
+        if units.lower() in english_units.keys():
+            new_units = english_units[units.lower()]
+            print('Converting {0} to {1}'.format(units, new_units))
+        elif units.lower() in english_units.values():
+            print('Values already in target unit system. {0} {1}'.format(units, target_unitsystem))
+            return values, units
+        else:
+            print('Units not found in definitions. Not Converting.')
+            return values, units
+
+    elif target_unitsystem.lower() == 'metric':
+        if units.lower() in metric_units.keys():
+            new_units = metric_units[units.lower()]
+            print('Converting {0} to {1}'.format(units, new_units))
+        elif units.lower() in metric_units.values():
+            print('Values already in target unit system. {0} {1}'.format(units, target_unitsystem))
+            return values, units
+        else:
+            print('Units not found in definitions. Not Converting.')
+            return values, units
+
+    else:
+        print('Target Unit System undefined.', target_unitsystem)
+        print('Try english or metric')
+        return values, units
+
+    if units == new_units:
+        print('data already in target unit system.')
+        return values, units
+
+    if units.lower() in ['c', 'f']:
+        values = convertTempUnits(values, units)
+    elif units.lower() in constants.conversion.keys():
+        conversion_factor = constants.conversion[units.lower()]
+        values *= conversion_factor
+    elif new_units.lower() in constants.conversion.keys():
+        conversion_factor = 1/constants.conversion[units.lower()]
+        values *= conversion_factor
+    else:
+        print('Undefined Units conversion for units {0}.'.format(units))
+        print('No Conversions taking place.')
+        return values, units
+
+    return values, new_units
+
+def updateFlaggedValues(settings, flaggedvalue, replacevalue):
+    '''
+    iterates and updates specific flagged values with a replacement value
+    :param settings: dictionary, list or str settings
+    :param flaggedvalue: flagged value to look for and replace
+    :param replacevalue: value to replace flagged value with
+    :return: updated settings
+    '''
+
+    if isinstance(settings, list):
+        new_list = []
+        for item in settings:
+            item = updateFlaggedValues(item, flaggedvalue, replacevalue)
+            new_list.append(item)
+        return new_list
+
+    if isinstance(settings, np.ndarray):
+        new_list = []
+        for item in settings:
+            item = updateFlaggedValues(item, flaggedvalue, replacevalue)
+            new_list.append(item)
+        return np.asarray(new_list, dtype=settings.dtype)
+
+    elif isinstance(settings, dict):
+        for key in settings.keys():
+            settings[key] = updateFlaggedValues(settings[key], flaggedvalue, replacevalue)
+        return settings
+
+    elif isinstance(settings, str):
+        pattern = re.compile(re.escape(flaggedvalue), re.IGNORECASE)
+        settings = pattern.sub(repr(replacevalue)[1:-1], settings) #this seems weird with [1:-1] but paths wont work otherwise
+        return settings
+
+    else:
+        #this gets REALLY noisy.
+        #lots is set up to not be replaceable, so uncomment at your own risk
+        # print('Cannot set {0}'.format(flaggedvalue))
+        # print('Input Not recognized type', settings)
+        return settings
+
+def configureUnits(object_settings, parameter, units):
+    '''
+    configure units from line settings
+    :param object_settings:  dicitonary of user defined settings for current object
+    :param line: current line settings
+    :param units: current units of line
+    :return: units
+    '''
+
+    if units == None:
+        try:
+            units = constants.units[parameter.lower()]
+        except KeyError:
+            units = None
+
+    if isinstance(units, dict):
+        if 'unitsystem' in object_settings.keys():
+            units = units[object_settings['unitsystem'].lower()]
+        else:
+            units = None
+    return units
+
+def buzzTargetSum(dates, values, target):
+    '''
+    finds buzzplot targets defined and returns the flow sums
+    :param dates: list of dates
+    :param values: list of dicts of values @ structures
+    :param target: target value
+    :return: sum of values
+    '''
+
+    sum_vals = []
+    for i, d in enumerate(dates):
+        sum = 0
+        for sn in values.keys():
+            if values[sn]['elevcl'][i] == target:
+                sum += values[sn]['q(m3/s)'][i]
+        sum_vals.append(sum)
+    return np.asarray(sum_vals)
+
+def getObjectYears(Report, object_settings):
+    '''
+    formats years settings for plots/tables. Figures out years used, if split by year, and year strings
+    years is set to "ALLYEARS" if not split by year. This tells other parts of script to include all.
+    :param object_settings: currently selected object settings dictionary
+    :return:
+        split_by_year: boolean if plots/tables should be split up year to year or all at once
+        years: list of years that are used
+        yearstr: list of years as strings, or set of years (ex: 2013-2016)
+    '''
+
+    split_by_year = False
+    yearstr = ''
+    if 'splitbyyear' in object_settings.keys():
+        if object_settings['splitbyyear'].lower() == 'true':
+            split_by_year = True
+            years = Report.years
+            yearstr = [str(year) for year in years]
+    if not split_by_year:
+        yearstr = Report.years_str
+        years = ['ALLYEARS']
+
+    return split_by_year, years, yearstr
+
+def correctDuplicateLabels(linedata):
+    '''
+    changes the name of data internally if it is duplicated. Mostly used for comparison plots where "computed"
+    may be used several times. Appends numbers to the end
+    :param linedata: dictionary with settings
+    :return: updated dictionary
+    '''
+
+    for line in linedata.keys():
+        if 'label' in linedata[line].keys():
+            curlabel = linedata[line]['label']
+            lineidx = linedata[line]['numtimesused']
+            if lineidx > 0: #leave the first guy alone..
+                for otherline in linedata.keys():
+                    if otherline != line:
+                        if linedata[otherline]['label'] == curlabel:
+                            linedata[line]['label'] = '{0} {1}'.format(curlabel, lineidx) #append the number
+    return linedata
+
+def getParameterCount(line, object_settings):
+    '''
+    Returns parameter used in dataset and keeps a running total of used parameters in dataset
+    :param line: current line in linedata dataset
+    :param object_settings: currently selected object settings dictionary
+    :return:
+        param: current parameter if available else None
+        param_count: running count of used parameters
+    '''
+
+    if 'param_count' not in object_settings.keys():
+        param_count = {}
+    else:
+        param_count = object_settings['param_count']
+
+    if 'parameter' in line.keys():
+        param = line['parameter'].lower()
+    else:
+        param = None
+    if param not in param_count.keys():
+        param_count[param] = 0
+    else:
+        param_count[param] += 1
+
+    return param, param_count
+
+def copyKeysBetweenDicts(to_dict, from_dict, ignore=[]):
+    '''
+    Copies settings from an object to an Axis. That way, users can define settings once in the main flags and have
+    it cascade down to all axis, unless defined in the axis.
+    :param to_dict: settings to copy to
+    :param from_dict: settings to copy from
+    :param ignore: list of keys to not copy
+    :return: updated dictionary (to_dict)
+    '''
+
+    for key in from_dict.keys():
+        if key not in ignore:
+            if key not in to_dict.keys():
+                to_dict[key] = from_dict[key]
+    return to_dict
+
+def getTimeInterval(times):
+    '''
+    attempts to find out the time interval of the time series by finding the most common time interval
+    :param times: list of times
+    :return:
+    '''
+
+    t_ints = []
+    for i, t in enumerate(times):
+        if i == 0: #skip 1
+            last_time = t
+        else:
+            t_ints.append(t - last_time)
+
+    return getMostCommon(t_ints)
+
+def confirmColor(user_color, default_color):
+    '''
+    confirms the color choice is valid. If not, checks to see if common mistake with spaces.
+    If neither work, return a default color.
+    :param user_color: desired color for line to check
+    :param default_color: backup color we know works
+    :return: color string
+    '''
+
+    if not is_color_like(user_color):
+        if not is_color_like(user_color.replace(' ', '')):
+            print2stdout('Invalid color with {0}'.format(user_color))
+            print2stdout('Replacing with default color')
+            return default_color
+        else:
+            print2stdout('Misspelling in color with {0}'.format(user_color))
+            print2stdout('Replacing with {0}'.format(user_color.replace(' ', '')))
+            return user_color.replace(' ', '')
+    else:
+        return user_color
+
+def fixDuplicateColors(line_settings):
+    '''
+    when doing comparison runs, we can end up with multiple runs with the same lines set
+    settings can be set to a list of colors, like linecolors instead of linecolor.
+    finds the correct index for each line ,or chooses a default color
+    :param line_settings: dictionary containing line settings
+    :return: line settings with updated color settings
+    '''
+
+    lineusedcount = line_settings['numtimesused']
+    if lineusedcount > len(constants.def_colors):
+        defcol_idx = lineusedcount%len(constants.def_colors)
+    else:
+        defcol_idx = lineusedcount
+    if line_settings['drawline'].lower() == 'true':
+        if lineusedcount > 0: #if more than one, the color specified is already used. Use a new color..
+            if 'linecolors' in line_settings.keys():
+                if lineusedcount > len(line_settings['linecolors']):
+                    lc_idx = lineusedcount%len(line_settings['linecolors'])
+                else:
+                    lc_idx = lineusedcount
+                line_settings['linecolor'] = line_settings['linecolors'][lc_idx]
+            else:
+                line_settings['linecolor'] = constants.def_colors[defcol_idx]
+        else: #case where first line, but linecolor isnt defined, but linecolorS is
+            #so it used default color INSTEAD of the desired colro...
+            if 'linecolors' in line_settings.keys():
+                line_settings['linecolor'] = line_settings['linecolors'][0]
+
+    if line_settings['drawpoints'].lower() == 'true':
+        if lineusedcount > 0: #if more than one, the color specified is already used. Use a new color..
+            if 'pointfillcolors' in line_settings.keys():
+                if isinstance(line_settings['pointfillcolors'], dict):
+                    line_settings['pointfillcolors'] = [line_settings['pointfillcolors']['pointfillcolor']]
+                # pfc_idx = copy.copy(lineusedcount_idx)
+                if lineusedcount > len(line_settings['pointfillcolors']):
+                    pfc_idx = lineusedcount%len(line_settings['pointfillcolors'])
+                else:
+                    pfc_idx = lineusedcount
+                line_settings['pointfillcolor'] = line_settings['pointfillcolors'][pfc_idx]
+            if 'pointlinecolors' in line_settings.keys():
+                if isinstance(line_settings['pointlinecolors'], dict):
+                    line_settings['pointlinecolors'] = [line_settings['pointlinecolors']['pointlinecolor']]
+                if lineusedcount > len(line_settings['pointlinecolors']):
+                    plc_idx = lineusedcount%len(line_settings['pointlinecolors'])
+                else:
+                    plc_idx = lineusedcount
+                line_settings['pointlinecolor'] = line_settings['pointlinecolors'][plc_idx]
+
+            if 'pointfillcolor' not in line_settings.keys():
+                if 'pointlinecolor' in line_settings.keys():
+                    line_settings['pointfillcolor'] = line_settings['pointlinecolor']
+                else:
+                    line_settings['pointfillcolor'] = constants.def_colors[defcol_idx]
+
+            if 'pointlinecolor' not in line_settings.keys():
+                if 'pointfillcolor' in line_settings.keys():
+                    line_settings['pointlinecolor'] = line_settings['pointfillcolor']
+                else:
+                    line_settings['pointlinecolor'] = constants.def_colors[defcol_idx]
+
+        else: #case where first line, but linecolor isnt defined, so it used default color...
+            if 'pointfillcolors' in line_settings.keys():
+                if isinstance(line_settings['pointfillcolors'], dict):
+                    line_settings['pointfillcolors'] = [line_settings['pointfillcolors']['pointfillcolor']]
+                line_settings['pointfillcolor'] = line_settings['pointfillcolors'][0]
+            if 'pointlinecolors' in line_settings.keys():
+                if isinstance(line_settings['pointlinecolors'], dict):
+                    line_settings['pointlinecolors'] = [line_settings['pointlinecolors']['pointlinecolor']]
+                line_settings['pointlinecolor'] = line_settings['pointlinecolors'][0]
+
+    return line_settings
+
+def applyXLimits(Report, dates, values, xlims):
+    '''
+    if the filterbylimits flag is true, filters out values outside of the xlimits
+    :param dates: list of dates
+    :param values: list of values
+    :param xlims: dictionary of xlims, containing potentially min and/or max
+    :return: filtered dates and values
+    '''
+
+    if isinstance(dates[0], (int, float)):
+        wantedformat = 'jdate'
+    elif isinstance(dates[0], dt.datetime):
+        wantedformat = 'datetime'
+    if 'min' in xlims.keys():
+        min = WT.translateDateFormat(xlims['min'], wantedformat, Report.StartTime, Report.StartTime, Report.EndTime,
+                                     Report.ModelAlt.t_offset)
+        for i, d in enumerate(dates):
+            if min > d:
+                values[i] = np.nan #exclude
+    if 'max' in xlims.keys():
+        max = WT.translateDateFormat(xlims['max'], wantedformat, Report.EndTime,
+                                     Report.StartTime, Report.EndTime,
+                                     Report.ModelAlt.t_offset)
+        for i, d in enumerate(dates):
+            if max < d:
+                values[i] = np.nan #exclude
+
+    return dates, values
+
+def applyYLimits(dates, values, ylims):
+    '''
+    if the filterbylimits flag is true, filters out values outside of the ylimits
+    :param dates: list of dates
+    :param values: list of values
+    :param ylims: dictionary of ylims, containing potentially min and/or max
+    :return: filtered dates and values
+    '''
+
+    if 'min' in ylims.keys():
+        for i, v in enumerate(values):
+            if float(ylims['min']) > v:
+                values[i] = np.nan #exclude
+    if 'max' in ylims.keys():
+        for i, v in enumerate(values):
+            if float(ylims['max']) < v:
+                values[i] = np.nan #exclude
+
+    return dates, values
+
+def getGateOperationTimes(gatedata):
+    '''
+    gets times when gates are operational
+    :param gatedata: dictionary containing gate data
+    :return: list of dates with dates operational
+    '''
+
+    operationIndex = np.array([], dtype=int)
+    for gatelevel in gatedata.keys():
+        gate0 = list(gatedata[gatelevel]['gates'].keys())[0]
+        gateops_datamask = np.zeros(len(gatedata[gatelevel]['gates'][gate0]['values']), dtype=bool) #assume everything closed
+        for gi, gate in enumerate(gatedata[gatelevel]['gates']):
+            curgate = gatedata[gatelevel]['gates'][gate]
+            msk = ~np.isnan(curgate['values'])
+            gateops_datamask = gateops_datamask | msk #change when differnt
+
+        operationIndex = np.append(operationIndex, np.where(gateops_datamask[:-1] != gateops_datamask[1:])[0])
+
+    return curgate['dates'][np.unique(operationIndex)]
+
+def matcharrays( array1, array2):
+    '''
+    iterative recursive function that aims to line up arrays of different lengths. Takes in variable input so that
+    if there are lists of lists with a single date (aka profiles), alligns those so each elevation value has a date
+    assigned to it for easy output
+    :param array1: np.array or list of values, generally values
+    :param array2: np.array or list of values, generally dates
+    :return: array1 with correct length
+    '''
+
+    if isinstance(array1, (list, np.ndarray)) and isinstance(array2, (list, np.ndarray)):
+        if len(np.asarray(array1, dtype=object).shape) < len(np.asarray(array2, dtype=object).shape):
+            new_array1 = np.array([])
+            for i, ar2 in enumerate(array2):
+                new_array1 = np.append(new_array1, np.asarray([array1[i]] * len(ar2)))
+            return new_array1
+        #if both are lists..
+        elif len(array1) < len(array2):
+            '''
+            either ['Date1', 'Date2'], ['1,2,3'] OR ['Date1'], [1,2,3] OR ['DATE1'], [[1,2,3], [1,2,3,4]]
+             OR ['Date1', 'Date2'], [[1,2,3], [2,4,5],[6,
+             or [], [1,2,3]
+            scenario 1: shouldnt ever happen
+            scenario 2: do Date1 for each item in array2
+            scenario 3: do date1 for each value in each subarray in 2 '''
+
+            if len(array1) == 1: #solo date
+                new_array1 = []
+                for subarray2 in array2:
+                    new_array1.append(matcharrays(array1[0], subarray2))
+                return new_array1
+            elif len(array1) == 0: #no data
+                new_array1 = []
+                for subarray2 in array2:
+                    new_array1.append(matcharrays('', subarray2))
+                return new_array1
+
+            else:
+                print2stdout('ERROR') #If the Len of the arrays are offset, then there should only ever be 1 date
+        elif len(array1) == len(array2):
+            new_array1 = []
+            for i, subarray1 in enumerate(array1):
+                new_array1.append(matcharrays(subarray1, array2[i]))
+            return new_array1
+        else:
+            print2stdout('Array 1 is bigger than array2')
+            print2stdout(len(array1))
+            print2stdout(len(array2))
+            new_array1 = []
+            for i in range(len(array2)):
+                new_array1.append(array1[i])
+            return new_array1
+
+    #GOAL LOOP
+    elif isinstance(array1, (str, dt.datetime, int, float)) and isinstance(array2, (list, np.ndarray)):
+        # array1 is a single value, array2 is a list of values
+        new_array1 = []
+        for subarray2 in array2:
+            if isinstance(subarray2, (list, np.ndarray)):
+                new_array1.append(matcharrays(array1, subarray2))
+            else:
+                new_array1.append(array1)
+        return new_array1
+
+    else:
+        return array1
+
+def pickByParameter(values, line):
+    '''
+    some data (W2) has multiple parameters coming from a single results file, we can't know which one we want at
+    the moment. This grabs the right parameter based on input
+    :param values: dictionary of values
+    :param line: dictionary of line settings
+    :return:
+        values: list of values
+    '''
+
+    w2_param_dict = {'temperature': 't(c)',
+                     'elevation': 'elevcl',
+                     'flow': 'q(m3/s)'}
+
+    if 'parameter' not in line.keys():
+        print2stdout("Parameter not set for line.")
+        print2stdout("using the first set of values, {0}".format(list(values.keys())[0]))
+        return values[list(values.keys())[0]]
+    else:
+        if line['parameter'].lower() not in w2_param_dict.keys():
+            print2stdout('Parameter {0} not found in dict in pickByParameter(). {1}'.format(line['parameter'].lower(), w2_param_dict.keys()))
+            print2stdout("using the first set of values, {0}".format(list(values.keys())[0]))
+            return values[list(values.keys())[0]]
+        else:
+            p = line['parameter'].lower()
+            param_key = w2_param_dict[p]
+            return values[param_key]
+
+def prioritizeKey(firstchoice, secondchoice, key, backup=None):
+    '''
+    looks for a key in two sets of settings. If the key is in first choice, use that one. then check the second choice.
+    if it neither, just use backup.
+    :param firstchoice: dictionary
+    :param secondchoice: dictionary
+    :param key: settings key to look for in dictionaries
+    :param backup: backup value if in neither.
+    :return: setting from prioritized dictionary
+    '''
+
+    if key in firstchoice:
+        return firstchoice[key]
+    elif key in secondchoice:
+        return secondchoice[key]
+    else:
+        return backup
+
+def getListItems(listvals):
+    '''
+    recursive function to convert lists of lists into single lists for logging
+    :param listvals: value object
+    :return: list of values
+    '''
+
+    if isinstance(listvals, (list, np.ndarray)):
+        outvalues = []
+        for item in listvals:
+            if isinstance(item, (list, np.ndarray)):
+                vals = getListItems(item)
+                for v in vals:
+                    outvalues.append(v)
+            else:
+                return listvals #we just have a list of values, so we're good! return list
+    elif isinstance(listvals, dict):
+        outvalues = getListItemsFromDict(listvals)
+    return outvalues
+
+def getListItemsFromDict(indict):
+    '''
+    recursive function to convert dictionary of lists into single dictionary for logging. Keys are determined
+    using original keys
+    :param indict: value dictionary object
+    :return: dictionary of values
+    '''
+
+    outdict = {}
+    for key in indict:
+        if isinstance(indict[key], dict):
+            returndict = getListItemsFromDict(indict[key])
+            returndict = {'{0}_{1}'.format(key, newkey): returndict[newkey] for newkey in returndict}
+            for key in returndict.keys():
+                outdict[key] = returndict[key]
+        elif isinstance(indict[key], (list, np.ndarray)):
+            outdict[key] = indict[key]
+    return outdict
+
+def replaceOmittedValues(values, omitval):
+    '''
+    replaces a specified value in time series. Can be variable depending on data source (-99999, 0, 100, etc)
+    :param values: array of values
+    :param omitval: value to be omitted
+    :return: new values
+    '''
+
+    if isinstance(values, dict):
+        new_values = {}
+        for key in values:
+            new_values[key] = replaceOmittedValues(values[key], omitval)
+    else:
+        o_msk = np.where(values == omitval)
+        values[o_msk] = np.nan
+        new_values = np.asarray(values)
+        print2stdout('Omitted {0} values of {1}'.format(len(o_msk[0]), omitval))
+    return new_values
+
+def replaceDefaults(Report, default_settings, object_settings):
+    '''
+    makes deep copies of default and defined settings so no settings are accidentally carried over
+    replaces flagged values (%%) with easily identified variables
+    iterates through settings and replaces all default settings with defined settings
+    :param default_settings: default object settings dictionary
+    :param object_settings: user defined settings dictionary
+    :return:
+        default_settings: dictionary of user and default settings
+    '''
+
+    default_settings = pickle.loads(pickle.dumps(replaceflaggedValues(Report, default_settings, 'general'), -1))
+    object_settings = pickle.loads(pickle.dumps(replaceflaggedValues(Report, object_settings, 'general'), -1))
+
+    for key in object_settings.keys():
+        if key not in default_settings.keys(): #if defaults doesnt have key
+            default_settings[key] = object_settings[key]
+        elif default_settings[key] == None: #if defaults has key, but is none
+            default_settings[key] = object_settings[key]
+        elif isinstance(object_settings[key], list): #if settings is a list, aka rows or lines
+            # if key.lower() == 'rows': #if the default has rows defined, just overwrite them.
+            if key in default_settings.keys():
+                default_settings[key] = object_settings[key]
+            elif key.lower() not in default_settings.keys():
+                default_settings[key] = object_settings[key] #if the defaults dont have anything defined, fill it in
+        else:
+            default_settings[key] = object_settings[key]
+
+    return default_settings
+
+def getDateSourceFlag(object_settings):
+    '''
+    Gets the datesource from object settings
+    :param object_settings: currently selected object settings dictionary
+    :return: datessource_flag
+    '''
+
+    if 'datessource' in object_settings.keys():
+        datessource_flag = object_settings['datessource'] #determine how you want to get dates? either flag or list
+    else:
+        datessource_flag = [] #let it make timesteps
+
+    return datessource_flag

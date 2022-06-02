@@ -21,6 +21,8 @@ from collections import Counter
 import xml.etree.ElementTree as ET
 import pendulum
 
+import WAT_Functions as WF
+
 def definedVarCheck(Block, flags):
     '''
     confirms that all flags are contained in the given block, aka check for headers in XML
@@ -48,10 +50,10 @@ def readSimulationFile(simulation_name, studyfolder, iscomp=False):
         simulation_file = os.path.join(studyfolder, 'reports', '{0}_comparison.csv'.format(simulation_name.replace(' ', '_')))
     else:
         simulation_file = os.path.join(studyfolder, 'reports', '{0}.csv'.format(simulation_name.replace(' ', '_')))
-    print('Attempting to read {0}'.format(simulation_file))
+    WF.print2stdout('Attempting to read {0}'.format(simulation_file))
     if not os.path.exists(simulation_file):
-        print('ERROR: no Simulation CSV file {0}.csv for simulation: {1}'.format(simulation_name.replace(' ', '_'), simulation_name))
-        sys.exit()
+        WF.print2stderr('ERROR: no Simulation CSV file {0}.csv for simulation: {1}'.format(simulation_name.replace(' ', '_'), simulation_name))
+        sys.exit(1)
     sim_info = {}
     with open(simulation_file, 'r') as sf:
         for i, line in enumerate(sf):
@@ -150,14 +152,14 @@ def readDSSData(dss_file, pathname, startdate, enddate):
     endDatestr = enddate.strftime('%d%b%Y %H:%M:%S')
 
     if not os.path.exists(dss_file):
-        print('DSS file not found!', dss_file)
+        WF.print2stdout('DSS file not found!', dss_file)
         return [], [], None
 
     fid = HecDss.Open(dss_file)
     ts = fid.read_ts(pathname,window=(startDatestr,endDatestr),regular=True,trim_missing=False)
     if ts.empty: #if empty, it must be the path or time window. DSS record must exist
-        print('Invalid Timeseries record path of {0} or time window of {1} - {2}'.format(pathname, startDatestr, endDatestr))
-        print('Please check these parameters and rerun.')
+        WF.print2stdout('Invalid Timeseries record path of {0} or time window of {1} - {2}'.format(pathname, startDatestr, endDatestr))
+        WF.print2stdout('Please check these parameters and rerun.')
         return [], [], None
     values = np.array(ts.values)
     values[ts.nodata] = np.nan
@@ -175,8 +177,8 @@ def readDSSData(dss_file, pathname, startdate, enddate):
 
     if not made_ts:
         times = np.asarray(ts.pytimes)
-        print('Irregular DSS detected with {0} in {1}'.format(pathname, dss_file))
-        print('Recommend changing to regular time series for speed increases.')
+        WF.print2stdout('Irregular DSS detected with {0} in {1}'.format(pathname, dss_file))
+        WF.print2stdout('Recommend changing to regular time series for speed increases.')
     else:
         times = np.asarray(times)
 
@@ -247,7 +249,7 @@ def readTextProfile(observed_data_filename, timestamps, starttime=None, endtime=
     last_dt = dt.datetime(1933, 10, 15)
     hold_dt = dt.datetime(1933, 10, 15) #https://www.onthisday.com/date/1933/october/15 sorry Steve
     if not os.path.exists(observed_data_filename):
-        print('Observed data at {0} does not exist.'.format(observed_data_filename))
+        WF.print2stdout('Observed data at {0} does not exist.'.format(observed_data_filename))
         return [], [], []
     with open(observed_data_filename, 'r') as odf:
         for j, line in enumerate(odf):
@@ -479,6 +481,8 @@ def readSimulationInfo(Report, simulationInfoFile):
                 self.observedData
     '''
 
+    WF.checkExists(simulationInfoFile)
+
     Report.Simulations = []
     tree = ET.parse(simulationInfoFile)
     root = tree.getroot()
@@ -527,19 +531,9 @@ def readGraphicsDefaultFile(Report):
     '''
 
     graphicsDefaultfile = os.path.join(Report.studyDir, 'reports', 'Graphics_Defaults.xml')
+    WF.checkExists(graphicsDefaultfile)
     # graphicsDefaultfile = os.path.join(self.default_dir, 'Graphics_Defaults.xml') #TODO: implement with build
     Report.graphicsDefault = readGraphicsDefaults(graphicsDefaultfile)
-
-def readDefaultLineStylesFile(Report):
-    '''
-    sets up path for default line styles file and reads the xml
-    :return: class variable
-                self.defaultLineStyles
-    '''
-
-    defaultLinesFile = os.path.join(Report.studyDir, 'reports', 'defaultLineStyles.xml')
-    # defaultLinesFile = os.path.join(self.default_dir, 'defaultLineStyles.xml') #TODO: implement with build
-    Report.defaultLineStyles = readDefaultLineStyle(defaultLinesFile)
 
 def readDefinitionsFile(Report, simorder):
     '''
@@ -550,6 +544,7 @@ def readDefinitionsFile(Report, simorder):
     '''
 
     ChapterDefinitionsFile = os.path.join(Report.studyDir, 'reports', simorder['deffile'])
+    WF.checkExists(ChapterDefinitionsFile)
     Report.ChapterDefinitions = readChapterDefFile(ChapterDefinitionsFile)
 
 def readComparisonSimulationsCSV(Report):
@@ -558,9 +553,9 @@ def readComparisonSimulationsCSV(Report):
     but are built in general the same as regular Simulation CSV files.
     :return:
     '''
+
     Report.SimulationCSV = readSimulationFile(Report.SimulationVariables['base']['baseSimulationName'],
                                               Report.studyDir, iscomp=Report.iscomp)
-
 
 if __name__ == '__main__':
     #TODO: for debugging, remove.
