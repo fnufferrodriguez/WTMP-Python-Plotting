@@ -70,13 +70,26 @@ class Tables(object):
 
         headers = {}
         rows = {}
+        includeallyears = False
+        if 'includeallyears' in object_settings.keys():
+            if object_settings['includeallyears'].lower() == 'true':
+                includeallyears = True
         outputyears = [n for n in self.Report.years] #this is usually a range or ALLYEARS
-        outputyears.append('ALL') #do this last
+        if includeallyears or not split_by_year:
+            outputyears.append('ALL') #do this last
         for year in outputyears:
             headers[year] = []
             rows[year] = {}
             for ri, row in enumerate(object_settings['rows']):
                 rows[year][ri] = []
+
+        # conditions
+        # -single run all years
+        # -single run split by year
+        # -single run split by year and include all years
+        # -comp run all years
+        # -comp run split by year
+        # -comp run split by year and include all years
 
         for i, header in enumerate(object_settings['headers']):
             curheader = pickle.loads(pickle.dumps(header, -1))
@@ -91,42 +104,49 @@ class Tables(object):
                         else:
                             tmpheader = pickle.loads(pickle.dumps(curheader, -1))
                         tmpheader = tmpheader.replace('%%{0}%%'.format(data[datakey]['flag']), '')
-                        if split_by_year and '%%year%%' in curheader:
-                            for year in self.Report.years:
-                                headers[year].append(tmpheader)
+                        if split_by_year:
+                            for year in outputyears:
+                                if year == 'ALL':
+                                    headers[year].append(tmpheader.replace('%%year%%', self.Report.years_str))
+                                else:
+                                    headers[year].append(tmpheader)
                                 for ri, row in enumerate(object_settings['rows']):
                                     srow = row.split('|')[1:][i]
                                     rows[year][ri].append(srow.replace(data[datakey]['flag'], datakey))
                         else:
-                            headers['ALL'].append(tmpheader)
+                            headers[year].append(tmpheader.replace('%%year%%', self.Report.years_str))
                             for ri, row in enumerate(object_settings['rows']):
                                 srow = row.split('|')[1:][i]
                                 rows['ALL'][ri].append(srow.replace(data[datakey]['flag'], datakey))
 
                 if not isused: #if a header doesnt get used, probably something observed and not needing replacing.
-                    if split_by_year and '%%year%%' in curheader:
-                        for year in self.Report.years:
-                            headers[year].append(curheader)
+                    if split_by_year:
+                        for year in outputyears:
+                            if year == 'ALL':
+                                headers[year].append(curheader.replace('%%year%%', self.Report.years_str))
+                            else:
+                                headers[year].append(curheader)
                             for ri, row in enumerate(object_settings['rows']):
                                 srow = row.split('|')[1:][i]
                                 rows[year][ri].append(srow)
-
                     else:
-                        headers['ALL'].append(curheader)
+                        headers[year].append(curheader.replace('%%year%%', self.Report.years_str))
                         for ri, row in enumerate(object_settings['rows']):
                             srow = row.split('|')[1:][i]
-                            rows['ALL'][ri].append(srow)
+                            rows['ALL'][ri].append(srow.replace(data[datakey]['flag'], datakey))
 
             else: #single run
-                if split_by_year and '%%year%%' in curheader:
-                    for year in self.Report.years:
-                        headers[year].append(curheader)
+                if split_by_year:
+                    for year in outputyears:
+                        if year == 'ALL':
+                            headers[year].append(curheader.replace('%%year%%', self.Report.years_str))
+                        else:
+                            headers[year].append(curheader)
                         for ri, row in enumerate(object_settings['rows']):
                             srow = row.split('|')[1:][i]
                             rows[year][ri].append(srow)
-
                 else:
-                    headers['ALL'].append(curheader)
+                    headers[year].append(curheader.replace('%%year%%', self.Report.years_str))
                     for ri, row in enumerate(object_settings['rows']):
                         srow = row.split('|')[1:][i]
                         rows['ALL'][ri].append(srow)

@@ -1,4 +1,16 @@
+'''
+* Copyright 2022 United States Bureau of Reclamation (USBR).
+* United States Department of the Interior
+* All Rights Reserved. USBR PROPRIETARY/CONFIDENTIAL.
+* Source may not be released without written approval
+* from USBR
 
+Created on 7/15/2021
+@author: scott
+@organization: Resource Management Associates
+@contact: scott@rmanet.com
+@note:
+'''
 
 import os
 import numpy as np

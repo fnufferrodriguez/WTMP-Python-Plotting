@@ -12,28 +12,17 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '5.0.4'
+VERSIONNUMBER = '5.0.5'
 
 import datetime as dt
 import os
 import sys
 import matplotlib.pyplot as plt
 import matplotlib as mpl
-from matplotlib.colors import is_color_like, to_hex
 import numpy as np
-import pandas as pd
-import xml.etree.ElementTree as ET
-import calendar
-import re
-from collections import Counter
-import shutil
-from scipy import interpolate
-from functools import reduce
 import pickle
-import pendulum
 import itertools
 import traceback
-import math
 
 import WAT_Reader as WR
 import WAT_Functions as WF
@@ -176,7 +165,7 @@ class MakeAutomatedReport(object):
                 figsize=(12, 6)
                 pageformat = 'half'
             else:
-                figsize=(12,16)
+                figsize=(16,16)
                 pageformat = 'full'
 
             axis_weight = []
@@ -392,7 +381,7 @@ class MakeAutomatedReport(object):
                                 gate_line_settings['zorder'] = 4
 
                             if 'label' not in gate_line_settings.keys():
-                                gate_line_settings['label'] = '{0}_{1}'.format(gateop['label'], gate_count)
+                                gate_line_settings['label'] = '{0}_{1}'.format(gateop, gate_count)
 
                             if 'filterbylimits' not in gate_line_settings.keys():
                                 gate_line_settings['filterbylimits'] = 'true' #set default
@@ -487,64 +476,10 @@ class MakeAutomatedReport(object):
                                                        alpha=float(opline_settings['alpha']))
 
                 ### VERTICAL LINES ###
-                if 'vlines' in ax_settings.keys():
-                    for vline in ax_settings['vlines']:
-                        vline_settings = WD.getDefaultStraightLineSettings(vline)
-                        try:
-                            vline_settings['value'] = float(vline_settings['value'])
-                        except:
-                            vline_settings['value'] = WT.translateDateFormat(vline_settings['value'], 'datetime', '',
-                                                                             self.StartTime, self.EndTime,
-                                                                             self.ModelAlt.t_offset)
+                Plots.plotVerticalLines(ax_settings, ax, isdate=True)
 
-                        if 'dateformat' in ax_settings.keys():
-                            if ax_settings['dateformat'].lower() == 'jdate':
-                                if isinstance(vline_settings['value'], dt.datetime):
-                                    vline_settings['value'] = WT.DatetimeToJDate(vline_settings['value'], self.ModelAlt.t_offset)
-                                elif isinstance(vline_settings['value'], str):
-                                    try:
-                                        vline_settings['value'] = float(vline_settings['value'])
-                                    except:
-                                        vline_settings['value'] = WT.translateDateFormat(vline_settings['value'], 'datetime', '',
-                                                                                         self.StartTime, self.EndTime,
-                                                                                         self.ModelAlt.t_offset)
-                                        vline_settings['value'] = WT.DatetimeToJDate(vline_settings['value'], self.ModelAlt.t_offset)
-                            elif ax_settings['dateformat'].lower() == 'datetime':
-                                if isinstance(vline_settings['value'], (int,float)):
-                                    vline_settings['value'] = WT.JDateToDatetime(vline_settings['value'], self.startYear)
-                                elif isinstance(vline_settings['value'], str):
-                                    vline_settings['value'] = WT.translateDateFormat(vline_settings['value'], 'datetime', '',
-                                                                                     self.StartTime, self.EndTime,
-                                                                                     self.ModelAlt.t_offset)
-                        else:
-                            vline_settings['value'] = WT.translateDateFormat(vline_settings['value'], 'datetime', '',
-                                                                             self.StartTime, self.EndTime,
-                                                                             self.ModelAlt.t_offset)
-
-                        if 'label' not in vline_settings.keys():
-                            vline_settings['label'] = None
-                        if 'zorder' not in vline_settings.keys():
-                            vline_settings['zorder'] = 3
-
-                        ax.axvline(vline_settings['value'], label=vline_settings['label'], c=vline_settings['linecolor'],
-                                   lw=vline_settings['linewidth'], ls=vline_settings['linestylepattern'],
-                                   zorder=float(vline_settings['zorder']),
-                                   alpha=float(vline_settings['alpha']))
-                            
                 ### Horizontal LINES ###
-                if 'hlines' in ax_settings.keys():
-                    for hline in ax_settings['hlines']:
-                        hline_settings = WD.getDefaultStraightLineSettings(hline)
-                        if 'label' not in hline_settings.keys():
-                            hline_settings['label'] = None
-                        if 'zorder' not in hline_settings.keys():
-                            hline_settings['zorder'] = 3
-                        hline_settings['value'] = float(hline_settings['value'])
-
-                        ax.axhline(hline_settings['value'], label=hline_settings['label'], c=hline_settings['linecolor'],
-                                   lw=hline_settings['linewidth'], ls=hline_settings['linestylepattern'],
-                                   zorder=float(hline_settings['zorder']),
-                                   alpha=float(hline_settings['alpha']))
+                Plots.plotHorizontalLines(ax_settings, ax)
 
                 plotunits = WF.getPlotUnits(unitslist, ax_settings)
                 plotunits2 = WF.getPlotUnits(unitslist2, ax_settings)
@@ -821,22 +756,27 @@ class MakeAutomatedReport(object):
         if not object_settings['split_by_year']: #if we dont want to split by year, just make a big ass list
             yrheaders = [list(itertools.chain.from_iterable(yrheaders))]
             yrheaders_i = [list(itertools.chain.from_iterable(yrheaders_i))]
-        for yi, year in enumerate(self.years):
-            if len(yrheaders[yi]) == 0:
-                WF.print2stdout('No data for', year)
+        for yi, yrheader_group in enumerate(yrheaders):
+            if object_settings['split_by_year']:
+                yearstr = object_settings['yearstr'][yi]
+            else:
+                yearstr = self.years_str
+
+            if len(yrheader_group) == 0:
+                WF.print2stdout('No data for', yearstr)
                 continue
-            yearstr = object_settings['yearstr'][yi]
+
             object_desc = WF.updateFlaggedValues(object_settings['description'], '%%year%%', yearstr)
             if self.iscomp:
                 self.XML.writeDateControlledTableStart(object_desc, 'Statistics')
             else:
                 self.XML.writeTableStart(object_desc, 'Statistics')
-            for yhi, yrheader in enumerate(yrheaders[yi]):
+            for yhi, yrheader in enumerate(yrheader_group):
                 if self.iscomp:
                     #if a comparison, write the date column. Otherwise, this will be our header
                     self.XML.writeDateColumn(yrheader)
                 header_i = yrheaders_i[yi][yhi]
-                headings, rows = Tables.buildProfileStatsTable(table_blueprint, yrheaders[yi][yhi], line_settings)
+                headings, rows = Tables.buildProfileStatsTable(table_blueprint, yrheader, line_settings)
                 for hi,heading in enumerate(headings):
                     frmt_rows = []
                     threshold_colors = np.full(len(rows), None)
@@ -1006,76 +946,10 @@ class MakeAutomatedReport(object):
                             Plots.plotPoints(values, levels, ax, current_ls)
 
                     ### HLINES ###
-                    if 'hlines' in cur_obj_settings.keys():
-                        for hline_settings in cur_obj_settings['hlines']:
-                            if 'value' in hline_settings.keys():
-                                value = float(hline_settings['value'])
-                                units = None
-                            else:
-                                dates, values, units = self.Data.getTimeSeries(hline_settings, makecopy=False)
-                                # hline_idx = np.where(object_settings['timestamps'][j] == dates)
-                                hline_idx = WR.getClosestTime([object_settings['timestamps'][j]], dates)
-                                if len(hline_idx) == 0:
-                                    value = np.nan
-                                else:
-                                    value = values[hline_idx[0]]
-
-                            if 'parameter' in hline_settings:
-                                if object_settings['usedepth'].lower() == 'true':
-                                    if hline_settings['parameter'].lower() == 'elevation':
-                                        value = 0 #top of the water, should always be 0
-                                elif object_settings['usedepth'].lower() == 'false':
-                                    if hline_settings['parameter'].lower() == 'depth':
-                                        valueconv = WProfile.convertDepthsToElevations({'hline': {'depths': [value],
-                                                                                              'elevations': []}})
-                                        value = valueconv['hline']['elevation'][0]
-
-                            #currently cant convert these units..
-                            # if units != None:
-                            #     valueconv, units = WF.convertUnitSystem(value, units, object_settings['unitsystem'])
-                            #     value = valueconv[0]
-
-                            ### instead, use scalar to be manual
-                            if 'scalar' in hline_settings.keys():
-                                value *= float(hline_settings['scalar'])
-
-                            hline_settings = WD.getDefaultStraightLineSettings(hline_settings)
-                            if 'label' not in hline_settings.keys():
-                                hline_settings['label'] = None
-                            if 'zorder' not in hline_settings.keys():
-                                hline_settings['zorder'] = 3
-
-                            ax.axhline(value, label=hline_settings['label'], c=hline_settings['linecolor'],
-                                       lw=hline_settings['linewidth'], ls=hline_settings['linestylepattern'],
-                                       zorder=float(hline_settings['zorder']),
-                                       alpha=float(hline_settings['alpha']))
+                    Plots.plotHorizontalLines(cur_obj_settings, ax, timestamp_index=j)
 
                     ### VERTICAL LINES ###
-                    if 'vlines' in cur_obj_settings.keys():
-                        for vline in cur_obj_settings['vlines']:
-                            vline_settings = WD.getDefaultStraightLineSettings(vline)
-                            if 'value' in vline_settings.keys():
-                                value = float(vline_settings['value'])
-                                units = None
-                            else:
-                                dates, values, units = self.Data.getTimeSeries(vline_settings, makecopy=False)
-                                # vline_idx = np.where(object_settings['timestamps'][j] == dates)
-                                vline_idx = WR.getClosestTime([object_settings['timestamps'][j]], dates)
-                                if len(vline_idx) == 0:
-                                    value = np.nan
-                                else:
-                                    value = values[vline_idx[0]]
-                                # value = values[vline_idx]
-
-                            if 'label' not in vline_settings.keys():
-                                vline_settings['label'] = None
-                            if 'zorder' not in vline_settings.keys():
-                                vline_settings['zorder'] = 3
-
-                            ax.axvline(value, label=vline_settings['label'], c=vline_settings['linecolor'],
-                                       lw=vline_settings['linewidth'], ls=vline_settings['linestylepattern'],
-                                       zorder=float(vline_settings['zorder']),
-                                       alpha=float(vline_settings['alpha']))
+                    Plots.plotVerticalLines(cur_obj_settings, ax, timestamp_index=j)
 
                     show_xlabel, show_ylabel = self.getPlotLabelMasks(i, len(pgi), subplot_cols)
 
@@ -1977,63 +1851,10 @@ class MakeAutomatedReport(object):
                                                  label=label)
 
                 ### VERTICAL LINES ###
-                if 'vlines' in contour_settings.keys():
-                    for vline in contour_settings['vlines']:
-                        vline_settings = WD.getDefaultStraightLineSettings(vline)
-                        try:
-                            vline_settings['value'] = float(vline_settings['value'])
-                        except:
-                            vline_settings['value'] = WT.translateDateFormat(vline_settings['value'], 'datetime', '',
-                                                                             self.StartTime, self.EndTime,
-                                                                             self.ModelAlt.t_offset)
-                        if 'dateformat' in contour_settings.keys():
-                            if contour_settings['dateformat'].lower() == 'jdate':
-                                if isinstance(vline_settings['value'], dt.datetime):
-                                    vline_settings['value'] = WT.DatetimeToJDate(vline_settings['value'], self.ModelAlt.t_offset)
-                                elif isinstance(vline_settings['value'], str):
-                                    try:
-                                        vline_settings['value'] = float(vline_settings['value'])
-                                    except:
-                                        vline_settings['value'] = WT.translateDateFormat(vline_settings['value'], 'datetime', '',
-                                                                                         self.StartTime, self.EndTime,
-                                                                                         self.ModelAlt.t_offset)
-                                        vline_settings['value'] = WT.DatetimeToJDate(vline_settings['value'], self.ModelAlt.t_offset)
-                            elif contour_settings['dateformat'].lower() == 'datetime':
-                                if isinstance(vline_settings['value'], (int,float)):
-                                    vline_settings['value'] = WT.JDateToDatetime(vline_settings['value'], self.startYear)
-                                elif isinstance(vline_settings['value'], str):
-                                    vline_settings['value'] = WT.translateDateFormat(vline_settings['value'], 'datetime', '',
-                                                                                     self.StartTime, self.EndTime,
-                                                                                     self.ModelAlt.t_offset)
-                        else:
-                            vline_settings['value'] = WT.translateDateFormat(vline_settings['value'], 'datetime', '',
-                                                                             self.StartTime, self.EndTime,
-                                                                             self.ModelAlt.t_offset)
-
-                        if 'label' not in vline_settings.keys():
-                            vline_settings['label'] = None
-                        if 'zorder' not in vline_settings.keys():
-                            vline_settings['zorder'] = 3
-
-                        ax.axvline(vline_settings['value'], label=vline_settings['label'], c=vline_settings['linecolor'],
-                                   lw=vline_settings['linewidth'], ls=vline_settings['linestylepattern'],
-                                   zorder=float(vline_settings['zorder']),
-                                   alpha=float(vline_settings['alpha']))
+                Plots.plotVerticalLines(contour_settings, ax, isdate=True)
 
                 ### Horizontal LINES ###
-                if 'hlines' in contour_settings.keys():
-                    for hline in contour_settings['hlines']:
-                        hline_settings = WD.getDefaultStraightLineSettings(hline)
-                        if 'label' not in hline_settings.keys():
-                            hline_settings['label'] = None
-                        if 'zorder' not in hline_settings.keys():
-                            hline_settings['zorder'] = 3
-                        hline_settings['value'] = float(hline_settings['value'])
-
-                        ax.axhline(hline_settings['value'], label=hline_settings['label'], c=hline_settings['linecolor'],
-                                   lw=hline_settings['linewidth'], ls=hline_settings['linestylepattern'],
-                                   zorder=float(hline_settings['zorder']),
-                                   alpha=float(hline_settings['alpha']))
+                Plots.plotHorizontalLines(contour_settings, ax)
 
                 if 'transitions' in contour_settings.keys():
                     for transkey in transitions.keys():
@@ -2391,63 +2212,10 @@ class MakeAutomatedReport(object):
                                                  label=label)
 
                 ### VERTICAL LINES ###
-                if 'vlines' in contour_settings.keys():
-                    for vline in contour_settings['vlines']:
-                        vline_settings = WD.getDefaultStraightLineSettings(vline)
-                        try:
-                            vline_settings['value'] = float(vline_settings['value'])
-                        except:
-                            vline_settings['value'] = WT.translateDateFormat(vline_settings['value'], 'datetime', '',
-                                                                             self.StartTime, self.EndTime,
-                                                                             self.ModelAlt.t_offset)
-                        if 'dateformat' in contour_settings.keys():
-                            if contour_settings['dateformat'].lower() == 'jdate':
-                                if isinstance(vline_settings['value'], dt.datetime):
-                                    vline_settings['value'] = WT.DatetimeToJDate(vline_settings['value'], self.ModelAlt.t_offset)
-                                elif isinstance(vline_settings['value'], str):
-                                    try:
-                                        vline_settings['value'] = float(vline_settings['value'])
-                                    except:
-                                        vline_settings['value'] = WT.translateDateFormat(vline_settings['value'], 'datetime', '',
-                                                                                         self.StartTime, self.EndTime,
-                                                                                         self.ModelAlt.t_offset)
-                                        vline_settings['value'] = WT.DatetimeToJDate(vline_settings['value'], self.ModelAlt.t_offset)
-                            elif contour_settings['dateformat'].lower() == 'datetime':
-                                if isinstance(vline_settings['value'], (int,float)):
-                                    vline_settings['value'] = WT.JDateToDatetime(vline_settings['value'], self.startYear)
-                                elif isinstance(vline_settings['value'], str):
-                                    vline_settings['value'] = WT.translateDateFormat(vline_settings['value'], 'datetime', '',
-                                                                                     self.StartTime, self.EndTime,
-                                                                                     self.ModelAlt.t_offset)
-                        else:
-                            vline_settings['value'] = WT.translateDateFormat(vline_settings['value'], 'datetime', '',
-                                                                             self.StartTime, self.EndTime,
-                                                                             self.ModelAlt.t_offset)
-
-                        if 'label' not in vline_settings.keys():
-                            vline_settings['label'] = None
-                        if 'zorder' not in vline_settings.keys():
-                            vline_settings['zorder'] = 3
-
-                        ax.axvline(vline_settings['value'], label=vline_settings['label'], c=vline_settings['linecolor'],
-                                   lw=vline_settings['linewidth'], ls=vline_settings['linestylepattern'],
-                                   zorder=float(vline_settings['zorder']),
-                                   alpha=float(vline_settings['alpha']))
+                Plots.plotVerticalLines(contour_settings, ax, isdate=True)
 
                 ### Horizontal LINES ###
-                if 'hlines' in contour_settings.keys():
-                    for hline in contour_settings['hlines']:
-                        hline_settings = WD.getDefaultStraightLineSettings(hline)
-                        if 'label' not in hline_settings.keys():
-                            hline_settings['label'] = None
-                        if 'zorder' not in hline_settings.keys():
-                            hline_settings['zorder'] = 3
-                        hline_settings['value'] = float(hline_settings['value'])
-
-                        ax.axhline(hline_settings['value'], label=hline_settings['label'], c=hline_settings['linecolor'],
-                                   lw=hline_settings['linewidth'], ls=hline_settings['linestylepattern'],
-                                   zorder=float(hline_settings['zorder']),
-                                   alpha=float(hline_settings['alpha']))
+                Plots.plotHorizontalLines(contour_settings, ax)
 
                 if self.iscomp:
                     if 'modeltext' in contour_settings.keys():
@@ -3271,8 +3039,10 @@ class MakeAutomatedReport(object):
 if __name__ == '__main__':
     rundir = sys.argv[0]
     simInfoFile = sys.argv[1]
+
     # import cProfile
     # ar = cProfile.run('MakeAutomatedReport(simInfoFile, rundir)')
+
     try:
         MakeAutomatedReport(simInfoFile, rundir)
     except:

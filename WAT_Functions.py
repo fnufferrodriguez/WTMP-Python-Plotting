@@ -20,10 +20,8 @@ from scipy.constants import convert_temperature
 from sklearn.metrics import mean_absolute_error
 import re
 import pickle
-import pandas as pd
 import datetime as dt
 from collections import Counter
-import pendulum
 from matplotlib.colors import is_color_like
 
 import WAT_Constants as WC

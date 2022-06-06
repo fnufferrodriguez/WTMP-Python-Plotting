@@ -33,7 +33,7 @@ def getDefaultDefaultLineStyles(i):
     if i >= len(constants.def_colors):
         i = i - len(constants.def_colors)
     return {'linewidth': 2, 'linecolor': constants.def_colors[i],
-            'linestylepattern': 'solid', 'alpha': 1.0}
+            'linestylepattern': 'solid', 'alpha': 1.0, 'zorder': 4}
 
 def getDefaultDefaultPointStyles(i):
     '''
