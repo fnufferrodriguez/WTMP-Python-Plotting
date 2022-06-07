@@ -372,7 +372,8 @@ def normalize2DElevations(vals, elevations):
 
 def matchProfileTimestamps(input_timestamps, timeseries_dict, onflag='values'):
     output = {}
-    timestamp_idx = WR.getClosestProfileTime(input_timestamps, timeseries_dict['dates'])
+    # timestamp_idx = WR.getClosestProfileTime(input_timestamps, timeseries_dict['dates'])
+    timestamp_idx = WR.getClosestTime(input_timestamps, timeseries_dict['dates'])
     output[onflag] = timeseries_dict[onflag][timestamp_idx]
     output['dates'] = timeseries_dict['dates'][timestamp_idx]
     for key in timeseries_dict.keys():
