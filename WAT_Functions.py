@@ -1416,3 +1416,9 @@ def getDateSourceFlag(object_settings):
         datessource_flag = [] #let it make timesteps
 
     return datessource_flag
+
+def getMaxWSEFromElev(input_data):
+    elevations = []
+    for e in input_data:
+        elevations.append(max(e))
+    return elevations

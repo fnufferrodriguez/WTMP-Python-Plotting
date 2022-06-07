@@ -474,6 +474,12 @@ class Tables(object):
             getdata = False
 
         out_stat = np.nan
+
+        for key in data.keys():
+            if len(data[key]) == 0:
+                WF.print2stdout('Insufficient data.')
+                getdata = False
+
         if row.lower().startswith('%%meanbias'):
             if getdata:
                 out_stat = WF.calcMeanBias(data[flag1], data[flag2])
@@ -743,6 +749,7 @@ class Tables(object):
                 output_interp_elevations = np.arange(bottom, top, (top-bottom)/float(resolution))
         else:
             output_interp_elevations = []
+            output_interp_depths = []
 
         for flag in flags:
             out_data[flag] = {}
@@ -753,20 +760,30 @@ class Tables(object):
                 out_data[flag]['values'] = []
                 out_data[flag]['depths'] = []
                 out_data[flag]['elevations'] = []
-            elif len(output_interp_elevations) == 0:
-                WF.print2stdout(f'Insufficient elevation points for row {flag} in {row}')
-                out_data[flag]['values'] = []
-                out_data[flag]['depths'] = []
-                out_data[flag]['elevations'] = []
+                continue
+            elif usedepth.lower() == 'true':
+                if len(output_interp_depths) == 0:
+                    WF.print2stdout(f'Insufficient depth points for row {flag} in {row}')
+                    out_data[flag]['values'] = []
+                    out_data[flag]['depths'] = []
+                    out_data[flag]['elevations'] = []
+                    continue
+            elif usedepth.lower() == 'false':
+                if len(output_interp_elevations) == 0:
+                    WF.print2stdout(f'Insufficient elevation points for row {flag} in {row}')
+                    out_data[flag]['values'] = []
+                    out_data[flag]['depths'] = []
+                    out_data[flag]['elevations'] = []
+                    continue
+            # else:
+            if usedepth.lower() == 'true':
+                f_interp = interpolate.interp1d(data_dict[flag]['depths'][index], data_dict[flag]['values'][index], fill_value='extrapolate')
+                out_data[flag]['depths'] = output_interp_depths
+                out_data[flag]['values'] = f_interp(output_interp_depths)
             else:
-                if usedepth.lower() == 'true':
-                    f_interp = interpolate.interp1d(data_dict[flag]['depths'][index], data_dict[flag]['values'][index], fill_value='extrapolate')
-                    out_data[flag]['depths'] = output_interp_depths
-                    out_data[flag]['values'] = f_interp(output_interp_depths)
-                else:
-                    f_interp = interpolate.interp1d(data_dict[flag]['elevations'][index], data_dict[flag]['values'][index], fill_value='extrapolate')
-                    out_data[flag]['elevations'] = output_interp_elevations
-                    out_data[flag]['values'] = f_interp(output_interp_elevations)
+                f_interp = interpolate.interp1d(data_dict[flag]['elevations'][index], data_dict[flag]['values'][index], fill_value='extrapolate')
+                out_data[flag]['elevations'] = output_interp_elevations
+                out_data[flag]['values'] = f_interp(output_interp_elevations)
 
         return out_data
 

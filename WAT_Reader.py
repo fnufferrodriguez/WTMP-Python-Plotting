@@ -410,7 +410,8 @@ def getchildren(root, returnkeyless=False):
                     children[root.tag.lower()] = []
                 else: #otherwise, we have a single dictionary
                     subroot = root[0]
-                    if subroot.tag.lower() == root.tag.lower()[:-1]: #if the subroots is just the root, but singular
+                    #if the subroots is just the root, but singular, aka lines -> line, reaches -> reach
+                    if subroot.tag.lower() == root.tag.lower()[:-1] or subroot.tag.lower() == root.tag.lower()[:-2]:
                         children[root.tag.lower()] = []
                     else:
                         children[root.tag.lower()] = {}

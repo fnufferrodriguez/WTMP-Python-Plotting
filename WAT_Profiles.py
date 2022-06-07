@@ -97,76 +97,91 @@ def getProfileTimestampYearMonthIndex(object_settings, years):
         timestamp_indexes.append(year_idx)
     return timestamp_indexes
 
-def convertDepthsToElevations(data, object_settings):
+def convertDepthsToElevations(data, object_settings, wse_data={}):
     '''
     handles data to convert depths into elevations for observed data
     :param object_settings: dicitonary of user defined settings for current object
     :return: object settings dictionary with updated elevation data
     '''
 
-    elev_flag = 'NOVALID'
+    found_elevs = False
     for ld in data.keys():
         if data[ld]['elevations'] == []:
             noelev_flag = ld
-            for old in data.keys():
-                if len(data[old]['elevations']) > 0:
-                    elev_flag = old
-                    break
+            wse_data_key = ld + '_wse'
+            if wse_data_key in wse_data.keys():
+                selected_wse_data = wse_data[wse_data_key]
+                selected_wse_data = matchProfileTimestamps(data[ld]['times'], selected_wse_data, onflag='elevations')['elevations']
+                found_elevs = True
+            else:
+                for old in data.keys():
+                    if len(data[old]['elevations']) > 0:
+                        # elev_flag = old
+                        selected_wse_data = data[old]['elevations']
+                        selected_wse_data = WF.getMaxWSEFromElev(selected_wse_data)
+                        found_elevs = True
+                        break
 
-            if elev_flag != 'NOVALID':
+            if found_elevs:
                 data[noelev_flag]['elevations'] = convertObsDepths2Elevations(data[noelev_flag]['depths'],
-                                                                              data[elev_flag]['elevations'])
+                                                                              selected_wse_data)
             else:
                 object_settings['usedepth'] = 'true'
     return data, object_settings
 
-def convertElevationsToDepths(data, object_settings):
+def convertElevationsToDepths(data, object_settings, wse_data={}):
     '''
     handles data to convert depths into elevations for observed data
     :param object_settings: dicitonary of user defined settings for current object
     :return: object settings dictionary with updated elevation data
     '''
 
-    depth_flag = 'NOVALID'
+    found_elevs = False
     for ld in data.keys():
-        if data[ld]['depths'] == []:
+        if data[ld]['elevations'] == []:
             nodepth_flag = ld
-            for old in data.keys():
-                if len(data[old]['depths']) > 0:
-                    depth_flag = old
-                    break
+            wse_data_key = ld + '_wse'
+            if wse_data_key in wse_data.keys():
+                selected_wse_data = wse_data[wse_data_key]
+                selected_wse_data = matchProfileTimestamps(data[ld]['times'], selected_wse_data, onflag='elevations')['elevations']
+                found_elevs = True
+            else:
+                for old in data.keys():
+                    if len(data[old]['elevations']) > 0:
+                        # elev_flag = old
+                        selected_wse_data = data[old]['elevations']
+                        selected_wse_data = WF.getMaxWSEFromElev(selected_wse_data)
+                        found_elevs = True
+                        break
 
-            if depth_flag != 'NOVALID':
-                data[nodepth_flag]['depths'] = convertObsElevations2Depths(data[nodepth_flag]['elevations'],
-                                                                           data[depth_flag]['depths'],
-                                                                           data[depth_flag]['elevations'])
+            if found_elevs:
+                data[nodepth_flag]['elevations'] = convertObsElevations2Depths(data[nodepth_flag]['elevations'],
+                                                                               selected_wse_data)
             else:
                 object_settings['usedepth'] = 'false'
     return data, object_settings
 
-def convertObsDepths2Elevations(obs_depths, model_elevs):
+def convertObsDepths2Elevations(input_depths, reference_elevs):
     '''
     calculate observed elevations based on model elevations and obs depths
-    :param obs_depths: array of depths for observed data at timestep
-    :param model_elevs: array of model elevations at timestep
+    :param input_depths: array of depths for observed data at timestep
+    :param reference_elevs: array of model elevations at timestep
     :return: array of observed elevations
     '''
 
     obs_elev = []
-    for i, d in enumerate(obs_depths):
-        e = []
-        modeled_elevs = model_elevs[i]
-        if len(modeled_elevs) == 0:
-            obs_elev.append(np.full(len(d), np.nan)) #make nan boys
-        else:
-            topwater_elev = max(model_elevs[i])
-
+    if len(reference_elevs) == 0:
+        obs_elev.append(np.full(len(input_depths), np.nan)) #make nan boys
+    else:
+        for i, d in enumerate(input_depths):
+            e = []
+            topwater_elev = reference_elevs[i]
             for depth in d:
                 e.append(topwater_elev - depth)
             obs_elev.append(np.asarray(e))
     return obs_elev
 
-def convertObsElevations2Depths(obs_elevs, model_depths, model_elevations):
+def convertObsElevations2Depths(input_elevs, reference_elevs):
     '''
     calculate observed elevations based on model elevations and obs depths
     :param obs_depths: array of depths for observed data at timestep
@@ -174,19 +189,17 @@ def convertObsElevations2Depths(obs_elevs, model_depths, model_elevations):
     :return: array of observed elevations
     '''
 
-    obs_depth = []
-    for i, e in enumerate(obs_elevs):
-        d = []
-        modeled_depths = model_depths[i]
-        if len(modeled_depths) == 0 or len(model_elevations[i]) == 0:
-            obs_depth.append(np.full(len(e), np.nan)) #make nan boys
-        else:
-            topwater_elev = max(model_elevations[i])
-
+    out_depth = []
+    if len(reference_elevs) == 0:
+        out_depth.append(np.full(len(input_elevs), np.nan)) #make nan boys
+    else:
+        for i, e in enumerate(input_elevs):
+            d = []
+            topwater_elev = reference_elevs[i]
             for elev in e:
                 d.append(topwater_elev - elev)
-            obs_depth.append(np.asarray(d))
-    return obs_depth
+            out_depth.append(np.asarray(d))
+    return out_depth
 
 def convertProfileDataUnits(object_settings, data, line_settings):
     '''
@@ -356,3 +369,14 @@ def normalize2DElevations(vals, elevations):
         valelev_interp = interpolate.interp1d(elevations[vi], v, bounds_error=False, fill_value ="extrapolate")
         newvals.append(valelev_interp(new_elevations))
     return np.asarray(newvals), np.asarray(new_elevations)
+
+def matchProfileTimestamps(input_timestamps, timeseries_dict, onflag='values'):
+    output = {}
+    timestamp_idx = WR.getClosestProfileTime(input_timestamps, timeseries_dict['dates'])
+    output[onflag] = timeseries_dict[onflag][timestamp_idx]
+    output['dates'] = timeseries_dict['dates'][timestamp_idx]
+    for key in timeseries_dict.keys():
+        if key not in output.keys():
+            output[key] = timeseries_dict[key]
+    return output
+

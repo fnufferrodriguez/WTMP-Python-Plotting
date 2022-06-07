@@ -130,6 +130,20 @@ class DataOrganizer(object):
                     data[flag][key] = line[key]
         return data
 
+    def getProfileWSE(self, settings, onflag='lines'):
+        wse_data = {}
+        for dataobject in settings[onflag]:
+            if 'wse' in dataobject.keys():
+                dates, values, units = self.getTimeSeries(dataobject['wse'], makecopy=False)
+                datamem_key = self.buildMemoryKey(dataobject['wse'])
+                new_key = dataobject['flag'] + '_wse'
+                wse_data[new_key] = {'elevations': values,
+                                  'dates': dates,
+                                  'units': units,
+                                  'logoutputfilename': datamem_key}
+
+        return wse_data
+
     def getTimeSeriesDataDictionary(self, settings):
         '''
         Gets profile line data from defined data sources in XML files
@@ -609,6 +623,7 @@ class DataOrganizer(object):
             else:
                 if not np.array_equal(object_settings['timestamps'], self.Memory[datamem_key]['times']):
                     write = True
+
             if write:
                 self.Memory[datamem_key] = {'times': object_settings['timestamps'],
                                              'values': values,

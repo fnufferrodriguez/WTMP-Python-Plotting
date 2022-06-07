@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '5.0.5'
+VERSIONNUMBER = '5.0.6'
 
 import datetime as dt
 import os
@@ -731,9 +731,11 @@ class MakeAutomatedReport(object):
 
         ################ convert yflags ################
         if object_settings['usedepth'].lower() == 'false':
-            data, object_settings = WProfile.convertDepthsToElevations(data, object_settings)
+            wse_data = self.Data.getProfileWSE(object_settings, onflag='datapaths')
+            data, object_settings = WProfile.convertDepthsToElevations(data, object_settings, wse_data=wse_data)
         elif object_settings['usedepth'].lower() == 'true':
-            data, object_settings = WProfile.convertElevationsToDepths(data, object_settings)
+            wse_data = self.Data.getProfileWSE(object_settings, onflag='datapaths')
+            data, object_settings = WProfile.convertElevationsToDepths(data, object_settings, wse_data=wse_data)
 
         ################# Get plot units #################
         data, line_settings = WProfile.convertProfileDataUnits(object_settings, data, line_settings)
@@ -859,9 +861,11 @@ class MakeAutomatedReport(object):
 
         ################ convert yflags ################
         if object_settings['usedepth'].lower() == 'false':
-            data, object_settings = WProfile.convertDepthsToElevations(data, object_settings)
+            wse_data = self.Data.getProfileWSE(object_settings)
+            data, object_settings = WProfile.convertDepthsToElevations(data, object_settings, wse_data=wse_data)
         elif object_settings['usedepth'].lower() == 'true':
-            data, object_settings = WProfile.convertElevationsToDepths(data, object_settings)
+            wse_data = self.Data.getProfileWSE(object_settings)
+            data, object_settings = WProfile.convertElevationsToDepths(data, object_settings, wse_data=wse_data)
 
         self.Data.commitProfileDataToMemory(data, line_settings, object_settings)
         linedata, object_settings = WProfile.filterProfileData(data, line_settings, object_settings)
@@ -1597,9 +1601,11 @@ class MakeAutomatedReport(object):
 
         ################ convert yflags ################
         if object_settings['usedepth'].lower() == 'false':
-            data, object_settings = WProfile.convertDepthsToElevations(data, object_settings)
+            wse_data = self.Data.getProfileWSE(object_settings, onflag='datapaths')
+            data, object_settings = WProfile.convertDepthsToElevations(data, object_settings, wse_data=wse_data)
         elif object_settings['usedepth'].lower() == 'true':
-            data, object_settings = WProfile.convertElevationsToDepths(data, object_settings)
+            wse_data = self.Data.getProfileWSE(object_settings, onflag='datapaths')
+            data, object_settings = WProfile.convertElevationsToDepths(data, object_settings, wse_data=wse_data)
 
         headings, rows = Tables.buildSingleStatTable(object_settings, line_settings)
 
