@@ -26,6 +26,11 @@ import WAT_Reader as WR
 class Plots(object):
 
     def __init__(self, Report):
+        '''
+        class that controls plotting functions
+        :param Report: self from main Report Generator script
+        '''
+
         self.Report = Report
 
     def confirmAxis(self, object_settings):
@@ -122,6 +127,14 @@ class Plots(object):
         return RelativeMasterSet, RelativeLineSettings
 
     def plotLinesAndPoints(self, x, y, curaxis, settings):
+        '''
+        plots lines and points on line on given axis
+        :param x: data list for x axis (dates or otherwise)
+        :param y: data list for y axis
+        :param curaxis: current axis object
+        :param settings: dictionary containing settings for plot object
+        '''
+
         curaxis.plot(x, y, label=settings['label'], c=settings['linecolor'],
                      lw=settings['linewidth'], ls=settings['linestylepattern'],
                      marker=settings['symboltype'], markerfacecolor=settings['pointfillcolor'],
@@ -130,12 +143,28 @@ class Plots(object):
                      alpha=float(settings['alpha']))
 
     def plotLines(self, x, y, curaxis, settings):
+        '''
+        plots lines on line on given axis
+        :param x: data list for x axis (dates or otherwise)
+        :param y: data list for y axis
+        :param curaxis: current axis object
+        :param settings: dictionary containing settings for plot object
+        '''
+
         curaxis.plot(x, y, label=settings['label'], c=settings['linecolor'],
                      lw=settings['linewidth'], ls=settings['linestylepattern'],
                      zorder=float(settings['zorder']),
                      alpha=float(settings['alpha']))
 
     def plotPoints(self, x, y, curaxis, settings):
+        '''
+        plots points on line on given axis
+        :param x: data list for x axis (dates or otherwise)
+        :param y: data list for y axis
+        :param curaxis: current axis object
+        :param settings: dictionary containing settings for plot object
+        '''
+
         curaxis.scatter(x[::int(settings['numptsskip'])], y[::int(settings['numptsskip'])],
                         marker=settings['symboltype'], facecolor=settings['pointfillcolor'],
                         edgecolor=settings['pointlinecolor'], s=float(settings['symbolsize']),
@@ -214,7 +243,7 @@ class Plots(object):
 
         newticklabels = []
         for tick in ticks:
-            if isinstance(tick, (np.float64, int, float)):
+            if isinstance(tick, (int, float)):
 
                 if 'numdecimals' in ticksettings.keys():
                     numdecimals = int(ticksettings['numdecimals'])
@@ -333,6 +362,13 @@ class Plots(object):
             curax.set_xticklabels(newxticklabels)
 
     def plotHorizontalLines(self, object_settings, ax, timestamp_index=None):
+        '''
+        organizes given data and plots horizontal lines on a given axis
+        :param object_settings: dictionary potentionally containing <hlines> field
+        :param ax: current axis
+        :param timestamp_index: optional datetime index if hline is a timeseries
+        '''
+
         if 'hlines' in object_settings.keys():
             for hline_settings in object_settings['hlines']:
                 if 'value' in hline_settings.keys():
@@ -340,7 +376,6 @@ class Plots(object):
                     units = None
                 else:
                     dates, values, units = self.Report.Data.getTimeSeries(hline_settings, makecopy=False)
-                    # hline_idx = np.where(object_settings['timestamps'][j] == dates)
                     if timestamp_index != None:
                         hline_idx = WR.getClosestTime([object_settings['timestamps'][timestamp_index]], dates)
                     else:
@@ -381,6 +416,14 @@ class Plots(object):
                            alpha=float(hline_settings['alpha']))
 
     def plotVerticalLines(self, object_settings, ax, isdate=False, timestamp_index=None):
+        '''
+        organizes given data and plots vertical lines on a given axis
+        :param object_settings: dictionary potentionally containing <vlines> field
+        :param ax: current axis
+        :param isdate: optional if input value is a date, in which case we may need to format it
+        :param timestamp_index: optional datetime index if vline is a timeseries
+        '''
+
         if 'vlines' in object_settings.keys():
             for vline in object_settings['vlines']:
                 vline_settings = WD.getDefaultStraightLineSettings(vline)

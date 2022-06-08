@@ -12,7 +12,6 @@ Created on 7/15/2021
 @note:
 '''
 
-
 class XMLReport(object):
 
     def __init__(self, XML_fn):
@@ -39,6 +38,12 @@ class XMLReport(object):
             XML.write('<USBR_Automated_Report>\n')
 
     def replaceinXML(self, StringToReplace, StringReplacing):
+        '''
+        replaces strings in XML file, mainly used for the run types in the intro
+        :param StringToReplace: string that is going to be replaced
+        :param StringReplacing: string to replace it with
+        '''
+
         xml_text = []
         with open(self.XML_fn, 'r') as XML:
             for line in XML:

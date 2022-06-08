@@ -30,9 +30,19 @@ import WAT_Time as WT
 constants = WC.WAT_Constants()
 
 def print2stdout(*a):
+    '''
+    prints standard message to the console standard out
+    :param a: print message
+    '''
+
     print(*a, file=sys.stdout)
 
 def print2stderr(*a):
+    '''
+    prints error message to console standard error
+    :param a: print message
+    '''
+
     print(*a, file=sys.stderr)
 
 def printVersion(VERSIONNUMBER):
@@ -43,6 +53,11 @@ def printVersion(VERSIONNUMBER):
     print2stdout('VERSION:', VERSIONNUMBER)
 
 def checkExists(infile):
+    '''
+    checks if important file exists, and if not, exit script with error
+    :param infile: file path
+    '''
+
     if not os.path.exists(infile):
         print2stderr(f'ERROR: {infile} does not exist')
         sys.exit(1)
@@ -56,7 +71,6 @@ def cleanMissing(indata):
     '''
 
     indata[indata == -901.] = np.nan
-
     return indata
 
 def cleanComputed(indata):
@@ -225,6 +239,7 @@ def checkData(dataset, flag='values'):
             return False
         else:
             return True
+
     elif isinstance(dataset, list) or isinstance(dataset, np.ndarray):
         if len(dataset) == 0:
             return False
@@ -365,8 +380,8 @@ def calcNSE(data1, data2):
     # nash = nse(data1['values'], data2['values'])
     ### STEVE
     nse_ = 1 - (
-            np.sum((data2['values'] - data1['values']) ** 2, axis=0, dtype=np.float64)
-            / np.sum((data2['values'] - np.mean(data2['values'])) ** 2, dtype=np.float64)
+            np.sum((data2['values'] - data1['values']) ** 2, axis=0, dtype=float)
+            / np.sum((data2['values'] - np.mean(data2['values'])) ** 2, dtype=float)
                )
 
     ### MIKE DEAS
@@ -374,6 +389,7 @@ def calcNSE(data1, data2):
     #         np.sum((data1['values'] - data2['values']) ** 2, axis=0, dtype=np.float64)
     #         / np.sum((data2['values'] - np.mean(data2['values'])) ** 2, dtype=np.float64)
     # )
+
     if np.isinf(nse_):
         nse_ = np.nan
 
@@ -389,7 +405,6 @@ def getCount(data1):
     dcheck1 = checkData(data1, flag='values')
     if not dcheck1:
         return np.nan
-    # return len(data1['values'])
     return len(np.where(~np.isnan(data1['values']))[0])
 
 def calcMean(data1):
@@ -482,13 +497,13 @@ def replaceFlaggedValue(Report, value, itemset):
         value: string with potential flags replaced
     '''
 
-
     if itemset == 'general':
         flagged_values = {'%%region%%': Report.ChapterRegion,
                           '%%observedDir%%': Report.observedDir,
                           '%%startyear%%': str(Report.startYear),
                           '%%endyear%%': str(Report.endYear)
                           }
+
     elif itemset == 'modelspecific':
         flagged_values = {'%%ModelDSS%%': Report.DSSFile,
                           '%%Fpart%%': Report.alternativeFpart,
@@ -633,6 +648,7 @@ def filterDataByYear(data, year, extraflag=None):
     :param year: selected year
     :return:dictionary containing fultered data
     '''
+
     if year != 'ALLYEARS':
         for flag in data.keys():
             if len(data[flag]['dates']) > 0:
@@ -1096,7 +1112,7 @@ def fixDuplicateColors(line_settings):
                     line_settings['pointfillcolors'] = [line_settings['pointfillcolors']['pointfillcolor']]
                 # pfc_idx = copy.copy(lineusedcount_idx)
                 if lineusedcount > len(line_settings['pointfillcolors']):
-                    pfc_idx = lineusedcount%len(line_settings['pointfillcolors'])
+                    pfc_idx = lineusedcount % len(line_settings['pointfillcolors'])
                 else:
                     pfc_idx = lineusedcount
                 line_settings['pointfillcolor'] = line_settings['pointfillcolors'][pfc_idx]
@@ -1104,7 +1120,7 @@ def fixDuplicateColors(line_settings):
                 if isinstance(line_settings['pointlinecolors'], dict):
                     line_settings['pointlinecolors'] = [line_settings['pointlinecolors']['pointlinecolor']]
                 if lineusedcount > len(line_settings['pointlinecolors']):
-                    plc_idx = lineusedcount%len(line_settings['pointlinecolors'])
+                    plc_idx = lineusedcount % len(line_settings['pointlinecolors'])
                 else:
                     plc_idx = lineusedcount
                 line_settings['pointlinecolor'] = line_settings['pointlinecolors'][plc_idx]
@@ -1175,6 +1191,7 @@ def applyYLimits(dates, values, ylims):
         for i, v in enumerate(values):
             if float(ylims['min']) > v:
                 values[i] = np.nan #exclude
+
     if 'max' in ylims.keys():
         for i, v in enumerate(values):
             if float(ylims['max']) < v:

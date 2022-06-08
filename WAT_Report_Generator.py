@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '5.0.7'
+VERSIONNUMBER = '5.0.8'
 
 import datetime as dt
 import os
@@ -41,6 +41,8 @@ import WAT_Tables as WTable
 import WAT_Plots as WPlot
 import WAT_Gates as WGates
 
+import warnings
+warnings.filterwarnings("always")
 
 class MakeAutomatedReport(object):
     '''
@@ -185,11 +187,7 @@ class MakeAutomatedReport(object):
                 fig, axes = plt.subplots(ncols=1, nrows=len(cur_obj_settings['axs']), figsize=figsize,
                                          gridspec_kw={'height_ratios': axis_weight})
 
-            # plt.subplots_adjust(wspace=0, hspace=0)
-
-            legend_left = False
             left_sided_axes = []
-            legend_right = False
             right_sided_axes = []
 
             for axi, ax_settings in enumerate(cur_obj_settings['axs']):
@@ -529,7 +527,7 @@ class MakeAutomatedReport(object):
 
                         handles, labels = ax.get_legend_handles_labels()
 
-                        if ax_settings['legend_outside'].lower() == 'true':
+                        if ax_settings['legend_outside'].lower() == 'true': #TODO: calibrate the offset
                             if _usetwinx:
                                 empty_handle, = ax.plot([],[],color="w")
                                 handles.append(empty_handle)
@@ -537,18 +535,15 @@ class MakeAutomatedReport(object):
                                 ax2_handles, ax2_labels = ax2.get_legend_handles_labels()
                                 handles += ax2_handles
                                 labels += ax2_labels
-                                legend_right = True
                                 right_sided_axes.append(ax)
                                 right_offset = ax.get_window_extent().x0 / ax.get_window_extent().width
                                 ax.legend(handles=handles, labels=labels, loc='center left', bbox_to_anchor=(1+right_offset/2, 0.5), ncol=1,fontsize=legsize)
 
                             else:
-                                legend_right = True
                                 right_sided_axes.append(ax)
                                 ax.legend(handles=handles, labels=labels, loc='center left', bbox_to_anchor=(1, 0.5), ncol=1,fontsize=legsize)
                         else:
                             ax.legend(fontsize=legsize)
-
 
                 ############# xticks and lims #############
 
@@ -705,6 +700,7 @@ class MakeAutomatedReport(object):
         :param object_settings: currently selected object settings dictionary
         :return: writes table to XML
         '''
+
         WF.print2stdout('\n################################')
         WF.print2stdout('Now making Profile Stats Table.')
         WF.print2stdout('################################\n')
@@ -742,7 +738,6 @@ class MakeAutomatedReport(object):
         object_settings['units_list'] = WF.getUnitsList(line_settings)
         object_settings['plot_units'] = WF.getPlotUnits(object_settings['units_list'], object_settings)
         object_settings = WF.updateFlaggedValues(object_settings, '%%units%%', object_settings['plot_units'])
-        # table_blueprint = pickle.loads(pickle.dumps(object_settings, -1))
 
         table_blueprint = WF.updateFlaggedValues(table_blueprint, '%%units%%', object_settings['plot_units'])
 
@@ -957,9 +952,6 @@ class MakeAutomatedReport(object):
 
                     show_xlabel, show_ylabel = self.getPlotLabelMasks(i, len(pgi), subplot_cols)
 
-                    # if cur_obj_settings['gridlines'].lower() == 'true':
-                    #     ax.grid(zorder=-9)
-
                     if show_ylabel:
                         if 'ylabel' in cur_obj_settings.keys():
                             if 'ylabelsize' in object_settings.keys():
@@ -1024,7 +1016,6 @@ class MakeAutomatedReport(object):
 
                     ax.set_xlim(left=xmin)
                     ax.set_xlim(right=xmax)
-
 
                     yticksize = 10 #default
                     if 'fontsize' in object_settings.keys():
@@ -1118,14 +1109,13 @@ class MakeAutomatedReport(object):
                                         if isinstance(dates[0], (int,float)):
                                             dates = WT.JDateToDatetime(dates, self.startYear)
 
-                                # gatemsk = np.where(object_settings['timestamps'][j] == dates)
                                 if gatemsk == None:
                                     gatemsk = WR.getClosestTime([object_settings['timestamps'][j]], dates)
                                 if len(gatemsk) == 0:
                                     value = np.nan
                                 else:
                                     value = values[gatemsk[0]]
-                                # value = values[gatemsk][0]
+
                                 xpos = gatepoint_xpositions[gate_count]
                                 if gategroup not in gateconfig.keys():
                                     gateconfig[gategroup] = {gate: value}
@@ -1217,10 +1207,7 @@ class MakeAutomatedReport(object):
                             else:
                                 bottomtext_str.append(text)
                         bottomtext = ', '.join(bottomtext_str)
-                        # plt.text(0.02, -0.2, bottomtext, fontsize=8, color='red', transform=ax.transFigure)
-                        # if show_xlabel:
-                        #     ax.annotate(bottomtext, xy=(0.02, -40), fontsize=6, color='red', xycoords='axes points')
-                        # else:
+
                         if show_xticks:
                             bottomtext_y = -25
                         else:
@@ -1647,7 +1634,6 @@ class MakeAutomatedReport(object):
                         stats_data = Tables.formatStatsProfileLineData(row_val, data, object_settings['resolution'],
                                                                      object_settings['usedepth'], di)
                         rowval_stats = WProfile.stackProfileIndicies(rowval_stats, stats_data)
-
 
                     row_val, stat = Tables.getStatsLine(row_val, rowval_stats)
                     if np.isnan(row_val):
@@ -2111,7 +2097,6 @@ class MakeAutomatedReport(object):
 
                 ax = axes[IDi]
 
-
                 parameter, contour_settings['param_count'] = WF.getParameterCount(contour, contour_settings)
 
                 if 'units' in contour_settings.keys():
@@ -2175,7 +2160,7 @@ class MakeAutomatedReport(object):
                                     vmin=vmin, vmax=vmax,
                                     levels=np.linspace(vmin, vmax, int(contour_settings['colorbar']['bins'])), #add one to get the desired number..
                                     extend='both') #the .T transposes the array so dates on bottom TODO:make extend variable
-                # ax.invert_yaxis()
+
                 # ax.plot(dates, topwater, c='red') #debug topwater
                 self.WAT_log.addLogEntry({'type': contour_settings['label'] + '_ContourPlot' if contour_settings['label'] != '' else 'ContourPlot',
                                           'name': self.ChapterRegion+'_'+yearstr,
@@ -2601,6 +2586,7 @@ class MakeAutomatedReport(object):
 
         if 'yticksize' in object_settings.keys():
             yticksize = float(object_settings['yticksize'])
+        elif 'fontsize' in object_settings.keys():
             yticksize = float(object_settings['fontsize'])
         else:
             yticksize = 10
@@ -2938,6 +2924,7 @@ class MakeAutomatedReport(object):
         loads model alternative specific settings for a given ID
         :param ID: selected ID, such as 'base' or 'alt_1'
         '''
+
         self.alternativeFpart = self.SimulationVariables[ID]['alternativeFpart']
         self.alternativeDirectory = self.SimulationVariables[ID]['alternativeDirectory']
         self.modelAltName = self.SimulationVariables[ID]['modelAltName']
@@ -3010,8 +2997,6 @@ class MakeAutomatedReport(object):
             outstr += ' {0}'.format(self.SimulationVariables[ID]['plugin'])
         self.XML.replaceinXML('%%REPLACEINTRO_{0}%%'.format(simorder), outstr)
 
-
-
     def checkModelType(self, line_info):
         '''
          checks to see if current data path configuration is congruent with currently loaded model ID.
@@ -3039,8 +3024,6 @@ class MakeAutomatedReport(object):
         self.loadCurrentModelAltID(ID)
         settings = WF.replaceflaggedValues(self, settings, 'modelspecific')
         return settings
-
-
 
 if __name__ == '__main__':
     rundir = sys.argv[0]

@@ -25,6 +25,10 @@ import WAT_Time as WT
 class Tables(object):
 
     def __init__(self, Report):
+        '''
+        Class to control table objects
+        :param Report: self class from main Report Generator script
+        '''
         self.Report = Report
 
     def buildHeadersByTimestamps(self, timestamps, years):
@@ -33,7 +37,7 @@ class Tables(object):
         convert to Datetime, no matter what. We can convert back..
         Filter by year, using year input. If ALLYEARS, no data is filtered.
         :param timestamps: list of available timesteps
-        :param year: used to filter down to the year, or if ALLYEARS, allow all years
+        :param years: used to filter down to the year, or if ALLYEARS, allow all years
         :return: list of headers
         '''
 
@@ -199,25 +203,37 @@ class Tables(object):
         elif len(data.keys()) > 2:
             WF.print2stdout('\nWARNING: Too many datapaths defined.')
             WF.print2stdout(f'Need 2 datapaths to compute statistics for {stat}')
+
+            if 'Computed' in datakeys:
+                flag1 = 'Computed'
+                if 'Observed' in datakeys:
+                    flag2 = 'Observed'
+                else:
+                    flag2 = [n for n in datakeys if n != flag1 and flag1 not in n][0] #not computed
+            else:
+                flag1 = datakeys[0]
+                flag2 = [n for n in datakeys if n != flag1 and flag1 not in n][0] #not computed
+            datakeys = [flag1, flag2]
+
             WF.print2stdout(f'Resulting table will use the following datapaths: {datakeys[0]}, {datakeys[1]}')
-        else:
-            for year in object_settings['years']:
-                row = f'{year}'
+
+        for year in object_settings['years']:
+            row = f'{year}'
+            for month in self.Report.Constants.mo_str_3:
+                if numflagsneeded == 1:
+                    row += f'|%%{stat}.{data[datakeys[0]]["flag"]}.MONTH={month.upper()}%%'
+                else:
+                    row += f'|%%{stat}.{data[datakeys[0]]["flag"]}.MONTH={month.upper()}.{data[datakeys[1]]["flag"]}.MONTH={month.upper()}%%'
+            rows.append(row)
+        if 'includeallyears' in object_settings.keys():
+            if object_settings['includeallyears'].lower() == 'true':
+                row = 'All'
                 for month in self.Report.Constants.mo_str_3:
                     if numflagsneeded == 1:
                         row += f'|%%{stat}.{data[datakeys[0]]["flag"]}.MONTH={month.upper()}%%'
                     else:
                         row += f'|%%{stat}.{data[datakeys[0]]["flag"]}.MONTH={month.upper()}.{data[datakeys[1]]["flag"]}.MONTH={month.upper()}%%'
                 rows.append(row)
-            if 'includeallyears' in object_settings.keys():
-                if object_settings['includeallyears'].lower() == 'true':
-                    row = 'All'
-                    for month in self.Report.Constants.mo_str_3:
-                        if numflagsneeded == 1:
-                            row += f'|%%{stat}.{data[datakeys[0]]["flag"]}.MONTH={month.upper()}%%'
-                        else:
-                            row += f'|%%{stat}.{data[datakeys[0]]["flag"]}.MONTH={month.upper()}.{data[datakeys[1]]["flag"]}.MONTH={month.upper()}%%'
-                    rows.append(row)
 
         return headers, rows
 
@@ -430,7 +446,7 @@ class Tables(object):
         '''
         takes rows for tables and replaces flags with the correct data, computing stat analysis if needed
         :param row: row section string
-        :param data_dict: dictionary of data that could be used
+        :param data: dictionary of data that could be used
         :return:
             out_stat: stat value
             stat: string name for stat
@@ -512,6 +528,12 @@ class Tables(object):
         return out_stat, stat
 
     def matchThresholdToStat(self, stat, object_settings):
+        '''
+        matches prescribed threshold values to statistic value
+        :param stat: string name of stat
+        :param object_settings: dictionary containing object settings
+        :return:
+        '''
         thresholds = []
         if 'tablecolors' in object_settings.keys():
             for tablecolor in object_settings['tablecolors']:
@@ -529,7 +551,7 @@ class Tables(object):
         :return: list of dictionary objects for each threshold
         '''
 
-        default_color = '#a6a6a6' #default
+        default_color = '#a6a6a6' #default, grey
         default_colorwhen = 'under' #default
         accepted_threshold_conditions = ['under', 'over']
         thresholds = []
@@ -568,7 +590,7 @@ class Tables(object):
         :return:hex color
         '''
 
-        threshold_color=default
+        threshold_color = default
         if in_color.startswith('#'):
             threshold_color = in_color
         else:

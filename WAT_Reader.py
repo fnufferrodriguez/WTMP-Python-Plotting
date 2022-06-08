@@ -187,6 +187,13 @@ def readDSSData(dss_file, pathname, startdate, enddate):
     return times, values, units
 
 def formatPyDSSToolsDates(datestring):
+    '''
+    takes in date strings and converts it to the correct form to be read by PYDSSTOOLS
+    fixes 2400 issues too
+    :param datestring: date string or datetime object
+    :return: formatted datetring
+    '''
+
     try:
         ts_stime = dt.datetime.strptime(datestring, '%d%b%Y %H:%M:%S')
     except ValueError:
@@ -197,7 +204,6 @@ def formatPyDSSToolsDates(datestring):
             ts_stime = dt.datetime.strptime(datestring, '%d%b%Y %H:%M:%S')
             ts_stime += dt.timedelta(days=1)
     return ts_stime
-
 
 def readW2ResultsFile(output_file_name, jd_dates, run_path, targetfieldidx=1):
     '''
@@ -261,7 +267,6 @@ def readTextProfile(observed_data_filename, timestamps, starttime=None, endtime=
             if dt_str == last_dtstr:
                 dt_tmp = last_dt
             else:
-                # dt_tmp = dateutil.parser.parse(dt_str)
                 dt_tmp = pendulum.parse(dt_str, strict=False).replace(tzinfo=None)
                 last_dtstr = dt_str
                 last_dt = dt_tmp
@@ -558,16 +563,5 @@ def readComparisonSimulationsCSV(Report):
     Report.SimulationCSV = readSimulationFile(Report.SimulationVariables['base']['baseSimulationName'],
                                               Report.studyDir, iscomp=Report.iscomp)
 
-if __name__ == '__main__':
-    #TODO: for debugging, remove.
-
-    # graphicsDefaultfile = r"D:\Work2021\USBR\RessimXMLTest\Shasta_W2_BUZZ.xml"
-    # results = ReadChapterDefFile(graphicsDefaultfile)
-    # for n in results:
-    #     print(n)
-    # graphicsDefaultfile = r"D:\Work2021\USBR\RessimXMLTest\Graphics_Defaults_Beta_v5.xml"
-    # results = read_GraphicsDefaults(graphicsDefaultfile)
-    # print(results)
-    print('debug.')
 
 

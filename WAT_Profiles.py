@@ -371,8 +371,15 @@ def normalize2DElevations(vals, elevations):
     return np.asarray(newvals), np.asarray(new_elevations)
 
 def matchProfileTimestamps(input_timestamps, timeseries_dict, onflag='values'):
+    '''
+    gets values from time series that allign with profile dates
+    :param input_timestamps: profile timesteps in a list
+    :param timeseries_dict: dictionary containing times and values
+    :param onflag: optional flag incase 'values' is the incorrect flag in timeseries_dict
+    :return: new dict with selected values and dates
+    '''
+
     output = {}
-    # timestamp_idx = WR.getClosestProfileTime(input_timestamps, timeseries_dict['dates'])
     timestamp_idx = WR.getClosestTime(input_timestamps, timeseries_dict['dates'])
     output[onflag] = timeseries_dict[onflag][timestamp_idx]
     output['dates'] = timeseries_dict['dates'][timestamp_idx]

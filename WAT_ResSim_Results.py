@@ -24,7 +24,7 @@ class ResSim_Results(object):
 
     def __init__(self, simulationPath, alternativeName, starttime, endtime, Report, external=False):
         '''
-        Class Builder init.
+        Class Builder init. Controls results and pathing for ResSim model results
         :param simulationPath: full path to ResSim simulation
         :param alternativeName: Name of selected Ressim Alternative run
         :param starttime: start time datetime object
@@ -55,6 +55,11 @@ class ResSim_Results(object):
         self.openH5File(self.h5fname)
 
     def openH5File(self, h5fname):
+        '''
+        opens hdf5 file instance
+        :param h5fname: filepath to hdf5 file
+        '''
+
         self.h = h5py.File(h5fname, 'r')
 
     def load_time(self):
@@ -114,7 +119,6 @@ class ResSim_Results(object):
 
         self.loadElevation(alt_subdomain_name=resname)
 
-
         vals = []
         elevations = []
         depths = []
@@ -154,22 +158,6 @@ class ResSim_Results(object):
             depths = np.array([])
             times = self.dt_dates
 
-            # for dti, dt_d in enumerate(self.dt_dates):
-            #     ktop = self.getTopLayer(dti) #get waterlevel top layer to know where to grab data from
-            #     v_el = self.vals[dti][:ktop + 1]
-            #     el = self.elev[:ktop + 1]
-            #     d_step = []
-            #     e_step = []
-            #     v_step = []
-            #     for ei, e in enumerate(el):
-            #         d_step.append(np.max(el) - e)
-            #         e_step.append(e)
-            #         v_step.append(v_el[ei])
-            #     depths.append(np.asarray(d_step))
-            #     elevations.append(np.asarray(e_step))
-            #     vals.append(np.asarray(v_step))
-            #     times.append(dt_d)
-
         return vals, elevations, depths, np.asarray(times)
 
     def getTopLayer(self, timestep_index):
@@ -201,12 +189,9 @@ class ResSim_Results(object):
         this_subdomain = self.subdomain_name if alt_subdomain_name is None else alt_subdomain_name
         cell_center_xy = self.h['Geometry/Subdomains/' + this_subdomain + '/Cell Center Coordinate']
         self.ncells = (np.shape(cell_center_xy))[0]
-        # self.elev = np.array([cell_center_xy[i][2] for i in range(self.ncells)])
         self.elev = np.array(cell_center_xy[:self.ncells, 2])
         elev_ts = self.h['Results/Subdomains/' + this_subdomain + '/Water Surface Elevation']
-        # self.elev_ts = np.array([elev_ts[i] for i in range(self.nt)])
         self.elev_ts = np.array(elev_ts[:self.nt])
-
 
     def loadResults(self, t_in, metrc, alt_subdomain_name=None):
         '''
@@ -426,16 +411,20 @@ class ResSim_Results(object):
             distance = np.asarray(distance)
         else:
             for cell in cell_center_xy:
-                d = np.sqrt( (cell[0] - firstpoint[0])**2 +  (cell[1] - firstpoint[1])**2)
+                d = np.sqrt( (cell[0] - firstpoint[0])**2 + (cell[1] - firstpoint[1])**2)
                 distance.append(d)
             #get roughly half the distance between first two cells. This is the closest we can get to half the cell distance
             first_distance_diff_half = (distance[1] - distance[0]) / 2
+
             #shift all distance so the first instance is now the cell center of the first point
             distance = np.asarray(distance) + first_distance_diff_half
+
             #then add 0 to the start, so it starts at 0
             distance = np.insert(distance, 0, 0)
+
             #then do the same for the backend
             last_distance_diff_half = (distance[-1] - distance[-2]) / 2
+
             distance = np.append(distance, distance[-1] + last_distance_diff_half)
 
         return distance
@@ -447,7 +436,6 @@ class ResSim_Results(object):
         :param xy: XY coordinates for observed station
         :return: cell index and subdomain information closest to observed data
         '''
-
 
         nearest_dist = 1e6
         for subdomain, sd_data in self.subdomains.items():

@@ -19,6 +19,10 @@ from scipy import interpolate
 class WAT_Constants(object):
 
     def __init__(self):
+        '''
+        Class that sets default constants that dont change, like conversions.
+        '''
+
         self.defineUnits()
         self.defineMonths()
         self.defineTimeIntervals()
@@ -33,6 +37,9 @@ class WAT_Constants(object):
         #TODO: expand this
         :return: set class variable
                     self.units
+                    self.unit_alt_names
+                    self.english_units
+                    self.metric_units
         '''
 
         self.units = {'temperature': {'metric':'c', 'english':'f'},
@@ -118,7 +125,10 @@ class WAT_Constants(object):
                                '1YEAR': ['1Y', 'pd']}
 
     def defineUnitConversions(self):
-        #Following is the SOURCE units, then the conversion to units listed above
+        '''
+        dictionary for unit conversion, key is source units, then conversion
+        '''
+
         self.conversion = {'m3/s': 35.314666213,
                           'cfs': 0.0283168469997284,
                           'm': 3.28084,
@@ -127,13 +137,20 @@ class WAT_Constants(object):
                           'af': 1233.48}
 
     def defineModelSpecificVariables(self):
-        self.model_specific_vars = {'ressimresname': 'ressim',
-                               'xy': 'ressim',
-                               'w2_segment': 'cequalw2',
-                               'w2_file': 'cequalw2'}
+        '''
+        defines model specific input types
+        '''
 
+        self.model_specific_vars = {'ressimresname': 'ressim',
+                                   'xy': 'ressim',
+                                   'w2_segment': 'cequalw2',
+                                   'w2_file': 'cequalw2'}
 
     def saturatedDO(self):
+        '''
+        creates a precalculated interpolated field for saturated DO based off of temperature
+        '''
+
         self.sat_data_do = [14.60, 14.19, 13.81, 13.44, 13.09, 12.75, 12.43, 12.12, 11.83, 11.55, 11.27, 11.01, 10.76, 10.52, 10.29,
                        10.07, 9.85, 9.65, 9.45, 9.26, 9.07, 8.90, 8.72, 8.56, 8.40, 8.24, 8.09, 7.95, 7.81, 7.67, 7.54, 7.41,
                        7.28, 7.16, 7.05, 6.93, 6.82, 6.71, 6.61, 6.51, 6.41, 6.31, 6.22, 6.13, 6.04, 5.95]

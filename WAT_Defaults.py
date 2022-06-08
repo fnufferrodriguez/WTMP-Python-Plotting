@@ -196,8 +196,8 @@ def getDefaultContourSettings(object_settings):
 
     defaultColormap = mpl.cm.get_cmap('jet')
     default_colorbar_settings = {'colormap': defaultColormap,
-                                 'bins':10,
-                                 'numticks':5}
+                                 'bins': 10,
+                                 'numticks': 5}
 
     if 'colorbar' in object_settings.keys():
         if 'colormap' in object_settings['colorbar'].keys():

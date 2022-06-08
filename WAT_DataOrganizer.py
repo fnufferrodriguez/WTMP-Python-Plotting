@@ -26,10 +26,19 @@ import WAT_Profiles as WProfile
 class DataOrganizer(object):
 
     def __init__(self, Report):
+        '''
+        class supports getting data from file sources and orgainzing data into memory dictionary for easy recall
+        :param Report: self from main Report Generator script
+        '''
+
         self.Report = Report #self from main
         self.intializeMemory()
 
     def intializeMemory(self):
+        '''
+        initializes the main dictionary to store data
+        '''
+
         self.Memory = {}
 
     def buildMemoryKey(self, Data_info):
@@ -131,6 +140,14 @@ class DataOrganizer(object):
         return data
 
     def getProfileWSE(self, settings, onflag='lines'):
+        '''
+        gets the Water surface elevation from time series if <wse> flag in line
+        WSE is named <flag it was under> + _wse for easy coordination
+        :param settings: dictionary containing lines
+        :param onflag: optional flag if <lines> is not the main datasource (i.e., datapath)
+        :return: new data dictionary with WSE data
+        '''
+
         wse_data = {}
         for dataobject in settings[onflag]:
             if 'wse' in dataobject.keys():
@@ -138,9 +155,9 @@ class DataOrganizer(object):
                 datamem_key = self.buildMemoryKey(dataobject['wse'])
                 new_key = dataobject['flag'] + '_wse'
                 wse_data[new_key] = {'elevations': values,
-                                  'dates': dates,
-                                  'units': units,
-                                  'logoutputfilename': datamem_key}
+                                      'dates': dates,
+                                      'units': units,
+                                      'logoutputfilename': datamem_key}
 
         return wse_data
 
@@ -148,7 +165,6 @@ class DataOrganizer(object):
         '''
         Gets profile line data from defined data sources in XML files
         :param settings: currently selected object settings dictionary
-        :param keyval: determines what key to iterate over for data
         :return: dictionary containing data and information about each data set
         '''
 
@@ -196,7 +212,7 @@ class DataOrganizer(object):
             else:
                 datamem_key = self.buildMemoryKey(Line_info)
                 if datamem_key in self.Memory.keys():
-                    # WF.print2stdout('Reading {0} from memory'.format(datamem_key))
+                    # WF.print2stdout('Reading {0} from memory'.format(datamem_key)) #noisy
                     if makecopy:
                         datamementry = pickle.loads(pickle.dumps(self.Memory[datamem_key], -1))
                     else:
@@ -317,7 +333,6 @@ class DataOrganizer(object):
         '''
         Gets profile line data from defined data sources in XML files
         :param settings: currently selected object settings dictionary
-        :param keyval: determines what key to iterate over for data
         :return: dictionary containing data and information about each data set
         '''
 

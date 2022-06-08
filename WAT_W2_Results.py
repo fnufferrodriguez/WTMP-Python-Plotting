@@ -68,7 +68,7 @@ class W2_Results(object):
                     self.layers
         '''
 
-        self.layers = self.getControlVariable(self.line_sections, 'TSR LAYE', pref_output_type=np.float)
+        self.layers = self.getControlVariable(self.line_sections, 'TSR LAYE', pref_output_type=float)
 
     def getOutputFileName(self):
         '''
@@ -121,7 +121,6 @@ class W2_Results(object):
 
         return sections
 
-    # def getControlVariable(self, lines_sections, variable, pref_output_type=np.str):
     def getControlVariable(self, lines_sections, variable, pref_output_type=np.str_):
         '''
         Parses the split control file sections from self.format_cf_lines() for a wanted card. Cards usually preface
@@ -204,9 +203,6 @@ class W2_Results(object):
         :return: array of water temperatures, elevations and depths
         '''
 
-        # unique_times = timesteps
-        # WF.print2stdout('Num unique times:', len(unique_times))
-
         self.get_tempprofile_layers() #get the output layers. out at 2m depths
 
         wt = np.full((len(self.layers), len(self.jd_dates)), np.nan)
@@ -228,7 +224,7 @@ class W2_Results(object):
                     if line.lower().startswith('jday'):
                         headerline=li
                         break
-            # op_file = pd.read_csv(ofn_path, header=0)
+
             op_file = pd.read_csv(ofn_path, header=headerline, skip_blank_lines=False)
             op_file.columns = op_file.columns.str.lower()
             if len(op_file['jday']) > 1:
@@ -243,16 +239,6 @@ class W2_Results(object):
                 wsElev_ts_Vals[jdate_msk] = Elev_interp(self.jd_dates[jdate_msk])
                 wt[i-1] = wt_ts_Vals
                 WS_Elev[i-1] = wsElev_ts_Vals
-                # wt.append(wt_ts_Vals)
-                # WS_Elev.append(wsElev_ts_Vals)
-                # wt.append(WT_interp(self.jd_dates[jdate_msk]))
-                # WS_Elev.append(Elev_interp(self.jd_dates[jdate_msk]))
-                # for j, jd in enumerate(self.jd_dates):
-                #     try:
-                #         wt[j][i-1] = WT_interp(jd)
-                #         WS_Elev[j][i-1] = Elev_interp(jd)
-                #     except ValueError:
-                #         continue
 
         wt = np.asarray(wt).T
         WS_Elev = np.asarray(WS_Elev).T
@@ -263,7 +249,6 @@ class W2_Results(object):
             depths = []
             times = []
             for t, time in enumerate(timesteps):
-                # WF.print2stdout('{0} of {1}'.format(t, len(unique_times)))
                 e = []
                 timestep = WT.getIdxForTimestamp(self.jd_dates, time, self.t_offset)
                 if timestep > -1:#timestep in model
@@ -277,9 +262,7 @@ class W2_Results(object):
                     WSE = WSE[np.where(~np.isnan(WSE))][0] #otherwise find valid
                     WSE_array = np.full((self.layers.shape), WSE)
                     e = (WSE_array - self.layers) * 3.28
-                    # for depth in self.layers: #get all depths
-                    #     e.append((WSE - depth) * 3.28) #conv to feet
-                    # select_wt[t] = wt[timestep][:] #find WTs
+
                     select_wt.append(wt[timestep][:]) #find WTs
 
                 else: #if timestep NOT in model, add empties
@@ -291,7 +274,6 @@ class W2_Results(object):
                 depths.append(self.layers * 3.28) #append dpeths
                 times.append(time) #get time
             select_wt, elevations, depths = self.matchProfileLengths(select_wt, elevations, depths)
-            # return select_wt, elevations, np.asarray(depths), np.asarray(times)
 
             return select_wt, elevations, depths, np.asarray(times)
         else:
@@ -311,7 +293,6 @@ class W2_Results(object):
         WS_Elev = np.full((len(self.layers), len(self.jd_dates)), np.nan)
 
         for i in range(1,len(self.layers)+1):
-            # WF.print2stdout('{0} of {1}'.format(i, len(self.layers)+1))
             ofn = '{0}_{1}_seg{2}.{3}'.format(self.output_file_name.split('.')[0],
                                               i,
                                               seg,
@@ -326,7 +307,7 @@ class W2_Results(object):
                     if line.lower().startswith('jday'):
                         headerline=li
                         break
-            # op_file = pd.read_csv(ofn_path, header=0)
+
             op_file = pd.read_csv(ofn_path, header=headerline, skip_blank_lines=False)
             op_file.columns = op_file.columns.str.lower()
             if len(op_file['jday']) > 1:
@@ -338,14 +319,12 @@ class W2_Results(object):
                 wsElev_ts_Vals[jdate_msk] = Elev_interp(self.jd_dates[jdate_msk])
                 WS_Elev[i-1] = wsElev_ts_Vals
 
-
         WS_Elev = np.asarray(WS_Elev).T
 
         if isinstance(timesteps, (list, np.ndarray)):
 
             WSE_out = []
             for t, time in enumerate(timesteps):
-                # WF.print2stdout('{0} of {1}'.format(t, len(unique_times)))
                 timestep = WT.getIdxForTimestamp(self.jd_dates, time, self.t_offset)
                 if timestep > -1:#timestep in model
                     WSE = WS_Elev[timestep] #Meters #get WSE
@@ -406,21 +385,19 @@ class W2_Results(object):
                 else:
                     hname = header+'.{0}'.format(structure_num-1)
                 vals = np.asarray([float(str(n).replace(',','')) for n in stsf[hname].tolist()])
-                # vals = [float(n) for n in stsf[hname].tolist()]
                 values[structure_num][header.lower()] = vals
 
         dates = stsf['jday'].tolist()
         dates = np.asarray([float(str(n).replace(',', '')) for n in dates])
-        # dates = [float(n) for n in dates]
 
         return dates, values
 
-    def filterByParameter(self, values, Line_info):
+    def filterByParameter(self, values, line_info):
         '''
         W2 results files have multiple parameters in a single file, so we can return many parameters
         this grabs the parameter defined in the line
         :param values: dictionary of lists of values
-        :param Line_info: line settings dictionary containing values
+        :param line_info: line settings dictionary containing values
         :return: values list, parameter from line settings
         '''
 
@@ -428,15 +405,15 @@ class W2_Results(object):
                        'temperature': 't(c)',
                        'waterlevel': 'elevcl'}
 
-        if 'parameter' not in Line_info.keys():
+        if 'parameter' not in line_info.keys():
             WF.print2stdout('Parameter not specified.')
-            WF.print2stdout('Line Info:', Line_info)
+            WF.print2stdout('Line Info:', line_info)
             return values, ''
         new_values = {}
-        target_header = headerparam[Line_info['parameter']]
+        target_header = headerparam[line_info['parameter']]
         for key in values.keys():
             new_values[key] = values[key][target_header]
-        return new_values, Line_info['parameter']
+        return new_values, line_info['parameter']
 
     def matchProfileLengths(self, select_val, elevations, depths):
         '''
@@ -453,7 +430,6 @@ class W2_Results(object):
         min_len = min((len_val, len_elev, len_depth))
         return select_val[:min_len], elevations[:min_len], depths[:min_len]
 
-    # def readTimeSeries(self, output_file_name, column=1, skiprows=3, **args):
     def readTimeSeries(self, output_file_name, column=1, skiprows=3, **kwargs):
         '''
         get the output time series for W2 at a specified location. Like the temperature profiles, output freq is
@@ -503,6 +479,12 @@ class W2_Results(object):
         return self.dt_dates, out_vals
 
     def readSegment(self, filename, parameter):
+        '''
+        Temporary until we figure out how to do W2 contours
+        :param filename:
+        :param parameter:
+        :return:
+        '''
         read_param = self.getParameterFileStr(parameter)
         if read_param == None:
             return [], [], []
@@ -544,6 +526,12 @@ class W2_Results(object):
 
 
     def getParameterFileStr(self, parameter):
+        '''
+        gets parameter file name based on the input name
+        :param parameter: desired parameter
+        :return: formatted internal name
+        '''
+
         #input:output
         fileparams = {'temperature': 'Temperature',
                       'density': 'Density',

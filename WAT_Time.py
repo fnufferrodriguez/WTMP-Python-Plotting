@@ -18,6 +18,7 @@ import datetime as dt
 import pendulum
 
 import WAT_Functions as WF
+import WAT_Time as WT
 
 def changeTimeSeriesInterval(times, values, Line_info, t_offset, startYear):
     '''
@@ -152,13 +153,12 @@ def changeTimeSeriesInterval(times, values, Line_info, t_offset, startYear):
     else:
         return new_times, np.asarray(new_values)
 
-def defineStartEndYears(self):
+def defineStartEndYears(Report):
     '''
     defines start and end years for the simulation so they can be replaced by flagged values.
     end dates that end on the first of the year with no min seconds (aka Dec 31 @ 24:00) have their end
     years set to be the year prior, as its not fair to really call them that next year
-    self.years is a list of all years used
-    self.years_str is a string representation of the years, either as a single year, or range, aka 2003-2005
+    :param Report: instance from main report script
     :return: class variables
                 self.startYear
                 self.endYear
@@ -166,43 +166,46 @@ def defineStartEndYears(self):
                 self.years_str
     '''
 
-    tw_start = self.StartTime
-    tw_end = self.EndTime
+    tw_start = Report.StartTime
+    tw_end = Report.EndTime
     if tw_end == dt.datetime(tw_end.year, 1, 1, 0, 0):
         tw_end += dt.timedelta(seconds=-1) #if its this day just go back
 
-    self.startYear = tw_start.year
-    self.endYear = tw_end.year
-    if self.startYear == self.endYear:
-        self.years_str = str(self.startYear)
-        self.years = [self.startYear]
+    Report.startYear = tw_start.year
+    Report.endYear = tw_end.year
+    if Report.startYear == Report.endYear:
+        Report.years_str = str(Report.startYear)
+        Report.years = [Report.startYear]
     else:
-        self.years = range(tw_start.year, tw_end.year+1)
-        self.years_str = "{0}-{1}".format(self.startYear, self.endYear)
+        Report.years = range(tw_start.year, tw_end.year + 1)
+        Report.years_str = "{0}-{1}".format(Report.startYear, Report.endYear)
 
-def setMultiRunStartEndYears(self):
+def setMultiRunStartEndYears(Report):
     '''
     sets start and end times by looking at all possible runs. Picks overlapping time periods only.
+    :param Report: instance from main report script
     '''
 
-    for simID in self.SimulationVariables.keys():
-        if self.SimulationVariables[simID]['StartTime'] > self.StartTime:
-            self.StartTime = self.SimulationVariables[simID]['StartTime']
-        if self.SimulationVariables[simID]['EndTime'] < self.EndTime:
-            self.EndTime = self.SimulationVariables[simID]['EndTime']
-    WF.print2stdout('Start and End time set to {0} - {1}'.format(self.StartTime, self.EndTime))
+    for simID in Report.SimulationVariables.keys():
+        if Report.SimulationVariables[simID]['StartTime'] > Report.StartTime:
+            Report.StartTime = Report.SimulationVariables[simID]['StartTime']
+        if Report.SimulationVariables[simID]['EndTime'] < Report.EndTime:
+            Report.EndTime = Report.SimulationVariables[simID]['EndTime']
+    WF.print2stdout('Start and End time set to {0} - {1}'.format(Report.StartTime, Report.EndTime))
 
-def setSimulationDateTimes(self, ID):
+def setSimulationDateTimes(Report, ID):
     '''
     sets the simulation start time and dates from string format. If timestamp says 24:00, converts it to be correct
     Datetime format of the next day at 00:00
+    :param Report: instance from main report script
+    :param ID: selected run ID
     :return: class varables
                 self.StartTime
                 self.EndTime
     '''
 
-    StartTimeStr = self.SimulationVariables[ID]['StartTimeStr']
-    EndTimeStr = self.SimulationVariables[ID]['EndTimeStr']
+    StartTimeStr = Report.SimulationVariables[ID]['StartTimeStr']
+    EndTimeStr = Report.SimulationVariables[ID]['EndTimeStr']
 
     if '24:00' in StartTimeStr:
         tstrtmp = StartTimeStr.replace('24:00', '23:00')
@@ -210,7 +213,7 @@ def setSimulationDateTimes(self, ID):
         StartTime += dt.timedelta(hours=1)
     else:
         StartTime = dt.datetime.strptime(StartTimeStr, '%d %B %Y, %H:%M')
-    self.SimulationVariables[ID]['StartTime'] = StartTime
+    Report.SimulationVariables[ID]['StartTime'] = StartTime
 
     if '24:00' in EndTimeStr:
         tstrtmp = EndTimeStr.replace('24:00', '23:00')
@@ -218,12 +221,14 @@ def setSimulationDateTimes(self, ID):
         EndTime += dt.timedelta(hours=1)
     else:
         EndTime = dt.datetime.strptime(EndTimeStr, '%d %B %Y, %H:%M')
-    self.SimulationVariables[ID]['EndTime'] = EndTime
+    Report.SimulationVariables[ID]['EndTime'] = EndTime
 
 def makeRegularTimesteps(starttime, endtime, days=15):
     '''
     makes regular time series for profile plots if there are no times defined
-    :param days: day interval
+    :param starttime: start time for new timeseries
+    :param endtime: end time for new time series
+    :param days: interval for profile time series, 15 is default
     :return: timestep list
     '''
 
@@ -352,6 +357,7 @@ def DatetimeToJDate(dates, time_offset):
     '''
     converts datetime dates to jdate values
     :param dates: list of datetime dates
+    :param time_offset: model time offset
     :return:
         jdates: list of dates
         jdate: single date
@@ -363,7 +369,6 @@ def DatetimeToJDate(dates, time_offset):
     elif isinstance(dates, (list, np.ndarray)):
         if isinstance(dates[0], (float, int)):
             return dates
-        # jdates = np.asarray([(WT.datetime2Ordinal(n) - ModelAlt.t_offset) + 1 for n in dates])
         jdates = np.asarray([(datetime2Ordinal(n) - time_offset) + 1 for n in dates])
         return jdates
     elif isinstance(dates, dt.datetime):
@@ -378,6 +383,9 @@ def translateDateFormat(lim, dateformat, fallback, StartTime, EndTime, time_offs
     :param lim: limit value, either int or datetime
     :param dateformat: desired date format, either 'datetime' or 'jdate'
     :param fallback: if setting translation fails, use backup, usually starttime or endtime
+    :param StartTime: start time
+    :param EndTime: end time
+    :param time_offset: offset for conversion
     :return:
         lim: original limit, if translate fails
         lim_fmrt: translated limit
