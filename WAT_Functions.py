@@ -44,6 +44,7 @@ def print2stderr(*a):
     '''
 
     print(*a, file=sys.stderr)
+    print(*a, file=sys.stdout)
 
 def printVersion(VERSIONNUMBER):
     '''
