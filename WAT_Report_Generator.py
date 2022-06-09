@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '5.0.8'
+VERSIONNUMBER = '5.0.9'
 
 import datetime as dt
 import os
@@ -1497,7 +1497,8 @@ class MakeAutomatedReport(object):
 
         headings, rows = Tables.buildSingleStatTable(object_settings, data)
 
-        # object_settings= self.configureSettingsForID('base', object_settings) #will turn on for comparison plot later
+        object_settings = self.configureSettingsForID('base', object_settings) #will turn on for comparison plot later
+
         object_settings['units_list'] = WF.getUnitsList(data)
         object_settings['plot_units'] = WF.getPlotUnits(object_settings['units_list'], object_settings)
 
@@ -1596,7 +1597,7 @@ class MakeAutomatedReport(object):
 
         headings, rows = Tables.buildSingleStatTable(object_settings, line_settings)
 
-        # object_settings= self.configureSettingsForID('base', object_settings) #will turn on for comparison plot later
+        object_settings= self.configureSettingsForID('base', object_settings) #will turn on for comparison plot later
         ################# Get plot units #################
         data, line_settings = WProfile.convertProfileDataUnits(object_settings, data, line_settings)
         object_settings['units_list'] = WF.getUnitsList(line_settings)
