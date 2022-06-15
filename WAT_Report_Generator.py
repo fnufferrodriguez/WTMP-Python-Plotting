@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '5.0.9'
+VERSIONNUMBER = '5.0.10'
 
 import datetime as dt
 import os
@@ -167,7 +167,7 @@ class MakeAutomatedReport(object):
                 figsize=(12, 6)
                 pageformat = 'half'
             else:
-                figsize=(16,16)
+                figsize=(12,14)
                 pageformat = 'full'
 
             axis_weight = []
@@ -481,8 +481,8 @@ class MakeAutomatedReport(object):
 
                 plotunits = WF.getPlotUnits(unitslist, ax_settings)
                 plotunits2 = WF.getPlotUnits(unitslist2, ax_settings)
-                ax_settings = WF.updateFlaggedValues(ax_settings, '%%units%%', plotunits)
-                ax_settings = WF.updateFlaggedValues(ax_settings, '%%units2%%', plotunits2)
+                ax_settings = WF.updateFlaggedValues(ax_settings, '%%units%%', WF.formatUnitsStrings(plotunits))
+                ax_settings = WF.updateFlaggedValues(ax_settings, '%%units2%%', WF.formatUnitsStrings(plotunits2))
 
                 if axi == 0:
                     if 'title' in ax_settings.keys():
@@ -527,23 +527,25 @@ class MakeAutomatedReport(object):
 
                         handles, labels = ax.get_legend_handles_labels()
 
+                        if _usetwinx:
+                            empty_handle, = ax.plot([],[],color="w")
+                            handles.append(empty_handle)
+                            labels.append('')
+                            ax2_handles, ax2_labels = ax2.get_legend_handles_labels()
+                            handles += ax2_handles
+                            labels += ax2_labels
+                            right_sided_axes.append(ax)
+                            right_offset = ax.get_window_extent().x0 / ax.get_window_extent().width
+
                         if ax_settings['legend_outside'].lower() == 'true': #TODO: calibrate the offset
                             if _usetwinx:
-                                empty_handle, = ax.plot([],[],color="w")
-                                handles.append(empty_handle)
-                                labels.append('')
-                                ax2_handles, ax2_labels = ax2.get_legend_handles_labels()
-                                handles += ax2_handles
-                                labels += ax2_labels
-                                right_sided_axes.append(ax)
-                                right_offset = ax.get_window_extent().x0 / ax.get_window_extent().width
                                 ax.legend(handles=handles, labels=labels, loc='center left', bbox_to_anchor=(1+right_offset/2, 0.5), ncol=1,fontsize=legsize)
 
                             else:
-                                right_sided_axes.append(ax)
+                                # right_sided_axes.append(ax)
                                 ax.legend(handles=handles, labels=labels, loc='center left', bbox_to_anchor=(1, 0.5), ncol=1,fontsize=legsize)
                         else:
-                            ax.legend(fontsize=legsize)
+                            ax.legend(handles=handles, labels=labels, fontsize=legsize)
 
                 ############# xticks and lims #############
 
@@ -563,42 +565,10 @@ class MakeAutomatedReport(object):
                 ax.set_xlim(right=xmax)
 
                 ############# yticks and lims #############
-                ymin, ymax = ax.get_ylim()
-                if 'ylims' in ax_settings.keys():
-                    if 'min' in ax_settings['ylims']:
-                        ymin = float(ax_settings['ylims']['min'])
+                Plots.formatYTicks(ax, ax_settings, gatedata, gate_placement)
 
-                    if 'max' in ax_settings['ylims']:
-                        ymax = float(ax_settings['ylims']['max'])
-
-                if len(gatedata.keys()) != 0:
-                    ymax = gate_placement
-                    ymin = 0
-
-                if 'yticks' in ax_settings.keys():
-                    ytick_settings = ax_settings['yticks']
-                    if 'fontsize' in ytick_settings.keys():
-                        yticksize = float(ytick_settings['fontsize'])
-                    elif 'fontsize' in ax_settings.keys():
-                        yticksize = float(ax_settings['fontsize'])
-                    else:
-                        yticksize = 10
-                    ax.tick_params(axis='y', labelsize=yticksize)
-
-                    if 'spacing' in ytick_settings.keys():
-                        ytickspacing = ytick_settings['spacing']
-                        if '.' in ytickspacing:
-                            ytickspacing = float(ytickspacing)
-                        else:
-                            ytickspacing = int(ytickspacing)
-
-                        newyticks = np.arange(ymin, (ymax+ytickspacing), ytickspacing)
-                        newyticklabels = Plots.formatTickLabels(newyticks, ytick_settings)
-                        ax.set_yticks(newyticks)
-                        ax.set_yticklabels(newyticklabels)
-
-                ax.set_ylim(bottom=ymin)
-                ax.set_ylim(top=ymax)
+                if _usetwinx:
+                    Plots.fixEmptyYAxis(ax, ax2)
 
                 if len(gatelabels_positions) > 0:
                     ax.set_yticks(gatelabels_positions)
@@ -615,37 +585,7 @@ class MakeAutomatedReport(object):
                             ylabsize2 = 12
                         ax2.set_ylabel(ax_settings['ylabel2'].replace("\\n", "\n"), fontsize=ylabsize2)
 
-                    ymin2, ymax2 = ax2.get_ylim()
-                    if 'ylims2' in ax_settings.keys():
-                        if 'min' in ax_settings['ylims2']:
-                            ymin2 = float(ax_settings['ylims2']['min'])
-                        if 'max' in ax_settings['ylims2']:
-                            ymax2 = float(ax_settings['ylims2']['max'])
-
-                    if 'yticks2' in ax_settings.keys():
-                        ytick2_settings = ax_settings['yticks2']
-                        if 'yticksize' in ytick2_settings.keys():
-                            yticksize = float(ytick2_settings['yticksize'])
-                        elif 'fontsize' in ytick2_settings.keys():
-                            yticksize = float(ytick2_settings['fontsize'])
-                        else:
-                            yticksize = 10
-                        ax2.tick_params(axis='y', labelsize=yticksize)
-
-                        if 'spacing' in ytick2_settings.keys():
-                            ytickspacing = ytick2_settings['spacing']
-                            if '.' in ytickspacing:
-                                ytickspacing = float(ytickspacing)
-                            else:
-                                ytickspacing = int(ytickspacing)
-
-                            newyticks = np.arange(ymin2, (ymax2+ytickspacing), ytickspacing)
-                            newyticklabels = Plots.formatTickLabels(newyticks, ytick2_settings)
-                            ax2.set_yticks(newyticks)
-                            ax2.set_yticklabels(newyticklabels)
-
-                    ax2.set_ylim(bottom=ymin2)
-                    ax2.set_ylim(top=ymax2)
+                    Plots.formatYTicks(ax2, ax_settings, gatedata, gate_placement, axis='right')
 
                     ax2.grid(False)
                     ax.set_zorder(ax2.get_zorder()+1) #axis called second will always be on top unless this
@@ -669,7 +609,14 @@ class MakeAutomatedReport(object):
                 if rax_leg_width_ratio > right_mod:
                     right_mod = rax_leg_width_ratio
             plt.tight_layout()
-            plt.subplots_adjust(wspace=0, hspace=0)
+
+            spacebetweenaxis = False
+            if 'spacebetweenaxis' in object_settings.keys():
+                if object_settings['spacebetweenaxis'].lower() == 'true':
+                    spacebetweenaxis = True
+
+            if not spacebetweenaxis:
+                plt.subplots_adjust(wspace=0, hspace=0)
 
             basefigname = os.path.join(self.images_path, 'TimeSeriesPlot' + '_' + self.ChapterRegion.replace(' ','_')
                                        + '_' + yearstr)
@@ -737,9 +684,9 @@ class MakeAutomatedReport(object):
         data, line_settings = WProfile.convertProfileDataUnits(object_settings, data, line_settings)
         object_settings['units_list'] = WF.getUnitsList(line_settings)
         object_settings['plot_units'] = WF.getPlotUnits(object_settings['units_list'], object_settings)
-        object_settings = WF.updateFlaggedValues(object_settings, '%%units%%', object_settings['plot_units'])
+        object_settings = WF.updateFlaggedValues(object_settings, '%%units%%', WF.formatUnitsStrings(object_settings['plot_units'], format='external'))
 
-        table_blueprint = WF.updateFlaggedValues(table_blueprint, '%%units%%', object_settings['plot_units'])
+        table_blueprint = WF.updateFlaggedValues(table_blueprint, '%%units%%', WF.formatUnitsStrings(object_settings['plot_units'], format='external'))
 
         self.Data.commitProfileDataToMemory(data, line_settings, object_settings)
         data, object_settings = WProfile.filterProfileData(data, line_settings, object_settings)
@@ -807,8 +754,8 @@ class MakeAutomatedReport(object):
                                                       'logoutputfilename': ', '.join([line_settings[flag]['logoutputfilename'] for flag in line_settings])
                                                       },
                                                      isdata=True)
-
-                        frmt_rows.append('{0}|{1}'.format(rowname, row_val))
+                        numberFormat = Tables.matchNumberFormatByStat(stat, object_settings)
+                        frmt_rows.append('{0}|{1}'.format(rowname, WF.formatNumbers(row_val, numberFormat)))
                     self.XML.writeTableColumn(heading, frmt_rows, thresholdcolors=threshold_colors)
                 if self.iscomp:
                     self.XML.writeDateColumnEnd()
@@ -852,7 +799,7 @@ class MakeAutomatedReport(object):
         data, line_settings = WProfile.convertProfileDataUnits(object_settings, data, line_settings)
         object_settings['units_list'] = WF.getUnitsList(line_settings)
         object_settings['plot_units'] = WF.getPlotUnits(object_settings['units_list'], object_settings)
-        object_settings = WF.updateFlaggedValues(object_settings, '%%units%%', object_settings['plot_units'])
+        object_settings = WF.updateFlaggedValues(object_settings, '%%units%%', WF.formatUnitsStrings(object_settings['plot_units']))
 
         ################ convert yflags ################
         if object_settings['usedepth'].lower() == 'false':
@@ -976,86 +923,27 @@ class MakeAutomatedReport(object):
                                 labelpad = 0
                             ax.set_xlabel(cur_obj_settings['xlabel'], fontsize=xlabsize, labelpad=labelpad)
 
-                    xticksize = 10 #default
-                    if 'fontsize' in object_settings.keys():
-                        xticksize = float(object_settings['fontsize']) #plot defined default
-                    if 'xticks' in object_settings.keys(): #user defined
-                        if 'fontsize' in object_settings['xticks'].keys():
-                            xticksize = float(object_settings['xticks']['fontsize'])
-
                     show_xticks = True
                     if 'xlims' in object_settings.keys() and not show_xlabel:
                         if all([x in object_settings['xlims'].keys() for x in ['min', 'max']]):
                             show_xticks = False
 
-                    xmin, xmax = ax.get_xlim()
-                    if 'xlims' in object_settings.keys():
-                        if 'min' in object_settings['xlims']:
-                            xmin = float(object_settings['xlims']['min'])
-                        if 'max' in object_settings['xlims']:
-                            xmax = float(object_settings['xlims']['max'])
-
-                    ax.tick_params(axis='x', labelsize=xticksize)
-                    if 'xticks' in object_settings.keys():
-                        xtick_settings = object_settings['xticks']
-                        if 'spacing' in xtick_settings.keys():
-                            xtickspacing = xtick_settings['spacing']
-                            if '.' in xtickspacing:
-                                xtickspacing = float(xtickspacing)
-                            else:
-                                xtickspacing = int(xtickspacing)
-                            newxticks = np.arange(xmin, (xmax+xtickspacing), xtickspacing)
-                            newxticklabels = Plots.formatTickLabels(newxticks, xtick_settings)
-                            # ax.xaxis.set_major_locator(mticker.FixedLocator(newxticks))
-                            ax.set_xticks(newxticks)
-                            ax.set_xticklabels(newxticklabels)
+                    Plots.formatXTicks(ax, object_settings)
 
                     if not show_xticks:
                         ax.set_xticklabels([])
                         ax.tick_params(axis='x', which='both', bottom=False)
 
-                    ax.set_xlim(left=xmin)
-                    ax.set_xlim(right=xmax)
-
-                    yticksize = 10 #default
-                    if 'fontsize' in object_settings.keys():
-                        yticksize = float(object_settings['fontsize']) #plot defined default
-                    if 'yticks' in object_settings.keys(): #user defined
-                        if 'fontsize' in object_settings['yticks'].keys():
-                            yticksize = float(object_settings['yticks']['fontsize'])
-                        
                     show_yticks = True
                     if 'ylims' in object_settings.keys() and not show_ylabel:
                         if all([x in object_settings['ylims'].keys() for x in ['min', 'max']]):
                             show_yticks = False
 
-                    ymin, ymax = ax.get_ylim()
-                    if 'ylims' in object_settings.keys():
-                        if 'min' in object_settings['ylims']:
-                            ymin = float(object_settings['ylims']['min'])
-                        if 'max' in object_settings['ylims']:
-                            ymax = float(object_settings['ylims']['max'])
-
-                    ax.tick_params(axis='y', labelsize=yticksize)
-                    if 'yticks' in object_settings.keys():
-                        ytick_settings = object_settings['yticks']
-                        if 'spacing' in ytick_settings.keys():
-                            ytickspacing = ytick_settings['spacing']
-                            if '.' in ytickspacing:
-                                ytickspacing = float(ytickspacing)
-                            else:
-                                ytickspacing = int(ytickspacing)
-                            newyticks = np.arange(ymin, (ymax+ytickspacing), ytickspacing)
-                            newyticklabels = Plots.formatTickLabels(newyticks, ytick_settings)
-                            ax.set_yticks(newyticks)
-                            ax.set_yticklabels(newyticklabels)
+                    Plots.formatYTicks(ax, object_settings)
 
                     if not show_yticks:
                         ax.set_yticklabels([])
                         ax.tick_params(axis='y', which='both', left=False)
-
-                    ax.set_ylim(bottom=ymin)
-                    ax.set_ylim(top=ymax)
 
                     if cur_obj_settings['gridlines'].lower() == 'true':
                         ax.grid(zorder=-9)
@@ -1307,7 +1195,7 @@ class MakeAutomatedReport(object):
         :param object_settings: currently selected object settings dictionary
         :return: writes to XML file
         '''
-
+        #TODO: make number formats for unique stats in tables
         WF.print2stdout('\n################################')
         WF.print2stdout('Now making Error Stats table.')
         WF.print2stdout('################################\n')
@@ -1329,9 +1217,9 @@ class MakeAutomatedReport(object):
         object_settings['units_list'] = WF.getUnitsList(data)
         object_settings['plot_units'] = WF.getPlotUnits(object_settings['units_list'], object_settings)
 
-        object_settings = WF.updateFlaggedValues(object_settings, '%%units%%', object_settings['plot_units'])
-        rows = WF.updateFlaggedValues(rows, '%%units%%', object_settings['plot_units'])
-        headings = WF.updateFlaggedValues(headings, '%%units%%', object_settings['plot_units'])
+        object_settings = WF.updateFlaggedValues(object_settings, '%%units%%', WF.formatUnitsStrings(object_settings['plot_units'], format='external'))
+        rows = WF.updateFlaggedValues(rows, '%%units%%', WF.formatUnitsStrings(object_settings['plot_units'], format='external'))
+        headings = WF.updateFlaggedValues(headings, '%%units%%', WF.formatUnitsStrings(object_settings['plot_units'], format='external'))
 
         data = Tables.filterTableData(data, object_settings)
         data = Tables.correctTableUnits(data, object_settings)
@@ -1386,7 +1274,8 @@ class MakeAutomatedReport(object):
                                                  isdata=True)
 
                 header = '' if header == None else header
-                frmt_rows.append('{0}|{1}'.format(rowname, row_val))
+                numberFormat = Tables.matchNumberFormatByStat(stat, object_settings)
+                frmt_rows.append('{0}|{1}'.format(rowname, WF.formatNumbers(row_val, numberFormat)))
             self.XML.writeTableColumn(header, frmt_rows, thresholdcolors=threshold_colors)
         self.XML.writeTableEnd()
 
@@ -1416,7 +1305,7 @@ class MakeAutomatedReport(object):
         object_settings['units_list'] = WF.getUnitsList(data)
         object_settings['plot_units'] = WF.getPlotUnits(object_settings['units_list'], object_settings)
 
-        object_settings = WF.updateFlaggedValues(object_settings, '%%units%%', object_settings['plot_units'])
+        object_settings = WF.updateFlaggedValues(object_settings, '%%units%%', WF.formatUnitsStrings(object_settings['plot_units'], format='external'))
 
         data = Tables.filterTableData(data, object_settings)
         data = Tables.correctTableUnits(data, object_settings)
@@ -1439,6 +1328,7 @@ class MakeAutomatedReport(object):
                 s_row = row.split('|')
                 rowname = s_row[0]
                 row_val = s_row[i+1]
+                stat=None
                 if '%%' in row_val:
                     rowdata, sr_month = Tables.getStatsLineData(row_val, data, year=year)
                     if len(rowdata) == 0:
@@ -1471,7 +1361,8 @@ class MakeAutomatedReport(object):
                                                  isdata=True)
 
                 header = '' if header == None else header
-                frmt_rows.append('{0}|{1}'.format(rowname, row_val))
+                numberFormat = Tables.matchNumberFormatByStat(stat, object_settings)
+                frmt_rows.append('{0}|{1}'.format(rowname, WF.formatNumbers(row_val, numberFormat)))
             self.XML.writeTableColumn(header, frmt_rows, thresholdcolors=threshold_colors)
         self.XML.writeTableEnd()
 
@@ -1502,7 +1393,7 @@ class MakeAutomatedReport(object):
         object_settings['units_list'] = WF.getUnitsList(data)
         object_settings['plot_units'] = WF.getPlotUnits(object_settings['units_list'], object_settings)
 
-        object_settings = WF.updateFlaggedValues(object_settings, '%%units%%', object_settings['plot_units'])
+        object_settings = WF.updateFlaggedValues(object_settings, '%%units%%', WF.formatUnitsStrings(object_settings['plot_units'], format='external'))
 
         data = Tables.filterTableData(data, object_settings)
         data = Tables.correctTableUnits(data, object_settings)
@@ -1556,7 +1447,8 @@ class MakeAutomatedReport(object):
                                                  isdata=True)
 
                 header = '' if header == None else header
-                frmt_rows.append('{0}|{1}'.format(rowname, row_val))
+                numberFormat = Tables.matchNumberFormatByStat(stat, object_settings)
+                frmt_rows.append('{0}|{1}'.format(rowname, WF.formatNumbers(row_val, numberFormat)))
             self.XML.writeTableColumn(header, frmt_rows, thresholdcolors=threshold_colors)
         self.XML.writeTableEnd()
 
@@ -1603,7 +1495,7 @@ class MakeAutomatedReport(object):
         object_settings['units_list'] = WF.getUnitsList(line_settings)
         object_settings['plot_units'] = WF.getPlotUnits(object_settings['units_list'], object_settings)
 
-        object_settings = WF.updateFlaggedValues(object_settings, '%%units%%', object_settings['plot_units'])
+        object_settings = WF.updateFlaggedValues(object_settings, '%%units%%', WF.formatUnitsStrings(object_settings['plot_units'], format='external'))
 
         self.Data.commitProfileDataToMemory(data, line_settings, object_settings)
 
@@ -1625,6 +1517,7 @@ class MakeAutomatedReport(object):
                 else:
                     year = 'ALL'
                 row_val = s_row[i+1]
+                stat = None
                 if '%%' in row_val:
                     rowval_stats = {}
                     if year == 'ALL':
@@ -1662,7 +1555,8 @@ class MakeAutomatedReport(object):
                                              isdata=True)
 
                 header = '' if header == None else header
-                frmt_rows.append('{0}|{1}'.format(rowname, row_val))
+                numberFormat = Tables.matchNumberFormatByStat(stat, object_settings)
+                frmt_rows.append('{0}|{1}'.format(rowname, WF.formatNumbers(row_val, numberFormat)))
 
             self.XML.writeTableColumn(header, frmt_rows, thresholdcolors=threshold_colors)
         self.XML.writeTableEnd()
@@ -1817,7 +1711,7 @@ class MakeAutomatedReport(object):
                                           },
                                          isdata=True)
 
-                contour_settings = WF.updateFlaggedValues(contour_settings, '%%units%%', units)
+                contour_settings = WF.updateFlaggedValues(contour_settings, '%%units%%', WF.formatUnitsStrings(units))
 
                 if 'contourlines' in contour_settings.keys():
                     for contourline in contour_settings['contourlines']:
@@ -1849,37 +1743,37 @@ class MakeAutomatedReport(object):
                 ### Horizontal LINES ###
                 Plots.plotHorizontalLines(contour_settings, ax)
 
-                if 'transitions' in contour_settings.keys():
-                    for transkey in transitions.keys():
-                        transition_start = transitions[transkey]
-                        trans_name = None
-                        hline = WD.getDefaultStraightLineSettings(contour_settings['transitions'])
-
-                        linecolor = WF.prioritizeKey(contours[transkey], hline, 'linecolor')
-                        linestylepattern = WF.prioritizeKey(contours[transkey], hline, 'linestylepattern')
-                        alpha = WF.prioritizeKey(contours[transkey], hline, 'alpha')
-                        linewidth = WF.prioritizeKey(contours[transkey], hline, 'linewidth')
-
-                        ax.axhline(y=transition_start, c=linecolor, ls=linestylepattern, alpha=float(alpha),
-                                   lw=float(linewidth))
-                        if 'name' in contour_settings['transitions'].keys():
-                            trans_flag = contour_settings['transitions']['name'].lower() #blue:pink:white:pink:blue
-                            text_settings = WD.getDefaultTextSettings(contour_settings['transitions'])
-
-                            if trans_flag in contours[transkey].keys():
-                                trans_name = contours[transkey][trans_flag]
-                            if trans_name != None:
-
-                                trans_y_ratio = abs(1.0 - (transition_start / max(ax.get_ylim()) + .01)) #dont let user touch this
-
-                                fontcolor = WF.prioritizeKey(contours[transkey], text_settings, 'fontcolor')
-                                fontsize = WF.prioritizeKey(contours[transkey], text_settings, 'fontsize')
-                                horizontalalignment = WF.prioritizeKey(contours[transkey], text_settings, 'horizontalalignment')
-                                text_x_pos = WF.prioritizeKey(contours[transkey], text_settings, 'text_x_pos', backup=0.001)
-
-                                ax.text(float(text_x_pos), trans_y_ratio, trans_name, c=fontcolor, size=float(fontsize),
-                                        transform=ax.transAxes, horizontalalignment=horizontalalignment,
-                                        verticalalignment='top')
+                # if 'transitions' in contour_settings.keys():
+                #     for transkey in transitions.keys():
+                #         transition_start = transitions[transkey]
+                #         trans_name = None
+                #         hline = WD.getDefaultStraightLineSettings(contour_settings['transitions'])
+                #
+                #         linecolor = WF.prioritizeKey(contours[transkey], hline, 'linecolor')
+                #         linestylepattern = WF.prioritizeKey(contours[transkey], hline, 'linestylepattern')
+                #         alpha = WF.prioritizeKey(contours[transkey], hline, 'alpha')
+                #         linewidth = WF.prioritizeKey(contours[transkey], hline, 'linewidth')
+                #
+                #         ax.axhline(y=transition_start, c=linecolor, ls=linestylepattern, alpha=float(alpha),
+                #                    lw=float(linewidth))
+                #         if 'name' in contour_settings['transitions'].keys():
+                #             trans_flag = contour_settings['transitions']['name'].lower() #blue:pink:white:pink:blue
+                #             text_settings = WD.getDefaultTextSettings(contour_settings['transitions'])
+                #
+                #             if trans_flag in contours[transkey].keys():
+                #                 trans_name = contours[transkey][trans_flag]
+                #             if trans_name != None:
+                #
+                #                 trans_y_ratio = abs(1.0 - (transition_start / max(ax.get_ylim()) + .01)) #dont let user touch this
+                #
+                #                 fontcolor = WF.prioritizeKey(contours[transkey], text_settings, 'fontcolor')
+                #                 fontsize = WF.prioritizeKey(contours[transkey], text_settings, 'fontsize')
+                #                 horizontalalignment = WF.prioritizeKey(contours[transkey], text_settings, 'horizontalalignment')
+                #                 text_x_pos = WF.prioritizeKey(contours[transkey], text_settings, 'text_x_pos', backup=0.001)
+                #
+                #                 ax.text(float(text_x_pos), trans_y_ratio, trans_name, c=fontcolor, size=float(fontsize),
+                #                         transform=ax.transAxes, horizontalalignment=horizontalalignment,
+                #                         verticalalignment='top')
                 if self.iscomp:
                     if 'modeltext' in contour_settings.keys():
                         modeltext = contour_settings['modeltext']
@@ -1901,52 +1795,57 @@ class MakeAutomatedReport(object):
                         ylabsize = 12
                     ax.set_ylabel(contour_settings['ylabel'], fontsize=ylabsize)
 
-                if 'ylims' in contour_settings.keys():
-                    if 'min' in contour_settings['ylims']:
-                        ax.set_ylim(bottom=float(contour_settings['ylims']['min']))
-                    if 'max' in contour_settings['ylims']:
-                        ax.set_ylim(top=float(contour_settings['ylims']['max']))
 
+                xmin, xmax = ax.get_xlim()
+                if contour_settings['dateformat'].lower() == 'datetime':
+                    xmin = mpl.dates.num2date(xmin)
+                    xmax = mpl.dates.num2date(xmax)
                 if 'xticks' in contour_settings.keys():
                     xtick_settings = contour_settings['xticks']
                     Plots.formatTimeSeriesXticks(ax, xtick_settings, contour_settings)
+                ax.set_xlim(left=xmin)
+                ax.set_xlim(right=xmax)
 
-                yticksize = 10 #default
-                if 'fontsize' in object_settings.keys():
-                    yticksize = float(object_settings['fontsize']) #plot defined default
-                if 'yticks' in object_settings.keys(): #user defined
-                    if 'fontsize' in object_settings['yticks'].keys():
-                        yticksize = float(object_settings['yticks']['fontsize'])
+                Plots.formatYTicks(ax, contour_settings)
 
-                ymin, ymax = ax.get_ylim()
-                if 'ylims' in object_settings.keys():
-                    if 'min' in object_settings['ylims']:
-                        ymin = float(object_settings['ylims']['min'])
-                    if 'max' in object_settings['ylims']:
-                        ymax = float(object_settings['ylims']['max'])
+                if 'transitions' in contour_settings.keys():
+                    for transkey in transitions.keys():
+                        transition_start = transitions[transkey]
+                        trans_name = None
+                        hline = WD.getDefaultStraightLineSettings(contour_settings['transitions'])
 
-                ax.tick_params(axis='y', labelsize=yticksize)
-                if 'yticks' in object_settings.keys():
-                    ytick_settings = object_settings['yticks']
-                    if 'spacing' in ytick_settings.keys():
-                        ytickspacing = ytick_settings['spacing']
-                        if '.' in ytickspacing:
-                            ytickspacing = float(ytickspacing)
-                        else:
-                            ytickspacing = int(ytickspacing)
-                        newyticks = np.arange(ymin, (ymax+ytickspacing), ytickspacing)
-                        newyticklabels = Plots.formatTickLabels(newyticks, ytick_settings)
-                        ax.set_yticks(newyticks)
-                        ax.set_yticklabels(newyticklabels)
+                        linecolor = WF.prioritizeKey(contours[transkey], hline, 'linecolor')
+                        linestylepattern = WF.prioritizeKey(contours[transkey], hline, 'linestylepattern')
+                        alpha = WF.prioritizeKey(contours[transkey], hline, 'alpha')
+                        linewidth = WF.prioritizeKey(contours[transkey], hline, 'linewidth')
 
-                ax.set_ylim(bottom=ymin)
-                ax.set_ylim(top=ymax)
+                        ax.axhline(y=transition_start, c=linecolor, ls=linestylepattern, alpha=float(alpha),
+                                   lw=float(linewidth))
+                        if 'name' in contour_settings['transitions'].keys():
+                            trans_flag = contour_settings['transitions']['name'].lower() #blue:pink:white:pink:blue
+                            text_settings = WD.getDefaultTextSettings(contour_settings['transitions'])
+
+                            if trans_flag in contours[transkey].keys():
+                                trans_name = contours[transkey][trans_flag]
+                            if trans_name != None:
+                                if ax.get_ylim()[0] <= transition_start <= ax.get_ylim()[1]:
+                                    trans_y_value = transition_start + ((ax.get_ylim()[1] - ax.get_ylim()[0]) * .01)
+
+                                    fontcolor = WF.prioritizeKey(contours[transkey], text_settings, 'fontcolor')
+                                    fontsize = WF.prioritizeKey(contours[transkey], text_settings, 'fontsize')
+                                    horizontalalignment = WF.prioritizeKey(contours[transkey], text_settings, 'horizontalalignment')
+                                    text_x_pos = WF.prioritizeKey(contours[transkey], text_settings, 'text_x_pos', backup=0.001)
+                                    trans_x_value = mpl.dates.num2date(ax.get_xlim()[0] + ((ax.get_xlim()[1] - ax.get_xlim()[0]) * float(text_x_pos)))
+
+                                    ax.text(trans_x_value, trans_y_value, trans_name, c=fontcolor, size=float(fontsize),
+                                            horizontalalignment=horizontalalignment,
+                                            verticalalignment='top')
 
                 ax.invert_yaxis()
 
             # #stuff to call once per plot
             self.configureSettingsForID('base', cur_obj_settings)
-            cur_obj_settings = WF.updateFlaggedValues(cur_obj_settings, '%%units%%', units)
+            cur_obj_settings = WF.updateFlaggedValues(cur_obj_settings, '%%units%%', WF.formatUnitsStrings(units))
 
             if 'title' in cur_obj_settings.keys():
                 if 'titlesize' in cur_obj_settings.keys():
@@ -2177,7 +2076,7 @@ class MakeAutomatedReport(object):
                                           },
                                          isdata=True)
 
-                contour_settings = WF.updateFlaggedValues(contour_settings, '%%units%%', units)
+                contour_settings = WF.updateFlaggedValues(contour_settings, '%%units%%', WF.formatUnitsStrings(units))
 
                 if 'contourlines' in contour_settings.keys():
                     for contourline in contour_settings['contourlines']:
@@ -2249,42 +2148,43 @@ class MakeAutomatedReport(object):
                 ax.set_xlim(right=xmax)
 
                 ############# yticks and lims #############
-                ymin, ymax = ax.get_ylim()
-                if 'ylims' in contour_settings.keys():
-                    if 'min' in contour_settings['ylims']:
-                        ymin = float(contour_settings['ylims']['min'])
-
-                    if 'max' in contour_settings['ylims']:
-                        ymax = float(contour_settings['ylims']['max'])
-
-                if 'yticks' in contour_settings.keys():
-                    ytick_settings = contour_settings['yticks']
-                    if 'fontsize' in ytick_settings.keys():
-                        yticksize = float(ytick_settings['fontsize'])
-                    elif 'fontsize' in contour_settings.keys():
-                        yticksize = float(contour_settings['fontsize'])
-                    else:
-                        yticksize = 10
-                    ax.tick_params(axis='y', labelsize=yticksize)
-
-                    if 'spacing' in ytick_settings.keys():
-                        ytickspacing = ytick_settings['spacing']
-                        if '.' in ytickspacing:
-                            ytickspacing = float(ytickspacing)
-                        else:
-                            ytickspacing = int(ytickspacing)
-
-                        newyticks = np.arange(ymin, (ymax+ytickspacing), ytickspacing)
-                        newyticklabels = Plots.formatTickLabels(newyticks, ytick_settings)
-                        ax.set_yticks(newyticks)
-                        ax.set_yticklabels(newyticklabels)
-
-                ax.set_ylim(bottom=ymin)
-                ax.set_ylim(top=ymax)
+                Plots.formatYTicks(ax, contour_settings)
+                # ymin, ymax = ax.get_ylim()
+                # if 'ylims' in contour_settings.keys():
+                #     if 'min' in contour_settings['ylims']:
+                #         ymin = float(contour_settings['ylims']['min'])
+                #
+                #     if 'max' in contour_settings['ylims']:
+                #         ymax = float(contour_settings['ylims']['max'])
+                #
+                # if 'yticks' in contour_settings.keys():
+                #     ytick_settings = contour_settings['yticks']
+                #     if 'fontsize' in ytick_settings.keys():
+                #         yticksize = float(ytick_settings['fontsize'])
+                #     elif 'fontsize' in contour_settings.keys():
+                #         yticksize = float(contour_settings['fontsize'])
+                #     else:
+                #         yticksize = 10
+                #     ax.tick_params(axis='y', labelsize=yticksize)
+                #
+                #     if 'spacing' in ytick_settings.keys():
+                #         ytickspacing = ytick_settings['spacing']
+                #         if '.' in ytickspacing:
+                #             ytickspacing = float(ytickspacing)
+                #         else:
+                #             ytickspacing = int(ytickspacing)
+                #
+                #         newyticks = np.arange(ymin, (ymax+ytickspacing), ytickspacing)
+                #         newyticklabels = Plots.formatTickLabels(newyticks, ytick_settings)
+                #         ax.set_yticks(newyticks)
+                #         ax.set_yticklabels(newyticklabels)
+                #
+                # ax.set_ylim(bottom=ymin)
+                # ax.set_ylim(top=ymax)
 
             # #stuff to call once per plot
             self.configureSettingsForID('base', cur_obj_settings)
-            cur_obj_settings = WF.updateFlaggedValues(cur_obj_settings, '%%units%%', units)
+            cur_obj_settings = WF.updateFlaggedValues(cur_obj_settings, '%%units%%', WF.formatUnitsStrings(units))
 
             if 'title' in cur_obj_settings.keys():
                 if 'titlesize' in cur_obj_settings.keys():

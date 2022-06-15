@@ -578,6 +578,20 @@ class Tables(object):
                     thresholds += self.formatThreshold(tablecolor)
         return thresholds
 
+    def matchNumberFormatByStat(self, stat, settings):
+        numberFormats = []
+        if 'numberformats' in settings.keys():
+            for numberformat in settings['numberformats']:
+                if 'stats' in numberformat:
+                    if stat.lower() in [n.lower() for n in numberformat['stats']]:
+                        numberFormats.append(numberformat)
+                else:
+                    numberFormats.append(numberformat)
+        if isinstance(stat, str):
+            if stat.lower() == 'count':
+                numberFormats.append({'decimalplaces': 0})
+        return numberFormats
+
     def formatThreshold(self, object_settings):
         '''
         organizes settings for thresholds for stat tables. Fills in missing values with defaults
