@@ -681,7 +681,7 @@ class DataOrganizer(object):
                 if self.Report.currentlyloadedID != 'base':
                     dp = self.Report.configureSettingsForID('base', dp)
                 else:
-                    dp = WF.replaceflaggedValues(self, dp, 'modelspecific')
+                    dp = WF.replaceflaggedValues(self.Report, dp, 'modelspecific')
                 dp['numtimesused'] = 0
                 if not self.Report.checkModelType(dp):
                     continue

@@ -1440,3 +1440,47 @@ def getMaxWSEFromElev(input_data):
     for e in input_data:
         elevations.append(max(e))
     return elevations
+
+def formatUnitsStrings(units, format='internal'):
+    if units == None:
+        return units
+    if format == 'internal':
+        units_list = constants.units_fancy_flags_internal
+    elif format == 'external':
+        units_list = constants.units_fancy_flags_external
+
+    if units.lower() in units_list.keys():
+        output = units_list[units.lower()]
+    else:
+        output = units
+    return output
+
+def formatNumbers(number, numberformatsettings):
+
+    try:
+        number = float(number)
+    except:
+        return number
+    if np.isnan(number):
+        return number
+
+    for numberformat in numberformatsettings:
+        if 'decimalplaces' in numberformat.keys():
+            decplaces = int(numberformat['decimalplaces'])
+            # if 'range' in numberformat.keys():
+            if 'max' in numberformat.keys() and 'min' in numberformat.keys():
+                if float(numberformat['min']) < abs(number) <= float(numberformat['max']):
+                    print(f'Number {number} with settings {numberformat}')
+                    return '{num:,.{digits}f}'.format(num=number, digits=decplaces)
+
+            elif 'max' in numberformat.keys() and 'min' not in numberformat.keys():
+                if abs(number) <= float(numberformat['max']):
+                    return '{num:,.{digits}f}'.format(num=number, digits=decplaces)
+
+            elif 'min' in numberformat.keys() and 'max' not in numberformat.keys():
+                if float(numberformat['min']) < abs(number):
+                    return '{num:,.{digits}f}'.format(num=number, digits=decplaces)
+            else:
+                return '{num:,.{digits}f}'.format(num=number, digits=decplaces)
+
+    return f'{number:,.2f}'

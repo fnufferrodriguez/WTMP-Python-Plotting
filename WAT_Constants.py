@@ -42,8 +42,8 @@ class WAT_Constants(object):
                     self.metric_units
         '''
 
-        self.units = {'temperature': {'metric':'c', 'english':'f'},
-                      'temp': {'metric':'c', 'english':'f'},
+        self.units = {'temperature': {'metric':"c", 'english':"f"},
+                      'temp': {'metric':'c', 'english':"f"},
                       'do_sat': {'metric': '%', 'english': '%'},
                       'flow': {'metric': 'm3/s', 'english': 'cfs'},
                       'storage': {'metric': 'm3', 'english': 'af'},
@@ -56,8 +56,8 @@ class WAT_Constants(object):
                       'sal': {'metric': 'psu', 'english': 'psu'},
                       }
 
-        self.unit_alt_names = {'f': ['f', 'faren', 'degf', 'fahrenheit', 'fahren', 'deg f'],
-                                'c': ['c', 'cel', 'celsius', 'deg c', 'degc'],
+        self.unit_alt_names = {'f': ['f', 'faren', 'degf', 'fahrenheit', 'fahren', 'deg f', '°f'],
+                                'c': ['c', 'cel', 'celsius', 'deg c', 'degc', '°c'],
                                 'm3/s': ['m3/s', 'm3s', 'metercubedpersecond', 'cms'],
                                 'cfs': ['cfs', 'cubicftpersecond', 'f3/s', 'f3s'],
                                 'm': ['m', 'meters', 'mtrs'],
@@ -67,6 +67,11 @@ class WAT_Constants(object):
                                 'm/s': ['mps', 'm/s', 'meterspersecond', 'm/second'],
                                 'ft/s': ['ft/s', 'fps', 'feetpersecond', 'feet/s']}
 
+        self.units_fancy_flags_internal = {'f': u"\u00b0F",
+                                            'c': u"\u00b0C"}
+
+        self.units_fancy_flags_external = {'f': r"&#176;F",
+                                          'c': r"&#176;C"}
         self.english_units = {self.units[key]['metric']: self.units[key]['english'] for key in self.units.keys()}
         self.metric_units = {v: k for k, v in self.english_units.items()}
 
@@ -160,3 +165,4 @@ class WAT_Constants(object):
 
         self.satDO_interp = interpolate.interp1d(self.sat_data_temp, self.sat_data_do,
                                         fill_value=(self.sat_data_do[0], self.sat_data_do[-1]), bounds_error=False)
+

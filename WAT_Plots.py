@@ -242,25 +242,21 @@ class Plots(object):
         '''
 
         newticklabels = []
+        allticksinteger = False
+        if np.all([float(tick).is_integer() if isinstance(tick, (int, float)) else False for tick in ticks]):
+            allticksinteger=True
+
         for tick in ticks:
             if isinstance(tick, (int, float)):
 
                 if 'numdecimals' in ticksettings.keys():
                     numdecimals = int(ticksettings['numdecimals'])
+                elif allticksinteger:
+                    numdecimals = 0
                 else:
-                    numdecimals = 1
+                    numdecimals = 2
 
-                if numdecimals == 0:
-                    newticklabel = int(round(tick, 0))
-                    newticklabels.append(str(newticklabel))
-                else:
-                    newticklabel = round(tick, numdecimals)
-                    if numdecimals == 1: #fix numbers like 10.0
-                        if str(newticklabel).split('.')[1].startswith('0'):
-                            newticklabel = str(newticklabel).split('.')[0]
-                            newticklabels.append(newticklabel)
-                        else:
-                            newticklabels.append(str(newticklabel))
+                newticklabels.append('{num:,.{digits}f}'.format(num=tick, digits=numdecimals))
 
             elif isinstance(tick, dt.datetime):
                 if 'datetimeformat' in ticksettings.keys():
@@ -347,10 +343,10 @@ class Plots(object):
         elif 'spacing' in xtick_settings.keys():
             xtickspacing = xtick_settings['spacing']
             if axis_settings[dateformatflag].lower() == 'jdate':
-                if '.' in xtickspacing:
-                    xtickspacing = float(xtickspacing)
-                else:
+                if float(xtickspacing).is_integer():
                     xtickspacing = int(xtickspacing)
+                else:
+                    xtickspacing = float(xtickspacing)
                 newxticks = np.arange(xmin, (xmax+xtickspacing), xtickspacing)
             elif axis_settings[dateformatflag].lower() == 'datetime':
                 dt_xmin = WT.JDateToDatetime(xmin, self.Report.startYear) #do everything on datetime, and we can convert later
@@ -360,6 +356,113 @@ class Plots(object):
             newxticklabels = Plots.formatTickLabels(newxticks, xtick_settings)
             curax.set_xticks(newxticks)
             curax.set_xticklabels(newxticklabels)
+
+    def formatYTicks(self, ax, ax_settings, gatedata={}, gate_placement=10, axis='left'):
+
+        if axis == 'left':
+            ylimflag = 'ylims'
+            yticksflag = 'yticks'
+        else:
+            ylimflag = 'ylims2'
+            yticksflag = 'yticks2'
+
+        ymin, ymax = ax.get_ylim()
+        if ylimflag in ax_settings.keys():
+            if 'min' in ax_settings[ylimflag]:
+                ymin = float(ax_settings[ylimflag]['min'])
+
+            if 'max' in ax_settings[ylimflag]:
+                ymax = float(ax_settings[ylimflag]['max'])
+
+        if len(gatedata.keys()) != 0:
+            ymax = gate_placement
+            ymin = 0
+
+        ax.set_ylim(bottom=ymin)
+        ax.set_ylim(top=ymax)
+
+        if yticksflag in ax_settings.keys():
+            ytick_settings = ax_settings[yticksflag]
+            if 'fontsize' in ytick_settings.keys():
+                yticksize = float(ytick_settings['fontsize'])
+            elif 'fontsize' in ax_settings.keys():
+                yticksize = float(ax_settings['fontsize'])
+            else:
+                yticksize = 10
+            ax.tick_params(axis='y', labelsize=yticksize)
+
+            if 'spacing' in ytick_settings.keys():
+                ytickspacing = ytick_settings['spacing']
+
+                if float(ytickspacing).is_integer():
+                    ytickspacing = int(ytickspacing)
+                else:
+                    ytickspacing = float(ytickspacing)
+
+                if 'ylims' not in ax_settings.keys():
+                    ymax = int(np.ceil(ymax))
+                    ymin = int(np.floor(ymin))
+                else:
+                    if 'min' not in ax_settings[ylimflag].keys():
+                        ymin = int(np.floor(ymin))
+                    if 'max' not in ax_settings[ylimflag].keys():
+                        ymax = int(np.ceil(ymax))
+
+                newyticks = np.arange(ymin, (ymax+ytickspacing), ytickspacing)
+                newyticklabels = self.formatTickLabels(newyticks, ytick_settings)
+                ax.set_yticks(newyticks)
+                ax.set_yticklabels(newyticklabels)
+
+                ax.set_ylim(bottom=min(newyticks))
+                ax.set_ylim(top=max(newyticks))
+                return
+
+        newyticklabels = self.formatTickLabels(ax.get_yticks(), {})
+        ax.set_yticks(ax.get_yticks())
+        ax.set_yticklabels(newyticklabels)
+        ax.set_ylim(bottom=ymin)
+        ax.set_ylim(top=ymax)
+
+    def formatXTicks(self, ax, ax_settings, axis='bottom'):
+
+        if axis == 'bottom':
+            xlimflag = 'xlims'
+            xticksflag = 'xticks'
+        else:
+            xlimflag = 'xlims2'
+            xticksflag = 'xticks2'
+
+        xmin, xmax = ax.get_xlim()
+        if 'xlims' in ax_settings.keys():
+            if 'min' in ax_settings[xlimflag]:
+                xmin = float(ax_settings[xlimflag]['min'])
+            if 'max' in ax_settings[xlimflag]:
+                xmax = float(ax_settings[xlimflag]['max'])
+
+        if xticksflag in ax_settings.keys():
+            xtick_settings = ax_settings[xticksflag]
+            if 'fontsize' in xtick_settings.keys():
+                xticksize = float(xtick_settings['fontsize'])
+            elif 'fontsize' in ax_settings.keys():
+                xticksize = float(ax_settings['fontsize'])
+            else:
+                xticksize = 10
+            ax.tick_params(axis='x', labelsize=xticksize)
+
+            if 'spacing' in xtick_settings.keys():
+                xtickspacing = xtick_settings['spacing']
+                if float(xtickspacing).is_integer():
+                    xtickspacing = int(xtickspacing)
+                else:
+                    xtickspacing = float(xtickspacing)
+                newxticks = np.arange(xmin, (xmax+xtickspacing), xtickspacing)
+                newxticklabels = self.formatTickLabels(newxticks, xtick_settings)
+                # ax.xaxis.set_major_locator(mticker.FixedLocator(newxticks))
+                ax.set_xticks(newxticks)
+                ax.set_xticklabels(newxticklabels)
+
+        ax.set_xlim(left=xmin)
+        ax.set_xlim(right=xmax)
 
     def plotHorizontalLines(self, object_settings, ax, timestamp_index=None):
         '''
@@ -479,6 +582,16 @@ class Plots(object):
                            lw=vline_settings['linewidth'], ls=vline_settings['linestylepattern'],
                            zorder=float(vline_settings['zorder']),
                            alpha=float(vline_settings['alpha']))
+
+    def fixEmptyYAxis(self, ax, ax2):
+        right_handles, right_labels = ax.get_legend_handles_labels()
+        left_handles, left_labels = ax2.get_legend_handles_labels()
+        if len(right_handles) == 0:
+            ax.set_yticks([])
+            ax.set_yticklabels([])
+        if len(left_handles) == 0:
+            ax2.set_yticks([])
+            ax2.set_yticklabels([])
 
 def translateLineStylePatterns(LineSettings):
     '''
