@@ -49,7 +49,7 @@ class DataOrganizer(object):
         :return: name for memory key, or null if can't be determined
         '''
 
-        very_special_flags = f'{self.Report.SimulationName.replace(" ", "").replace(":", "")}_{self.Report.baseSimulationName}'
+        very_special_flags = f'{self.Report.SimulationName.replace(" ", "").replace(":", "")}_{self.Report.baseSimulationName.replace(" ", "").replace(":", "")}'
 
         if 'dss_path' in Data_info.keys(): #Get data from DSS record
             if 'dss_filename' in Data_info.keys():
