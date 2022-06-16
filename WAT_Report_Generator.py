@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '5.0.12'
+VERSIONNUMBER = '5.1.0'
 
 import datetime as dt
 import os
@@ -528,24 +528,30 @@ class MakeAutomatedReport(object):
                         handles, labels = ax.get_legend_handles_labels()
 
                         if _usetwinx:
-                            empty_handle, = ax.plot([],[],color="w")
-                            handles.append(empty_handle)
-                            labels.append('')
+                            if len(handles) > 0:
+                                empty_handle, = ax.plot([],[],color="w")
+                                handles.append(empty_handle)
+                                labels.append('')
                             ax2_handles, ax2_labels = ax2.get_legend_handles_labels()
                             handles += ax2_handles
                             labels += ax2_labels
                             right_sided_axes.append(ax)
                             right_offset = ax.get_window_extent().x0 / ax.get_window_extent().width
 
+                        if 'numlegendcolumns' in ax_settings:
+                            numcols = int(ax_settings['numlegendcolumns'])
+                        else:
+                            numcols = 1
+
                         if ax_settings['legend_outside'].lower() == 'true': #TODO: calibrate the offset
                             if _usetwinx:
-                                ax.legend(handles=handles, labels=labels, loc='center left', bbox_to_anchor=(1+right_offset/2, 0.5), ncol=1,fontsize=legsize)
+                                ax.legend(handles=handles, labels=labels, loc='center left', bbox_to_anchor=(1+right_offset/2, 0.5), ncol=numcols,fontsize=legsize)
 
                             else:
                                 # right_sided_axes.append(ax)
-                                ax.legend(handles=handles, labels=labels, loc='center left', bbox_to_anchor=(1, 0.5), ncol=1,fontsize=legsize)
+                                ax.legend(handles=handles, labels=labels, loc='center left', bbox_to_anchor=(1, 0.5), ncol=numcols,fontsize=legsize)
                         else:
-                            ax.legend(handles=handles, labels=labels, fontsize=legsize)
+                            ax.legend(handles=handles, labels=labels, fontsize=legsize, ncol=numcols)
 
                 ############# xticks and lims #############
 
@@ -587,7 +593,10 @@ class MakeAutomatedReport(object):
 
                     Plots.formatYTicks(ax2, ax_settings, gatedata, gate_placement, axis='right')
 
-                    ax2.grid(False)
+                    if len(ax.get_lines()) > 0:
+                        ax2.grid(False)
+                    else:
+                        ax2.grid(True)
                     ax.set_zorder(ax2.get_zorder()+1) #axis called second will always be on top unless this
                     ax.patch.set_visible(False)
 
@@ -608,15 +617,12 @@ class MakeAutomatedReport(object):
                 rax_leg_width_ratio = rax_leg.get_window_extent().width / rax.get_window_extent().width
                 if rax_leg_width_ratio > right_mod:
                     right_mod = rax_leg_width_ratio
+
             plt.tight_layout()
 
-            spacebetweenaxis = False
             if 'spacebetweenaxis' in object_settings.keys():
-                if object_settings['spacebetweenaxis'].lower() == 'true':
-                    spacebetweenaxis = True
-
-            if not spacebetweenaxis:
-                plt.subplots_adjust(wspace=0, hspace=0)
+                if object_settings['spacebetweenaxis'].lower() != 'true':
+                    plt.subplots_adjust(wspace=0, hspace=0)
 
             basefigname = os.path.join(self.images_path, 'TimeSeriesPlot' + '_' + self.ChapterRegion.replace(' ','_')
                                        + '_' + yearstr)
