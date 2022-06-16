@@ -1500,3 +1500,18 @@ def formatNumbers(number, numberformatsettings):
                 return '{num:,.{digits}f}'.format(num=number, digits=decplaces)
 
     return f'{number:,.2f}'
+
+def checkJasperFiles(study_dir):
+    files_in_directory = os.listdir(study_dir)
+    jrxml_files = [file for file in files_in_directory if file.endswith('.jrxml')]
+    for jrxml_file in jrxml_files:
+        jasper_file = os.path.join(study_dir, jrxml_file.split('.jrxml')[0] + '.jasper')
+        if os.path.exists(jasper_file):
+            jrxml_time = os.path.getmtime(os.path.join(study_dir, jrxml_file))
+            jasper_time = os.path.getmtime(os.path.join(study_dir, jasper_file))
+
+            if jrxml_time > jasper_time: #if the jasper if older than the jrxml
+                print2stdout(f'\nNewer JRXML file detected for {jrxml_file}')
+                print2stdout(f'Deleting {jasper_file}')
+                os.remove(jasper_file)
+
