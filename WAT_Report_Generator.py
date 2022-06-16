@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '5.1.0'
+VERSIONNUMBER = '5.1.1'
 
 import datetime as dt
 import os
@@ -63,6 +63,7 @@ class MakeAutomatedReport(object):
         self.definePaths()
         self.Constants = WC.WAT_Constants()
         self.cleanOutputDirs()
+        WF.checkJasperFiles(os.path.join(self.studyDir, 'reports'))
         WR.readGraphicsDefaultFile(self) #read graphical component defaults
         self.defaultLineStyles = WD.readDefaultLineStylesFile(self)
         self.WAT_log = WL.WAT_Logger()
