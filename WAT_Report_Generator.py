@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '5.0.11'
+VERSIONNUMBER = '5.0.12'
 
 import datetime as dt
 import os
@@ -1412,6 +1412,7 @@ class MakeAutomatedReport(object):
                 else:
                     year = 'ALL'
                 row_val = s_row[i+1]
+                stat = None
                 if '%%' in row_val:
                     rowdata, sr_month = Tables.getStatsLineData(row_val, data, year=year)
                     if len(rowdata) == 0:
@@ -2272,7 +2273,7 @@ class MakeAutomatedReport(object):
 
         default_settings = self.loadDefaultPlotObject('buzzplot')
         object_settings = WF.replaceDefaults(self, default_settings, object_settings)
-        fig = plt.figure(figsize=(12, 6))
+        fig = plt.figure(figsize=(12, 8))
         ax = fig.add_subplot()
 
         ### Make Twin axis ###
@@ -2286,33 +2287,6 @@ class MakeAutomatedReport(object):
         if _usetwinx:
             ax2 = ax.twinx()
 
-            if 'ylabel2' in object_settings.keys():
-                if 'ylabelsize2' in object_settings.keys():
-                    ylabsize2 = float(object_settings['ylabelsize2'])
-                elif 'fontsize' in object_settings.keys():
-                    ylabsize2 = float(object_settings['fontsize'])
-                else:
-                    ylabsize2 = 12
-                ax2.set_ylabel(object_settings['ylabel2'], fontsize=ylabsize2)
-
-            if 'ylims2' in object_settings.keys():
-                if 'min' in object_settings['ylims2']:
-                    ax2.set_ylim(bottom=float(object_settings['ylims2']['min']))
-                if 'max' in object_settings['ylims2']:
-                    ax2.set_ylim(top=float(object_settings['ylims2']['max']))
-
-            if 'yticksize2' in object_settings.keys():
-                yticksize2 = float(object_settings['yticksize2'])
-            elif 'fontsize' in object_settings.keys():
-                yticksize2 = float(object_settings['fontsize'])
-            else:
-                yticksize2 = 10
-            ax2.tick_params(axis='y', labelsize=yticksize2)
-
-            ax2.grid(False)
-            ax.set_zorder(ax2.get_zorder()+1) #axis called second will always be on top unless this
-            ax.patch.set_visible(False)
-
         ### Grid Lines ###
         if 'gridlines' in object_settings.keys():
             if object_settings['gridlines'].lower() == 'true':
@@ -2325,27 +2299,30 @@ class MakeAutomatedReport(object):
 
         object_settings = self.configureSettingsForID('base', object_settings)
 
-        for i, line in enumerate(data.keys()):
+        for line in data.keys():
             curline = data[line]
             values = curline['values']
             dates = curline['dates']
+            units = curline['units']
+            parameter, object_settings['param_count'] = WF.getParameterCount(curline, object_settings)
+            i = object_settings['param_count'][parameter]
 
-            if 'target' in line.keys():
-                values = WF.buzzTargetSum(dates, values, float(line['target']))
+            if 'target' in curline.keys():
+                values = WF.buzzTargetSum(dates, values, float(curline['target']))
             else:
                 if isinstance(values, dict):
                     if len(values.keys()) == 1: #single struct station, like leakage..
                         values = values[list(values.keys())[0]]
-                        values = WF.pickByParameter(values, line)
+                        values = WF.pickByParameter(values, curline)
                     else:
                         WF.print2stdout('Too many values to iterate. check if line should have a target, or an incorrect number')
                         WF.print2stdout('of structures are defined.')
-                        WF.print2stdout('Line:', line)
+                        WF.print2stdout('Line:', curline)
                         continue
 
             chkvals = WF.checkData(values)
             if not chkvals:
-                WF.print2stdout('Invalid Data settings for line:', line)
+                WF.print2stdout('Invalid Data settings for line:', curline)
                 continue
 
             if 'dateformat' in object_settings.keys():
@@ -2359,53 +2336,40 @@ class MakeAutomatedReport(object):
                     if isinstance(dates[0], (float, int)):
                         dates = WT.JDateToDatetime(dates, self.startYear)
 
+            if units == None:
+                if parameter != None:
+                    try:
+                        units = self.Constants.units[parameter]
+                    except KeyError:
+                        units = None
+
+            if isinstance(units, dict):
+                if 'unitsystem' in object_settings.keys():
+                    units = units[object_settings['unitsystem'].lower()]
+                else:
+                    units = None
+
             if 'unitsystem' in object_settings.keys():
                 values, units = WF.convertUnitSystem(values, units, object_settings['unitsystem'])
 
-            if 'parameter' in line.keys():
-                line_settings = WD.getDefaultLineSettings(self.defaultLineStyles, line, line['parameter'], i)
+            if 'parameter' in curline.keys():
+                line_settings = WD.getDefaultLineSettings(self.defaultLineStyles, curline, curline['parameter'], i)
             else:
-                line_settings = WD.getDefaultLineSettings(self.defaultLineStyles, line, None, i)
+                line_settings = WD.getDefaultLineSettings(self.defaultLineStyles, curline, None, i)
 
-            if 'scalar' in line.keys():
+            if 'scalar' in curline.keys():
                 try:
-                    scalar = float(line['scalar'])
+                    scalar = float(curline['scalar'])
                     values = scalar * values
                 except ValueError:
-                    WF.print2stdout('Invalid Scalar. {0}'.format(line['scalar']))
+                    WF.print2stdout('Invalid Scalar. {0}'.format(curline['scalar']))
                     continue
 
-            if 'filterbylimits' not in line_settings.keys():
-                line_settings['filterbylimits'] = 'true' #set default
-
-            if line_settings['filterbylimits'].lower() == 'true':
-                if _usetwinx:
-                    if 'xaxis' in line.keys():
-                        if line['xaxis'].lower() == 'left':
-                            xaxis = 'left'
-                        else:
-                            xaxis = 'right'
-                    else:
-                        xaxis = 'left'
-                else:
-                    xaxis = 'left'
-
-                if xaxis == 'left':
-                    if 'xlims' in object_settings.keys():
-                        dates, values = WF.applyXLimits(self, dates, values, object_settings['xlims'])
-                    if 'ylims' in object_settings.keys():
-                        dates, values = WF.applyYLimits(dates, values, object_settings['ylims'])
-                else:
-                    if 'xlims2' in object_settings.keys():
-                        dates, values = WF.applyXLimits(self, dates, values, object_settings['xlims'])
-                    if 'ylims' in object_settings.keys():
-                        dates, values = WF.applyYLimits(dates, values, object_settings['ylims2'])
-
-            if 'linetype' in line.keys():
-                if line['linetype'].lower() == 'stacked': #stacked plots need to be added at the end..
+            if 'linetype' in curline.keys():
+                if curline['linetype'].lower() == 'stacked': #stacked plots need to be added at the end..
                     if _usetwinx:
-                        if 'xaxis' in line.keys():
-                            axis = line['xaxis'].lower()
+                        if 'xaxis' in curline.keys():
+                            axis = curline['xaxis'].lower()
                     else:
                         axis = 'left' #if not twinx, then only can use left
 
@@ -2419,7 +2383,7 @@ class MakeAutomatedReport(object):
             else: #otherwise we're normal lines
                 if _usetwinx:
                     if 'xaxis' in line_settings:
-                        if line['xaxis'].lower() == 'left':
+                        if curline['xaxis'].lower() == 'left':
                             curax = ax
                         else:
                             curax = ax2
@@ -2448,7 +2412,7 @@ class MakeAutomatedReport(object):
                                           'value_end_date': WT.translateDateFormat(dates[-1], 'datetime', '',
                                                                                    self.StartTime, self.EndTime,
                                                                                    self.ModelAlt.t_offset).strftime('%d %b %Y'),
-                                          'logoutputfilename': line['logoutputfilename']
+                                          'logoutputfilename': curline['logoutputfilename']
                                           },
                                          isdata=True)
 
@@ -2532,35 +2496,65 @@ class MakeAutomatedReport(object):
 
         ### Xaxis formatting ###
         Plots.formatDateXAxis(ax, object_settings)
+        xmin, xmax = ax.get_xlim()
 
-        if 'ylims' in object_settings.keys():
-            if 'min' in object_settings['ylims']:
-                ax.set_ylim(bottom=float(object_settings['ylims']['min']))
-            if 'max' in object_settings['ylims2']:
-                ax.set_ylim(top=float(object_settings['ylims']['max']))
+        if object_settings['dateformat'].lower() == 'datetime':
+            xmin = mpl.dates.num2date(xmin)
+            xmax = mpl.dates.num2date(xmax)
 
-        if _usetwiny:
-            ax2 = ax.twiny()
-            if 'xlabel2' in object_settings.keys():
-                if 'xlabelsize2' in object_settings.keys():
-                    xlabelsize2 = float(object_settings['xlabelsize2'])
+        if 'xticks' in object_settings.keys():
+            xtick_settings = object_settings['xticks']
+
+            Plots.formatTimeSeriesXticks(ax, xtick_settings, object_settings)
+
+        ax.set_xlim(left=xmin)
+        ax.set_xlim(right=xmax)
+
+        ############# yticks and lims #############
+        Plots.formatYTicks(ax, object_settings)
+
+        if _usetwinx:
+            Plots.fixEmptyYAxis(ax, ax2)
+
+            if 'ylabel2' in object_settings.keys():
+                if 'ylabelsize2' in object_settings.keys():
+                    ylabsize2 = float(object_settings['ylabelsize2'])
                 elif 'fontsize' in object_settings.keys():
-                    xlabelsize2 = float(object_settings['fontsize'])
+                    ylabsize2 = float(object_settings['fontsize'])
                 else:
-                    xlabelsize2 = 12
-                ax2.set_xlabel(object_settings['xlabel2'], fontsize=xlabelsize2)
+                    ylabsize2 = 12
+                ax2.set_ylabel(object_settings['ylabel2'], fontsize=ylabsize2)
 
-            Plots.formatDateXAxis(ax2, object_settings, twin=True)
-
-            if 'xticksize2' in object_settings.keys():
-                xticksize2 = float(object_settings['xticksize2'])
-            elif 'fontsize' in object_settings.keys():
-                xticksize2 = float(object_settings['fontsize'])
-            else:
-                xticksize2 = 10
-            ax2.tick_params(axis='x', labelsize=xticksize2)
+            Plots.formatYTicks(ax2, object_settings, axis='right')
 
             ax2.grid(False)
+            ax.set_zorder(ax2.get_zorder()+1) #axis called second will always be on top unless this
+            ax.patch.set_visible(False)
+
+        # if _usetwiny:
+        #     ax2 = ax.twiny()
+        #     if 'xlabel2' in object_settings.keys():
+        #         if 'xlabelsize2' in object_settings.keys():
+        #             xlabelsize2 = float(object_settings['xlabelsize2'])
+        #         elif 'fontsize' in object_settings.keys():
+        #             xlabelsize2 = float(object_settings['fontsize'])
+        #         else:
+        #             xlabelsize2 = 12
+        #         ax2.set_xlabel(object_settings['xlabel2'], fontsize=xlabelsize2)
+        #
+        #     Plots.formatDateXAxis(ax2, object_settings, twin=True)
+
+            # if 'xticksize2' in object_settings.keys():
+            #     xticksize2 = float(object_settings['xticksize2'])
+            # elif 'fontsize' in object_settings.keys():
+            #     xticksize2 = float(object_settings['fontsize'])
+            # else:
+            #     xticksize2 = 10
+            # ax2.tick_params(axis='x', labelsize=xticksize2)
+            # Plots.formatTimeSeriesXticks(ax2, xtick_settings, object_settings)
+            #
+            # ax2.grid(False)
+
 
         ax.set_axisbelow(True) #lets legend be on top.
 
@@ -2580,7 +2574,8 @@ class MakeAutomatedReport(object):
         plt.savefig(figname)
         plt.close('all')
 
-        self.XML.writeTimeSeriesPlot(os.path.basename(figname), object_settings['description'])
+        # self.XML.writeHalfPagePlot(os.path.basename(figname), object_settings['description'])
+        self.XML.writeFullPagePlot(os.path.basename(figname), object_settings['description'])
 
     def setSimulationCSVVars(self, simlist):
         '''

@@ -357,10 +357,7 @@ class W2_Results(object):
         if not os.path.exists(ofn_path):
             WF.print2stdout('Data File not found!', ofn_path)
             return [], []
-        if isinstance(structure_nums, dict):
-            structure_nums = [structure_nums['structurenumber']]
-        elif isinstance(structure_nums, str):
-            structure_nums = [structure_nums]
+
         structure_nums = [int(n) for n in structure_nums]
         values = {}
 
@@ -368,6 +365,7 @@ class W2_Results(object):
             for i, line in enumerate(o):
                 if i == skiprows-1:
                     headers = line.strip().lower().replace(',','').split()[1:] #skipjdate..
+                    break
         header_count = Counter(headers)
         headers = list(set(headers))
 
@@ -443,14 +441,26 @@ class W2_Results(object):
 
         try:
             column = int(column)
-        except ValueError:
-            pass #keep as string
+        except:
+            pass
+
+        try:
+            skiprows = int(skiprows)
+        except:
+            pass
+
 
         ofn_path = os.path.join(self.run_path, output_file_name)
 
         if not os.path.exists(ofn_path):
-            print('Data File not found!', ofn_path)
+            WF.print2stdout('Data File not found!', ofn_path)
             return [], []
+
+        if isinstance(column, str):
+            header = linecache.getline(ofn_path, int(skiprows)).strip().lower().split() #1 indexed, for some reason
+            cidx = np.where(np.asarray(header) == column.lower())[0]
+            if len(cidx) > 0:
+                column = cidx[0]
 
         dates = []
         values = []
@@ -461,12 +471,12 @@ class W2_Results(object):
                     if len(sline) == 1: #not csv TODO: figure out this but better..
                         sline = line.split()
                     dates.append(float(sline[0].strip()))
-                    if isinstance(column, int):
-                        values.append(float(sline[column].strip()))
-                    elif isinstance(column, str):
-                        header = linecache.getline(ofn_path, int(skiprows)-1).strip().lower().split()
-                        cidx = np.where(np.asarray(header) == column.lower())[0]
-                        values.append(float(sline[cidx].strip()))
+                    # if isinstance(column, int):
+                    values.append(float(sline[column].strip()))
+                    # elif isinstance(column, str):
+                        # header = linecache.getline(ofn_path, int(skiprows)).strip().lower().split() #1 indexed, for some reason
+                        # cidx = np.where(np.asarray(header) == column.lower())[0]
+                        # values.append(float(sline[cidx].strip()))
 
         if len(dates) > 1:
             val_interp = interp1d(dates, values)
@@ -520,7 +530,7 @@ class W2_Results(object):
                     checkForVar = True
 
 
-        print('stp')
+        WF.print2stdout('stp')
 
         # otf.split('\n')
 
@@ -548,7 +558,7 @@ class W2_Results(object):
                       'vertical velocity': 'Vertical velocity'}
 
         if parameter.lower() not in fileparams:
-            print('Parameter {0} not in acceptable parameters.'.format(parameter))
+            WF.print2stdout('Parameter {0} not in acceptable parameters.'.format(parameter))
             return None
         else:
             return fileparams[parameter.lower()]

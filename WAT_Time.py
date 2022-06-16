@@ -31,6 +31,9 @@ def changeTimeSeriesInterval(times, values, Line_info, t_offset, startYear):
 
     convert_to_jdate = False
 
+    if len(times) == 0:
+        return times, values
+
     if isinstance(times[0], (int, float)): #check for jdate, this is easier in dt..
         times = JDateToDatetime(times, startYear)
         convert_to_jdate = True
@@ -54,7 +57,6 @@ def changeTimeSeriesInterval(times, values, Line_info, t_offset, startYear):
         for key in values:
             new_times, new_values[key] = changeTimeSeriesInterval(times, values[key], Line_info, t_offset, startYear)
     else:
-
         if 'interval' in Line_info:
             interval = Line_info['interval'].upper()
             pd_interval = getPandasTimeFreq(interval)
@@ -157,9 +159,9 @@ def changeTimeSeriesInterval(times, values, Line_info, t_offset, startYear):
             return times, values
 
     if convert_to_jdate:
-        return WT.DatetimeToJDate(new_times, t_offset), np.asarray(new_values)
+        return WT.DatetimeToJDate(new_times, t_offset), new_values
     else:
-        return new_times, np.asarray(new_values)
+        return new_times, new_values
 
 def defineStartEndYears(Report):
     '''
@@ -317,7 +319,7 @@ def getPandasTimeFreq(intervalstring):
         timeint = intervalstring.replace('year','') + 'A'
         return timeint
     else:
-        print('Unidentified time interval')
+        WF.print2stdout('Unidentified time interval')
         return 0
 
 def buildTimeSeries(startTime, endTime, interval):

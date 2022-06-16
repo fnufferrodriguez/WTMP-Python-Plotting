@@ -222,7 +222,7 @@ def matchData(data1, data2):
         data2['values'] = v_2_msk
         return data1, data2
 
-def checkData(dataset, flag='values'):
+def checkData(dataset, flag=None):
     '''
     checks datasets to ensure that they are valid for representation. Checks for a given flag, any length and
     that its not all NaNs
@@ -232,13 +232,24 @@ def checkData(dataset, flag='values'):
     '''
 
     if isinstance(dataset, dict):
-        if flag not in dataset.keys():
-            return False
-        elif len(dataset[flag]) == 0:
-            return False
-        elif checkAllNaNs(dataset[flag]):
-            return False
+        if flag != None:
+            if flag not in dataset.keys():
+                return False
+            elif len(dataset[flag]) == 0:
+                return False
+            elif checkAllNaNs(dataset[flag]):
+                return False
+            else:
+                return True
         else:
+            for key in dataset.keys():
+                if isinstance(dataset[key], dict):
+                    check = checkData(dataset[key])
+                else:
+                    check = checkData(dataset[key], flag=key)
+                if check == False:
+                    print2stdout(f'Invalid at {key}')
+                    return False
             return True
 
     elif isinstance(dataset, list) or isinstance(dataset, np.ndarray):
@@ -435,7 +446,7 @@ def convertTempUnits(values, units):
         values = convert_temperature(values, 'C', 'F')
         return values
     else:
-        print('Undefined temp units:', units)
+        print2stdout('Undefined temp units:', units)
         return values
 
 def filterContourOverTopWater(values, elevations, topwater):
@@ -605,12 +616,12 @@ def mergeLines(data, settings):
                 controller = dataflags[0]
             otherflags = [n for n in dataflags if n != controller]
             if controller not in data.keys():
-                print('Mergeline Controller {0} not found in data {1}'.format(controller, data.keys()))
+                print2stdout('Mergeline Controller {0} not found in data {1}'.format(controller, data.keys()))
                 continue
             flagnotfound = False
             for OF in otherflags:
                 if OF not in data.keys():
-                    print('Mergeline flag {0} not found in data {1}'.format(OF, data.keys()))
+                    print2stdout('Mergeline flag {0} not found in data {1}'.format(OF, data.keys()))
                     flagnotfound = True
             if flagnotfound:
                 continue
@@ -621,9 +632,9 @@ def mergeLines(data, settings):
             baseunits = data[controller]['units']
             for flag in otherflags:
                 if data[flag]['units'] != baseunits:
-                    print('WARNING: Attempting to merge lines with differing units')
-                    print('{0}: {1} and {2}: {3}'.format(flag, data[flag]['units'], controller, baseunits))
-                    print('If incorrect, please modify/append input settings to ensure lines '
+                    print2stdout('WARNING: Attempting to merge lines with differing units')
+                    print2stdout('{0}: {1} and {2}: {3}'.format(flag, data[flag]['units'], controller, baseunits))
+                    print2stdout('If incorrect, please modify/append input settings to ensure lines '
                           'are converted prior to merging.')
                 data[controller], data[flag] = matchData(data[controller], data[flag])
                 if math == 'add':
@@ -948,7 +959,7 @@ def buzzTargetSum(dates, values, target):
 
     sum_vals = []
     for i, d in enumerate(dates):
-        sum = 0
+        sum = 0.0
         for sn in values.keys():
             if values[sn]['elevcl'][i] == target:
                 sum += values[sn]['q(m3/s)'][i]
@@ -1384,12 +1395,17 @@ def replaceOmittedValues(values, omitval):
         new_values = {}
         for key in values:
             new_values[key] = replaceOmittedValues(values[key], omitval)
+        return new_values
     else:
-        o_msk = np.where(values == omitval)
-        values[o_msk] = np.nan
-        new_values = np.asarray(values)
-        print2stdout('Omitted {0} values of {1}'.format(len(o_msk[0]), omitval))
-    return new_values
+        if len(values) > 0:
+            o_msk = np.where(values == omitval)
+            values[o_msk] = np.nan
+            new_values = np.asarray(values)
+            print2stdout('Omitted {0} values of {1}'.format(len(o_msk[0]), omitval))
+            return new_values
+        else:
+            print2stdout('No Values to omit.')
+            return values
 
 def replaceDefaults(Report, default_settings, object_settings):
     '''

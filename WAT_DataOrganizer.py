@@ -69,6 +69,8 @@ class DataOrganizer(object):
                     structure_nums = Data_info['structurenumbers']
                 outname += '_Struct_' + '_'.join(structure_nums) + f'_{very_special_flags}'
             else:
+                if 'column' in Data_info.keys():
+                    very_special_flags += f'_Columnf{Data_info["column"].replace(" ","")}'
                 outname = '{0}'.format(os.path.basename(Data_info['w2_file']).split('.')[0]) + f'_{very_special_flags}'
             return outname
 
@@ -126,7 +128,7 @@ class DataOrganizer(object):
                 flag = newflag
                 WF.print2stdout('The new flag is {0}'.format(newflag))
             datamem_key = self.buildMemoryKey(line)
-            if 'units' in line.keys() and units != None:
+            if 'units' in line.keys() and units == None:
                 units = line['units']
             data[flag] = {'values': values,
                           'dates': dates,
@@ -323,6 +325,7 @@ class DataOrganizer(object):
         if 'interval' in Line_info.keys():
             times, values = WT.changeTimeSeriesInterval(times, values, Line_info, self.Report.ModelAlt.t_offset, self.Report.startYear)
 
+
         return times, values, units
 
     #################################################################
@@ -343,7 +346,7 @@ class DataOrganizer(object):
             numtimesused = 0
             if 'flag' not in line.keys():
                 WF.print2stdout('Flag not set for line (Computed/Observed/etc)')
-                print('Not plotting Line:', line)
+                WF.print2stdout('Not plotting Line:', line)
                 continue
             elif line['flag'].lower() == 'computed':
                 # for ID in self.SimulationVariables.keys():

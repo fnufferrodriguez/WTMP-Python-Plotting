@@ -441,7 +441,7 @@ class Tables(object):
                         if curflag == None:
                             WF.print2stdout('Invalid Table row for {0}'.format(row))
                             WF.print2stdout('Data Key not contained within {0}'.format(data_dict.keys()))
-                            print('Please check Datapaths in the XML file, or modify the rows to have the correct flags'
+                            WF.print2stdout('Please check Datapaths in the XML file, or modify the rows to have the correct flags'
                                   ' for the data present')
                             return data, ''
 
@@ -556,7 +556,7 @@ class Tables(object):
             stat = 'mean'
         else:
             if '%%' in row:
-                print('Unable to convert flag in row', row)
+                WF.print2stdout('Unable to convert flag in row', row)
             return row, ''
 
         return out_stat, stat
