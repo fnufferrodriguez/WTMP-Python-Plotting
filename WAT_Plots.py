@@ -586,12 +586,12 @@ class Plots(object):
                            alpha=float(vline_settings['alpha']))
 
     def fixEmptyYAxis(self, ax, ax2):
-        right_handles, right_labels = ax.get_legend_handles_labels()
-        left_handles, left_labels = ax2.get_legend_handles_labels()
-        if len(right_handles) == 0:
+        ax_lines = ax.get_lines()
+        ax2_lines = ax2.get_lines()
+        if len(ax_lines) == 0:
             ax.set_yticks([])
             ax.set_yticklabels([])
-        if len(left_handles) == 0:
+        if len(ax2_lines) == 0:
             ax2.set_yticks([])
             ax2.set_yticklabels([])
 

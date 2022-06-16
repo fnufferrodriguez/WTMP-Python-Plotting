@@ -579,18 +579,25 @@ class Tables(object):
         return thresholds
 
     def matchNumberFormatByStat(self, stat, settings):
-        numberFormats = []
+        numberFormats_default = []
+        numberFormats_statspec = []
+
         if 'numberformats' in settings.keys():
             for numberformat in settings['numberformats']:
                 if 'stats' in numberformat:
                     if stat.lower() in [n.lower() for n in numberformat['stats']]:
-                        numberFormats.append(numberformat)
+                        numberFormats_statspec.append(numberformat)
                 else:
-                    numberFormats.append(numberformat)
+                    numberFormats_default.append(numberformat)
         if isinstance(stat, str):
             if stat.lower() == 'count':
-                numberFormats.append({'decimalplaces': 0})
-        return numberFormats
+                if len(numberFormats_statspec) == 0:
+                    numberFormats_statspec.append({'decimalplaces': 0})
+
+        if len(numberFormats_statspec) > 0:
+            return numberFormats_statspec
+        else:
+            return numberFormats_default
 
     def formatThreshold(self, object_settings):
         '''
