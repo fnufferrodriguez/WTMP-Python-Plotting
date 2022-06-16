@@ -367,6 +367,7 @@ class Plots(object):
             yticksflag = 'yticks2'
 
         ymin, ymax = ax.get_ylim()
+
         if ylimflag in ax_settings.keys():
             if 'min' in ax_settings[ylimflag]:
                 ymin = float(ax_settings[ylimflag]['min'])
@@ -417,6 +418,7 @@ class Plots(object):
                 ax.set_ylim(top=max(newyticks))
                 return
 
+        # newyticks = np.linspace(ymin, ymax, len(ax.get_yticks())) #default num of
         newyticklabels = self.formatTickLabels(ax.get_yticks(), {})
         ax.set_yticks(ax.get_yticks())
         ax.set_yticklabels(newyticklabels)

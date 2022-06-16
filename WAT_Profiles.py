@@ -209,7 +209,7 @@ def convertProfileDataUnits(object_settings, data, line_settings):
     '''
 
     if 'unitsystem' not in object_settings.keys():
-        print('Unit system not defined.')
+        WF.print2stdout('Unit system not defined.')
         return data, line_settings
     for flag in data.keys():
         if line_settings[flag]['units'] == None:
