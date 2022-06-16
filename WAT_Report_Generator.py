@@ -1412,6 +1412,7 @@ class MakeAutomatedReport(object):
                 else:
                     year = 'ALL'
                 row_val = s_row[i+1]
+                stat = None
                 if '%%' in row_val:
                     rowdata, sr_month = Tables.getStatsLineData(row_val, data, year=year)
                     if len(rowdata) == 0:
