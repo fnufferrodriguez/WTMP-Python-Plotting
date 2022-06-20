@@ -223,50 +223,50 @@ class Tables(object):
                 observed_flag = 'Observed' if 'Observed' in data.keys() else [n for n in data.keys() if n not in computed_flags][0]
 
         for year in object_settings['years']:
-            if self.Report.iscomp:
-                for computed_key in computed_flags:
-                    if 'ID' in data[computed_key].keys():
-                        ID = data[computed_key]['ID']
-                        self.Report.loadCurrentID(ID)
-                        row = f'{self.Report.SimulationName} {year}'
-                        for month in self.Report.Constants.mo_str_3:
-                            if numflagsneeded == 1:
-                                row += f'|%%{stat}.{data[computed_key]["flag"]}.MONTH={month.upper()}%%'
-                            else:
-                                row += f'|%%{stat}.{data[computed_key]["flag"]}.MONTH={month.upper()}.{data[observed_flag]["flag"]}.MONTH={month.upper()}%%'
-                        rows.append(row)
-            else:
+            # if self.Report.iscomp:
+            #     for computed_key in computed_flags:
+            #         if 'ID' in data[computed_key].keys():
+            #             ID = data[computed_key]['ID']
+            #             self.Report.loadCurrentID(ID)
+            #             row = f'{self.Report.SimulationName} {year}'
+            #             for month in self.Report.Constants.mo_str_3:
+            #                 if numflagsneeded == 1:
+            #                     row += f'|%%{stat}.{data[computed_key]["flag"]}.MONTH={month.upper()}%%'
+            #                 else:
+            #                     row += f'|%%{stat}.{data[computed_key]["flag"]}.MONTH={month.upper()}.{data[observed_flag]["flag"]}.MONTH={month.upper()}%%'
+            #             rows.append(row)
+            # else:
                 computed_key = computed_flags[0]
                 row = f'{year}'
                 for month in self.Report.Constants.mo_str_3:
                     if numflagsneeded == 1:
-                        row += f'|%%{stat}.{data[computed_key]["flag"]}.MONTH={month.upper()}%%'
+                        row += f'|%%{stat}.{computed_key}.MONTH={month.upper()}%%'
                     else:
-                        row += f'|%%{stat}.{data[computed_key]["flag"]}.MONTH={month.upper()}.{data[observed_flag]["flag"]}.MONTH={month.upper()}%%'
+                        row += f'|%%{stat}.{computed_key}.MONTH={month.upper()}.{data[observed_flag]["flag"]}.MONTH={month.upper()}%%'
                 rows.append(row)
 
         if 'includeallyears' in object_settings.keys():
             if object_settings['includeallyears'].lower() == 'true':
-                if self.Report.iscomp:
-                    for computed_key in computed_flags:
-                        if 'ID' in data[computed_key].keys():
-                            ID = data[computed_key]['ID']
-                            self.Report.loadCurrentID(ID)
-                            row = f'{self.Report.SimulationName} All'
-                            for month in self.Report.Constants.mo_str_3:
-                                if numflagsneeded == 1:
-                                    row += f'|%%{stat}.{data[computed_key]["flag"]}.MONTH={month.upper()}%%'
-                                else:
-                                    row += f'|%%{stat}.{data[computed_key]["flag"]}.MONTH={month.upper()}.{data[observed_flag]["flag"]}.MONTH={month.upper()}%%'
-                            rows.append(row)
-                else:
+                # if self.Report.iscomp:
+                #     for computed_key in computed_flags:
+                #         if 'ID' in data[computed_key].keys():
+                #             ID = data[computed_key]['ID']
+                #             self.Report.loadCurrentID(ID)
+                #             row = f'{self.Report.SimulationName} All'
+                #             for month in self.Report.Constants.mo_str_3:
+                #                 if numflagsneeded == 1:
+                #                     row += f'|%%{stat}.{data[computed_key]["flag"]}.MONTH={month.upper()}%%'
+                #                 else:
+                #                     row += f'|%%{stat}.{data[computed_key]["flag"]}.MONTH={month.upper()}.{data[observed_flag]["flag"]}.MONTH={month.upper()}%%'
+                #             rows.append(row)
+                # else:
                     row = 'All'
                     computed_key = computed_flags[0]
                     for month in self.Report.Constants.mo_str_3:
                         if numflagsneeded == 1:
-                            row += f'|%%{stat}.{data[computed_key]["flag"]}.MONTH={month.upper()}%%'
+                            row += f'|%%{stat}.{computed_key}.MONTH={month.upper()}%%'
                         else:
-                            row += f'|%%{stat}.{data[computed_key]["flag"]}.MONTH={month.upper()}.{data[observed_flag]["flag"]}.MONTH={month.upper()}%%'
+                            row += f'|%%{stat}.{computed_key}.MONTH={month.upper()}.{data[observed_flag]["flag"]}.MONTH={month.upper()}%%'
                     rows.append(row)
 
         return headers, rows
