@@ -943,3 +943,18 @@ class DataOrganizer(object):
                 with open(csv_name, 'w') as inf:
                     inf.write('ERROR WRITING FILE.')
 
+    def getComputedData(self, data):
+        computedKeys = []
+        for datakey in data.keys():
+            if 'ID' in data[datakey].keys():
+                computedKeys.append(datakey)
+        return computedKeys
+
+    def filterComputed(self, data, targetkey, computedKeys):
+        # outdata = pickle.loads(pickle.dumps(data, -1))
+        outdata = {}
+        for key in data.keys():
+            if key == targetkey or key not in computedKeys:
+                # data.pop(key)
+                outdata[key] = data[key]
+        return outdata

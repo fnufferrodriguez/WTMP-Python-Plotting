@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '5.1.1'
+VERSIONNUMBER = '5.1.2'
 
 import datetime as dt
 import os
@@ -1393,9 +1393,9 @@ class MakeAutomatedReport(object):
         data = self.Data.getTableDataDictionary(object_settings)
         data = WF.mergeLines(data, object_settings)
 
-        headings, rows = Tables.buildSingleStatTable(object_settings, data)
+        # headings, rows = Tables.buildSingleStatTable(object_settings, data)
 
-        object_settings = self.configureSettingsForID('base', object_settings) #will turn on for comparison plot later
+        # object_settings = self.configureSettingsForID('base', object_settings) #will turn on for comparison plot later
 
         object_settings['units_list'] = WF.getUnitsList(data)
         object_settings['plot_units'] = WF.getPlotUnits(object_settings['units_list'], object_settings)
@@ -1407,58 +1407,70 @@ class MakeAutomatedReport(object):
 
         thresholds = Tables.formatThreshold(object_settings)
 
-        self.XML.writeNarrowTableStart(object_settings['description'], 'Year')
-        for i, header in enumerate(headings):
-            frmt_rows = []
-            threshold_colors = np.full(len(rows), None)
-            for ri, row in enumerate(rows):
-                s_row = row.split('|')
-                rowname = s_row[0]
-                if rowname in [str(n) for n in object_settings['years']]:
-                    year = int(rowname)
-                else:
-                    year = 'ALL'
-                row_val = s_row[i+1]
-                stat = None
-                if '%%' in row_val:
-                    rowdata, sr_month = Tables.getStatsLineData(row_val, data, year=year)
-                    if len(rowdata) == 0:
-                        row_val = None
+        computedKeys = self.Data.getComputedData(data)
+        for key in computedKeys:
+            object_settings_blueprint = pickle.loads(pickle.dumps(object_settings, -1))
+            object_settings_blueprint = self.configureSettingsForID(data[key]['ID'], object_settings_blueprint)
+            # self.loadCurrentID(data[key]['ID'])
+            # self.loadCurrentModelAltID(data[key]['ID'])
+            data_filt = self.Data.filterComputed(data, key, computedKeys)
+            print(data_filt.keys())
+            headings, rows = Tables.buildSingleStatTable(object_settings_blueprint, data_filt)
+
+            self.XML.writeNarrowTableStart(object_settings_blueprint['description'], 'Year')
+            for i, header in enumerate(headings):
+                frmt_rows = []
+                threshold_colors = np.full(len(rows), None)
+                for ri, row in enumerate(rows):
+                    s_row = row.split('|')
+                    rowname = s_row[0]
+                    if rowname in [str(n) for n in object_settings_blueprint['years']]:
+                        year = int(rowname)
                     else:
-                        row_val, stat = Tables.getStatsLine(row_val, rowdata)
-                        if np.isnan(row_val):
-                            row_val = '-'
+                        year = 'ALL'
+                    row_val = s_row[i+1]
+                    stat = None
+                    if '%%' in row_val:
+                        rowdata, sr_month = Tables.getStatsLineData(row_val, data_filt, year=year)
+                        if len(rowdata) == 0:
+                            row_val = None
                         else:
-                            for thresh in thresholds:
-                                if thresh['colorwhen'] == 'under':
-                                    if row_val < thresh['value']:
-                                        threshold_colors[ri] = thresh['color']
-                                elif thresh['colorwhen'] == 'over':
-                                    if row_val > thresh['value']:
-                                        threshold_colors[ri] = thresh['color']
+                            row_val, stat = Tables.getStatsLine(row_val, rowdata)
+                            if np.isnan(row_val):
+                                row_val = '-'
+                            else:
+                                for thresh in thresholds:
+                                    if thresh['colorwhen'] == 'under':
+                                        if row_val < thresh['value']:
+                                            threshold_colors[ri] = thresh['color']
+                                    elif thresh['colorwhen'] == 'over':
+                                        if row_val > thresh['value']:
+                                            threshold_colors[ri] = thresh['color']
 
-                        data_start_date, data_end_date = Tables.getTableDates(year, object_settings, month=sr_month)
-                        self.WAT_log.addLogEntry({'type': 'Statistic',
-                                                  'name': ' '.join([self.ChapterRegion, header, stat]),
-                                                  'description': object_settings['description'],
-                                                  'value': row_val,
-                                                  'units': object_settings['units_list'],
-                                                  'function': stat,
-                                                  'value_start_date': WT.translateDateFormat(data_start_date, 'datetime', '',
-                                                                                             self.StartTime, self.EndTime,
-                                                                                             self.ModelAlt.t_offset),
-                                                  'value_end_date': WT.translateDateFormat(data_end_date, 'datetime', '',
-                                                                                           self.StartTime, self.EndTime,
-                                                                                           self.ModelAlt.t_offset),
-                                                  'logoutputfilename': ', '.join([data[flag]['logoutputfilename'] for flag in data])
-                                                  },
-                                                 isdata=True)
+                            data_start_date, data_end_date = Tables.getTableDates(year, object_settings_blueprint, month=sr_month)
+                            self.WAT_log.addLogEntry({'type': 'Statistic',
+                                                      'name': ' '.join([self.ChapterRegion, header, stat]),
+                                                      'description': object_settings_blueprint['description'],
+                                                      'value': row_val,
+                                                      'units': object_settings_blueprint['units_list'],
+                                                      'function': stat,
+                                                      'value_start_date': WT.translateDateFormat(data_start_date, 'datetime', '',
+                                                                                                 self.StartTime, self.EndTime,
+                                                                                                 self.ModelAlt.t_offset),
+                                                      'value_end_date': WT.translateDateFormat(data_end_date, 'datetime', '',
+                                                                                               self.StartTime, self.EndTime,
+                                                                                               self.ModelAlt.t_offset),
+                                                      'logoutputfilename': ', '.join([data[flag]['logoutputfilename'] for flag in data])
+                                                      },
+                                                     isdata=True)
 
-                header = '' if header == None else header
-                numberFormat = Tables.matchNumberFormatByStat(stat, object_settings)
-                frmt_rows.append('{0}|{1}'.format(rowname, WF.formatNumbers(row_val, numberFormat)))
-            self.XML.writeTableColumn(header, frmt_rows, thresholdcolors=threshold_colors)
-        self.XML.writeTableEnd()
+                    header = '' if header == None else header
+                    numberFormat = Tables.matchNumberFormatByStat(stat, object_settings_blueprint)
+                    frmt_rows.append('{0}|{1}'.format(rowname, WF.formatNumbers(row_val, numberFormat)))
+                self.XML.writeTableColumn(header, frmt_rows, thresholdcolors=threshold_colors)
+            self.XML.writeTableEnd()
+        self.loadCurrentID('base')
+        self.loadCurrentModelAltID('base')
 
     def makeSingleStatisticProfileTable(self, object_settings):
         '''
@@ -1495,9 +1507,9 @@ class MakeAutomatedReport(object):
             wse_data = self.Data.getProfileWSE(object_settings, onflag='datapaths')
             data, object_settings = WProfile.convertElevationsToDepths(data, object_settings, wse_data=wse_data)
 
-        headings, rows = Tables.buildSingleStatTable(object_settings, line_settings)
-
-        object_settings= self.configureSettingsForID('base', object_settings) #will turn on for comparison plot later
+        # headings, rows = Tables.buildSingleStatTable(object_settings, line_settings)
+        #
+        # object_settings= self.configureSettingsForID('base', object_settings) #will turn on for comparison plot later
         ################# Get plot units #################
         data, line_settings = WProfile.convertProfileDataUnits(object_settings, data, line_settings)
         object_settings['units_list'] = WF.getUnitsList(line_settings)
@@ -1513,61 +1525,74 @@ class MakeAutomatedReport(object):
 
         thresholds = Tables.formatThreshold(object_settings)
 
-        self.XML.writeNarrowTableStart(object_settings['description'], 'Year')
-        for i, header in enumerate(headings):
-            frmt_rows = []
-            threshold_colors = np.full(len(rows), None)
-            for ri, row in enumerate(rows):
-                s_row = row.split('|')
-                rowname = s_row[0]
-                if rowname in [str(n) for n in object_settings['years']]:
-                    year = int(rowname)
-                else:
-                    year = 'ALL'
-                row_val = s_row[i+1]
-                stat = None
-                if '%%' in row_val:
-                    rowval_stats = {}
-                    if year == 'ALL':
-                        data_idx = WF.getAllMonthIdx(object_settings['timestamp_index'], i)
+        computedKeys = self.Data.getComputedData(line_settings)
+        for key in computedKeys:
+            object_settings_blueprint = pickle.loads(pickle.dumps(object_settings, -1))
+            object_settings_blueprint = self.configureSettingsForID(line_settings[key]['ID'], object_settings_blueprint)
+            # self.loadCurrentID(data[key]['ID'])
+            # self.loadCurrentModelAltID(data[key]['ID'])
+            data_filt = self.Data.filterComputed(data, key, computedKeys)
+            line_settings_filt = self.Data.filterComputed(line_settings, key, computedKeys)
+            print(data_filt.keys())
+            headings, rows = Tables.buildSingleStatTable(object_settings_blueprint, line_settings_filt)
+
+            self.XML.writeNarrowTableStart(object_settings_blueprint['description'], 'Year')
+            for i, header in enumerate(headings):
+                frmt_rows = []
+                threshold_colors = np.full(len(rows), None)
+                for ri, row in enumerate(rows):
+                    s_row = row.split('|')
+                    rowname = s_row[0]
+                    if rowname in [str(n) for n in object_settings_blueprint['years']]:
+                        year = int(rowname)
                     else:
-                        data_idx = object_settings['timestamp_index'][ri][i]
-                    for di in data_idx:
-                        stats_data = Tables.formatStatsProfileLineData(row_val, data, object_settings['resolution'],
-                                                                     object_settings['usedepth'], di)
-                        rowval_stats = WProfile.stackProfileIndicies(rowval_stats, stats_data)
+                        year = 'ALL'
+                    row_val = s_row[i+1]
+                    stat = None
+                    if '%%' in row_val:
+                        rowval_stats = {}
+                        if year == 'ALL':
+                            data_idx = WF.getAllMonthIdx(object_settings_blueprint['timestamp_index'], i)
+                        else:
+                            data_idx = object_settings_blueprint['timestamp_index'][ri][i]
+                        for di in data_idx:
+                            stats_data = Tables.formatStatsProfileLineData(row_val, data_filt, object_settings_blueprint['resolution'],
+                                                                           object_settings_blueprint['usedepth'], di)
+                            rowval_stats = WProfile.stackProfileIndicies(rowval_stats, stats_data)
 
-                    row_val, stat = Tables.getStatsLine(row_val, rowval_stats)
-                    if np.isnan(row_val):
-                        row_val = '-'
-                    else:
-                        for thresh in thresholds:
-                            if thresh['colorwhen'] == 'under':
-                                if row_val < thresh['value']:
-                                    threshold_colors[ri] = thresh['color']
-                            elif thresh['colorwhen'] == 'over':
-                                if row_val > thresh['value']:
-                                    threshold_colors[ri] = thresh['color']
+                        row_val, stat = Tables.getStatsLine(row_val, rowval_stats)
+                        if np.isnan(row_val):
+                            row_val = '-'
+                        else:
+                            for thresh in thresholds:
+                                if thresh['colorwhen'] == 'under':
+                                    if row_val < thresh['value']:
+                                        threshold_colors[ri] = thresh['color']
+                                elif thresh['colorwhen'] == 'over':
+                                    if row_val > thresh['value']:
+                                        threshold_colors[ri] = thresh['color']
 
-                    data_start_date, data_end_date = Tables.getTableDates(year, object_settings, month=header)
-                    self.WAT_log.addLogEntry({'type': 'ProfileTableStatistic',
-                                              'name': ' '.join([self.ChapterRegion, header, stat]),
-                                              'description': object_settings['description'],
-                                              'value': row_val,
-                                              'function': stat,
-                                              'units': object_settings['plot_units'],
-                                              'value_start_date': data_start_date,
-                                              'value_end_date': data_end_date,
-                                              'logoutputfilename': ', '.join([line_settings[flag]['logoutputfilename'] for flag in line_settings])
-                                              },
-                                             isdata=True)
+                        data_start_date, data_end_date = Tables.getTableDates(year, object_settings_blueprint, month=header)
+                        self.WAT_log.addLogEntry({'type': 'ProfileTableStatistic',
+                                                  'name': ' '.join([self.ChapterRegion, header, stat]),
+                                                  'description': object_settings_blueprint['description'],
+                                                  'value': row_val,
+                                                  'function': stat,
+                                                  'units': object_settings_blueprint['plot_units'],
+                                                  'value_start_date': data_start_date,
+                                                  'value_end_date': data_end_date,
+                                                  'logoutputfilename': ', '.join([line_settings[flag]['logoutputfilename'] for flag in line_settings])
+                                                  },
+                                                 isdata=True)
 
-                header = '' if header == None else header
-                numberFormat = Tables.matchNumberFormatByStat(stat, object_settings)
-                frmt_rows.append('{0}|{1}'.format(rowname, WF.formatNumbers(row_val, numberFormat)))
+                    header = '' if header == None else header
+                    numberFormat = Tables.matchNumberFormatByStat(stat, object_settings_blueprint)
+                    frmt_rows.append('{0}|{1}'.format(rowname, WF.formatNumbers(row_val, numberFormat)))
 
-            self.XML.writeTableColumn(header, frmt_rows, thresholdcolors=threshold_colors)
-        self.XML.writeTableEnd()
+                self.XML.writeTableColumn(header, frmt_rows, thresholdcolors=threshold_colors)
+            self.XML.writeTableEnd()
+        self.loadCurrentID('base')
+        self.loadCurrentModelAltID('base')
 
     def makeContourPlot(self, object_settings):
         '''
