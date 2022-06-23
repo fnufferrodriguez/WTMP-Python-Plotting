@@ -586,8 +586,8 @@ class Plots(object):
                            alpha=float(vline_settings['alpha']))
 
     def fixEmptyYAxis(self, ax, ax2):
-        ax_lines = ax.get_lines()
-        ax2_lines = ax2.get_lines()
+        ax_lines, _ = ax.get_legend_handles_labels()
+        ax2_lines, _ = ax2.get_legend_handles_labels()
         if len(ax_lines) == 0:
             ax.set_yticks([])
             ax.set_yticklabels([])

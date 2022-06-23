@@ -429,16 +429,16 @@ class DataOrganizer(object):
 
         if datamemkey in self.Memory.keys():
             dm = pickle.loads(pickle.dumps(self.Memory[datamemkey], -1))
-            print('retrieving profile from datamem')
+            WF.print2stdout('retrieving profile from datamem')
             if isinstance(timesteps, str): #if looking for all
                 if dm['subset'] == 'false': #the last time data was grabbed, it was not a subset, aka all
                     return dm['values'], dm['elevations'], dm['depths'], dm['times'], Profile_info['flag']
                 else:
-                    print('Incorrect Timesteps in data memory. Re-extracting data for', datamemkey)
+                    WF.print2stdout('Incorrect Timesteps in data memory. Re-extracting data for', datamemkey)
             elif np.array_equal(timesteps, dm['times']):
                 return dm['values'], dm['elevations'], dm['depths'], dm['times'], Profile_info['flag']
             else:
-                print('Incorrect Timesteps in data memory. Re-extracting data for', datamemkey)
+                WF.print2stdout('Incorrect Timesteps in data memory. Re-extracting data for', datamemkey)
 
         if 'filename' in Profile_info.keys(): #Get data from Observed
             filename = Profile_info['filename']
@@ -449,19 +449,19 @@ class DataOrganizer(object):
                 elif Profile_info['y_convention'].lower() == 'elevation':
                     return values, yvals, [], times, Profile_info['flag']
                 else:
-                    print('Unknown value for flag y_convention: {0}'.format(Profile_info['y_convention']))
-                    print('Please use "depth" or "elevation"')
-                    print('Assuming depths...')
+                    WF.print2stdout('Unknown value for flag y_convention: {0}'.format(Profile_info['y_convention']))
+                    WF.print2stdout('Please use "depth" or "elevation"')
+                    WF.print2stdout('Assuming depths...')
                     return values, [], yvals, times, Profile_info['flag']
             else:
-                print('No value for flag y_convention')
-                print('Assuming depths...')
+                WF.print2stdout('No value for flag y_convention')
+                WF.print2stdout('Assuming depths...')
                 return values, [], yvals, times, Profile_info['flag']
 
         elif 'h5file' in Profile_info.keys() and 'ressimresname' in Profile_info.keys():
             filename = Profile_info['h5file']
             if not os.path.exists(filename):
-                print('ERROR: H5 file does not exist:', filename)
+                WF.print2stdout('ERROR: H5 file does not exist:', filename)
                 return [], [], [], [], Profile_info['flag']
             externalResSim = WDR.ResSim_Results('', '', '', '', self.Report, external=True)
             externalResSim.openH5File(filename)
@@ -486,8 +486,8 @@ class DataOrganizer(object):
                                                                             Profile_info['parameter'], timesteps)
             return vals, elevations, depths, times, Profile_info['flag']
 
-        print('No Data Defined for Profile')
-        print('Profile:', Profile_info)
+        WF.print2stdout('No Data Defined for Profile')
+        WF.print2stdout('Profile:', Profile_info)
         return [], [], [], [], None
 
     def getReservoirContourDataDictionary(self, settings):
@@ -529,7 +529,7 @@ class DataOrganizer(object):
                             count += 1
                             newflag = flag + '_{0}'.format(count)
                         flag = newflag
-                        print('The new flag is {0}'.format(newflag))
+                        WF.print2stdout('The new flag is {0}'.format(newflag))
                     datamem_key = self.buildMemoryKey(datapath)
 
                     if 'units' in datapath.keys():
@@ -565,16 +565,16 @@ class DataOrganizer(object):
 
         if datamemkey in self.Memory.keys():
             dm = pickle.loads(pickle.dumps(self.Memory[datamemkey], -1))
-            print('retrieving profile topwater from datamem')
+            WF.print2stdout('retrieving profile topwater from datamem')
             if isinstance(timesteps, str): #if looking for all
                 if dm['subset'] == 'false': #the last time data was grabbed, it was not a subset, aka all
                     return dm['topwater']
                 else:
-                    print('Incorrect Timesteps in data memory. Re-extracting data for', datamemkey)
+                    WF.print2stdout('Incorrect Timesteps in data memory. Re-extracting data for', datamemkey)
             elif np.array_equal(timesteps, dm['times']):
                 return dm['topwater']
             else:
-                print('Incorrect Timesteps in data memory. Re-extracting data for', datamemkey)
+                WF.print2stdout('Incorrect Timesteps in data memory. Re-extracting data for', datamemkey)
 
         if 'filename' in profile.keys(): #Get data from Observed
             filename = profile['filename']
@@ -583,22 +583,22 @@ class DataOrganizer(object):
                 if profile['y_convention'].lower() == 'elevation':
                     return [yval[0] for yval in yvals]
                 elif profile['y_convention'].lower() == 'depth':
-                    print('Unable to get topwater from depth.')
+                    WF.print2stdout('Unable to get topwater from depth.')
                     return []
                 else:
-                    print('Unknown value for flag y_convention: {0}'.format(profile['y_convention']))
-                    print('Please use "elevation"')
-                    print('Assuming elevations...')
+                    WF.print2stdout('Unknown value for flag y_convention: {0}'.format(profile['y_convention']))
+                    WF.print2stdout('Please use "elevation"')
+                    WF.print2stdout('Assuming elevations...')
                     return [yval[0] for yval in yvals]
             else:
-                print('No value for flag y_convention')
-                print('Assuming elevation...')
+                WF.print2stdout('No value for flag y_convention')
+                WF.print2stdout('Assuming elevation...')
                 return [yval[0] for yval in yvals]
 
         elif 'h5file' in profile.keys() and 'ressimresname' in profile.keys():
             filename = profile['h5file']
             if not os.path.exists(filename):
-                print('ERROR: H5 file does not exist:', filename)
+                WF.print2stdout('ERROR: H5 file does not exist:', filename)
                 return []
             externalResSim = WDR.ResSim_Results('', '', '', '', self.Report, external=True)
             externalResSim.openH5File(filename)
@@ -619,8 +619,8 @@ class DataOrganizer(object):
             topwater = self.Report.ModelAlt.readProfileTopwater(profile['ressimresname'], timesteps)
             return topwater
 
-        print('No Data Defined for line')
-        print('Profile:', profile)
+        WF.print2stdout('No Data Defined for line')
+        WF.print2stdout('Profile:', profile)
         return []
 
     def commitProfileDataToMemory(self, data, line_settings, object_settings):
@@ -667,8 +667,8 @@ class DataOrganizer(object):
         for dp in object_settings['datapaths']:
             numtimesused = 0
             if 'flag' not in dp.keys():
-                print('Flag not set for line (Computed/Observed/etc)')
-                print('Not using Line:', dp)
+                WF.print2stdout('Flag not set for line (Computed/Observed/etc)')
+                WF.print2stdout('Not using Line:', dp)
                 continue
             elif dp['flag'].lower() == 'computed':
                 for ID in self.Report.accepted_IDs:
@@ -706,7 +706,7 @@ class DataOrganizer(object):
         if 'ressimresname' in settings.keys(): #Ressim subdomain
             datamem_key = self.buildMemoryKey(settings)
             if datamem_key in self.Memory.keys():
-                print('READING {0} FROM MEMORY'.format(datamem_key))
+                WF.print2stdout('READING {0} FROM MEMORY'.format(datamem_key))
                 datamem_entry = pickle.loads(pickle.dumps(self.Memory[datamem_key], -1))
                 times = datamem_entry['dates']
                 values = datamem_entry['values']
@@ -734,7 +734,7 @@ class DataOrganizer(object):
         elif 'w2_file' in settings.keys():
             datamem_key = self.buildMemoryKey(settings)
             if datamem_key in self.Memory.keys():
-                print('READING {0} FROM MEMORY'.format(datamem_key))
+                WF.print2stdout('READING {0} FROM MEMORY'.format(datamem_key))
                 datamementry = pickle.loads(pickle.dumps(self.Memory[datamem_key], -1))
                 times = datamementry['dates']
                 values = datamementry['values']
@@ -780,7 +780,7 @@ class DataOrganizer(object):
                             count += 1
                             newflag = flag + '_{0}'.format(count)
                         flag = newflag
-                        print('The new flag is {0}'.format(newflag))
+                        WF.print2stdout('The new flag is {0}'.format(newflag))
                     datamem_key = self.buildMemoryKey(reach)
 
                     if 'units' in reach.keys() and units == None:
@@ -938,8 +938,8 @@ class DataOrganizer(object):
                 df.to_csv(csv_name, index=False)
 
             except:
-                print('ERROR WRITING CSV FILE')
-                print(traceback.format_exc())
+                WF.print2stdout('ERROR WRITING CSV FILE')
+                WF.print2stdout(traceback.format_exc())
                 with open(csv_name, 'w') as inf:
                     inf.write('ERROR WRITING FILE.')
 

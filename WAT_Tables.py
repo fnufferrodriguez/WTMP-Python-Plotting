@@ -74,13 +74,14 @@ class Tables(object):
 
         headers = {}
         rows = {}
-        includeallyears = False
-        if 'includeallyears' in object_settings.keys():
-            if object_settings['includeallyears'].lower() == 'true':
-                includeallyears = True
-        outputyears = [n for n in self.Report.years] #this is usually a range or ALLYEARS
-        if includeallyears or not split_by_year:
-            outputyears.append('ALL') #do this last
+        # includeallyears = False
+        # if 'includeallyears' in object_settings.keys():
+        #     if object_settings['includeallyears'].lower() == 'true':
+        #         includeallyears = True
+        # outputyears = [n for n in self.Report.years] #this is usually a range or ALLYEARS
+        outputyears = object_settings['years'] #this is usually a range or ALLYEARS
+        # if includeallyears or not split_by_year:
+        #     outputyears.append('ALL') #do this last
         for year in outputyears:
             headers[year] = []
             rows[year] = {}
@@ -110,7 +111,7 @@ class Tables(object):
                         tmpheader = tmpheader.replace('%%{0}%%'.format(data[datakey]['flag']), '')
                         if split_by_year:
                             for year in outputyears:
-                                if year == 'ALL':
+                                if year == 'ALLYEARS':
                                     headers[year].append(tmpheader.replace('%%year%%', self.Report.years_str))
                                 else:
                                     headers[year].append(tmpheader)
@@ -121,12 +122,12 @@ class Tables(object):
                             headers[year].append(tmpheader.replace('%%year%%', self.Report.years_str))
                             for ri, row in enumerate(object_settings['rows']):
                                 srow = row.split('|')[1:][i]
-                                rows['ALL'][ri].append(srow.replace(data[datakey]['flag'], datakey))
+                                rows['ALLYEARS'][ri].append(srow.replace(data[datakey]['flag'], datakey))
 
                 if not isused: #if a header doesnt get used, probably something observed and not needing replacing.
                     if split_by_year:
                         for year in outputyears:
-                            if year == 'ALL':
+                            if year == 'ALLYEARS':
                                 headers[year].append(curheader.replace('%%year%%', self.Report.years_str))
                             else:
                                 headers[year].append(curheader)
@@ -137,12 +138,12 @@ class Tables(object):
                         headers[year].append(curheader.replace('%%year%%', self.Report.years_str))
                         for ri, row in enumerate(object_settings['rows']):
                             srow = row.split('|')[1:][i]
-                            rows['ALL'][ri].append(srow.replace(data[datakey]['flag'], datakey))
+                            rows['ALLYEARS'][ri].append(srow.replace(data[datakey]['flag'], datakey))
 
             else: #single run
                 if split_by_year:
                     for year in outputyears:
-                        if year == 'ALL':
+                        if year == 'ALLYEARS':
                             headers[year].append(curheader.replace('%%year%%', self.Report.years_str))
                         else:
                             headers[year].append(curheader)
@@ -153,14 +154,14 @@ class Tables(object):
                     headers[year].append(curheader.replace('%%year%%', self.Report.years_str))
                     for ri, row in enumerate(object_settings['rows']):
                         srow = row.split('|')[1:][i]
-                        rows['ALL'][ri].append(srow)
+                        rows['ALLYEARS'][ri].append(srow)
 
         organizedheaders = []
         organizedrows = []
         for row in object_settings['rows']:
             organizedrows.append(row.split('|')[0])
         for year in outputyears:
-            yrstr = str(year) if split_by_year and year != 'ALL' else self.Report.years_str
+            yrstr = str(year) if split_by_year and year != 'ALLYEARS' else self.Report.years_str
             for hdr in headers[year]:
                 organizedheaders.append([year, WF.updateFlaggedValues(hdr, '%%year%%', yrstr)])
             for ri in rows[year].keys():
@@ -194,12 +195,13 @@ class Tables(object):
                 for month in self.Report.Constants.mo_str_3:
                     row += '|-'
                 rows.append(row)
-            if 'includeallyears' in object_settings.keys():
-                if object_settings['includeallyears'].lower() == 'true':
-                    row = 'All'
-                    for month in self.Report.Constants.mo_str_3:
-                        row += '|-'
-                    rows.append(row)
+            # if 'includeallyears' in object_settings.keys():
+            #     if object_settings['includeallyears'].lower() == 'true':
+            #         # row = 'All'
+            #         row = 'ALLYEARS'
+            #         for month in self.Report.Constants.mo_str_3:
+            #             row += '|-'
+            #         rows.append(row)
             return headers, rows
 
         elif self.Report.iscomp:
@@ -223,19 +225,6 @@ class Tables(object):
                 observed_flag = 'Observed' if 'Observed' in data.keys() else [n for n in data.keys() if n not in computed_flags][0]
 
         for year in object_settings['years']:
-            # if self.Report.iscomp:
-            #     for computed_key in computed_flags:
-            #         if 'ID' in data[computed_key].keys():
-            #             ID = data[computed_key]['ID']
-            #             self.Report.loadCurrentID(ID)
-            #             row = f'{self.Report.SimulationName} {year}'
-            #             for month in self.Report.Constants.mo_str_3:
-            #                 if numflagsneeded == 1:
-            #                     row += f'|%%{stat}.{data[computed_key]["flag"]}.MONTH={month.upper()}%%'
-            #                 else:
-            #                     row += f'|%%{stat}.{data[computed_key]["flag"]}.MONTH={month.upper()}.{data[observed_flag]["flag"]}.MONTH={month.upper()}%%'
-            #             rows.append(row)
-            # else:
                 computed_key = computed_flags[0]
                 row = f'{year}'
                 for month in self.Report.Constants.mo_str_3:
@@ -245,29 +234,16 @@ class Tables(object):
                         row += f'|%%{stat}.{computed_key}.MONTH={month.upper()}.{data[observed_flag]["flag"]}.MONTH={month.upper()}%%'
                 rows.append(row)
 
-        if 'includeallyears' in object_settings.keys():
-            if object_settings['includeallyears'].lower() == 'true':
-                # if self.Report.iscomp:
-                #     for computed_key in computed_flags:
-                #         if 'ID' in data[computed_key].keys():
-                #             ID = data[computed_key]['ID']
-                #             self.Report.loadCurrentID(ID)
-                #             row = f'{self.Report.SimulationName} All'
-                #             for month in self.Report.Constants.mo_str_3:
-                #                 if numflagsneeded == 1:
-                #                     row += f'|%%{stat}.{data[computed_key]["flag"]}.MONTH={month.upper()}%%'
-                #                 else:
-                #                     row += f'|%%{stat}.{data[computed_key]["flag"]}.MONTH={month.upper()}.{data[observed_flag]["flag"]}.MONTH={month.upper()}%%'
-                #             rows.append(row)
-                # else:
-                    row = 'All'
-                    computed_key = computed_flags[0]
-                    for month in self.Report.Constants.mo_str_3:
-                        if numflagsneeded == 1:
-                            row += f'|%%{stat}.{computed_key}.MONTH={month.upper()}%%'
-                        else:
-                            row += f'|%%{stat}.{computed_key}.MONTH={month.upper()}.{data[observed_flag]["flag"]}.MONTH={month.upper()}%%'
-                    rows.append(row)
+        # if 'includeallyears' in object_settings.keys():
+        #     if object_settings['includeallyears'].lower() == 'true':
+        #             row = 'ALLYEARS'
+        #             computed_key = computed_flags[0]
+        #             for month in self.Report.Constants.mo_str_3:
+        #                 if numflagsneeded == 1:
+        #                     row += f'|%%{stat}.{computed_key}.MONTH={month.upper()}%%'
+        #                 else:
+        #                     row += f'|%%{stat}.{computed_key}.MONTH={month.upper()}.{data[observed_flag]["flag"]}.MONTH={month.upper()}%%'
+        #             rows.append(row)
 
         return headers, rows
 
@@ -402,7 +378,7 @@ class Tables(object):
 
         return data
 
-    def getStatsLineData(self, row, data_dict, year='ALL'):
+    def getStatsLineData(self, row, data_dict, year='ALLYEARS'):
         '''
         takes rows for tables and replaces flags with the correct data, computing stat analysis if needed
         :param row: row section string
@@ -447,7 +423,7 @@ class Tables(object):
 
                         newvals = np.array([])
                         newdates = np.array([])
-                        if year != 'ALL':
+                        if year != 'ALLYEARS':
                             year_loops = [year]
                         else:
                             year_loops = self.Report.years
@@ -466,7 +442,7 @@ class Tables(object):
                         data[curflag]['values'] = newvals
                         data[curflag]['dates'] = newdates
 
-        if year != 'ALL':
+        if year != 'ALLYEARS':
             for flag in data.keys():
                 if len(data[flag]['dates']) == 0:
                     continue
@@ -684,7 +660,7 @@ class Tables(object):
         elif year == self.Report.startYear:
             start_date = self.Report.StartTime.strftime('%d %b %Y')
         else:
-            if str(year).lower() == 'all':
+            if str(year).lower() == 'allyears':
                 start_date = '01 Jan {0}'.format(self.Report.startYear)
             else:
                 start_date = '01 Jan {0}'.format(year)
@@ -694,7 +670,7 @@ class Tables(object):
         elif year == self.Report.endYear:
             end_date = self.Report.EndTime.strftime('%d %b %Y')
         else:
-            if str(year).lower() == 'all':
+            if str(year).lower() == 'allyears':
                 end_date = '31 Dec {0}'.format(self.Report.endYear)
             else:
                 end_date = '31 Dec {0}'.format(year)
