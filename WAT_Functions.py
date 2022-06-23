@@ -813,7 +813,7 @@ def translateUnits(units):
 
     if units != None:
         for key in constants.unit_alt_names.keys():
-            if units.lower() in constants.unit_alt_names[key]:
+            if units.lower().strip() in constants.unit_alt_names[key]:
                 return key
 
     print('Units Undefined:', units)

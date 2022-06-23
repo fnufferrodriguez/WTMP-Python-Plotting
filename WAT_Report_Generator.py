@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '5.1.2'
+VERSIONNUMBER = '5.1.3'
 
 import datetime as dt
 import os
@@ -131,10 +131,22 @@ class MakeAutomatedReport(object):
         '''
 
         self.images_path = os.path.join(self.studyDir, 'reports', 'Images')
-        WF.checkExists(self.images_path)
+        if not os.path.exists(self.images_path):
+            try:
+                os.makedirs(self.images_path)
+                WF.print2stdout(f'{self.images_path} created!')
+            except:
+                WF.print2stderr(f'Unable to make {self.images_path}')
+                sys.exit(1)
 
         self.CSVPath = os.path.join(self.studyDir, 'reports', 'CSVData')
-        WF.checkExists(self.CSVPath)
+        if not os.path.exists(self.CSVPath):
+            try:
+                os.makedirs(self.CSVPath)
+                WF.print2stdout(f'{self.CSVPath} created!')
+            except:
+                WF.print2stderr(f'Unable to make {self.CSVPath}')
+                sys.exit(1)
 
     def makeTimeSeriesPlot(self, object_settings):
         '''
