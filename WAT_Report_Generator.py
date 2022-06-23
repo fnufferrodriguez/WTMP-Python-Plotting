@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '5.1.3'
+VERSIONNUMBER = '5.1.4'
 
 import datetime as dt
 import os
@@ -170,10 +170,8 @@ class MakeAutomatedReport(object):
 
         for yi, year in enumerate(object_settings['years']):
             cur_obj_settings = pickle.loads(pickle.dumps(object_settings, -1))
-            if object_settings['split_by_year']:
-                yearstr = str(year)
-            else:
-                yearstr = object_settings['yearstr']
+            yearstr = object_settings['yearstr'][yi]
+
             cur_obj_settings = WF.updateFlaggedValues(cur_obj_settings, '%%year%%', yearstr)
 
             if len(cur_obj_settings['axs']) == 1:
@@ -394,20 +392,21 @@ class MakeAutomatedReport(object):
                             if 'label' not in gate_line_settings.keys():
                                 gate_line_settings['label'] = '{0}_{1}'.format(gateop, gate_count)
 
-                            if 'filterbylimits' not in gate_line_settings.keys():
-                                gate_line_settings['filterbylimits'] = 'true' #set default
+                            # if 'filterbylimits' not in gate_line_settings.keys():
+                            #     gate_line_settings['filterbylimits'] = 'true' #set default
 
-                            if gate_line_settings['filterbylimits'].lower() == 'true':
-                                if 'xlims' in ax_settings.keys():
-                                    dates, values = WF.applyXLimits(self, dates, values, ax_settings['xlims'])
+                            # if gate_line_settings['filterbylimits'].lower() == 'true':
+                                # if 'xlims' in ax_settings.keys():
+                                    # dates, values = WF.applyXLimits(self, dates, values, ax_settings['xlims'])
 
                             if 'placement' in gate_line_settings.keys():
                                 line_placement = float(gate_line_settings['placement'])
                             else:
                                 line_placement = gate_placement
 
-                            values *= line_placement
                             gatelines_positions.append(line_placement)
+                            # values *= line_placement
+                            gatevalues = line_placement * values
 
                             curax = ax
                             if _usetwinx:
@@ -416,13 +415,13 @@ class MakeAutomatedReport(object):
                                         curax = ax2
 
                             if gate_line_settings['drawline'].lower() == 'true' and gate_line_settings['drawpoints'].lower() == 'true':
-                                Plots.plotLinesAndPoints(dates, values, curax, gate_line_settings)
+                                Plots.plotLinesAndPoints(dates, gatevalues, curax, gate_line_settings)
 
                             elif gate_line_settings['drawline'].lower() == 'true':
-                                Plots.plotLines(dates, values, curax, gate_line_settings)
+                                Plots.plotLines(dates, gatevalues, curax, gate_line_settings)
 
                             elif gate_line_settings['drawpoints'].lower() == 'true':
-                                Plots.plotPoints(dates, values, curax, gate_line_settings)
+                                Plots.plotPoints(dates, gatevalues, curax, gate_line_settings)
 
                             gate_count += 1 #keep track of gate number in group
                             gate_placement += 1 #keep track of gate palcement in space
@@ -1401,7 +1400,9 @@ class MakeAutomatedReport(object):
         default_settings = self.loadDefaultPlotObject('singlestatistictable') #get default SingleStat items
         object_settings = WF.replaceDefaults(self, default_settings, object_settings) #overwrite the defaults with chapter file
 
-        object_settings['years'] = pickle.loads(pickle.dumps(self.years, -1))
+        # object_settings['years'] = pickle.loads(pickle.dumps(self.years, -1))
+        object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = WF.getObjectYears(self, object_settings)
+
         data = self.Data.getTableDataDictionary(object_settings)
         data = WF.mergeLines(data, object_settings)
 
@@ -1426,7 +1427,7 @@ class MakeAutomatedReport(object):
             # self.loadCurrentID(data[key]['ID'])
             # self.loadCurrentModelAltID(data[key]['ID'])
             data_filt = self.Data.filterComputed(data, key, computedKeys)
-            print(data_filt.keys())
+
             headings, rows = Tables.buildSingleStatTable(object_settings_blueprint, data_filt)
 
             self.XML.writeNarrowTableStart(object_settings_blueprint['description'], 'Year')
@@ -1436,10 +1437,14 @@ class MakeAutomatedReport(object):
                 for ri, row in enumerate(rows):
                     s_row = row.split('|')
                     rowname = s_row[0]
-                    if rowname in [str(n) for n in object_settings_blueprint['years']]:
-                        year = int(rowname)
-                    else:
-                        year = 'ALL'
+                    if rowname == 'ALLYEARS':
+                        rowname = 'All'
+                    year = object_settings['years'][ri]
+                    # if rowname in [str(n) for n in object_settings_blueprint['years']]:
+                    #     year = int(rowname)
+                    # else:
+                    #     year = 'ALLYEARS'
+                    #     rowname = 'ALL'
                     row_val = s_row[i+1]
                     stat = None
                     if '%%' in row_val:
@@ -1506,7 +1511,8 @@ class MakeAutomatedReport(object):
         object_settings['timestamps'] = WProfile.getProfileTimestamps(object_settings, self.StartTime, self.EndTime)
         object_settings['timestamp_index'] = WProfile.getProfileTimestampYearMonthIndex(object_settings, self.years)
 
-        object_settings['years'] = pickle.loads(pickle.dumps(self.years, -1))
+        # object_settings['years'] = pickle.loads(pickle.dumps(self.years, -1))
+        object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = WF.getObjectYears(self, object_settings)
 
         data, line_settings = self.Data.getProfileDataDictionary(object_settings)
         line_settings = WF.correctDuplicateLabels(line_settings)
@@ -1545,7 +1551,7 @@ class MakeAutomatedReport(object):
             # self.loadCurrentModelAltID(data[key]['ID'])
             data_filt = self.Data.filterComputed(data, key, computedKeys)
             line_settings_filt = self.Data.filterComputed(line_settings, key, computedKeys)
-            print(data_filt.keys())
+
             headings, rows = Tables.buildSingleStatTable(object_settings_blueprint, line_settings_filt)
 
             self.XML.writeNarrowTableStart(object_settings_blueprint['description'], 'Year')
@@ -1555,15 +1561,19 @@ class MakeAutomatedReport(object):
                 for ri, row in enumerate(rows):
                     s_row = row.split('|')
                     rowname = s_row[0]
-                    if rowname in [str(n) for n in object_settings_blueprint['years']]:
-                        year = int(rowname)
-                    else:
-                        year = 'ALL'
+                    if rowname == 'ALLYEARS':
+                        rowname = 'All'
+                    year = object_settings['years'][ri]
+                    # if rowname in [str(n) for n in object_settings_blueprint['years']]:
+                    #     year = int(rowname)
+                    # else:
+                    #     year = 'ALLYEARS'
+                    #     rowname = 'ALL'
                     row_val = s_row[i+1]
                     stat = None
                     if '%%' in row_val:
                         rowval_stats = {}
-                        if year == 'ALL':
+                        if year == 'ALLYEARS':
                             data_idx = WF.getAllMonthIdx(object_settings_blueprint['timestamp_index'], i)
                         else:
                             data_idx = object_settings_blueprint['timestamp_index'][ri][i]
@@ -1626,10 +1636,11 @@ class MakeAutomatedReport(object):
 
         for yi, year in enumerate(object_settings['years']):
             cur_obj_settings = pickle.loads(pickle.dumps(object_settings, -1))
-            if object_settings['split_by_year']:
-                yearstr = str(year)
-            else:
-                yearstr = object_settings['yearstr']
+            # if object_settings['split_by_year']:
+            #     yearstr = str(year)
+            # else:
+            #     yearstr = object_settings['yearstr']
+            yearstr = object_settings['yearstr'][yi]
 
             cur_obj_settings = Plots.setTimeSeriesXlims(cur_obj_settings, yearstr, object_settings['years'])
 
@@ -1985,10 +1996,11 @@ class MakeAutomatedReport(object):
 
         for yi, year in enumerate(object_settings['years']):
             cur_obj_settings = pickle.loads(pickle.dumps(object_settings, -1))
-            if object_settings['split_by_year']:
-                yearstr = str(year)
-            else:
-                yearstr = object_settings['yearstr']
+            # if object_settings['split_by_year']:
+            #     yearstr = str(year)
+            # else:
+            #     yearstr = object_settings['yearstr']
+            yearstr = object_settings['yearstr'][yi]
 
             cur_obj_settings = Plots.setTimeSeriesXlims(cur_obj_settings, yearstr, object_settings['years'])
 
@@ -2194,38 +2206,6 @@ class MakeAutomatedReport(object):
 
                 ############# yticks and lims #############
                 Plots.formatYTicks(ax, contour_settings)
-                # ymin, ymax = ax.get_ylim()
-                # if 'ylims' in contour_settings.keys():
-                #     if 'min' in contour_settings['ylims']:
-                #         ymin = float(contour_settings['ylims']['min'])
-                #
-                #     if 'max' in contour_settings['ylims']:
-                #         ymax = float(contour_settings['ylims']['max'])
-                #
-                # if 'yticks' in contour_settings.keys():
-                #     ytick_settings = contour_settings['yticks']
-                #     if 'fontsize' in ytick_settings.keys():
-                #         yticksize = float(ytick_settings['fontsize'])
-                #     elif 'fontsize' in contour_settings.keys():
-                #         yticksize = float(contour_settings['fontsize'])
-                #     else:
-                #         yticksize = 10
-                #     ax.tick_params(axis='y', labelsize=yticksize)
-                #
-                #     if 'spacing' in ytick_settings.keys():
-                #         ytickspacing = ytick_settings['spacing']
-                #         if '.' in ytickspacing:
-                #             ytickspacing = float(ytickspacing)
-                #         else:
-                #             ytickspacing = int(ytickspacing)
-                #
-                #         newyticks = np.arange(ymin, (ymax+ytickspacing), ytickspacing)
-                #         newyticklabels = Plots.formatTickLabels(newyticks, ytick_settings)
-                #         ax.set_yticks(newyticks)
-                #         ax.set_yticklabels(newyticklabels)
-                #
-                # ax.set_ylim(bottom=ymin)
-                # ax.set_ylim(top=ymax)
 
             # #stuff to call once per plot
             self.configureSettingsForID('base', cur_obj_settings)

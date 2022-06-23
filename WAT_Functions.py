@@ -787,7 +787,7 @@ def getPlotUnits(unitslist, object_settings):
         plotunits = getMostCommon(unitslist)
 
     else:
-        print('No units defined.')
+        print2stdout('No units defined.')
         plotunits = ''
 
     plotunits = translateUnits(plotunits)
@@ -816,7 +816,7 @@ def translateUnits(units):
             if units.lower().strip() in constants.unit_alt_names[key]:
                 return key
 
-    print('Units Undefined:', units)
+    print2stdout('Units Undefined:', units)
     return units
 
 def convertUnitSystem(values, units, target_unitsystem):
@@ -837,26 +837,26 @@ def convertUnitSystem(values, units, target_unitsystem):
     metric_units = constants.metric_units
 
     if units == None:
-        print('Units undefined.')
+        print2stdout('Units undefined.')
         return values, units
 
     if target_unitsystem.lower() == 'english':
         if units.lower() in english_units.keys():
             new_units = english_units[units.lower()]
-            print('Converting {0} to {1}'.format(units, new_units))
+            print2stdout('Converting {0} to {1}'.format(units, new_units))
         elif units.lower() in english_units.values():
-            print('Values already in target unit system. {0} {1}'.format(units, target_unitsystem))
+            print2stdout('Values already in target unit system. {0} {1}'.format(units, target_unitsystem))
             return values, units
         else:
-            print('Units not found in definitions. Not Converting.')
+            print2stdout('Units not found in definitions. Not Converting.')
             return values, units
 
     elif target_unitsystem.lower() == 'metric':
         if units.lower() in metric_units.keys():
             new_units = metric_units[units.lower()]
-            print('Converting {0} to {1}'.format(units, new_units))
+            print2stdout('Converting {0} to {1}'.format(units, new_units))
         elif units.lower() in metric_units.values():
-            print('Values already in target unit system. {0} {1}'.format(units, target_unitsystem))
+            print2stdout('Values already in target unit system. {0} {1}'.format(units, target_unitsystem))
             return values, units
         else:
             print('Units not found in definitions. Not Converting.')
@@ -982,11 +982,18 @@ def getObjectYears(Report, object_settings):
     if 'splitbyyear' in object_settings.keys():
         if object_settings['splitbyyear'].lower() == 'true':
             split_by_year = True
-            years = Report.years
+            years = [int(year) for year in Report.years]
             yearstr = [str(year) for year in years]
     if not split_by_year:
-        yearstr = Report.years_str
+        yearstr = [Report.years_str]
         years = ['ALLYEARS']
+
+    if 'includeallyears' in object_settings.keys():
+        if object_settings['includeallyears'].lower() == 'true':
+            if 'ALLYEARS' not in years:
+                if len(years) > 1: #if theres only one year in here, please don't do another copy of that..
+                    years.append('ALLYEARS')
+                    yearstr.append(Report.years_str)
 
     return split_by_year, years, yearstr
 
