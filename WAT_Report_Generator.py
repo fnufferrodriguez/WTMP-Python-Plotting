@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '5.1.4'
+VERSIONNUMBER = '5.1.5'
 
 import datetime as dt
 import os
@@ -167,6 +167,8 @@ class MakeAutomatedReport(object):
         object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = WF.getObjectYears(self, object_settings)
 
         object_settings = Plots.confirmAxis(object_settings)
+
+        object_settings['years'], object_settings['yearstr'] = WF.organizePlotYears(object_settings)
 
         for yi, year in enumerate(object_settings['years']):
             cur_obj_settings = pickle.loads(pickle.dumps(object_settings, -1))
@@ -1634,6 +1636,8 @@ class MakeAutomatedReport(object):
 
         object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = WF.getObjectYears(self, object_settings)
 
+        object_settings['years'], object_settings['yearstr'] = WF.organizePlotYears(object_settings)
+
         for yi, year in enumerate(object_settings['years']):
             cur_obj_settings = pickle.loads(pickle.dumps(object_settings, -1))
             # if object_settings['split_by_year']:
@@ -1993,6 +1997,8 @@ class MakeAutomatedReport(object):
         object_settings['datakey'] = 'datapaths'
 
         object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = WF.getObjectYears(self, object_settings)
+
+        object_settings['years'], object_settings['yearstr'] = WF.organizePlotYears(object_settings)
 
         for yi, year in enumerate(object_settings['years']):
             cur_obj_settings = pickle.loads(pickle.dumps(object_settings, -1))

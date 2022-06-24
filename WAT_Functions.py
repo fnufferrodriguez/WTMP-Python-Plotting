@@ -1522,3 +1522,24 @@ def checkJasperFiles(study_dir):
                 print2stdout(f'Deleting {jasper_file}')
                 os.remove(jasper_file)
 
+def organizePlotYears(object_settings):
+    if 'years' in object_settings.keys():
+        years = []
+        if 'yearstr' in object_settings.keys():
+            yrstrs = []
+            _isyrstr = True
+        for yi, year in enumerate(object_settings['years']):
+            if year == 'ALLYEARS':
+                years.append(year)
+                if _isyrstr:
+                    yrstrs.append(object_settings['yearstr'][yi])
+        for yi, year in enumerate(object_settings['years']):
+            if year != 'ALLYEARS':
+                years.append(year)
+                if _isyrstr:
+                    yrstrs.append(object_settings['yearstr'][yi])
+        if _isyrstr:
+            return years, yrstrs
+        else:
+            return years, []
+    return [], []
