@@ -872,19 +872,19 @@ def convertUnitSystem(values, units, target_unitsystem):
         return values, units
 
     if units.lower() in ['c', 'f']:
-        values = convertTempUnits(values, units)
+        new_values = convertTempUnits(values, units)
     elif units.lower() in constants.conversion.keys():
         conversion_factor = constants.conversion[units.lower()]
-        values *= conversion_factor
+        new_values = values * conversion_factor
     elif new_units.lower() in constants.conversion.keys():
         conversion_factor = 1/constants.conversion[units.lower()]
-        values *= conversion_factor
+        new_values = values * conversion_factor
     else:
         print('Undefined Units conversion for units {0}.'.format(units))
         print('No Conversions taking place.')
         return values, units
 
-    return values, new_units
+    return new_values, new_units
 
 def updateFlaggedValues(settings, flaggedvalue, replacevalue):
     '''
