@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '5.1.6'
+VERSIONNUMBER = '5.1.7'
 
 import datetime as dt
 import os
@@ -67,6 +67,7 @@ class MakeAutomatedReport(object):
         WR.readGraphicsDefaultFile(self) #read graphical component defaults
         self.defaultLineStyles = WD.readDefaultLineStylesFile(self)
         self.WAT_log = WL.WAT_Logger()
+        self.modelOrder = 0
 
         if self.reportType == 'single': #Eventually be able to do comparison reports, put that here
             for simulation in self.Simulations:
@@ -88,8 +89,9 @@ class MakeAutomatedReport(object):
                     self.loadCurrentModelAltID('base')
                     self.WAT_log.addSimLogEntry(self.accepted_IDs, self.SimulationVariables, self.observedDir)
                     self.writeChapter()
-                    self.fixXMLModelIntroduction(simorder)
+                    self.appendXMLModelIntroduction(simorder)
                     self.Data.writeDataFiles()
+                self.fixXMLModelIntroduction()
                 self.XML.writeReportEnd()
                 self.WAT_log.equalizeLog()
         elif self.reportType == 'alternativecomparison':
@@ -112,8 +114,9 @@ class MakeAutomatedReport(object):
                 self.loadCurrentModelAltID('base')
                 self.WAT_log.addSimLogEntry(self.accepted_IDs, self.SimulationVariables, self.observedDir)
                 self.writeChapter()
-                self.fixXMLModelIntroduction(simorder)
+                self.appendXMLModelIntroduction(simorder)
                 self.Data.writeDataFiles()
+            self.fixXMLModelIntroduction()
             self.XML.writeReportEnd()
             self.WAT_log.equalizeLog()
         else:
@@ -2908,7 +2911,7 @@ class MakeAutomatedReport(object):
 
         return 'undefined' #no id either way..
 
-    def fixXMLModelIntroduction(self, simorder):
+    def appendXMLModelIntroduction(self, simorder):
         '''
         Fixes intro in XML that shows what models are used for each region.
         Updates a flag with used models.
@@ -2916,12 +2919,36 @@ class MakeAutomatedReport(object):
         :return:
         '''
 
-        outstr = '{0}:'.format(self.ChapterRegion)
-        for cnt, ID in enumerate(self.accepted_IDs):
-            if cnt > 0:
-                outstr += ','
-            outstr += ' {0}'.format(self.SimulationVariables[ID]['plugin'])
-        self.XML.replaceinXML('%%REPLACEINTRO_{0}%%'.format(simorder), outstr)
+        # outstr = '{0}:'.format(self.ChapterRegion)
+        # for cnt, ID in enumerate(self.accepted_IDs):
+        #     if cnt > 0:
+        #         outstr += ','
+        #     outstr += ' {0}'.format(self.SimulationVariables[ID]['plugin'])
+        # self.XML.replaceinXML('%%REPLACEINTRO_{0}%%'.format(simorder), outstr)
+
+        modelstrs = []
+        # for Chapter in [n for n in self.ChapterDefinitions[::-1]]:
+        for Chapter in self.ChapterDefinitions:
+            chapname = Chapter['name']
+            # outstr = '{0}:'.format(chapname)
+            outstr = f'<Model ModelOrder="%%modelOrder%%" >{chapname}:'
+            for cnt, ID in enumerate(self.accepted_IDs):
+                if cnt > 0:
+                    outstr += ','
+                outstr += ' {0}'.format(self.SimulationVariables[ID]['plugin'])
+            outstr += '</Model>\n'
+            modelstrs.append(outstr)
+
+        lastline = '%%REPLACEINTRO_{0}%%'.format(simorder)
+        for i, ms in enumerate(modelstrs):
+            tmpstr = ms.replace('%%modelOrder%%', str(self.modelOrder))
+            self.XML.insertAfter(lastline, tmpstr)
+            self.modelOrder += 1
+            lastline = tmpstr
+
+    def fixXMLModelIntroduction(self):
+        # pass
+        self.XML.removeLine('%%REPLACEINTRO_')
 
     def checkModelType(self, line_info):
         '''

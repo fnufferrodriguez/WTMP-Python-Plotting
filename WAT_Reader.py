@@ -280,9 +280,9 @@ def readTextProfile(observed_data_filename, timestamps, starttime=None, endtime=
                     t.append(np.array(t_profile))
                     wt.append(np.array(wt_profile))
                     d.append(np.array(d_profile))
-                t_profile = []
-                wt_profile = []
-                d_profile = []
+                t_profile = [dt_tmp]
+                wt_profile = [float(sline[1])]
+                d_profile = [float(sline[2])]
             else:
                 if float(sline[2]) not in d_profile:
                     t_profile.append(dt_tmp)
