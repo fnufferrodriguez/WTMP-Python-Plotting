@@ -333,7 +333,7 @@ def buildTimeSeries(startTime, endTime, interval):
     '''
 
     intervalinfo = getPandasTimeFreq(interval)
-    ts = pd.date_range(startTime, endTime, freq=intervalinfo, closed=None)
+    ts = pd.date_range(startTime, endTime, freq=intervalinfo, inclusive=False)
     ts = np.asarray([t.to_pydatetime() for t in ts])
     return ts
 

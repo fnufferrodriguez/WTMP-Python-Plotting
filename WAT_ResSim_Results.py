@@ -119,46 +119,51 @@ class ResSim_Results(object):
 
         self.loadElevation(alt_subdomain_name=resname)
 
-        vals = []
-        elevations = []
-        depths = []
-        times = []
-        # WF.print2stdout('UNIQUE TIMES:', unique_times)
-        if isinstance(timestamps, (list, np.ndarray)):
-            unique_times = [n for n in timestamps]
-            for j, time_in in enumerate(unique_times):
-                timestep = WT.getIdxForTimestamp(self.jd_dates, time_in, self.t_offset)
-                if timestep == -1:
-                    depths.append(np.asarray([]))
-                    elevations.append(np.asarray([]))
-                    vals.append(np.asarray([]))
-                    times.append(time_in)
-                    # continue
-                else:
-                    # WF.print2stdout('finding time for', time_in)
-                    self.loadResults(time_in, metric.lower(), alt_subdomain_name=resname)
-                    ktop = self.getTopLayer(timestep) #get waterlevel top layer to know where to grab data from
-                    v_el = self.vals[:ktop + 1]
-                    el = self.elev[:ktop + 1]
-                    d_step = []
-                    e_step = []
-                    v_step = []
-                    for ei, e in enumerate(el):
-                        d_step.append(np.max(el) - e)
-                        e_step.append(e)
-                        v_step.append(v_el[ei])
-                    depths.append(np.asarray(d_step))
-                    elevations.append(np.asarray(e_step))
-                    vals.append(np.asarray(v_step))
-                    times.append(time_in)
-        else:
-            self.loadResults('all', metric.lower(), alt_subdomain_name=resname)
-            elevations = self.elev
-            vals = np.asarray(self.vals)
-            depths = np.array([])
-            times = self.dt_dates
+        if self.subdomain_read_success:
 
-        return vals, elevations, depths, np.asarray(times)
+            vals = []
+            elevations = []
+            depths = []
+            times = []
+            # WF.print2stdout('UNIQUE TIMES:', unique_times)
+            if isinstance(timestamps, (list, np.ndarray)):
+                unique_times = [n for n in timestamps]
+                for j, time_in in enumerate(unique_times):
+                    timestep = WT.getIdxForTimestamp(self.jd_dates, time_in, self.t_offset)
+                    if timestep == -1:
+                        depths.append(np.asarray([]))
+                        elevations.append(np.asarray([]))
+                        vals.append(np.asarray([]))
+                        times.append(time_in)
+                        # continue
+                    else:
+                        # WF.print2stdout('finding time for', time_in)
+                        self.loadResults(time_in, metric.lower(), alt_subdomain_name=resname)
+                        ktop = self.getTopLayer(timestep) #get waterlevel top layer to know where to grab data from
+                        v_el = self.vals[:ktop + 1]
+                        el = self.elev[:ktop + 1]
+                        d_step = []
+                        e_step = []
+                        v_step = []
+                        for ei, e in enumerate(el):
+                            d_step.append(np.max(el) - e)
+                            e_step.append(e)
+                            v_step.append(v_el[ei])
+                        depths.append(np.asarray(d_step))
+                        elevations.append(np.asarray(e_step))
+                        vals.append(np.asarray(v_step))
+                        times.append(time_in)
+            else:
+                self.loadResults('all', metric.lower(), alt_subdomain_name=resname)
+                elevations = self.elev
+                vals = np.asarray(self.vals)
+                depths = np.array([])
+                times = self.dt_dates
+
+            return vals, elevations, depths, np.asarray(times)
+
+        else:
+            return [], [], [], []
 
     def getTopLayer(self, timestep_index):
         '''
@@ -176,6 +181,7 @@ class ResSim_Results(object):
                 break
         return k
 
+
     def loadElevation(self, alt_subdomain_name=None):
         '''
         loads elevations from the H5 file
@@ -187,11 +193,20 @@ class ResSim_Results(object):
         '''
 
         this_subdomain = self.subdomain_name if alt_subdomain_name is None else alt_subdomain_name
-        cell_center_xy = self.h['Geometry/Subdomains/' + this_subdomain + '/Cell Center Coordinate']
-        self.ncells = (np.shape(cell_center_xy))[0]
-        self.elev = np.array(cell_center_xy[:self.ncells, 2])
-        elev_ts = self.h['Results/Subdomains/' + this_subdomain + '/Water Surface Elevation']
-        self.elev_ts = np.array(elev_ts[:self.nt])
+        subdomain_name = 'Geometry/Subdomains/' + this_subdomain + '/Cell Center Coordinate'
+        if subdomain_name not in self.h.keys():
+            WF.print2stdout(f"\nWARNING: Subdomain {this_subdomain} not found in results file.")
+            self.elev = np.array([])
+            self.elev_ts = np.array([])
+            self.ncells = 0
+            self.subdomain_read_success = False
+        else:
+            cell_center_xy = self.h[subdomain_name]
+            self.ncells = (np.shape(cell_center_xy))[0]
+            self.elev = np.array(cell_center_xy[:self.ncells, 2])
+            elev_ts = self.h['Results/Subdomains/' + this_subdomain + '/Water Surface Elevation']
+            self.elev_ts = np.array(elev_ts[:self.nt])
+            self.subdomain_read_success = True
 
     def loadResults(self, t_in, metrc, alt_subdomain_name=None):
         '''
@@ -211,7 +226,9 @@ class ResSim_Results(object):
             try:
                 vals = self.h['Results/Subdomains/' + this_subdomain + '/' + metric_name]
             except KeyError:
-                raise KeyError('WQ Simulation does not have results for metric: {0}'.format(metric_name))
+                # raise KeyError('WQ Simulation does not have results for metric: {0}'.format(metric_name))
+                WF.print2stdout(f'\nWARNING: WQ Simulation does not have results for metric: {metric_name}')
+                vals = []
 
         elif metrc == 'diss_oxy' or metrc.lower() == 'do':
             metric_name = 'Dissolved Oxygen'
@@ -295,19 +312,24 @@ class ResSim_Results(object):
         '''
 
         self.loadElevation(alt_subdomain_name=resname)
-        if isinstance(timestamps, (list, np.ndarray)):
-            topwater = []
-            unique_times = [n for n in timestamps]
-            for j, time_in in enumerate(unique_times):
-                timestep = WT.getIdxForTimestamp(self.jd_dates, time_in, self.t_offset)
-                if timestep == -1:
-                    topwater.append(np.nan)
-                    # continue
-                else:
-                    topwater.append(self.elev_ts[timestep])
+
+        if self.subdomain_read_success:
+
+            if isinstance(timestamps, (list, np.ndarray)):
+                topwater = []
+                unique_times = [n for n in timestamps]
+                for j, time_in in enumerate(unique_times):
+                    timestep = WT.getIdxForTimestamp(self.jd_dates, time_in, self.t_offset)
+                    if timestep == -1:
+                        topwater.append(np.nan)
+                        # continue
+                    else:
+                        topwater.append(self.elev_ts[timestep])
+            else:
+                topwater = self.elev_ts[:]
+            return np.asarray(topwater)
         else:
-            topwater = self.elev_ts[:]
-        return np.asarray(topwater)
+            return []
 
     def checkSubdomain(self, subdomain_name):
         '''
@@ -328,6 +350,10 @@ class ResSim_Results(object):
         :param subdomain_name: name of subdomain to extract data from
         :return: times, values, distances
         '''
+
+        if f'Results/Subdomains/{subdomain_name}' not in self.h.keys():
+            WF.print2stdout(f"\nWARNING: Subdomain {subdomain_name} not found in results file.")
+            return [], [], []
 
         if metric.lower() == 'flow':
             dataset_name = 'Cell flow'
