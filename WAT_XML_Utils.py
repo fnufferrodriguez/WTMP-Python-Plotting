@@ -56,6 +56,33 @@ class XMLReport(object):
             for line in xml_text:
                 XML.write(line)
 
+    def insertAfter(self, StringToAddAfter, StringToAdd):
+        xml_text = []
+        with open(self.XML_fn, 'r') as XML:
+            for line in XML:
+                if StringToAddAfter in line:
+                    xml_text.append(line)
+                    xml_text.append(StringToAdd)
+                else:
+                    xml_text.append(line)
+
+        with open(self.XML_fn, 'w') as XML:
+            for line in xml_text:
+                XML.write(line)
+
+    def removeLine(self, inputStr):
+        xml_text = []
+        with open(self.XML_fn, 'r') as XML:
+            for line in XML:
+                if inputStr in line:
+                    continue
+                else:
+                    xml_text.append(line)
+        with open(self.XML_fn, 'w') as XML:
+            for line in xml_text:
+                XML.write(line)
+
+
     def primeCounters(self):
         '''
         sets up counters for figures tables and sections. Some start at 0, some start at 1
