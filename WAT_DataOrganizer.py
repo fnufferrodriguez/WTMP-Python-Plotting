@@ -21,6 +21,7 @@ import pickle
 import WAT_Functions as WF
 import WAT_Reader as WDR
 import WAT_Time as WT
+import WAT_Reader as WR
 import WAT_Profiles as WProfile
 
 class DataOrganizer(object):
@@ -199,6 +200,41 @@ class DataOrganizer(object):
                     data = self.updateTimeSeriesDataDictionary(data, line)
 
         return data
+
+    def getStraightLineValue(self, settings):
+        straightlines = {}
+        types_of_straightlines = ['hlines', 'vlines']
+        for tosl in types_of_straightlines:
+            if tosl in settings.keys():
+                straightlines[tosl] = {}
+                for line in settings[tosl]:
+                    if 'value' in line.keys(): #if defined single value for all plots
+                        value = float(line['value'])
+                        const_key = f'constant_{value}'
+                        if 'timestamps' in settings.keys():
+                            values = [value] * len(settings['timestamps'])
+                        else:
+                            values = [value]
+                        straightlines[tosl][const_key] = {'values': values,
+                                                          'numtimesused': 0}
+                        for key in line.keys():
+                            if key not in straightlines[tosl][const_key].keys():
+                                straightlines[tosl][const_key][key] = line[key]
+                        if 'units' not in straightlines[tosl][const_key].keys():
+                            straightlines[tosl][const_key]['units'] = None
+                    else:
+                        timeserieslines = self.getTimeSeriesDataDictionary({'lines': [line]})
+                        for timeserieslinekey in timeserieslines.keys():
+                            values = timeserieslines[timeserieslinekey]['values']
+                            dates = timeserieslines[timeserieslinekey]['dates']
+                            if 'timestamps' in settings.keys():
+                                idx = WR.getClosestTime(settings['timestamps'], dates)
+                                straightlines[tosl][timeserieslinekey] = {'values': values[idx]}
+                            for key in timeserieslines[timeserieslinekey].keys():
+                                if key not in straightlines[tosl][timeserieslinekey].keys():
+                                    straightlines[tosl][timeserieslinekey][key] = timeserieslines[timeserieslinekey][key]
+
+        return straightlines
 
     def getTimeSeries(self, Line_info, makecopy=True):
         '''

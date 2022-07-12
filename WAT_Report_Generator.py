@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '5.1.8'
+VERSIONNUMBER = '5.1.9'
 
 import datetime as dt
 import os
@@ -234,6 +234,8 @@ class MakeAutomatedReport(object):
                 gatedata = self.Data.getGateDataDictionary(ax_settings, makecopy=False)
                 linedata = WF.filterDataByYear(linedata, year)
                 linedata = WF.correctDuplicateLabels(linedata)
+                straightlines = self.Data.getStraightLineValue(ax_settings)
+
                 for gateop in gatedata.keys():
                     gatedata[gateop]['gates'] = WF.filterDataByYear(gatedata[gateop]['gates'], year)
 
@@ -491,10 +493,10 @@ class MakeAutomatedReport(object):
                                                        alpha=float(opline_settings['alpha']))
 
                 ### VERTICAL LINES ###
-                Plots.plotVerticalLines(ax_settings, ax, isdate=True)
+                Plots.plotVerticalLines(straightlines, ax, cur_obj_settings, isdate=True)
 
                 ### Horizontal LINES ###
-                Plots.plotHorizontalLines(ax_settings, ax)
+                Plots.plotHorizontalLines(straightlines, ax, cur_obj_settings)
 
                 plotunits = WF.getPlotUnits(unitslist, ax_settings)
                 plotunits2 = WF.getPlotUnits(unitslist2, ax_settings)
@@ -640,6 +642,8 @@ class MakeAutomatedReport(object):
             if 'spacebetweenaxis' in object_settings.keys():
                 if object_settings['spacebetweenaxis'].lower() != 'true':
                     plt.subplots_adjust(wspace=0, hspace=0)
+            else:
+                plt.subplots_adjust(wspace=0, hspace=0)
 
             basefigname = os.path.join(self.images_path, 'TimeSeriesPlot' + '_' + self.ChapterRegion.replace(' ','_')
                                        + '_' + yearstr)
@@ -813,6 +817,8 @@ class MakeAutomatedReport(object):
 
         ################# Get data #################
         data, line_settings = self.Data.getProfileDataDictionary(object_settings)
+        straightlines = self.Data.getStraightLineValue(object_settings)
+
         line_settings = WF.correctDuplicateLabels(line_settings)
 
         object_settings = self.configureSettingsForID('base', object_settings)
@@ -915,10 +921,10 @@ class MakeAutomatedReport(object):
                             Plots.plotPoints(values, levels, ax, current_ls)
 
                     ### HLINES ###
-                    Plots.plotHorizontalLines(cur_obj_settings, ax, timestamp_index=j)
+                    Plots.plotHorizontalLines(straightlines, ax, cur_obj_settings, timestamp_index=j)
 
                     ### VERTICAL LINES ###
-                    Plots.plotVerticalLines(cur_obj_settings, ax, timestamp_index=j)
+                    Plots.plotVerticalLines(straightlines, ax, cur_obj_settings, timestamp_index=j)
 
                     show_xlabel, show_ylabel = self.getPlotLabelMasks(i, len(pgi), subplot_cols)
 
@@ -1163,9 +1169,11 @@ class MakeAutomatedReport(object):
                                 n_legends_row = 1
 
                             plt.subplots_adjust(bottom=.1*n_legends_row)
-                            fig_ratio = (axs[int(n_nrow_active)-1,0].bbox.extents[1] - (fig.bbox.height * (.1025 * n_legends_row))) / fig.bbox.height
+                            # fig_ratio = (axs[int(n_nrow_active)-1,0].bbox.extents[1] - (fig.bbox.height * (.1025 * n_legends_row))) / fig.bbox.height
+                            fig_ratio = (axs[int(n_nrow_active)-1,0].bbox.extents[1] - (fig.bbox.height * .055)) / fig.bbox.height
 
-                            plt.legend(bbox_to_anchor=(.5,fig_ratio), loc="lower center", fontsize=legsize,
+                            # plt.legend(bbox_to_anchor=(.5,fig_ratio), loc="lower center", fontsize=legsize,
+                            plt.legend(bbox_to_anchor=(.5,fig_ratio), loc="upper center", fontsize=legsize,
                                        bbox_transform=fig.transFigure, ncol=ncolumns, handles=leg_handles,
                                        labels=leg_labels)
 
@@ -1643,10 +1651,7 @@ class MakeAutomatedReport(object):
 
         for yi, year in enumerate(object_settings['years']):
             cur_obj_settings = pickle.loads(pickle.dumps(object_settings, -1))
-            # if object_settings['split_by_year']:
-            #     yearstr = str(year)
-            # else:
-            #     yearstr = object_settings['yearstr']
+
             yearstr = object_settings['yearstr'][yi]
 
             cur_obj_settings = Plots.setTimeSeriesXlims(cur_obj_settings, yearstr, object_settings['years'])
@@ -1664,6 +1669,8 @@ class MakeAutomatedReport(object):
             contoursbyID = self.Data.getContourDataDictionary(cur_obj_settings)
             contoursbyID = WF.filterDataByYear(contoursbyID, year)
             selectedContourIDs = WF.getUsedIDs(contoursbyID)
+
+            straightlines = self.Data.getStraightLineValue(cur_obj_settings)
 
             if len(selectedContourIDs) == 1:
                 figsize=(12, 6)
@@ -1801,10 +1808,10 @@ class MakeAutomatedReport(object):
                                                  label=label)
 
                 ### VERTICAL LINES ###
-                Plots.plotVerticalLines(contour_settings, ax, isdate=True)
+                Plots.plotVerticalLines(straightlines, ax, contour_settings, isdate=True)
 
                 ### Horizontal LINES ###
-                Plots.plotHorizontalLines(contour_settings, ax)
+                Plots.plotHorizontalLines(straightlines, ax, contour_settings)
 
                 # if 'transitions' in contour_settings.keys():
                 #     for transkey in transitions.keys():

@@ -466,50 +466,50 @@ class Plots(object):
         ax.set_xlim(left=xmin)
         ax.set_xlim(right=xmax)
 
-    def plotHorizontalLines(self, object_settings, ax, timestamp_index=None):
+    def plotHorizontalLines(self, straightlines, ax, object_settings, timestamp_index=0):
         '''
         organizes given data and plots horizontal lines on a given axis
-        :param object_settings: dictionary potentionally containing <hlines> field
+        :param straightlines: dictionary potentionally containing <hlines> field
         :param ax: current axis
+        :param object_settings: dictionary containing information for the entire plot
         :param timestamp_index: optional datetime index if hline is a timeseries
         '''
 
-        if 'hlines' in object_settings.keys():
-            for hline_settings in object_settings['hlines']:
-                if 'value' in hline_settings.keys():
-                    value = float(hline_settings['value'])
-                    units = None
-                else:
-                    dates, values, units = self.Report.Data.getTimeSeries(hline_settings, makecopy=False)
-                    if timestamp_index != None:
-                        hline_idx = WR.getClosestTime([object_settings['timestamps'][timestamp_index]], dates)
-                    else:
-                        return
-                    if len(hline_idx) == 0:
-                        value = np.nan
-                    else:
-                        value = values[hline_idx[0]]
-
-                if 'parameter' in hline_settings:
+        if 'hlines' in straightlines.keys():
+            hlines = straightlines['hlines']
+            hlines = WF.correctDuplicateLabels(hlines)
+            for key in hlines.keys():
+                hline_settings = hlines[key]
+                value = hline_settings['values'][timestamp_index]
+                units = hline_settings['units']
+                if 'parameter' in hline_settings.keys():
                     if object_settings['usedepth'].lower() == 'true':
                         if hline_settings['parameter'].lower() == 'elevation':
-                            value = 0 #top of the water, should always be 0
+                            valueconv, _ = WProfile.convertElevationsToDepths({'hline': {'depths': [],
+                                                                                      'elevations': [value]}})
+                            value = valueconv['hline']['depth'][0]
                     elif object_settings['usedepth'].lower() == 'false':
                         if hline_settings['parameter'].lower() == 'depth':
-                            valueconv = WProfile.convertDepthsToElevations({'hline': {'depths': [value],
+                            valueconv, _ = WProfile.convertDepthsToElevations({'hline': {'depths': [value],
                                                                                       'elevations': []}})
-                            value = valueconv['hline']['elevation'][0]
+                            value = valueconv['hline']['elevations'][0]
 
                 #currently cant convert these units..
-                # if units != None:
-                #     valueconv, units = WF.convertUnitSystem(value, units, object_settings['unitsystem'])
-                #     value = valueconv[0]
+                if units != None:
+                    if 'y_unitsystem' in object_settings.keys():
+                        unitsystem = object_settings['y_unitsystem']
+                    else:
+                        unitsystem = object_settings['unitsystem']
+                    valueconv, units = WF.convertUnitSystem(value, units, unitsystem)
+                    value = valueconv
 
                 ### instead, use scalar to be manual
                 if 'scalar' in hline_settings.keys():
                     value *= float(hline_settings['scalar'])
 
                 hline_settings = WD.getDefaultStraightLineSettings(hline_settings)
+                hline_settings = WF.fixDuplicateColors(hline_settings) #used the line, used param, then double up so subtract 1
+
                 if 'label' not in hline_settings.keys():
                     hline_settings['label'] = None
                 if 'zorder' not in hline_settings.keys():
@@ -520,35 +520,23 @@ class Plots(object):
                            zorder=float(hline_settings['zorder']),
                            alpha=float(hline_settings['alpha']))
 
-    def plotVerticalLines(self, object_settings, ax, isdate=False, timestamp_index=None):
+    def plotVerticalLines(self, straightlines, ax, object_settings, timestamp_index=0, isdate=True):
         '''
         organizes given data and plots vertical lines on a given axis
-        :param object_settings: dictionary potentionally containing <vlines> field
+        :param straightlines: dictionary potentionally containing <vlines> field
         :param ax: current axis
+        :param object_settings: dictionary containing information for the entire plot
         :param isdate: optional if input value is a date, in which case we may need to format it
         :param timestamp_index: optional datetime index if vline is a timeseries
         '''
 
-        if 'vlines' in object_settings.keys():
-            for vline in object_settings['vlines']:
-                vline_settings = WD.getDefaultStraightLineSettings(vline)
-                if 'value' in vline_settings.keys():
-                    try:
-                        value = float(vline_settings['value'])
-                    except:
-                        value = WT.translateDateFormat(vline_settings['value'], 'datetime', '',
-                                                                         self.Report.StartTime, self.Report.EndTime,
-                                                                         self.Report.ModelAlt.t_offset)
-                else:
-                    dates, values, units = self.Report.Data.getTimeSeries(vline_settings, makecopy=False)
-                    if timestamp_index != None:
-                        vline_idx = WR.getClosestTime([object_settings['timestamps'][timestamp_index]], dates)
-                    else:
-                        return
-                    if len(vline_idx) == 0:
-                        value = np.nan
-                    else:
-                        value = values[vline_idx[0]]
+        if 'vlines' in straightlines.keys():
+            vlines = straightlines['vlines']
+            vlines = WF.correctDuplicateLabels(vlines)
+            for key in vlines.keys():
+                vline_settings = vlines[key]
+                value = vline_settings['values'][timestamp_index]
+                units = vline_settings['units']
 
                 if isdate:
                     if 'dateformat' in object_settings.keys():
@@ -579,6 +567,13 @@ class Plots(object):
                     vline_settings['label'] = None
                 if 'zorder' not in vline_settings.keys():
                     vline_settings['zorder'] = 3
+
+                if units != None:
+                    valueconv, units = WF.convertUnitSystem(value, units, object_settings['unitsystem'])
+                    value = valueconv
+
+                vline_settings = WD.getDefaultStraightLineSettings(vline_settings)
+                vline_settings = WF.fixDuplicateColors(vline_settings) #used the line, used param, then double up so subtract 1
 
                 ax.axvline(value, label=vline_settings['label'], c=vline_settings['linecolor'],
                            lw=vline_settings['linewidth'], ls=vline_settings['linestylepattern'],

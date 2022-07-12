@@ -155,7 +155,7 @@ def convertElevationsToDepths(data, object_settings, wse_data={}):
                         break
 
             if found_elevs:
-                data[nodepth_flag]['elevations'] = convertObsElevations2Depths(data[nodepth_flag]['elevations'],
+                data[nodepth_flag]['depths'] = convertObsElevations2Depths(data[nodepth_flag]['elevations'],
                                                                                selected_wse_data)
             else:
                 object_settings['usedepth'] = 'false'

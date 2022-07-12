@@ -227,7 +227,7 @@ def getDefaultStraightLineSettings(LineSettings):
     :return:
         LineSettings: dictionary containing keys describing how the line/points are drawn
     '''
-
+    LineSettings = getDrawFlags(LineSettings)
     default_default_lines = getDefaultDefaultLineStyles(0)
     default_default_lines['linecolor'] = 'black' #don't need different colors by default..
     for key in default_default_lines.keys():

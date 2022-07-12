@@ -1008,12 +1008,13 @@ def correctDuplicateLabels(linedata):
     for line in linedata.keys():
         if 'label' in linedata[line].keys():
             curlabel = linedata[line]['label']
-            lineidx = linedata[line]['numtimesused']
-            if lineidx > 0: #leave the first guy alone..
-                for otherline in linedata.keys():
-                    if otherline != line:
-                        if linedata[otherline]['label'] == curlabel:
-                            linedata[line]['label'] = '{0} {1}'.format(curlabel, lineidx) #append the number
+            if 'numtimesused' in linedata[line].keys():
+                lineidx = linedata[line]['numtimesused']
+                if lineidx > 0: #leave the first guy alone..
+                    for otherline in linedata.keys():
+                        if otherline != line:
+                            if linedata[otherline]['label'] == curlabel:
+                                linedata[line]['label'] = '{0} {1}'.format(curlabel, lineidx) #append the number
     return linedata
 
 def getParameterCount(line, object_settings):
