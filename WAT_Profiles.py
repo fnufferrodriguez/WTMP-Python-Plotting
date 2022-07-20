@@ -104,16 +104,19 @@ def convertDepthsToElevations(data, object_settings, wse_data={}):
     :return: object settings dictionary with updated elevation data
     '''
 
-    found_elevs = False
+    #
     for ld in data.keys():
+        found_elevs = False
         if data[ld]['elevations'] == []:
             noelev_flag = ld
             wse_data_key = ld + '_wse'
             if wse_data_key in wse_data.keys():
                 selected_wse_data = wse_data[wse_data_key]
-                selected_wse_data = matchProfileTimestamps(data[ld]['times'], selected_wse_data, onflag='elevations')['elevations']
-                found_elevs = True
-            else:
+                if len(selected_wse_data['elevations']) > 0:
+                    selected_wse_data = matchProfileTimestamps(data[ld]['times'], selected_wse_data, onflag='elevations')['elevations']
+                    found_elevs = True
+            # else:
+            if not found_elevs:
                 for old in data.keys():
                     if len(data[old]['elevations']) > 0:
                         # elev_flag = old
@@ -136,8 +139,8 @@ def convertElevationsToDepths(data, object_settings, wse_data={}):
     :return: object settings dictionary with updated elevation data
     '''
 
-    found_elevs = False
     for ld in data.keys():
+        found_elevs = False
         if data[ld]['elevations'] == []:
             nodepth_flag = ld
             wse_data_key = ld + '_wse'
@@ -145,7 +148,7 @@ def convertElevationsToDepths(data, object_settings, wse_data={}):
                 selected_wse_data = wse_data[wse_data_key]
                 selected_wse_data = matchProfileTimestamps(data[ld]['times'], selected_wse_data, onflag='elevations')['elevations']
                 found_elevs = True
-            else:
+            if not found_elevs:
                 for old in data.keys():
                     if len(data[old]['elevations']) > 0:
                         # elev_flag = old
