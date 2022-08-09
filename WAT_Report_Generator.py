@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '5.1.10'
+VERSIONNUMBER = '5.1.11'
 
 import datetime as dt
 import os
@@ -167,6 +167,11 @@ class MakeAutomatedReport(object):
         default_settings = self.loadDefaultPlotObject('timeseriesplot') #get default TS plot items
         object_settings = WF.replaceDefaults(self, default_settings, object_settings) #overwrite the defaults with chapter file
 
+        if 'template' in object_settings.keys():
+            template_settings = WR.readTemplate(self, object_settings['template'])
+            if object_settings['type'].lower() in template_settings.keys():
+                object_settings = WF.replaceDefaults(self, template_settings[object_settings['type'].lower()], object_settings)
+
         object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = WF.getObjectYears(self, object_settings)
 
         object_settings = Plots.confirmAxis(object_settings)
@@ -205,7 +210,7 @@ class MakeAutomatedReport(object):
 
             left_sided_axes = []
             right_sided_axes = []
-
+            useAx = []
             for axi, ax_settings in enumerate(cur_obj_settings['axs']):
 
                 ax_settings = WF.copyKeysBetweenDicts(ax_settings, cur_obj_settings, ignore=['axs'])
@@ -228,6 +233,7 @@ class MakeAutomatedReport(object):
 
                 unitslist = []
                 unitslist2 = []
+                stackplots = {}
                 linedata = self.Data.getTimeSeriesDataDictionary(ax_settings)
                 linedata = WF.mergeLines(linedata, ax_settings)
                 ax_settings = self.configureSettingsForID('base', ax_settings)
@@ -255,6 +261,18 @@ class MakeAutomatedReport(object):
                     values = curline['values']
                     dates = curline['dates']
                     units = curline['units']
+
+                    isstack = False
+                    if 'linetype' in curline.keys():
+                        if curline['linetype'].lower() == 'stacked': #stacked plots need to be added at the end..
+                            if _usetwinx:
+                                if 'yaxis' in curline.keys():
+                                    axis = curline['yaxis'].lower()
+                            else:
+                                axis = 'left' #if not twinx, then only can use left
+                            values = WF.buzzTargetSum(dates, values)
+
+                            isstack = True
 
                     if units == None:
                         if parameter != None:
@@ -289,6 +307,14 @@ class MakeAutomatedReport(object):
                         if isinstance(dates[0], (int, float)):
                             dates = WT.JDateToDatetime(dates, self.startYear)
 
+                    if 'scalar' in curline.keys():
+                        try:
+                            scalar = float(curline['scalar'])
+                            values = scalar * values
+                        except ValueError:
+                            WF.print2stdout('Invalid Scalar. {0}'.format(curline['scalar']))
+                            continue
+
                     line_settings = WD.getDefaultLineSettings(self.defaultLineStyles, curline, parameter, i)
                     line_settings = WF.fixDuplicateColors(line_settings) #used the line, used param, then double up so subtract 1
 
@@ -298,14 +324,14 @@ class MakeAutomatedReport(object):
                     if 'label' not in line_settings.keys():
                         line_settings['label'] = ''
 
-                    if 'filterbylimits' not in line_settings.keys():
-                        line_settings['filterbylimits'] = 'true' #set default
-
-                    if line_settings['filterbylimits'].lower() == 'true':
-                        if 'xlims' in object_settings.keys():
-                            dates, values = WF.applyXLimits(self, dates, values, cur_obj_settings['xlims'])
-                        if 'ylims' in object_settings.keys():
-                            dates, values = WF.applyYLimits(dates, values, cur_obj_settings['ylims'])
+                    # if 'filterbylimits' not in line_settings.keys():
+                    #     line_settings['filterbylimits'] = 'true' #set default
+                    #
+                    # if line_settings['filterbylimits'].lower() == 'true':
+                    #     if 'xlims' in object_settings.keys():
+                    #         dates, values = WF.applyXLimits(self, dates, values, cur_obj_settings['xlims'])
+                    #     if 'ylims' in object_settings.keys():
+                    #         dates, values = WF.applyYLimits(dates, values, cur_obj_settings['ylims'])
 
                     curax = ax
                     axis2 = False
@@ -329,29 +355,39 @@ class MakeAutomatedReport(object):
                                                                               self.startYear)
                             values = values/RelativeMasterSet
 
-                    if line_settings['drawline'].lower() == 'true' and line_settings['drawpoints'].lower() == 'true':
-                        Plots.plotLinesAndPoints(dates, values, curax, line_settings)
+                    if isstack:
+                        if axis not in stackplots.keys(): #left or right
+                            stackplots[axis] = []
+                        stackplots[axis].append({'values': values,
+                                                 'dates': dates,
+                                                 'label': curline['label'],
+                                                 'color': curline['linecolor']})
 
-                    elif line_settings['drawline'].lower() == 'true':
-                        Plots.plotLines(dates, values, curax, line_settings)
+                    else:
 
-                    elif line_settings['drawpoints'].lower() == 'true':
-                        Plots.plotPoints(dates, values, curax, line_settings)
+                        if line_settings['drawline'].lower() == 'true' and line_settings['drawpoints'].lower() == 'true':
+                            Plots.plotLinesAndPoints(dates, values, curax, line_settings)
+
+                        elif line_settings['drawline'].lower() == 'true':
+                            Plots.plotLines(dates, values, curax, line_settings)
+
+                        elif line_settings['drawpoints'].lower() == 'true':
+                            Plots.plotPoints(dates, values, curax, line_settings)
 
 
-                    self.WAT_log.addLogEntry({'type': line_settings['label'] + '_TimeSeries' if line_settings['label'] != '' else 'Timeseries',
-                                              'name': self.ChapterRegion+'_'+yearstr,
-                                              'description': ax_settings['description'],
-                                              'units': units,
-                                              'value_start_date': WT.translateDateFormat(dates[0], 'datetime', '',
-                                                                                         self.StartTime, self.EndTime,
-                                                                                         self.ModelAlt.t_offset).strftime('%d %b %Y'),
-                                              'value_end_date': WT.translateDateFormat(dates[-1], 'datetime', '',
-                                                                                       self.StartTime, self.EndTime,
-                                                                                       self.ModelAlt.t_offset).strftime('%d %b %Y'),
-                                              'logoutputfilename': curline['logoutputfilename']
-                                             },
-                                             isdata=True)
+                        self.WAT_log.addLogEntry({'type': line_settings['label'] + '_TimeSeries' if line_settings['label'] != '' else 'Timeseries',
+                                                  'name': self.ChapterRegion+'_'+yearstr,
+                                                  'description': ax_settings['description'],
+                                                  'units': units,
+                                                  'value_start_date': WT.translateDateFormat(dates[0], 'datetime', '',
+                                                                                             self.StartTime, self.EndTime,
+                                                                                             self.ModelAlt.t_offset).strftime('%d %b %Y'),
+                                                  'value_end_date': WT.translateDateFormat(dates[-1], 'datetime', '',
+                                                                                           self.StartTime, self.EndTime,
+                                                                                           self.ModelAlt.t_offset).strftime('%d %b %Y'),
+                                                  'logoutputfilename': curline['logoutputfilename']
+                                                 },
+                                                 isdata=True)
                 # GATE DATA #
                 if 'gatespacing' in ax_settings.keys():
                     gatespacing = float(ax_settings['gatespacing'])
@@ -492,6 +528,29 @@ class MakeAutomatedReport(object):
                                                    zorder=float(opline_settings['zorder']),
                                                        alpha=float(opline_settings['alpha']))
 
+                for stackplot_ax in stackplots.keys():
+                    if stackplot_ax == 'left':
+                        curax = ax
+                    elif stackplot_ax == 'right':
+                        curax = ax2
+
+                    sps = stackplots[stackplot_ax]
+                    stackvalues = [n['values'] for n in sps]
+                    stackdates = [n['dates'] for n in sps]
+                    stacklabels = [n['label'] for n in sps]
+                    stackcolors = [n['color'] for n in sps]
+
+                    matched_dates = list(set(stackdates[0]).intersection(*stackdates)) #find dates that ALL dates have.
+                    matched_dates.sort()
+
+                    #now filter values associated with dates not in this list
+                    for di, datelist in enumerate(stackdates):
+                        mask_date_idx = [ni for ni, date in enumerate(datelist) if date in matched_dates]
+                        stackvalues[di] = np.asarray(stackvalues[di])[mask_date_idx]
+
+                    curax.stackplot(matched_dates, stackvalues, labels=stacklabels, colors=stackcolors, zorder=2)
+
+
                 ### VERTICAL LINES ###
                 Plots.plotVerticalLines(straightlines, ax, cur_obj_settings, isdate=True)
 
@@ -574,7 +633,12 @@ class MakeAutomatedReport(object):
 
                 ############# xticks and lims #############
 
-                Plots.formatDateXAxis(ax, ax_settings)
+                useplot = Plots.formatDateXAxis(ax, ax_settings)
+                if not useplot:
+                    useAx.append(False)
+                else:
+                    useAx.append(True)
+
                 xmin, xmax = ax.get_xlim()
 
                 if ax_settings['dateformat'].lower() == 'datetime':
@@ -618,6 +682,11 @@ class MakeAutomatedReport(object):
                         ax2.grid(True)
                     ax.set_zorder(ax2.get_zorder()+1) #axis called second will always be on top unless this
                     ax.patch.set_visible(False)
+
+            if not any(useAx):
+                print(f'Plot for {year} not included due to xlimits.')
+                plt.close("all")
+                continue
 
             plt.gcf().canvas.draw() #refresh so we can get legend stuff
             left_mod = 0
@@ -683,6 +752,12 @@ class MakeAutomatedReport(object):
 
         default_settings = self.loadDefaultPlotObject('profilestatisticstable')
         object_settings = WF.replaceDefaults(self, default_settings, object_settings)
+
+        if 'template' in object_settings.keys():
+            template_settings = WR.readTemplate(self, object_settings['template'])
+            if object_settings['type'].lower() in template_settings.keys():
+                object_settings = WF.replaceDefaults(self, template_settings[object_settings['type'].lower()], object_settings)
+
         object_settings['datakey'] = 'datapaths'
 
         ################# Get timestamps #################
@@ -803,6 +878,12 @@ class MakeAutomatedReport(object):
 
         default_settings = self.loadDefaultPlotObject('profileplot')
         object_settings = WF.replaceDefaults(self, default_settings, object_settings)
+
+        if 'template' in object_settings.keys():
+            template_settings = WR.readTemplate(self, object_settings['template'])
+            if object_settings['type'].lower() in template_settings.keys():
+                object_settings = WF.replaceDefaults(self, template_settings[object_settings['type'].lower()], object_settings)
+
         object_settings['datakey'] = 'lines'
 
         obj_desc = WF.updateFlaggedValues(object_settings['description'], '%%year%%', self.years_str)
@@ -1236,6 +1317,11 @@ class MakeAutomatedReport(object):
         default_settings = self.loadDefaultPlotObject('errorstatisticstable')
         object_settings = WF.replaceDefaults(self, default_settings, object_settings)
 
+        if 'template' in object_settings.keys():
+            template_settings = WR.readTemplate(self, object_settings['template'])
+            if object_settings['type'].lower() in template_settings.keys():
+                object_settings = WF.replaceDefaults(self, template_settings[object_settings['type'].lower()], object_settings)
+
         object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = WF.getObjectYears(self, object_settings)
 
         data = self.Data.getTableDataDictionary(object_settings)
@@ -1325,6 +1411,12 @@ class MakeAutomatedReport(object):
 
         default_settings = self.loadDefaultPlotObject('monthlystatisticstable')
         object_settings = WF.replaceDefaults(self, default_settings, object_settings)
+
+        if 'template' in object_settings.keys():
+            template_settings = WR.readTemplate(self, object_settings['template'])
+            if object_settings['type'].lower() in template_settings.keys():
+                object_settings = WF.replaceDefaults(self, template_settings[object_settings['type'].lower()], object_settings)
+
         object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = WF.getObjectYears(self, object_settings)
 
         data = self.Data.getTableDataDictionary(object_settings)
@@ -1413,15 +1505,15 @@ class MakeAutomatedReport(object):
         default_settings = self.loadDefaultPlotObject('singlestatistictable') #get default SingleStat items
         object_settings = WF.replaceDefaults(self, default_settings, object_settings) #overwrite the defaults with chapter file
 
-        # object_settings['years'] = pickle.loads(pickle.dumps(self.years, -1))
+        if 'template' in object_settings.keys():
+            template_settings = WR.readTemplate(self, object_settings['template'])
+            if object_settings['type'].lower() in template_settings.keys():
+                object_settings = WF.replaceDefaults(self, template_settings[object_settings['type'].lower()], object_settings)
+
         object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = WF.getObjectYears(self, object_settings)
 
         data = self.Data.getTableDataDictionary(object_settings)
         data = WF.mergeLines(data, object_settings)
-
-        # headings, rows = Tables.buildSingleStatTable(object_settings, data)
-
-        # object_settings = self.configureSettingsForID('base', object_settings) #will turn on for comparison plot later
 
         object_settings['units_list'] = WF.getUnitsList(data)
         object_settings['plot_units'] = WF.getPlotUnits(object_settings['units_list'], object_settings)
@@ -1517,6 +1609,12 @@ class MakeAutomatedReport(object):
 
         default_settings = self.loadDefaultPlotObject('singlestatisticprofiletable') #get default SingleStat items
         object_settings = WF.replaceDefaults(self, default_settings, object_settings) #overwrite the defaults with chapter file
+
+        if 'template' in object_settings.keys():
+            template_settings = WR.readTemplate(self, object_settings['template'])
+            if object_settings['type'].lower() in template_settings.keys():
+                object_settings = WF.replaceDefaults(self, template_settings[object_settings['type'].lower()], object_settings)
+
         object_settings['datakey'] = 'datapaths'
 
         ################# Get timestamps #################
@@ -1645,11 +1743,17 @@ class MakeAutomatedReport(object):
         default_settings = self.loadDefaultPlotObject('contourplot') #get default TS plot items
         object_settings = WF.replaceDefaults(self, default_settings, object_settings) #overwrite the defaults with chapter file
 
+        if 'template' in object_settings.keys():
+            template_settings = WR.readTemplate(self, object_settings['template'])
+            if object_settings['type'].lower() in template_settings.keys():
+                object_settings = WF.replaceDefaults(self, template_settings[object_settings['type'].lower()], object_settings)
+
         object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = WF.getObjectYears(self, object_settings)
 
         object_settings['years'], object_settings['yearstr'] = WF.organizePlotYears(object_settings)
 
         for yi, year in enumerate(object_settings['years']):
+            useAx = []
             cur_obj_settings = pickle.loads(pickle.dumps(object_settings, -1))
 
             yearstr = object_settings['yearstr'][yi]
@@ -1813,37 +1917,6 @@ class MakeAutomatedReport(object):
                 ### Horizontal LINES ###
                 Plots.plotHorizontalLines(straightlines, ax, contour_settings)
 
-                # if 'transitions' in contour_settings.keys():
-                #     for transkey in transitions.keys():
-                #         transition_start = transitions[transkey]
-                #         trans_name = None
-                #         hline = WD.getDefaultStraightLineSettings(contour_settings['transitions'])
-                #
-                #         linecolor = WF.prioritizeKey(contours[transkey], hline, 'linecolor')
-                #         linestylepattern = WF.prioritizeKey(contours[transkey], hline, 'linestylepattern')
-                #         alpha = WF.prioritizeKey(contours[transkey], hline, 'alpha')
-                #         linewidth = WF.prioritizeKey(contours[transkey], hline, 'linewidth')
-                #
-                #         ax.axhline(y=transition_start, c=linecolor, ls=linestylepattern, alpha=float(alpha),
-                #                    lw=float(linewidth))
-                #         if 'name' in contour_settings['transitions'].keys():
-                #             trans_flag = contour_settings['transitions']['name'].lower() #blue:pink:white:pink:blue
-                #             text_settings = WD.getDefaultTextSettings(contour_settings['transitions'])
-                #
-                #             if trans_flag in contours[transkey].keys():
-                #                 trans_name = contours[transkey][trans_flag]
-                #             if trans_name != None:
-                #
-                #                 trans_y_ratio = abs(1.0 - (transition_start / max(ax.get_ylim()) + .01)) #dont let user touch this
-                #
-                #                 fontcolor = WF.prioritizeKey(contours[transkey], text_settings, 'fontcolor')
-                #                 fontsize = WF.prioritizeKey(contours[transkey], text_settings, 'fontsize')
-                #                 horizontalalignment = WF.prioritizeKey(contours[transkey], text_settings, 'horizontalalignment')
-                #                 text_x_pos = WF.prioritizeKey(contours[transkey], text_settings, 'text_x_pos', backup=0.001)
-                #
-                #                 ax.text(float(text_x_pos), trans_y_ratio, trans_name, c=fontcolor, size=float(fontsize),
-                #                         transform=ax.transAxes, horizontalalignment=horizontalalignment,
-                #                         verticalalignment='top')
                 if self.iscomp:
                     if 'modeltext' in contour_settings.keys():
                         modeltext = contour_settings['modeltext']
@@ -1935,7 +2008,11 @@ class MakeAutomatedReport(object):
                     xlabsize = 12
                 axes[-1].set_xlabel(cur_obj_settings['xlabel'], fontsize=xlabsize)
 
-            Plots.formatDateXAxis(axes[-1], cur_obj_settings)
+            useplot = Plots.formatDateXAxis(axes[-1], cur_obj_settings)
+            if not useplot:
+                useAx.append(False)
+            else:
+                useAx.append(True)
 
             if 'legend' in cur_obj_settings.keys():
                 if cur_obj_settings['legend'].lower() == 'true':
@@ -1947,6 +2024,11 @@ class MakeAutomatedReport(object):
                         legsize = 12
                     if len(axes[0].get_legend_handles_labels()[0]) > 0:
                         plt.legend(fontsize=legsize)
+
+            if not any(useAx):
+                print(f'Plot for {year} not included due to xlimits.')
+                plt.close("all")
+                continue
 
             cbar = plt.colorbar(contr, ax=axes[-1], orientation='horizontal', aspect=50.)
             # locs = np.linspace(vmin, vmax, int(cur_obj_settings['colorbar']['bins']))[::int(cur_obj_settings['colorbar']['skipticks'])]
@@ -2004,6 +2086,12 @@ class MakeAutomatedReport(object):
 
         default_settings = self.loadDefaultPlotObject('reservoircontourplot') #get default TS plot items
         object_settings = WF.replaceDefaults(self, default_settings, object_settings) #overwrite the defaults with chapter file
+
+        if 'template' in object_settings.keys():
+            template_settings = WR.readTemplate(self, object_settings['template'])
+            if object_settings['type'].lower() in template_settings.keys():
+                object_settings = WF.replaceDefaults(self, template_settings[object_settings['type'].lower()], object_settings)
+
         object_settings['datakey'] = 'datapaths'
 
         object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = WF.getObjectYears(self, object_settings)
@@ -2011,6 +2099,7 @@ class MakeAutomatedReport(object):
         object_settings['years'], object_settings['yearstr'] = WF.organizePlotYears(object_settings)
 
         for yi, year in enumerate(object_settings['years']):
+            useAx = []
             cur_obj_settings = pickle.loads(pickle.dumps(object_settings, -1))
             # if object_settings['split_by_year']:
             #     yearstr = str(year)
@@ -2205,7 +2294,11 @@ class MakeAutomatedReport(object):
 
                 ############# xticks and lims #############
 
-                Plots.formatDateXAxis(ax, contour_settings)
+                useplot = Plots.formatDateXAxis(ax, contour_settings)
+                if not useplot:
+                    useAx.append(False)
+                else:
+                    useAx.append(True)
                 xmin, xmax = ax.get_xlim()
 
                 if contour_settings['dateformat'].lower() == 'datetime':
@@ -2245,7 +2338,16 @@ class MakeAutomatedReport(object):
                     xlabsize = 12
                 axes[-1].set_xlabel(cur_obj_settings['xlabel'], fontsize=xlabsize)
 
-            Plots.formatDateXAxis(axes[-1], cur_obj_settings)
+            useplot = Plots.formatDateXAxis(axes[-1], cur_obj_settings)
+            if not useplot:
+                useAx.append(False)
+            else:
+                useAx.append(True)
+
+            if not any(useAx):
+                print(f'Plot for {year} not included due to xlimits.')
+                plt.close("all")
+                continue
 
             if 'legend' in cur_obj_settings.keys():
                 if cur_obj_settings['legend'].lower() == 'true':
@@ -2297,325 +2399,6 @@ class MakeAutomatedReport(object):
                 self.XML.writeFullPagePlot(os.path.basename(figname), cur_obj_settings['description'])
             elif pageformat == 'half':
                 self.XML.writeHalfPagePlot(os.path.basename(figname), cur_obj_settings['description'])
-
-    def makeBuzzPlot(self, object_settings):
-        '''
-        takes in object settings to build buzzplots and write to XML
-        :param object_settings: currently selected object settings dictionary
-        :return: creates png in images dir and writes to XML file
-        '''
-
-        WF.print2stdout('\n################################')
-        WF.print2stdout('Now making Buzz Plot.')
-        WF.print2stdout('################################\n')
-
-        Plots = WPlot.Plots(self)
-
-        default_settings = self.loadDefaultPlotObject('buzzplot')
-        object_settings = WF.replaceDefaults(self, default_settings, object_settings)
-        fig = plt.figure(figsize=(12, 8))
-        ax = fig.add_subplot()
-
-        ### Make Twin axis ###
-        if 'twinx' in object_settings.keys():
-            if object_settings['twinx'].lower() == 'true':
-                _usetwinx = True
-        if 'twiny' in object_settings.keys():
-            if object_settings['twiny'].lower() == 'true':
-                _usetwiny = True
-
-        if _usetwinx:
-            ax2 = ax.twinx()
-
-        ### Grid Lines ###
-        if 'gridlines' in object_settings.keys():
-            if object_settings['gridlines'].lower() == 'true':
-                ax.grid(zorder=-1)
-
-        ### Plot Lines ###
-        stackplots = {}
-        data = self.Data.getTimeSeriesDataDictionary(object_settings)
-        data = WF.mergeLines(data, object_settings)
-
-        object_settings = self.configureSettingsForID('base', object_settings)
-
-        for line in data.keys():
-            curline = data[line]
-            values = curline['values']
-            dates = curline['dates']
-            units = curline['units']
-            parameter, object_settings['param_count'] = WF.getParameterCount(curline, object_settings)
-            i = object_settings['param_count'][parameter]
-
-            if 'target' in curline.keys():
-                values = WF.buzzTargetSum(dates, values, float(curline['target']))
-            else:
-                if isinstance(values, dict):
-                    if len(values.keys()) == 1: #single struct station, like leakage..
-                        values = values[list(values.keys())[0]]
-                        values = WF.pickByParameter(values, curline)
-                    else:
-                        WF.print2stdout('Too many values to iterate. check if line should have a target, or an incorrect number')
-                        WF.print2stdout('of structures are defined.')
-                        WF.print2stdout('Line:', curline)
-                        continue
-
-            chkvals = WF.checkData(values)
-            if not chkvals:
-                WF.print2stdout('Invalid Data settings for line:', curline)
-                continue
-
-            if 'dateformat' in object_settings.keys():
-                if object_settings['dateformat'].lower() == 'jdate':
-                    if isinstance(dates[0], dt.datetime):
-                        dates = WT.DatetimeToJDate(dates, self.ModelAlt.t_offset)
-                elif object_settings['dateformat'].lower() == 'datetime':
-                    if isinstance(dates[0], (float, int)):
-                        dates = WT.JDateToDatetime(dates, self.startYear)
-                else:
-                    if isinstance(dates[0], (float, int)):
-                        dates = WT.JDateToDatetime(dates, self.startYear)
-
-            if units == None:
-                if parameter != None:
-                    try:
-                        units = self.Constants.units[parameter]
-                    except KeyError:
-                        units = None
-
-            if isinstance(units, dict):
-                if 'unitsystem' in object_settings.keys():
-                    units = units[object_settings['unitsystem'].lower()]
-                else:
-                    units = None
-
-            if 'unitsystem' in object_settings.keys():
-                values, units = WF.convertUnitSystem(values, units, object_settings['unitsystem'])
-
-            if 'parameter' in curline.keys():
-                line_settings = WD.getDefaultLineSettings(self.defaultLineStyles, curline, curline['parameter'], i)
-            else:
-                line_settings = WD.getDefaultLineSettings(self.defaultLineStyles, curline, None, i)
-
-            if 'scalar' in curline.keys():
-                try:
-                    scalar = float(curline['scalar'])
-                    values = scalar * values
-                except ValueError:
-                    WF.print2stdout('Invalid Scalar. {0}'.format(curline['scalar']))
-                    continue
-
-            if 'linetype' in curline.keys():
-                if curline['linetype'].lower() == 'stacked': #stacked plots need to be added at the end..
-                    if _usetwinx:
-                        if 'xaxis' in curline.keys():
-                            axis = curline['xaxis'].lower()
-                    else:
-                        axis = 'left' #if not twinx, then only can use left
-
-                    if axis not in stackplots.keys(): #left or right
-                        stackplots[axis] = []
-                    stackplots[axis].append({'values': values,
-                                             'dates': dates,
-                                             'label': line_settings['label'],
-                                             'color': line_settings['linecolor']})
-
-            else: #otherwise we're normal lines
-                if _usetwinx:
-                    if 'xaxis' in line_settings:
-                        if curline['xaxis'].lower() == 'left':
-                            curax = ax
-                        else:
-                            curax = ax2
-                    else:
-                        curax = ax
-
-                if 'zorder' not in line_settings.keys():
-                    line_settings['zorder'] = 4
-
-                if line_settings['drawline'].lower() == 'true' and line_settings['drawpoints'].lower() == 'true':
-                    Plots.plotLinesAndPoints(dates, values, curax, line_settings)
-
-                elif line_settings['drawline'].lower() == 'true':
-                    Plots.plotLines(dates, values, curax, line_settings)
-
-                elif line_settings['drawpoints'].lower() == 'true':
-                    Plots.plotPoints(dates, values, curax, line_settings)
-
-                self.WAT_log.addLogEntry({'type': line_settings['label'] + '_BuzzPlot' if line_settings['label'] != '' else 'BuzzPlot',
-                                          'name': self.ChapterRegion,
-                                          'description': object_settings['description'],
-                                          'units': units,
-                                          'value_start_date': WT.translateDateFormat(dates[0], 'datetime', '',
-                                                                                     self.StartTime, self.EndTime,
-                                                                                     self.ModelAlt.t_offset).strftime('%d %b %Y'),
-                                          'value_end_date': WT.translateDateFormat(dates[-1], 'datetime', '',
-                                                                                   self.StartTime, self.EndTime,
-                                                                                   self.ModelAlt.t_offset).strftime('%d %b %Y'),
-                                          'logoutputfilename': curline['logoutputfilename']
-                                          },
-                                         isdata=True)
-
-        for stackplot_ax in stackplots.keys():
-            if stackplot_ax == 'left':
-                curax = ax
-            elif stackplot_ax == 'right':
-                curax = ax2
-
-            sps = stackplots[stackplot_ax]
-            values = [n['values'] for n in sps]
-            dates = [n['dates'] for n in sps]
-            labels = [n['label'] for n in sps]
-            colors = [n['color'] for n in sps]
-
-            matched_dates = list(set(dates[0]).intersection(*dates)) #find dates that ALL dates have.
-            matched_dates.sort()
-
-            #now filter values associated with dates not in this list
-            for di, datelist in enumerate(dates):
-                mask_date_idx = [ni for ni, date in enumerate(datelist) if date in matched_dates]
-                values[di] = np.asarray(values[di])[mask_date_idx]
-
-            curax.stackplot(matched_dates, values, labels=labels, colors=colors, zorder=2)
-
-        plt.title(object_settings['title'])
-
-        if 'ylabel' in object_settings.keys():
-            if 'ylabelsize' in object_settings.keys():
-                ylabelsize = float(object_settings['ylabelsize'])
-            elif 'fontsize' in object_settings.keys():
-                ylabelsize = float(object_settings['fontsize'])
-            else:
-                ylabelsize = 12
-            ax.set_ylabel(object_settings['ylabel'], fontsize=ylabelsize)
-
-        if 'yticksize' in object_settings.keys():
-            yticksize = float(object_settings['yticksize'])
-        elif 'fontsize' in object_settings.keys():
-            yticksize = float(object_settings['fontsize'])
-        else:
-            yticksize = 10
-        ax.tick_params(axis='y', labelsize=yticksize)
-
-        if 'xlabel' in object_settings.keys():
-            if 'xlabelsize' in object_settings.keys():
-                xlabelsize = float(object_settings['xlabelsize'])
-            elif 'fontsize' in object_settings.keys():
-                xlabelsize = float(object_settings['fontsize'])
-            else:
-                xlabelsize = 12
-            ax.set_xlabel(object_settings['xlabel'], fontsize=xlabelsize)
-
-        if 'xticksize' in object_settings.keys():
-            xticksize = float(object_settings['xticksize'])
-        elif 'fontsize' in object_settings.keys():
-            xticksize = float(object_settings['fontsize'])
-        else:
-            xticksize = 10
-        ax.tick_params(axis='x', labelsize=xticksize)
-
-        ### Add everything to legend ###
-        if object_settings['legend'].lower() == 'true':
-            lines, labels = ax.get_legend_handles_labels()
-            if _usetwinx:
-                lines2, labels2 = ax2.get_legend_handles_labels()
-                leg_lines = lines + lines2
-                leg_labels = labels + labels2
-            else:
-                leg_lines = lines
-                leg_labels = labels
-
-            if 'legendsize' in object_settings.keys():
-                legsize = float(object_settings['legendsize'])
-            elif 'fontsize' in object_settings.keys():
-                legsize = float(object_settings['fontsize'])
-            else:
-                legsize = 12
-
-            ax.legend(leg_lines, leg_labels, fontsize=legsize).set_zorder(102) #always on top)
-
-        ### Xaxis formatting ###
-        Plots.formatDateXAxis(ax, object_settings)
-        xmin, xmax = ax.get_xlim()
-
-        if object_settings['dateformat'].lower() == 'datetime':
-            xmin = mpl.dates.num2date(xmin)
-            xmax = mpl.dates.num2date(xmax)
-
-        if 'xticks' in object_settings.keys():
-            xtick_settings = object_settings['xticks']
-
-            Plots.formatTimeSeriesXticks(ax, xtick_settings, object_settings)
-
-        ax.set_xlim(left=xmin)
-        ax.set_xlim(right=xmax)
-
-        ############# yticks and lims #############
-        Plots.formatYTicks(ax, object_settings)
-
-        if _usetwinx:
-            Plots.fixEmptyYAxis(ax, ax2)
-
-            if 'ylabel2' in object_settings.keys():
-                if 'ylabelsize2' in object_settings.keys():
-                    ylabsize2 = float(object_settings['ylabelsize2'])
-                elif 'fontsize' in object_settings.keys():
-                    ylabsize2 = float(object_settings['fontsize'])
-                else:
-                    ylabsize2 = 12
-                ax2.set_ylabel(object_settings['ylabel2'], fontsize=ylabsize2)
-
-            Plots.formatYTicks(ax2, object_settings, axis='right')
-
-            ax2.grid(False)
-            ax.set_zorder(ax2.get_zorder()+1) #axis called second will always be on top unless this
-            ax.patch.set_visible(False)
-
-        # if _usetwiny:
-        #     ax2 = ax.twiny()
-        #     if 'xlabel2' in object_settings.keys():
-        #         if 'xlabelsize2' in object_settings.keys():
-        #             xlabelsize2 = float(object_settings['xlabelsize2'])
-        #         elif 'fontsize' in object_settings.keys():
-        #             xlabelsize2 = float(object_settings['fontsize'])
-        #         else:
-        #             xlabelsize2 = 12
-        #         ax2.set_xlabel(object_settings['xlabel2'], fontsize=xlabelsize2)
-        #
-        #     Plots.formatDateXAxis(ax2, object_settings, twin=True)
-
-            # if 'xticksize2' in object_settings.keys():
-            #     xticksize2 = float(object_settings['xticksize2'])
-            # elif 'fontsize' in object_settings.keys():
-            #     xticksize2 = float(object_settings['fontsize'])
-            # else:
-            #     xticksize2 = 10
-            # ax2.tick_params(axis='x', labelsize=xticksize2)
-            # Plots.formatTimeSeriesXticks(ax2, xtick_settings, object_settings)
-            #
-            # ax2.grid(False)
-
-
-        ax.set_axisbelow(True) #lets legend be on top.
-
-        basefigname = os.path.join(self.images_path, 'BuzzPlot' + '_' + self.ChapterRegion.replace(' ','_'))
-        exists = True
-        tempnum = 1
-        tfn = basefigname
-        while exists:
-            if os.path.exists(tfn + '.png'):
-                tfn = basefigname + '_{0}'.format(tempnum)
-                tempnum += 1
-            else:
-                exists = False
-        figname = tfn + '.png'
-        plt.tight_layout()
-        # plt.savefig(figname, bbox_inches='tight')
-        plt.savefig(figname)
-        plt.close('all')
-
-        # self.XML.writeHalfPagePlot(os.path.basename(figname), object_settings['description'])
-        self.XML.writeFullPagePlot(os.path.basename(figname), object_settings['description'])
 
     def setSimulationCSVVars(self, simlist):
         '''

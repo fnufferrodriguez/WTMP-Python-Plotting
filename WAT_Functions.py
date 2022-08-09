@@ -242,12 +242,17 @@ def checkData(dataset, flag=None):
             else:
                 return True
         else:
+            multicheck = False
             for key in dataset.keys():
                 if isinstance(dataset[key], dict):
                     check = checkData(dataset[key])
+                    if check:
+                        multicheck = True
                 else:
                     check = checkData(dataset[key], flag=key)
-                if check == False:
+                    if check:
+                        multicheck = True
+                if multicheck == False:
                     print2stdout(f'Invalid at {key}')
                     return False
             return True
@@ -948,7 +953,25 @@ def configureUnits(object_settings, parameter, units):
             units = None
     return units
 
-def buzzTargetSum(dates, values, target):
+# def buzzTargetSum(dates, values, target):
+#     '''
+#     finds buzzplot targets defined and returns the flow sums
+#     :param dates: list of dates
+#     :param values: list of dicts of values @ structures
+#     :param target: target value
+#     :return: sum of values
+#     '''
+#
+#     sum_vals = []
+#     for i, d in enumerate(dates):
+#         sum = 0.0
+#         for sn in values.keys():
+#             if values[sn]['elevcl'][i] == target:
+#                 sum += values[sn]['q(m3/s)'][i]
+#         sum_vals.append(sum)
+#     return np.asarray(sum_vals)
+
+def buzzTargetSum(dates, values):
     '''
     finds buzzplot targets defined and returns the flow sums
     :param dates: list of dates
@@ -957,11 +980,14 @@ def buzzTargetSum(dates, values, target):
     :return: sum of values
     '''
 
+    if isinstance(values, (list, np.ndarray)):
+        return values
     sum_vals = []
     for i, d in enumerate(dates):
         sum = 0.0
         for sn in values.keys():
-            if values[sn]['elevcl'][i] == target:
+            # if values[sn]['elevcl'][i] == target:
+            if not np.isnan(values[sn]['q(m3/s)'][i]):
                 sum += values[sn]['q(m3/s)'][i]
         sum_vals.append(sum)
     return np.asarray(sum_vals)

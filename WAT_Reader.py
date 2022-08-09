@@ -564,4 +564,10 @@ def readComparisonSimulationsCSV(Report):
                                               Report.studyDir, iscomp=Report.iscomp)
 
 
-
+def readTemplate(Report, templatefilename):
+    templatefile = os.path.join(Report.studyDir, 'reports', templatefilename)
+    tree = ET.parse(templatefile)
+    root = tree.getroot()
+    templateObjects = root.findall('Object')
+    reportObjects = iterateGraphicsDefaults(templateObjects, 'Type')
+    return reportObjects
