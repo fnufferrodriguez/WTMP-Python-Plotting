@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '5.1.11'
+VERSIONNUMBER = '5.1.12'
 
 import datetime as dt
 import os
@@ -1005,7 +1005,7 @@ class MakeAutomatedReport(object):
                     Plots.plotHorizontalLines(straightlines, ax, cur_obj_settings, timestamp_index=j)
 
                     ### VERTICAL LINES ###
-                    Plots.plotVerticalLines(straightlines, ax, cur_obj_settings, timestamp_index=j)
+                    Plots.plotVerticalLines(straightlines, ax, cur_obj_settings, timestamp_index=j, isdate=False)
 
                     show_xlabel, show_ylabel = self.getPlotLabelMasks(i, len(pgi), subplot_cols)
 
