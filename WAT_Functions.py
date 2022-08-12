@@ -1570,3 +1570,6 @@ def organizePlotYears(object_settings):
         else:
             return years, []
     return [], []
+
+def sanitizeText(intext):
+    return str(intext).replace('.','').replace(' ', '').replace(':', '').replace("_","")
