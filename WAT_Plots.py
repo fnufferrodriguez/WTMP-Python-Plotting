@@ -180,6 +180,7 @@ class Plots(object):
         :return: sets xlimits for axis
         '''
 
+        useplot = True
         if twin:
             if 'xlims2' in object_settings.keys():
                 xlims_flag = 'xlims2'
@@ -220,18 +221,30 @@ class Plots(object):
                     max = WT.DatetimeToJDate(self.Report.EndTime, self.Report.ModelAlt.t_offset)
                 else:
                     #we've done everything we can at this point..
-                    max = self.Report.StartTime
+                    max = self.Report.EndTime
 
             min = WT.translateDateFormat(min, dateformat, self.Report.StartTime, self.Report.StartTime, self.Report.EndTime,
                                          self.Report.ModelAlt.t_offset)
             max = WT.translateDateFormat(max, dateformat, self.Report.EndTime, self.Report.StartTime,
                                          self.Report.EndTime, self.Report.ModelAlt.t_offset)
 
+
+            current_xlims = curax.get_xlim()
+            if max > current_xlims[1]:
+                max = current_xlims[1]
+            if min < current_xlims[0]:
+                min = current_xlims[0]
+            if min > current_xlims[1]:
+                useplot = False
+            if max < current_xlims[0]:
+                useplot = False
             curax.set_xlim(left=min, right=max)
 
         else:
             WF.print2stdout('No Xlims flag set for {0}'.format(xlims_flag))
             WF.print2stdout('Not setting Xlims.')
+
+        return useplot
 
     def formatTickLabels(self, ticks, ticksettings):
         '''
