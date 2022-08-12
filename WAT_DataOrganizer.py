@@ -974,8 +974,8 @@ class DataOrganizer(object):
             except:
                 WF.print2stdout('ERROR WRITING CSV FILE')
                 WF.print2stdout(traceback.format_exc())
-                with open(csv_name, 'w') as inf:
-                    inf.write('ERROR WRITING FILE.')
+                # with open(csv_name, 'w') as inf:
+                #     inf.write('ERROR WRITING FILE.')
 
     def getComputedData(self, data):
         computedKeys = []
