@@ -50,18 +50,22 @@ class DataOrganizer(object):
         :return: name for memory key, or null if can't be determined
         '''
 
-        very_special_flags = f'{self.Report.SimulationName.replace(" ", "").replace(":", "")}_{self.Report.baseSimulationName.replace(" ", "").replace(":", "")}'
+        # very_special_flags = f'{self.Report.SimulationName.replace(" ", "").replace(":", "")}_{self.Report.baseSimulationName.replace(" ", "").replace(":", "")}'
+        very_special_flags = WF.sanitizeText(self.Report.baseSimulationName)
 
         if 'dss_path' in Data_info.keys(): #Get data from DSS record
             if 'dss_filename' in Data_info.keys():
-                outname = f"{os.path.basename(Data_info['dss_filename']).split('.')[0]}_" \
-                          f"{Data_info['dss_path'].replace('/', '').replace(':', '')}_" \
-                          f"{very_special_flags}"
-                return outname
+                # outname = f"{os.path.basename(Data_info['dss_filename']).split('.')[0]}_" \
+                #           f"{Data_info['dss_path'].replace('/', '').replace(':', '')}_" \
+                #           f"{very_special_flags}"
+                outname = WF.sanitizeText(os.path.basename(Data_info['dss_filename'])[:-4])
+                dssnamesplit = Data_info['dss_path'].split('/')
+                dssname_pick = WF.sanitizeText(f"{dssnamesplit[1]}_{dssnamesplit[2]}_{dssnamesplit[3]}_{dssnamesplit[-2]}")
+                outname = very_special_flags + '_' + outname + '_' + dssname_pick
 
         elif 'w2_file' in Data_info.keys():
             if 'structurenumbers' in Data_info.keys():
-                outname = '{0}'.format(os.path.basename(Data_info['w2_file']).split('.')[0])
+                outname = WF.sanitizeText(os.path.basename(Data_info['w2_file']).split('.')[0])
                 if isinstance(Data_info['structurenumbers'], dict):
                     structure_nums = [Data_info['structurenumbers']['structurenumber']]
                 elif isinstance(Data_info['structurenumbers'], str):
@@ -71,38 +75,33 @@ class DataOrganizer(object):
                 outname += '_Struct_' + '_'.join(structure_nums) + f'_{very_special_flags}'
             else:
                 if 'column' in Data_info.keys():
-                    very_special_flags += f'_Columnf{Data_info["column"].replace(" ","")}'
-                outname = '{0}'.format(os.path.basename(Data_info['w2_file']).split('.')[0]) + f'_{very_special_flags}'
-            return outname
+                    very_special_flags += f'_Colf{Data_info["column"].replace(" ","")}'
+                outname = f"{os.path.basename(Data_info['w2_file']).split('.')[0]}_{very_special_flags}"
 
         elif 'h5file' in Data_info.keys():
-            h5name = os.path.basename(Data_info['h5file']).split('.h5')[0] + '_h5'
+            h5name = WF.sanitizeText(os.path.basename(Data_info['h5file']).split('.h5')[0] + 'h5')
             if 'easting' in Data_info.keys() and 'northing' in Data_info.keys():
-                outname = 'externalh5_{0}_{1}_{2}_{3}'.format(h5name, Data_info['parameter'], Data_info['easting'], Data_info['northing']) + f'_{very_special_flags}'
-                return outname
+                outname = 'externalh5_{0}_{1}_{2}_{3}_{4}'.format(h5name, WF.sanitizeText(Data_info['parameter']), Data_info['easting'], Data_info['northing'], very_special_flags)
             elif 'ressimname' in Data_info.keys():
-                outname = 'externalh5_{0}_{1}_{2}'.format(h5name, Data_info['parameter'], Data_info['ressimresname']) + f'_{very_special_flags}'
-                return outname
+                outname = 'externalh5_{0}_{1}_{2}_{3}'.format(h5name, WF.sanitizeText(Data_info['parameter']), WF.sanitizeText(Data_info['ressimresname']), very_special_flags)
 
         elif 'easting' in Data_info.keys() and 'northing' in Data_info.keys():
-            outname = '{0}_{1}_{2}'.format(Data_info['parameter'], Data_info['easting'], Data_info['northing']) + f'_{very_special_flags}'
-            return outname
+            outname = '{0}_{1}_{2}_{3}'.format(WF.sanitizeText(Data_info['parameter']), Data_info['easting'], Data_info['northing'], very_special_flags)
 
         elif 'filename' in Data_info.keys(): #Get data from Observed Profile
-            outname = '{0}'.format(os.path.basename(Data_info['filename']).split('.')[0].replace(' ', '_')) + f'_{very_special_flags}'
-            return outname
+            outname = WF.sanitizeText(os.path.basename(Data_info['filename']).split('.')[0].replace(' ', '_')) + f'_{very_special_flags}'
 
         elif 'w2_segment' in Data_info.keys():
             outname = 'W2_{0}_{1}_profile'.format(self.Report.ModelAlt.output_file_name.split('.')[0], Data_info['w2_segment']) + f'_{very_special_flags}'
-            return outname
 
         elif 'ressimresname' in Data_info.keys():
-            outname = '{0}_{1}_{2}'.format(os.path.basename(self.Report.ModelAlt.h5fname).split('.')[0] +'_h5',
-                                           Data_info['parameter'], Data_info['ressimresname']) + f'_{very_special_flags}'
+            outname = '{0}_{1}_{2}_{3}'.format(WF.sanitizeText(os.path.basename(self.Report.ModelAlt.h5fname).split('.')[0] +'_h5'),
+                                           WF.sanitizeText(Data_info['parameter']), WF.sanitizeText(Data_info['ressimresname']), very_special_flags)
 
-            return outname
+        else:
+            outname = 'NULL'
 
-        return 'NULL'
+        return outname[:200]
 
     #################################################################
     #TimeSeries Functions
@@ -598,7 +597,6 @@ class DataOrganizer(object):
         '''
 
         datamemkey = self.buildMemoryKey(profile)
-
         if datamemkey in self.Memory.keys():
             dm = pickle.loads(pickle.dumps(self.Memory[datamemkey], -1))
             WF.print2stdout('retrieving profile topwater from datamem')
@@ -976,8 +974,8 @@ class DataOrganizer(object):
             except:
                 WF.print2stdout('ERROR WRITING CSV FILE')
                 WF.print2stdout(traceback.format_exc())
-                with open(csv_name, 'w') as inf:
-                    inf.write('ERROR WRITING FILE.')
+                # with open(csv_name, 'w') as inf:
+                #     inf.write('ERROR WRITING FILE.')
 
     def getComputedData(self, data):
         computedKeys = []
