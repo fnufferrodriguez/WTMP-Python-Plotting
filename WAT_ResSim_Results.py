@@ -244,6 +244,14 @@ class ResSim_Results(object):
             vdo = self.h['Results/Subdomains/' + this_subdomain + '/' + metric_name]
             vals = WF.calcComputedDOSat(vt, vdo, self.Report.Constants.satDO_interp)
 
+        elif metrc.lower() == 'elevation':
+            self.loadElevation(alt_subdomain_name=this_subdomain)
+            vals = self.elev
+
+        elif metrc.lower() == 'wse':
+            self.loadElevation(alt_subdomain_name=this_subdomain)
+            vals = self.elev_ts
+
         if t_in != 'all':
             timestep = WT.getIdxForTimestamp(self.jd_dates, t_in, self.t_offset) #get timestep index for current date
             if timestep == -1:
@@ -507,3 +515,58 @@ class ResSim_Results(object):
         for j in range(nt):
             self.t_computed.append(ttmp0 + j * delta_t)
         self.t_computed = np.array(self.t_computed)
+
+    def getProfileTargetTimeseries(self, ResName, parameter, target_info):
+        target_parameter = target_info['parameter']
+        target_value = float(target_info['value'])
+        self.loadResults('all', target_parameter.lower(), alt_subdomain_name=ResName)
+        target_param_values = self.vals
+        self.loadResults('all', parameter.lower(), alt_subdomain_name=ResName)
+        output_param_values = self.vals
+        self.loadComputedTime()
+
+        interval_seconds = (self.t_computed[1] - self.t_computed[0]).total_seconds()
+        if interval_seconds == 3600: #hourly
+            interval = 24
+        elif interval_seconds == 900:
+            interval = 96
+        elif interval_seconds == 86400:
+            interval = 1
+        # interval = 1
+
+        vals_skip = target_param_values[::interval]
+        output_val_at_target = np.full(len(vals_skip), np.nan)
+        for i, vsp in enumerate(vals_skip):
+            for j, pv in enumerate(vsp[::-1]):
+                if pv <= target_value:
+                    toplayer = self.getTopLayer(interval*i)
+                    real_layer = len(vsp) - j - 1
+                    if toplayer < real_layer:
+                        layer = toplayer
+                    else:
+                        layer = real_layer
+
+                    if layer < toplayer:
+                        layer_pls_1 = layer + 1
+
+                        if len(output_param_values.shape) == 1:
+                            layer_val = output_param_values[layer]
+                            layer_val_pls_1 = output_param_values[layer_pls_1]
+                        elif len(output_param_values.shape) == 2:
+                            layer_val = output_param_values[interval*i][layer]
+                            layer_val_pls_1 = output_param_values[interval*i][layer_pls_1]
+                        interp_layer_val = layer_val + ((target_value - vsp[layer]) / (vsp[layer_pls_1] - vsp[layer])) * (layer_val_pls_1 - layer_val)
+                        output_val_at_target[i] = interp_layer_val
+                        # y's are the elevations and x's are the temperatures.
+
+                    else:
+                        if len(output_param_values.shape) == 1:
+                            output_val_at_target[i] = output_param_values[layer]
+                        elif len(output_param_values.shape) == 2:
+                            output_val_at_target[i] = output_param_values[interval*i][layer]
+
+
+                    break
+
+        return self.t_computed[::interval], output_val_at_target
+

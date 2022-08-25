@@ -74,7 +74,7 @@ class Plots(object):
         :return: set of data on same interavl and units, settings for relative lines
         '''
 
-        #add all thje data together. then we cna use this when plotting it to get %
+        #add all the data together. then we can use this when plotting it to get %
         #TODO: deal with irregular intervals
         intervals = {}
         biggest_interval = None
@@ -187,58 +187,63 @@ class Plots(object):
             else:
                 WF.print2stdout('Using Same Xlims for top and bottom.')
                 xlims_flag = 'xlims'
-            dateformat_flag = 'dateformat2'
         else:
             xlims_flag = 'xlims'
-            dateformat_flag = 'dateformat'
-
-        if dateformat_flag in object_settings.keys():
-            dateformat = object_settings[dateformat_flag].lower()
-        else:
-            WF.print2stdout('Dateformat flag not set. Defaulting to datetime..')
-            dateformat = 'datetime'
 
         if xlims_flag in object_settings.keys():
             xlims = object_settings[xlims_flag]#should be min max flags in here
 
             if 'min' in xlims.keys():
-                min = xlims['min']
+                xmin = xlims['min']
+                if '-' in self.Report.years_str: #multiyear plots use 2008-2019 format
+                    if isinstance(xmin, str): #if this gets replaced it will only be a str
+                        if self.Report.years_str in xmin: #check for the offender
+                            xmin = xmin.replace(self.Report.years_str, str(self.Report.startYear))
+
             else:
-                if dateformat == 'datetime':
-                    min = self.Report.StartTime
-                elif dateformat == 'jdate':
-                    min = WT.DatetimeToJDate(self.Report.StartTime, self.Report.ModelAlt.t_offset)
-                else:
-                    #we've done everything we can at this point..
-                    min = self.Report.StartTime
+                xmin = self.Report.StartTime
 
             if 'max' in xlims.keys():
-                max = xlims['max']
+                xmax = xlims['max']
+                if '-' in self.Report.years_str: #multiyear plots use 2008-2019 format
+                    if isinstance(xmax, str): #if this gets replaced it will only be a str
+                        if self.Report.years_str in xmax: #check for the offender
+                            xmax = xmax.replace(self.Report.years_str, str(self.Report.endYear))
             else:
-                if dateformat == 'datetime':
-                    max = self.Report.EndTime
-                elif dateformat == 'jdate':
-                    max = WT.DatetimeToJDate(self.Report.EndTime, self.Report.ModelAlt.t_offset)
-                else:
-                    #we've done everything we can at this point..
-                    max = self.Report.EndTime
-
-            min = WT.translateDateFormat(min, dateformat, self.Report.StartTime, self.Report.StartTime, self.Report.EndTime,
-                                         self.Report.ModelAlt.t_offset)
-            max = WT.translateDateFormat(max, dateformat, self.Report.EndTime, self.Report.StartTime,
-                                         self.Report.EndTime, self.Report.ModelAlt.t_offset)
-
+                xmax = self.Report.EndTime
 
             current_xlims = curax.get_xlim()
-            if max > current_xlims[1]:
-                max = current_xlims[1]
-            if min < current_xlims[0]:
-                min = current_xlims[0]
-            if min > current_xlims[1]:
+            current_xlims = [n.replace(tzinfo=None) for n in mpl.dates.num2date(current_xlims)]
+
+            if current_xlims[0] < self.Report.StartTime:
+                starttime = self.Report.StartTime
+            else:
+                starttime = current_xlims[0]
+
+            if current_xlims[1] > self.Report.EndTime:
+                endtime = self.Report.EndTime
+            else:
+                endtime = current_xlims[1]
+            xmin = WT.translateDateFormat(xmin, 'datetime', starttime, starttime, endtime, self.Report.ModelAlt.t_offset)
+
+            try:
+                xmax = float(xmax)
+                tmp_starttime = current_xlims[1] - dt.timedelta(seconds=1)
+                if starttime < tmp_starttime: #check for end of year
+                    starttime = dt.datetime(tmp_starttime.year, 1, 1, 0, 0)
+            except:
+                pass
+            xmax = WT.translateDateFormat(xmax, 'datetime', endtime, starttime, endtime, self.Report.ModelAlt.t_offset)
+
+            if xmax > current_xlims[1]:
+                xmax = current_xlims[1]
+            if xmin < current_xlims[0]:
+                xmin = current_xlims[0]
+            if xmin > current_xlims[1]:
                 useplot = False
-            if max < current_xlims[0]:
+            if xmax < current_xlims[0]:
                 useplot = False
-            curax.set_xlim(left=min, right=max)
+            curax.set_xlim(left=xmin, right=xmax)
 
         else:
             WF.print2stdout('No Xlims flag set for {0}'.format(xlims_flag))
@@ -295,9 +300,8 @@ class Plots(object):
 
         xmin, xmax = curax.get_xlim()
 
-        if axis_settings[dateformatflag].lower() == 'datetime':
-            xmin = mpl.dates.num2date(xmin)
-            xmax = mpl.dates.num2date(xmax)
+        xmin = mpl.dates.num2date(xmin).replace(tzinfo=None)
+        xmax = mpl.dates.num2date(xmax).replace(tzinfo=None)
 
         if 'fontsize' in xtick_settings.keys():
             xticksize = float(xtick_settings['fontsize'])
@@ -331,44 +335,42 @@ class Plots(object):
                 locator = mpl.dates.MonthLocator(formatted_months, bymonthday=bymonthday)
 
             curax.xaxis.set_major_locator(locator)
-            if axis_settings[dateformatflag].lower() == 'datetime':
-                if 'datetimeformat' in xtick_settings.keys():
-                    datetimeformat = xtick_settings['datetimeformat']
-                else:
-                    datetimeformat = '%b/%Y'
-                fmt = mpl.dates.DateFormatter(datetimeformat)
-                curax.xaxis.set_major_formatter(fmt)
 
         elif 'ondays' in xtick_settings.keys():
             if isinstance(xtick_settings['ondays'], dict):
                 xtick_settings['ondays'] = [xtick_settings['ondays']['day']]
-
             locator = mpl.dates.DayLocator([int(n) for n in xtick_settings['ondays']])
             curax.xaxis.set_major_locator(locator)
-            if axis_settings[dateformatflag].lower() == 'datetime':
-                if 'datetimeformat' in xtick_settings.keys():
-                    datetimeformat = xtick_settings['datetimeformat']
-                else:
-                    datetimeformat = '%m/%d/%Y'
-                fmt = mpl.dates.DateFormatter(datetimeformat)
-                curax.xaxis.set_major_formatter(fmt)
 
         elif 'spacing' in xtick_settings.keys():
             xtickspacing = xtick_settings['spacing']
-            if axis_settings[dateformatflag].lower() == 'jdate':
-                if float(xtickspacing).is_integer():
-                    xtickspacing = int(xtickspacing)
-                else:
-                    xtickspacing = float(xtickspacing)
-                newxticks = np.arange(xmin, (xmax+xtickspacing), xtickspacing)
-            elif axis_settings[dateformatflag].lower() == 'datetime':
-                dt_xmin = WT.JDateToDatetime(xmin, self.Report.startYear) #do everything on datetime, and we can convert later
-                dt_xmax = WT.JDateToDatetime(xmax, self.Report.startYear) #do everything on datetime, and we can convert later
-                newxticks = WT.buildTimeSeries(dt_xmin.replace(tzinfo=None), dt_xmax.replace(tzinfo=None), xtickspacing)
+            try:
+                xtickspacing = float(xtickspacing)
+                # xtickspacing = dt.timedelta(days=xtickspacing)
+                xtickspacing = f'{xtickspacing}D'
+            except ValueError:
+                xtickspacing = xtick_settings['spacing']
 
-            newxticklabels = Plots.formatTickLabels(newxticks, xtick_settings)
+            newxticks = WT.buildTimeSeries(xmin.replace(tzinfo=None), xmax.replace(tzinfo=None), xtickspacing)
+
+            newxticklabels = self.formatTickLabels(newxticks, xtick_settings)
             curax.set_xticks(newxticks)
             curax.set_xticklabels(newxticklabels)
+
+        if 'datetimeformat' in xtick_settings.keys():
+            if axis_settings[dateformatflag].lower() == 'datetime':
+                datetimeformat = xtick_settings['datetimeformat']
+                fmt = mpl.dates.DateFormatter(datetimeformat)
+                curax.xaxis.set_major_formatter(fmt)
+
+        current_xticks = mpl.dates.num2date(curax.get_xticks())
+        if dateformatflag in axis_settings.keys():
+            if axis_settings[dateformatflag].lower() == 'jdate':
+                if isinstance(current_xticks[0], dt.datetime):
+                    jdateticklabels = WT.DatetimeToJDate(current_xticks)
+                    newxticklabels = self.formatTickLabels(jdateticklabels, xtick_settings)
+                    curax.set_xticks(current_xticks)
+                    curax.set_xticklabels(newxticklabels)
 
     def formatYTicks(self, ax, ax_settings, gatedata={}, gate_placement=10, axis='left'):
 
@@ -552,27 +554,7 @@ class Plots(object):
                 units = vline_settings['units']
 
                 if isdate:
-                    if 'dateformat' in object_settings.keys():
-                        if object_settings['dateformat'].lower() == 'jdate':
-                            if isinstance(value, dt.datetime):
-                                vline_settings['value'] = WT.DatetimeToJDate(value, self.Report.ModelAlt.t_offset)
-                            elif isinstance(value, str):
-                                try:
-                                    value = float(value)
-                                except:
-                                    value = WT.translateDateFormat(value, 'datetime', '',
-                                                                     self.Report.StartTime, self.Report.EndTime,
-                                                                     self.Report.ModelAlt.t_offset)
-                                    value = WT.DatetimeToJDate(value, self.Report.ModelAlt.t_offset)
-                        elif object_settings['dateformat'].lower() == 'datetime':
-                            if isinstance(value, (int,float)):
-                                value = WT.JDateToDatetime(value, self.Report.startYear)
-                            elif isinstance(value, str):
-                                value = WT.translateDateFormat(value, 'datetime', '',
-                                                                 self.Report.StartTime, self.Report.EndTime,
-                                                                 self.Report.ModelAlt.t_offset)
-                    else:
-                        value = WT.translateDateFormat(value, 'datetime', '',
+                    value = WT.translateDateFormat(value, 'datetime', '',
                                                          self.Report.StartTime, self.Report.EndTime,
                                                          self.Report.ModelAlt.t_offset)
 
@@ -602,6 +584,26 @@ class Plots(object):
         if len(ax2_lines) == 0:
             ax2.set_yticks([])
             ax2.set_yticklabels([])
+
+
+    def setInitialXlims(self, ax, year):
+        if year == 'ALLYEARS':
+            xmin = self.Report.StartTime
+            xmax = self.Report.EndTime
+        else:
+            tmpmin = dt.datetime(year, 1, 1, 0, 0)
+            tmpmax = dt.datetime(year+1, 1, 1, 0, 0)
+            if tmpmin < self.Report.StartTime:
+                xmin = self.Report.StartTime
+            else:
+                xmin = tmpmin
+            if tmpmax > self.Report.EndTime:
+                xmax = self.Report.EndTime
+            else:
+                xmax = tmpmax
+
+        ax.set_xlim(left=xmin, right=xmax)
+
 
 def translateLineStylePatterns(LineSettings):
     '''
@@ -668,5 +670,3 @@ def translatePointStylePatterns(LineSettings):
         LineSettings['symboltype'] = 's'
 
     return LineSettings
-
-

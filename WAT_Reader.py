@@ -115,13 +115,28 @@ def readChapterDefFile(CD_file):
             ChapterDef['name'] = chap_name
             ChapterDef['region'] = chap_region
             ChapterDef['sections'] = []
+            grouptext = ''
+            grouptext_flags = ['text', 'Text', 'TEXT']
+            for flag in grouptext_flags:
+                findtext = chapter.find(flag)
+                if isinstance(findtext, ET.Element):
+                    grouptext = findtext.text
+                    break
+            ChapterDef['grouptext'] = grouptext
+
             cd_sections = chapter.findall('Sections/Section')
             for section in cd_sections:
                 section_objects = {}
-                try:
-                    section_objects['header'] = section.find('Header').text
-                except:
-                    section_objects['header'] = ''
+
+                headertext = ''
+                headerflags = ['header', 'Header', 'HEADER']
+                for flag in headerflags:
+                    findtext = section.find(flag)
+                    if isinstance(findtext, ET.Element):
+                        headertext = findtext.text
+                        break
+                section_objects['header'] = headertext
+
                 section_objects['objects'] = []
                 sec_objects = section.findall('Object')
                 objects = iterateChapterDefintions(sec_objects)

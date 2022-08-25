@@ -51,7 +51,7 @@ class DataOrganizer(object):
         '''
 
         # very_special_flags = f'{self.Report.SimulationName.replace(" ", "").replace(":", "")}_{self.Report.baseSimulationName.replace(" ", "").replace(":", "")}'
-        very_special_flags = WF.sanitizeText(self.Report.baseSimulationName)
+        very_special_flags = WF.sanitizeText(self.Report.SimulationName)
 
         if 'dss_path' in Data_info.keys(): #Get data from DSS record
             if 'dss_filename' in Data_info.keys():
@@ -97,7 +97,12 @@ class DataOrganizer(object):
         elif 'ressimresname' in Data_info.keys():
             outname = '{0}_{1}_{2}_{3}'.format(WF.sanitizeText(os.path.basename(self.Report.ModelAlt.h5fname).split('.')[0] +'_h5'),
                                            WF.sanitizeText(Data_info['parameter']), WF.sanitizeText(Data_info['ressimresname']), very_special_flags)
-
+            if 'target' in Data_info.keys():
+                outname += '_trgt'
+                if 'parameter' in Data_info['target'].keys():
+                    outname += Data_info['target']['parameter'][:4]
+                if 'value' in Data_info['target'].keys():
+                    outname += Data_info['target']['value']
         else:
             outname = 'NULL'
 
@@ -162,6 +167,33 @@ class DataOrganizer(object):
                                       'logoutputfilename': datamem_key}
 
         return wse_data
+
+    def filterByTargetElev(self, data):
+        for d in data.keys():
+            if 'target_elevation' in data[d].keys():
+                target_elevation = float(data[d]['target_elevation'])
+                values = data[d]['values']
+                if isinstance(values, dict): #w2 results kept in dict with elev
+                    for sn in values.keys():
+                        targelev_failed = np.where(values[sn]['elevcl'] != target_elevation)
+                        data[d]['values'][sn]['q(m3/s)'][targelev_failed] = 0.
+                elif isinstance(values, (list, np.ndarray)):
+                    if 'elevation' in data[d].keys():
+                        if 'flag' not in data[d]['elevation'].keys():
+                            data[d]['elevation']['flag'] = data[d]['flag']+'_elev'
+                            elev_times, elev_values, elev_units = self.getTimeSeries(data[d]['elevation'])
+                            targelev_failed = np.where(elev_values != target_elevation)
+                            if len(elev_times) == len(data[d]['values']):
+                                data[d]['values'][targelev_failed] = 0.
+                            else:
+                                WF.print2stdout(f'Values and Elevations in {d} different. Equalizing..')
+                                mainvalues, elev_data = WF.matchData({'dates': data[d]['dates'], 'values': data[d]['values']},
+                                                                     {'dates': elev_times, 'values': elev_values})
+                                targelev_failed = np.where(elev_data['values'] != target_elevation)
+                                mainvalues['values'][targelev_failed] = 0.
+                                data[d]['values'] = mainvalues['values']
+                                data[d]['dates'] = mainvalues['dates']
+        return data
 
     def getTimeSeriesDataDictionary(self, settings):
         '''
@@ -348,6 +380,36 @@ class DataOrganizer(object):
                 self.Memory[datamem_key] = {'times': pickle.loads(pickle.dumps(times, -1)),
                                              'values': pickle.loads(pickle.dumps(values, -1)),
                                              'units': pickle.loads(pickle.dumps(units, -1))}
+
+        elif "ressimresname" in Line_info.keys():
+            datamem_key = self.buildMemoryKey(Line_info)
+            if datamem_key in self.Memory.keys():
+                # WF.print2stdout('READING {0} FROM MEMORY'.format(datamem_key))
+                datamementry = pickle.loads(pickle.dumps(self.Memory[datamem_key], -1))
+                times = datamementry['times']
+                values = datamementry['values']
+                units = datamementry['units']
+
+            else:
+                if self.Report.plugin.lower() != 'ressim':
+                    WF.print2stdout('Incorrect model type for line using ResSimResName')
+                    return [], [], None
+                if 'target' not in Line_info.keys():
+                    WF.print2stdout('No target data for profile target timeseries.')
+                    WF.print2stdout('Please enter target data including value and parameter.')
+                    return [], [], None
+                if 'parameter' not in Line_info.keys():
+                    WF.print2stdout('No parameter for profile target timeseries.')
+                    WF.print2stdout('Assuming output is elevation.')
+                    Line_info['parameter'] = 'elevation'
+
+                times, values = self.Report.ModelAlt.getProfileTargetTimeseries(Line_info['ressimresname'],
+                                                                                                  Line_info['parameter'],
+                                                                                                  Line_info['target'])
+                if 'units' in Line_info.keys():
+                    units = Line_info['units']
+                else:
+                    units = None
 
         else:
             WF.print2stdout('No Data Defined for line')

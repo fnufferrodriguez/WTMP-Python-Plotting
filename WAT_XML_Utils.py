@@ -135,7 +135,7 @@ class XMLReport(object):
             XML.write('</Report_Subgroup>\n')
             XML.write('</Report_Group>\n')
 
-    def writeChapterStart(self, ChapterName):
+    def writeChapterStart(self, ChapterName, ChapterText):
         '''
         writes the starting chunk of an individual chapter. chapter names automatically show up in the TOC
         :param ChapterName: Name of the chapter
@@ -143,7 +143,8 @@ class XMLReport(object):
 
         self.current_reportsubgroup_num = 0
         with open(self.XML_fn, 'a') as XML:
-            XML.write('<Report_Group ReportGroupOrder="{0}" ReportGroupName="{1}">\n'.format(self.current_reportgroup_num, ChapterName))
+            outputtext = f'<Report_Group ReportGroupOrder="{self.current_reportgroup_num}" ReportGroupName="{ChapterName}" GroupText="{ChapterText}">\n'.replace('\\n', '\n').replace('\\t', '\t')
+            XML.write(outputtext)
         self.current_reportgroup_num += 1
 
     def writeChapterEnd(self):
@@ -213,6 +214,19 @@ class XMLReport(object):
 
         self.current_reportelem_num += 1
         self.current_fig_num += 1
+
+    def writeTextBox(self, text):
+        '''
+        writes a textbox object in the XML report
+        :param text: text string to be added
+        :return:
+        '''
+        with open(self.XML_fn, 'a') as XML:
+            XML.write('<Report_Element ReportElementOrder="{0}" Element="TextBox">\n'.format(self.current_reportelem_num))
+            outputtext = f'<Text>{text}</Text>\n'.replace('\\n', '\n').replace('\\t', '\t')
+            XML.write(outputtext)
+            XML.write('</Report_Element>\n')
+        self.current_reportelem_num += 1
 
     def writeProfilePlotStart(self, reservoir):
         '''

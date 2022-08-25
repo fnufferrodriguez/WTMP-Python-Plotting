@@ -299,28 +299,46 @@ def getPandasTimeFreq(intervalstring):
     :return: pandas time interval
     '''
 
-    intervalstring = intervalstring.lower()
-    if 'min' in intervalstring:
-        timeint = intervalstring.replace('min','') + 'T'
+    intervalstringlr = intervalstring.lower()
+    if 'min' in intervalstringlr:
+        for j in ['min', 'mins', 'minute', 'minutes']:
+            if j in intervalstringlr:
+                replaceflag = j
+        timeint = intervalstringlr.replace(replaceflag,'') + 'T'
         return timeint
-    elif 'hour' in intervalstring:
-        timeint = intervalstring.replace('hour','') + 'H'
+    elif 'hour' in intervalstringlr:
+        for j in ['hour', 'hours']:
+            if j in intervalstringlr:
+                replaceflag = j
+        timeint = intervalstringlr.replace(replaceflag,'') + 'H'
         return timeint
-    elif 'day' in intervalstring:
-        timeint = intervalstring.replace('day','') + 'D'
+    elif 'day' in intervalstringlr:
+        for j in ['day', 'days']:
+            if j in intervalstringlr:
+                replaceflag = j
+        timeint = intervalstringlr.replace(replaceflag,'') + 'D'
         return timeint
-    elif 'mon' in intervalstring:
-        timeint = intervalstring.replace('mon','') + 'M'
+    elif 'mon' in intervalstringlr:
+        for j in ['mon', 'mons', 'month', 'months']:
+            if j in intervalstringlr:
+                replaceflag = j
+        timeint = intervalstringlr.replace(replaceflag,'') + 'M'
         return timeint
-    elif 'week' in intervalstring:
-        timeint = intervalstring.replace('week','') + 'W'
+    elif 'week' in intervalstringlr:
+        for j in ['week', 'weeks']:
+            if j in intervalstringlr:
+                replaceflag = j
+        timeint = intervalstringlr.replace(replaceflag,'') + 'W'
         return timeint
-    elif 'year' in intervalstring:
-        timeint = intervalstring.replace('year','') + 'A'
+    elif 'year' in intervalstringlr:
+        for j in ['year', 'years']:
+            if j in intervalstringlr:
+                replaceflag = j
+        timeint = intervalstringlr.replace(replaceflag,'') + 'A'
         return timeint
     else:
         WF.print2stdout('Unidentified time interval')
-        return 0
+        return intervalstring
 
 def buildTimeSeries(startTime, endTime, interval):
     '''
@@ -333,7 +351,7 @@ def buildTimeSeries(startTime, endTime, interval):
     '''
 
     intervalinfo = getPandasTimeFreq(interval)
-    ts = pd.date_range(startTime, endTime, freq=intervalinfo, inclusive=False)
+    ts = pd.date_range(startTime, endTime, freq=intervalinfo, inclusive='both')
     ts = np.asarray([t.to_pydatetime() for t in ts])
     return ts
 
@@ -363,7 +381,7 @@ def JDateToDatetime(dates, startyear):
     else:
         return dates
 
-def DatetimeToJDate(dates, time_offset):
+def DatetimeToJDate(dates):
     '''
     converts datetime dates to jdate values
     :param dates: list of datetime dates
@@ -379,10 +397,11 @@ def DatetimeToJDate(dates, time_offset):
     elif isinstance(dates, (list, np.ndarray)):
         if isinstance(dates[0], (float, int)):
             return dates
-        jdates = np.asarray([(datetime2Ordinal(n) - time_offset) + 1 for n in dates])
+        # jdates = np.asarray([(datetime2Ordinal(n) - time_offset) + 1 for n in dates])
+        jdates = [(n.replace(tzinfo=None) - dt.datetime(n.year, 1, 1, 0, 0)).total_seconds() / (24*60*60) for n in dates]
         return jdates
     elif isinstance(dates, dt.datetime):
-        jdate = (datetime2Ordinal(dates) - time_offset) + 1
+        jdate = (dates.replace(tzinfo=None) - dt.datetime(dates.year, 1, 1, 0, 0)).total_seconds() / (24*60*60)
         return jdate
     else:
         return dates

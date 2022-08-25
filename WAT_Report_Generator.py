@@ -12,9 +12,8 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '5.1.14'
+VERSIONNUMBER = '5.2.0'
 
-import datetime as dt
 import os
 import sys
 import matplotlib.pyplot as plt
@@ -43,6 +42,8 @@ import WAT_Gates as WGates
 
 import warnings
 warnings.filterwarnings("always")
+
+mpl.rcParams['axes.autolimit_mode'] = 'round_numbers'
 
 class MakeAutomatedReport(object):
     '''
@@ -221,12 +222,18 @@ class MakeAutomatedReport(object):
                     ax = axes[axi]
 
                 ax_settings = Plots.setTimeSeriesXlims(ax_settings, yearstr, object_settings['years'])
+                Plots.setInitialXlims(ax, year)
 
                 ### Make Twin axis ###
                 _usetwinx = False
                 if 'twinx' in ax_settings.keys():
                     if ax_settings['twinx'].lower() == 'true':
                         _usetwinx = True
+
+                _usetwiny = False
+                if 'twiny' in object_settings.keys():
+                    if object_settings['twiny'].lower() == 'true':
+                        _usetwiny = True
 
                 if _usetwinx:
                     ax2 = ax.twinx()
@@ -235,6 +242,7 @@ class MakeAutomatedReport(object):
                 unitslist2 = []
                 stackplots = {}
                 linedata = self.Data.getTimeSeriesDataDictionary(ax_settings)
+                linedata = self.Data.filterByTargetElev(linedata)
                 linedata = WF.mergeLines(linedata, ax_settings)
                 ax_settings = self.configureSettingsForID('base', ax_settings)
                 gatedata = self.Data.getGateDataDictionary(ax_settings, makecopy=False)
@@ -262,6 +270,11 @@ class MakeAutomatedReport(object):
                     dates = curline['dates']
                     units = curline['units']
 
+                    # if 'target_elevation' in curline.keys():
+                    #     values = WF.getValuesAtTargetElev(values, curline['target_elevation'])
+
+                    values = WF.ValueSum(dates, values) #check for dict values and add them all together
+
                     isstack = False
                     if 'linetype' in curline.keys():
                         if curline['linetype'].lower() == 'stacked': #stacked plots need to be added at the end..
@@ -270,7 +283,6 @@ class MakeAutomatedReport(object):
                                     axis = curline['yaxis'].lower()
                             else:
                                 axis = 'left' #if not twinx, then only can use left
-                            values = WF.buzzTargetSum(dates, values)
 
                             isstack = True
 
@@ -295,17 +307,11 @@ class MakeAutomatedReport(object):
                         WF.print2stdout('Invalid Data settings for line:', line)
                         continue
 
-                    if 'dateformat' in ax_settings.keys():
-                        if ax_settings['dateformat'].lower() == 'jdate':
-                            if isinstance(dates[0], dt.datetime):
-                                dates = WT.DatetimeToJDate(dates, self.ModelAlt.t_offset)
-                        elif ax_settings['dateformat'].lower() == 'datetime':
-                            if isinstance(dates[0], (int,float)):
-                                dates = WT.JDateToDatetime(dates, self.startYear)
-                    else:
-                        ax_settings['dateformat'] = 'datetime'
-                        if isinstance(dates[0], (int, float)):
-                            dates = WT.JDateToDatetime(dates, self.startYear)
+                    dates = WT.JDateToDatetime(dates, self.startYear)
+
+                    if 'elevation_storage_area_file' in curline.keys():
+                        values = WF.calculateStorageFromElevation(values, curline)
+
 
                     if 'scalar' in curline.keys():
                         try:
@@ -323,15 +329,6 @@ class MakeAutomatedReport(object):
 
                     if 'label' not in line_settings.keys():
                         line_settings['label'] = ''
-
-                    # if 'filterbylimits' not in line_settings.keys():
-                    #     line_settings['filterbylimits'] = 'true' #set default
-                    #
-                    # if line_settings['filterbylimits'].lower() == 'true':
-                    #     if 'xlims' in object_settings.keys():
-                    #         dates, values = WF.applyXLimits(self, dates, values, cur_obj_settings['xlims'])
-                    #     if 'ylims' in object_settings.keys():
-                    #         dates, values = WF.applyYLimits(dates, values, cur_obj_settings['ylims'])
 
                     curax = ax
                     axis2 = False
@@ -399,91 +396,82 @@ class MakeAutomatedReport(object):
                 gatelabels_positions = []
                 gateop_rev = list(gatedata.keys())
                 if len(gateop_rev) > 1:
-                    gateop_rev.reverse()
-                for ggi, gateop in enumerate(gateop_rev):
-                    # gate_placement += ggi*gatespacing
-                    gate_count = 0 #keep track of gate number in group
-                    if 'label' in gatedata[gateop]:
-                        gategroup_labels.append(gatedata[gateop]['label'].replace('\\n', '\n'))
-                    elif 'flag' in gatedata[gateop]:
-                        gategroup_labels.append(gatedata[gateop]['flag'].replace('\\n', '\n'))
-                    else:
-                        gategroup_labels.append(gateop)
 
-                    gatelines_positions = []
-                    for gate in gatedata[gateop]['gates'].keys():
+                    gateline_pos = {}
+                    line_pos = gatespacing
+                    for gateop in gateop_rev[::-1]:
+                        gate_line_settings = gatedata[gateop]
+                        for gate in list(gate_line_settings['gates'].keys())[::-1]:
+                            gateline_pos[f"{gateop}_{gate}"] = line_pos
+                            line_pos += 1
+                        line_pos += gatespacing
 
-                        curgate = gatedata[gateop]['gates'][gate]
-                        values = curgate['values']
-                        dates = curgate['dates']
+                    for ggi, gateop in enumerate(gateop_rev):
+                        # gate_placement += ggi*gatespacing
+                        gate_count = 0 #keep track of gate number in group
+                        if 'label' in gatedata[gateop]:
+                            gategroup_labels.append(gatedata[gateop]['label'].replace('\\n', '\n'))
+                        elif 'flag' in gatedata[gateop]:
+                            gategroup_labels.append(gatedata[gateop]['flag'].replace('\\n', '\n'))
+                        else:
+                            gategroup_labels.append(gateop)
 
-                        if len(dates) > 0:
+                        gatelines_positions = []
+                        for gate in gatedata[gateop]['gates'].keys():
 
-                            if 'dateformat' in ax_settings.keys():
-                                if ax_settings['dateformat'].lower() == 'jdate':
-                                    if isinstance(dates[0], dt.datetime):
-                                        dates = WT.DatetimeToJDate(dates, self.ModelAlt.t_offset)
-                                elif ax_settings['dateformat'].lower() == 'datetime':
-                                    if isinstance(dates[0], (int,float)):
-                                        dates = WT.JDateToDatetime(dates, self.startYear)
+                            curgate = gatedata[gateop]['gates'][gate]
+                            values = curgate['values']
+                            dates = curgate['dates']
 
-                            gate_line_settings = WD.getDefaultGateLineSettings(curgate, gate_count)
+                            if len(dates) > 0:
 
-                            if 'zorder' not in gate_line_settings.keys():
-                                gate_line_settings['zorder'] = 4
+                                dates = WT.JDateToDatetime(dates, self.startYear)
 
-                            if 'label' not in gate_line_settings.keys():
-                                gate_line_settings['label'] = '{0}_{1}'.format(gateop, gate_count)
+                                gate_line_settings = WD.getDefaultGateLineSettings(curgate, gate_count)
 
-                            # if 'filterbylimits' not in gate_line_settings.keys():
-                            #     gate_line_settings['filterbylimits'] = 'true' #set default
+                                if 'zorder' not in gate_line_settings.keys():
+                                    gate_line_settings['zorder'] = 4
 
-                            # if gate_line_settings['filterbylimits'].lower() == 'true':
-                                # if 'xlims' in ax_settings.keys():
-                                    # dates, values = WF.applyXLimits(self, dates, values, ax_settings['xlims'])
+                                if 'label' not in gate_line_settings.keys():
+                                    gate_line_settings['label'] = '{0}_{1}'.format(gateop, gate_count)
 
-                            if 'placement' in gate_line_settings.keys():
-                                line_placement = float(gate_line_settings['placement'])
-                            else:
-                                line_placement = gate_placement
+                                line_placement = gateline_pos[f"{gateop}_{gate}"]
+                                gatelines_positions.append(line_placement)
+                                gatevalues = line_placement * values
 
-                            gatelines_positions.append(line_placement)
-                            # values *= line_placement
-                            gatevalues = line_placement * values
+                                curax = ax
+                                if _usetwinx:
+                                    if 'xaxis' in line_settings.keys():
+                                        if 'xaxis'.lower() == 'right':
+                                            curax = ax2
 
-                            curax = ax
-                            if _usetwinx:
-                                if 'xaxis' in line_settings.keys():
-                                    if 'xaxis'.lower() == 'right':
-                                        curax = ax2
+                                if gate_line_settings['drawline'].lower() == 'true' and gate_line_settings['drawpoints'].lower() == 'true':
+                                    Plots.plotLinesAndPoints(dates, gatevalues, curax, gate_line_settings)
 
-                            if gate_line_settings['drawline'].lower() == 'true' and gate_line_settings['drawpoints'].lower() == 'true':
-                                Plots.plotLinesAndPoints(dates, gatevalues, curax, gate_line_settings)
+                                elif gate_line_settings['drawline'].lower() == 'true':
+                                    Plots.plotLines(dates, gatevalues, curax, gate_line_settings)
 
-                            elif gate_line_settings['drawline'].lower() == 'true':
-                                Plots.plotLines(dates, gatevalues, curax, gate_line_settings)
+                                elif gate_line_settings['drawpoints'].lower() == 'true':
+                                    Plots.plotPoints(dates, gatevalues, curax, gate_line_settings)
 
-                            elif gate_line_settings['drawpoints'].lower() == 'true':
-                                Plots.plotPoints(dates, gatevalues, curax, gate_line_settings)
+                                gate_count += 1 #keep track of gate number in group
+                                gate_placement += 1 #keep track of gate palcement in space
+                                self.WAT_log.addLogEntry({'type': gate_line_settings['label'] + '_GateTimeSeries' if gate_line_settings['label'] != '' else 'GateTimeseries',
+                                                          'name': self.ChapterRegion+'_'+yearstr,
+                                                          'description': ax_settings['description'],
+                                                          'units': 'BINARY',
+                                                          'value_start_date': WT.translateDateFormat(dates[0], 'datetime', '',
+                                                                                                     self.StartTime, self.EndTime,
+                                                                                                     self.ModelAlt.t_offset).strftime('%d %b %Y'),
+                                                          'value_end_date': WT.translateDateFormat(dates[-1], 'datetime', '',
+                                                                                                   self.StartTime, self.EndTime,
+                                                                                                   self.ModelAlt.t_offset).strftime('%d %b %Y'),
+                                                          'logoutputfilename': curgate['logoutputfilename']
+                                                          },
+                                                         isdata=True)
 
-                            gate_count += 1 #keep track of gate number in group
-                            gate_placement += 1 #keep track of gate palcement in space
-                            self.WAT_log.addLogEntry({'type': gate_line_settings['label'] + '_GateTimeSeries' if gate_line_settings['label'] != '' else 'GateTimeseries',
-                                                      'name': self.ChapterRegion+'_'+yearstr,
-                                                      'description': ax_settings['description'],
-                                                      'units': 'BINARY',
-                                                      'value_start_date': WT.translateDateFormat(dates[0], 'datetime', '',
-                                                                                                 self.StartTime, self.EndTime,
-                                                                                                 self.ModelAlt.t_offset).strftime('%d %b %Y'),
-                                                      'value_end_date': WT.translateDateFormat(dates[-1], 'datetime', '',
-                                                                                               self.StartTime, self.EndTime,
-                                                                                               self.ModelAlt.t_offset).strftime('%d %b %Y'),
-                                                      'logoutputfilename': curgate['logoutputfilename']
-                                                      },
-                                                     isdata=True)
-
-                    gatelabels_positions.append(np.average(gatelines_positions))
-                    gate_placement += gatespacing
+                        gatelabels_positions.append(np.average(gatelines_positions))
+                        gate_placement += gatespacing
 
                 if 'operationlines' in ax_settings.keys():
                     operationtimes = WF.getGateOperationTimes(gatedata)
@@ -496,27 +484,7 @@ class MakeAutomatedReport(object):
 
                     for ax_to_add_line in axs_to_add_line:
                         for operationTime in operationtimes:
-                            if 'dateformat' in ax_settings.keys():
-                                if ax_settings['dateformat'].lower() == 'jdate':
-                                    if isinstance(operationTime, dt.datetime):
-                                        operationTime = WT.DatetimeToJDate(operationTime, self.ModelAlt.t_offset)
-                                    elif isinstance(operationTime, str):
-                                        try:
-                                            operationTime = float(operationTime)
-                                        except:
-                                            operationTime = WT.translateDateFormat(operationTime, 'datetime', '',
-                                                                                   self.StartTime, self.EndTime,
-                                                                                   self.ModelAlt.t_offset)
-                                            operationTime = WT.DatetimeToJDate(operationTime, self.ModelAlt.t_offset)
-                                elif ax_settings['dateformat'].lower() == 'datetime':
-                                    if isinstance(operationTime, (int,float)):
-                                        operationTime = WT.JDateToDatetime(operationTime, self.startYear)
-                                    elif isinstance(operationTime, str):
-                                        operationTime = WT.translateDateFormat(operationTime, 'datetime', '',
-                                                                               self.StartTime, self.EndTime,
-                                                                               self.ModelAlt.t_offset)
-                            else:
-                                operationTime = WT.translateDateFormat(operationTime, 'datetime', '',
+                            operationTime = WT.translateDateFormat(operationTime, 'datetime', '',
                                                                        self.StartTime, self.EndTime,
                                                                        self.ModelAlt.t_offset)
 
@@ -605,11 +573,16 @@ class MakeAutomatedReport(object):
 
                         handles, labels = ax.get_legend_handles_labels()
 
+                        plot_blank = True
                         if _usetwinx:
                             if len(handles) > 0:
-                                empty_handle, = ax.plot([],[],color="w")
-                                handles.append(empty_handle)
-                                labels.append('')
+                                if 'useblanklegendentry' in ax_settings.keys():
+                                    if ax_settings['useblanklegendentry'].lower() == 'false':
+                                        plot_blank = False
+                                if plot_blank:
+                                    empty_handle, = ax.plot([],[],color="w", alpha=0.0)
+                                    handles.append(empty_handle)
+                                    labels.append('')
                             ax2_handles, ax2_labels = ax2.get_legend_handles_labels()
                             handles += ax2_handles
                             labels += ax2_labels
@@ -641,17 +614,42 @@ class MakeAutomatedReport(object):
 
                 xmin, xmax = ax.get_xlim()
 
-                if ax_settings['dateformat'].lower() == 'datetime':
-                    xmin = mpl.dates.num2date(xmin)
-                    xmax = mpl.dates.num2date(xmax)
+                xmin = mpl.dates.num2date(xmin)
+                xmax = mpl.dates.num2date(xmax)
 
                 if 'xticks' in ax_settings.keys():
                     xtick_settings = ax_settings['xticks']
-
-                    Plots.formatTimeSeriesXticks(ax, xtick_settings, ax_settings)
+                else:
+                    xtick_settings = {}
+                Plots.formatTimeSeriesXticks(ax, xtick_settings, ax_settings)
 
                 ax.set_xlim(left=xmin)
                 ax.set_xlim(right=xmax)
+
+                if _usetwiny:
+                    ax2y = ax.twiny()
+                    ax2y.set_xlim(left=xmin)
+                    ax2y.set_xlim(right=xmax)
+                    useplot = Plots.formatDateXAxis(ax2y, object_settings, twin=True)
+                    xmin, xmax = ax2y.get_xlim()
+
+                    xmin = mpl.dates.num2date(xmin)
+                    xmax = mpl.dates.num2date(xmax)
+
+                    if 'xticks2' in ax_settings.keys():
+                        xtick_settings = ax_settings['xticks2']
+                    else:
+                        xtick_settings = {}
+                    if 'copybottom' in xtick_settings.keys():
+                        if xtick_settings['copybottom'].lower() == 'true':
+                            ax2y.set_xticks(ax.get_xticks())
+
+                    Plots.formatTimeSeriesXticks(ax2y, xtick_settings, ax_settings, dateformatflag='dateformat2')
+
+                    ax2y.set_xlim(left=xmin)
+                    ax2y.set_xlim(right=xmax)
+
+                    ax2y.grid(False)
 
                 ############# yticks and lims #############
                 Plots.formatYTicks(ax, ax_settings, gatedata, gate_placement)
@@ -1198,10 +1196,12 @@ class MakeAutomatedReport(object):
                                 bottomtext_str.append(object_settings['timestamps'][j].strftime('%m/%d/%Y'))
                             elif text.lower() == 'gateconfiguration':
                                 gateconfignum = WGates.getGateConfigurationDays(gateconfig, gatedata, object_settings['timestamps'][j])
-                                bottomtext_str.append(str(gateconfignum))
+                                # bottomtext_str.append(str(gateconfignum))
+                                bottomtext_str.append(str('{num:,.{digits}f}'.format(num=gateconfignum, digits=3)))
                             elif text.lower() == 'gateblend':
                                 gateblendnum = WGates.getGateBlendDays(gateconfig, gatedata, object_settings['timestamps'][j])
-                                bottomtext_str.append(str(gateblendnum))
+                                # bottomtext_str.append(str(gateblendnum))
+                                bottomtext_str.append(str('{num:,.{digits}f}'.format(num=gateblendnum, digits=3)))
                             else:
                                 bottomtext_str.append(text)
                         bottomtext = ', '.join(bottomtext_str)
@@ -1307,7 +1307,7 @@ class MakeAutomatedReport(object):
         :param object_settings: currently selected object settings dictionary
         :return: writes to XML file
         '''
-        #TODO: make number formats for unique stats in tables
+
         WF.print2stdout('\n################################')
         WF.print2stdout('Now making Error Stats table.')
         WF.print2stdout('################################\n')
@@ -1622,7 +1622,6 @@ class MakeAutomatedReport(object):
         object_settings['timestamps'] = WProfile.getProfileTimestamps(object_settings, self.StartTime, self.EndTime)
         object_settings['timestamp_index'] = WProfile.getProfileTimestampYearMonthIndex(object_settings, self.years)
 
-        # object_settings['years'] = pickle.loads(pickle.dumps(self.years, -1))
         object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = WF.getObjectYears(self, object_settings)
 
         data, line_settings = self.Data.getProfileDataDictionary(object_settings)
@@ -1840,13 +1839,7 @@ class MakeAutomatedReport(object):
                     WF.print2stdout('Invalid Data settings for contour plot year {0}'.format(year))
                     continue
 
-                if 'dateformat' in contour_settings.keys():
-                    if contour_settings['dateformat'].lower() == 'jdate':
-                        if isinstance(dates[0], dt.datetime):
-                            dates = WT.DatetimeToJDate(dates, self.ModelAlt.t_offset)
-                    elif contour_settings['dateformat'].lower() == 'datetime':
-                        if isinstance(dates[0], (int,float)):
-                            dates = WT.JDateToDatetime(dates, self.startYear)
+                dates = WT.JDateToDatetime(dates, self.startYear)
 
                 if 'label' not in contour_settings.keys():
                     contour_settings['label'] = ''
@@ -1940,12 +1933,15 @@ class MakeAutomatedReport(object):
 
 
                 xmin, xmax = ax.get_xlim()
-                if contour_settings['dateformat'].lower() == 'datetime':
-                    xmin = mpl.dates.num2date(xmin)
-                    xmax = mpl.dates.num2date(xmax)
+                # if contour_settings['dateformat'].lower() == 'datetime':
+                xmin = mpl.dates.num2date(xmin)
+                xmax = mpl.dates.num2date(xmax)
                 if 'xticks' in contour_settings.keys():
                     xtick_settings = contour_settings['xticks']
-                    Plots.formatTimeSeriesXticks(ax, xtick_settings, contour_settings)
+                else:
+                    xtick_settings = {}
+                Plots.formatTimeSeriesXticks(ax, xtick_settings, contour_settings)
+
                 ax.set_xlim(left=xmin)
                 ax.set_xlim(right=xmax)
 
@@ -2031,7 +2027,6 @@ class MakeAutomatedReport(object):
                 continue
 
             cbar = plt.colorbar(contr, ax=axes[-1], orientation='horizontal', aspect=50.)
-            # locs = np.linspace(vmin, vmax, int(cur_obj_settings['colorbar']['bins']))[::int(cur_obj_settings['colorbar']['skipticks'])]
             locs = np.linspace(vmin, vmax, int(contour_settings['colorbar']['numticks']))
             cbar.set_ticks(locs)
             cbar.set_ticklabels(locs.round(2))
@@ -2084,7 +2079,7 @@ class MakeAutomatedReport(object):
 
         Plots = WPlot.Plots(self)
 
-        default_settings = self.loadDefaultPlotObject('reservoircontourplot') #get default TS plot items
+        default_settings = self.loadDefaultPlotObject('contourplot') #get default TS plot items
         object_settings = WF.replaceDefaults(self, default_settings, object_settings) #overwrite the defaults with chapter file
 
         if 'template' in object_settings.keys():
@@ -2101,10 +2096,6 @@ class MakeAutomatedReport(object):
         for yi, year in enumerate(object_settings['years']):
             useAx = []
             cur_obj_settings = pickle.loads(pickle.dumps(object_settings, -1))
-            # if object_settings['split_by_year']:
-            #     yearstr = str(year)
-            # else:
-            #     yearstr = object_settings['yearstr']
             yearstr = object_settings['yearstr'][yi]
 
             cur_obj_settings = Plots.setTimeSeriesXlims(cur_obj_settings, yearstr, object_settings['years'])
@@ -2123,6 +2114,7 @@ class MakeAutomatedReport(object):
             contoursbyID = self.Data.getReservoirContourDataDictionary(cur_obj_settings)
             contoursbyID = WF.filterDataByYear(contoursbyID, year, extraflag='topwater')
             selectedContourIDs = WF.getUsedIDs(contoursbyID)
+            straightlines = self.Data.getStraightLineValue(cur_obj_settings)
 
             if len(selectedContourIDs) == 1:
                 figsize=(12, 6)
@@ -2191,13 +2183,7 @@ class MakeAutomatedReport(object):
                     WF.print2stdout('Invalid Data settings for contour plot year {0}'.format(year))
                     continue
 
-                if 'dateformat' in contour_settings.keys():
-                    if contour_settings['dateformat'].lower() == 'jdate':
-                        if isinstance(dates[0], dt.datetime):
-                            dates = WT.DatetimeToJDate(dates, self.ModelAlt.t_offset)
-                    elif contour_settings['dateformat'].lower() == 'datetime':
-                        if isinstance(dates[0], (int,float)):
-                            dates = WT.JDateToDatetime(dates, self.startYear)
+                dates = WT.JDateToDatetime(dates, self.startYear)
 
                 if 'label' not in contour_settings.keys():
                     contour_settings['label'] = ''
@@ -2265,10 +2251,10 @@ class MakeAutomatedReport(object):
                                                  label=label)
 
                 ### VERTICAL LINES ###
-                Plots.plotVerticalLines(contour_settings, ax, isdate=True)
+                Plots.plotVerticalLines(straightlines, ax, contour_settings, isdate=True)
 
                 ### Horizontal LINES ###
-                Plots.plotHorizontalLines(contour_settings, ax)
+                Plots.plotHorizontalLines(straightlines, ax, contour_settings)
 
                 if self.iscomp:
                     if 'modeltext' in contour_settings.keys():
@@ -2301,14 +2287,14 @@ class MakeAutomatedReport(object):
                     useAx.append(True)
                 xmin, xmax = ax.get_xlim()
 
-                if contour_settings['dateformat'].lower() == 'datetime':
-                    xmin = mpl.dates.num2date(xmin)
-                    xmax = mpl.dates.num2date(xmax)
+                xmin = mpl.dates.num2date(xmin)
+                xmax = mpl.dates.num2date(xmax)
 
                 if 'xticks' in contour_settings.keys():
                     xtick_settings = contour_settings['xticks']
-
-                    Plots.formatTimeSeriesXticks(ax, xtick_settings, contour_settings)
+                else:
+                    xtick_settings = {}
+                Plots.formatTimeSeriesXticks(ax, xtick_settings, contour_settings)
 
                 ax.set_xlim(left=xmin)
                 ax.set_xlim(right=xmax)
@@ -2399,6 +2385,17 @@ class MakeAutomatedReport(object):
                 self.XML.writeFullPagePlot(os.path.basename(figname), cur_obj_settings['description'])
             elif pageformat == 'half':
                 self.XML.writeHalfPagePlot(os.path.basename(figname), cur_obj_settings['description'])
+
+    def makeTextBox(self, object_settings):
+        '''
+        Makes a text box object in the report
+        :param object_settings: currently selected object settings dictionary
+        :return:
+        '''
+        if 'text' not in object_settings.keys():
+            WF.print2stdout('Failed to input textbox contents using <text> flag.')
+
+        self.XML.writeTextBox(object_settings['text'])
 
     def setSimulationCSVVars(self, simlist):
         '''
@@ -2519,8 +2516,9 @@ class MakeAutomatedReport(object):
         for Chapter in self.ChapterDefinitions:
             self.ChapterName = Chapter['name']
             self.ChapterRegion = Chapter['region']
+            self.ChapterText = Chapter['grouptext']
             self.WAT_log.addLogEntry({'region': self.ChapterRegion})
-            self.XML.writeChapterStart(self.ChapterName)
+            self.XML.writeChapterStart(self.ChapterName, self.ChapterText)
             for section in Chapter['sections']:
                 section_header = section['header']
                 self.XML.writeSectionHeader(section_header)
@@ -2534,8 +2532,6 @@ class MakeAutomatedReport(object):
                         self.makeErrorStatisticsTable(object)
                     elif objtype == 'monthlystatisticstable':
                         self.makeMonthlyStatisticsTable(object)
-                    elif objtype == 'buzzplot':
-                        self.makeBuzzPlot(object)
                     elif objtype == 'profilestatisticstable':
                         self.makeProfileStatisticsTable(object)
                     elif objtype == 'contourplot':
@@ -2546,6 +2542,8 @@ class MakeAutomatedReport(object):
                         self.makeSingleStatisticTable(object)
                     elif objtype == 'singlestatisticprofiletable':
                         self.makeSingleStatisticProfileTable(object)
+                    elif objtype == 'textbox':
+                        self.makeTextBox(object)
                     else:
                         WF.print2stdout('Section Type {0} not identified.'.format(objtype))
                         WF.print2stdout('Skipping Section..')
@@ -2709,18 +2707,9 @@ class MakeAutomatedReport(object):
         :return:
         '''
 
-        # outstr = '{0}:'.format(self.ChapterRegion)
-        # for cnt, ID in enumerate(self.accepted_IDs):
-        #     if cnt > 0:
-        #         outstr += ','
-        #     outstr += ' {0}'.format(self.SimulationVariables[ID]['plugin'])
-        # self.XML.replaceinXML('%%REPLACEINTRO_{0}%%'.format(simorder), outstr)
-
         modelstrs = []
-        # for Chapter in [n for n in self.ChapterDefinitions[::-1]]:
         for Chapter in self.ChapterDefinitions:
             chapname = Chapter['name']
-            # outstr = '{0}:'.format(chapname)
             outstr = f'<Model ModelOrder="%%modelOrder%%" >{chapname}:'
             for cnt, ID in enumerate(self.accepted_IDs):
                 if cnt > 0:
@@ -2737,7 +2726,6 @@ class MakeAutomatedReport(object):
             lastline = tmpstr
 
     def fixXMLModelIntroduction(self):
-        # pass
         self.XML.removeLine('%%REPLACEINTRO_')
 
     def checkModelType(self, line_info):

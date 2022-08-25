@@ -197,8 +197,10 @@ def matchData(data1, data2):
 
     if len(v_1) == 0 or len(v_2) == 0:
         return data1, data2
+
     if len(v_1) == len(v_2):
         return data1, data2
+
     elif len(v_1) > len(v_2):
         f_interp = interpolate.interp1d(t_2, v_2, bounds_error=False, fill_value=np.nan)
         v2_interp = f_interp(t_1)
@@ -210,6 +212,7 @@ def matchData(data1, data2):
         data2[y_key] = data1[y_key][msk]
         data1[y_key] = data1[y_key][msk]
         return data1, data2
+
     elif len(v_2) > len(v_1):
         f_interp = interpolate.interp1d(t_1, v_1, bounds_error=False, fill_value=np.nan)
         v1_interp = f_interp(t_2)
@@ -953,25 +956,7 @@ def configureUnits(object_settings, parameter, units):
             units = None
     return units
 
-# def buzzTargetSum(dates, values, target):
-#     '''
-#     finds buzzplot targets defined and returns the flow sums
-#     :param dates: list of dates
-#     :param values: list of dicts of values @ structures
-#     :param target: target value
-#     :return: sum of values
-#     '''
-#
-#     sum_vals = []
-#     for i, d in enumerate(dates):
-#         sum = 0.0
-#         for sn in values.keys():
-#             if values[sn]['elevcl'][i] == target:
-#                 sum += values[sn]['q(m3/s)'][i]
-#         sum_vals.append(sum)
-#     return np.asarray(sum_vals)
-
-def buzzTargetSum(dates, values):
+def ValueSum(dates, values):
     '''
     finds buzzplot targets defined and returns the flow sums
     :param dates: list of dates
@@ -1573,3 +1558,9 @@ def organizePlotYears(object_settings):
 
 def sanitizeText(intext):
     return str(intext).replace('.','').replace(' ', '').replace(':', '').replace("_","")
+
+def calculateStorageFromElevation(values, curline):
+    elevation_storage_area_file = curline['elevation_storage_area_file']
+    elev_stor_area = np.loadtxt(elevation_storage_area_file, delimiter=',')
+    elevstorcurve = interpolate.interp1d(elev_stor_area[:, 0], elev_stor_area[:, 1], bounds_error=False, fill_value=np.nan)
+    return elevstorcurve(values)
