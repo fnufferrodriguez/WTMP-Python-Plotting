@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '5.2.0'
+VERSIONNUMBER = '5.2.1'
 
 import os
 import sys
@@ -241,13 +241,13 @@ class MakeAutomatedReport(object):
                 unitslist = []
                 unitslist2 = []
                 stackplots = {}
-                linedata = self.Data.getTimeSeriesDataDictionary(ax_settings)
-                linedata = self.Data.filterByTargetElev(linedata)
-                linedata = WF.mergeLines(linedata, ax_settings)
+                linedata, line_settings = self.Data.getTimeSeriesDataDictionary(ax_settings)
+                linedata = self.Data.filterByTargetElev(linedata, line_settings)
+                linedata = WF.mergeLines(linedata, line_settings, ax_settings)
                 ax_settings = self.configureSettingsForID('base', ax_settings)
-                gatedata = self.Data.getGateDataDictionary(ax_settings, makecopy=False)
+                gatedata, gate_settings = self.Data.getGateDataDictionary(ax_settings, makecopy=False)
                 linedata = WF.filterDataByYear(linedata, year)
-                linedata = WF.correctDuplicateLabels(linedata)
+                line_settings = WF.correctDuplicateLabels(line_settings)
                 straightlines = self.Data.getStraightLineValue(ax_settings)
 
                 for gateop in gatedata.keys():
@@ -255,7 +255,7 @@ class MakeAutomatedReport(object):
 
                 if 'relative' in ax_settings.keys():
                     if ax_settings['relative'].lower() == 'true':
-                        RelativeMasterSet, RelativeLineSettings = Plots.getRelativeMasterSet(linedata)
+                        RelativeMasterSet, RelativeLineSettings = Plots.getRelativeMasterSet(linedata, line_settings)
                         if 'unitsystem' in ax_settings.keys():
                             RelativeMasterSet, RelativeLineSettings['units'] = WF.convertUnitSystem(RelativeMasterSet,
                                                                                                     RelativeLineSettings['units'],
@@ -263,24 +263,22 @@ class MakeAutomatedReport(object):
                 # LINE DATA #
                 for line in linedata:
                     curline = linedata[line]
-                    parameter, ax_settings['param_count'] = WF.getParameterCount(curline, ax_settings)
+                    curline_settings = line_settings[line]
+                    parameter, ax_settings['param_count'] = WF.getParameterCount(curline_settings, ax_settings)
                     i = ax_settings['param_count'][parameter]
 
                     values = curline['values']
                     dates = curline['dates']
-                    units = curline['units']
-
-                    # if 'target_elevation' in curline.keys():
-                    #     values = WF.getValuesAtTargetElev(values, curline['target_elevation'])
+                    units = curline_settings['units']
 
                     values = WF.ValueSum(dates, values) #check for dict values and add them all together
 
                     isstack = False
-                    if 'linetype' in curline.keys():
-                        if curline['linetype'].lower() == 'stacked': #stacked plots need to be added at the end..
+                    if 'linetype' in curline_settings.keys():
+                        if curline_settings['linetype'].lower() == 'stacked': #stacked plots need to be added at the end..
                             if _usetwinx:
-                                if 'yaxis' in curline.keys():
-                                    axis = curline['yaxis'].lower()
+                                if 'yaxis' in curline_settings.keys():
+                                    axis = curline_settings['yaxis'].lower()
                             else:
                                 axis = 'left' #if not twinx, then only can use left
 
@@ -309,32 +307,31 @@ class MakeAutomatedReport(object):
 
                     dates = WT.JDateToDatetime(dates, self.startYear)
 
-                    if 'elevation_storage_area_file' in curline.keys():
-                        values = WF.calculateStorageFromElevation(values, curline)
+                    if 'elevation_storage_area_file' in curline_settings.keys():
+                        values = WF.calculateStorageFromElevation(values, curline_settings)
 
-
-                    if 'scalar' in curline.keys():
+                    if 'scalar' in curline_settings.keys():
                         try:
-                            scalar = float(curline['scalar'])
+                            scalar = float(curline_settings['scalar'])
                             values = scalar * values
                         except ValueError:
-                            WF.print2stdout('Invalid Scalar. {0}'.format(curline['scalar']))
+                            WF.print2stdout('Invalid Scalar. {0}'.format(curline_settings['scalar']))
                             continue
 
-                    line_settings = WD.getDefaultLineSettings(self.defaultLineStyles, curline, parameter, i)
-                    line_settings = WF.fixDuplicateColors(line_settings) #used the line, used param, then double up so subtract 1
+                    line_draw_settings = WD.getDefaultLineSettings(self.defaultLineStyles, curline_settings, parameter, i)
+                    line_draw_settings = WF.fixDuplicateColors(line_draw_settings) #used the line, used param, then double up so subtract 1
 
-                    if 'zorder' not in line_settings.keys():
-                        line_settings['zorder'] = 4
+                    if 'zorder' not in line_draw_settings.keys():
+                        line_draw_settings['zorder'] = 4
 
-                    if 'label' not in line_settings.keys():
-                        line_settings['label'] = ''
+                    if 'label' not in line_draw_settings.keys():
+                        line_draw_settings['label'] = ''
 
                     curax = ax
                     axis2 = False
                     if _usetwinx:
-                        if 'yaxis' in line_settings.keys():
-                            if line_settings['yaxis'].lower() == 'right':
+                        if 'yaxis' in line_draw_settings.keys():
+                            if line_draw_settings['yaxis'].lower() == 'right':
                                 curax = ax2
                                 axis2 = True
 
@@ -357,22 +354,22 @@ class MakeAutomatedReport(object):
                             stackplots[axis] = []
                         stackplots[axis].append({'values': values,
                                                  'dates': dates,
-                                                 'label': curline['label'],
-                                                 'color': curline['linecolor']})
+                                                 'label': line_draw_settings['label'],
+                                                 'color': line_draw_settings['linecolor']})
 
                     else:
 
-                        if line_settings['drawline'].lower() == 'true' and line_settings['drawpoints'].lower() == 'true':
-                            Plots.plotLinesAndPoints(dates, values, curax, line_settings)
+                        if line_draw_settings['drawline'].lower() == 'true' and line_draw_settings['drawpoints'].lower() == 'true':
+                            Plots.plotLinesAndPoints(dates, values, curax, line_draw_settings)
 
-                        elif line_settings['drawline'].lower() == 'true':
-                            Plots.plotLines(dates, values, curax, line_settings)
+                        elif line_draw_settings['drawline'].lower() == 'true':
+                            Plots.plotLines(dates, values, curax, line_draw_settings)
 
-                        elif line_settings['drawpoints'].lower() == 'true':
-                            Plots.plotPoints(dates, values, curax, line_settings)
+                        elif line_draw_settings['drawpoints'].lower() == 'true':
+                            Plots.plotPoints(dates, values, curax, line_draw_settings)
 
 
-                        self.WAT_log.addLogEntry({'type': line_settings['label'] + '_TimeSeries' if line_settings['label'] != '' else 'Timeseries',
+                        self.WAT_log.addLogEntry({'type': line_draw_settings['label'] + '_TimeSeries' if line_draw_settings['label'] != '' else 'Timeseries',
                                                   'name': self.ChapterRegion+'_'+yearstr,
                                                   'description': ax_settings['description'],
                                                   'units': units,
@@ -382,7 +379,7 @@ class MakeAutomatedReport(object):
                                                   'value_end_date': WT.translateDateFormat(dates[-1], 'datetime', '',
                                                                                            self.StartTime, self.EndTime,
                                                                                            self.ModelAlt.t_offset).strftime('%d %b %Y'),
-                                                  'logoutputfilename': curline['logoutputfilename']
+                                                  'logoutputfilename': line_draw_settings['logoutputfilename']
                                                  },
                                                  isdata=True)
                 # GATE DATA #
@@ -409,10 +406,10 @@ class MakeAutomatedReport(object):
                     for ggi, gateop in enumerate(gateop_rev):
                         # gate_placement += ggi*gatespacing
                         gate_count = 0 #keep track of gate number in group
-                        if 'label' in gatedata[gateop]:
-                            gategroup_labels.append(gatedata[gateop]['label'].replace('\\n', '\n'))
-                        elif 'flag' in gatedata[gateop]:
-                            gategroup_labels.append(gatedata[gateop]['flag'].replace('\\n', '\n'))
+                        if 'label' in gate_settings[gateop]:
+                            gategroup_labels.append(gate_settings[gateop]['label'].replace('\\n', '\n'))
+                        elif 'flag' in gate_settings[gateop]:
+                            gategroup_labels.append(gate_settings[gateop]['flag'].replace('\\n', '\n'))
                         else:
                             gategroup_labels.append(gateop)
 
@@ -420,6 +417,7 @@ class MakeAutomatedReport(object):
                         for gate in gatedata[gateop]['gates'].keys():
 
                             curgate = gatedata[gateop]['gates'][gate]
+                            curgate_settings = gate_settings[gateop]['gates'][gate]
                             values = curgate['values']
                             dates = curgate['dates']
 
@@ -427,7 +425,7 @@ class MakeAutomatedReport(object):
 
                                 dates = WT.JDateToDatetime(dates, self.startYear)
 
-                                gate_line_settings = WD.getDefaultGateLineSettings(curgate, gate_count)
+                                gate_line_settings = WD.getDefaultGateLineSettings(curgate_settings, gate_count)
 
                                 if 'zorder' not in gate_line_settings.keys():
                                     gate_line_settings['zorder'] = 4
@@ -466,7 +464,7 @@ class MakeAutomatedReport(object):
                                                           'value_end_date': WT.translateDateFormat(dates[-1], 'datetime', '',
                                                                                                    self.StartTime, self.EndTime,
                                                                                                    self.ModelAlt.t_offset).strftime('%d %b %Y'),
-                                                          'logoutputfilename': curgate['logoutputfilename']
+                                                          'logoutputfilename': curgate_settings['logoutputfilename']
                                                           },
                                                          isdata=True)
 
@@ -901,7 +899,7 @@ class MakeAutomatedReport(object):
         line_settings = WF.correctDuplicateLabels(line_settings)
 
         object_settings = self.configureSettingsForID('base', object_settings)
-        gatedata = self.Data.getGateDataDictionary(object_settings, makecopy=False)
+        gatedata, gate_settings = self.Data.getGateDataDictionary(object_settings, makecopy=False)
 
         ################# Get plot units #################
         data, line_settings = WProfile.convertProfileDataUnits(object_settings, data, line_settings)
@@ -1071,15 +1069,16 @@ class MakeAutomatedReport(object):
                             gatepoint_xpositions = np.linspace(ax.get_xlim()[0], ax.get_xlim()[1],numgates+2)[1:-1] #+2 for start and end
 
                             cur_gateop = gatedata[gategroup]
+                            cur_gateop_settings = gate_settings[gategroup]
 
-                            if 'top' in cur_gateop.keys():
-                                gatetop = float(cur_gateop['top'])
+                            if 'top' in cur_gateop_settings.keys():
+                                gatetop = float(cur_gateop_settings['top'])
 
-                            if 'bottom' in cur_gateop.keys():
-                                gatebottom = float(cur_gateop['bottom'])
+                            if 'bottom' in cur_gateop_settings.keys():
+                                gatebottom = float(cur_gateop_settings['bottom'])
 
-                            if 'middle' in cur_gateop.keys():
-                                gatemiddle = float(cur_gateop['middle'])
+                            if 'middle' in cur_gateop_settings.keys():
+                                gatemiddle = float(cur_gateop_settings['middle'])
                             elif gatetop != None and gatebottom != None:
                                 gatemiddle = np.mean([gatetop, gatebottom])
 
@@ -1096,6 +1095,7 @@ class MakeAutomatedReport(object):
                             for gate in cur_gateop['gates'].keys():
 
                                 curgate = cur_gateop['gates'][gate]
+                                curgate_settings = cur_gateop_settings['gates'][gate]
 
                                 values = curgate['values']
                                 dates = curgate['dates']
@@ -1142,19 +1142,19 @@ class MakeAutomatedReport(object):
                                                           'value_end_date': WT.translateDateFormat(dates[-1], 'datetime', '',
                                                                                                    self.StartTime, self.EndTime,
                                                                                                    self.ModelAlt.t_offset).strftime('%d %b %Y'),
-                                                          'logoutputfilename': curgate['logoutputfilename']
+                                                          'logoutputfilename': curgate_settings['logoutputfilename']
                                                           },
                                                          isdata=True)
 
-                            if 'color' in cur_gateop.keys():
-                                color = cur_gateop['color']
+                            if 'color' in cur_gateop_settings.keys():
+                                color = cur_gateop_settings['color']
                                 default_color = self.Constants.def_colors[ggi]
                                 color = WF.confirmColor(color, default_color)
-                            if 'top' in cur_gateop.keys():
+                            if 'top' in cur_gateop_settings.keys():
                                 ax.axhline(gatetop, color=color, zorder=-7)
-                            if 'bottom' in cur_gateop.keys():
+                            if 'bottom' in cur_gateop_settings.keys():
                                 ax.axhline(gatebottom, color=color, zorder=-7)
-                            if 'middle' in cur_gateop.keys():
+                            if 'middle' in cur_gateop_settings.keys():
                                 ax.axhline(gatemiddle, color=color, zorder=-7)
 
                             if gateop_has_value:
@@ -1324,14 +1324,16 @@ class MakeAutomatedReport(object):
 
         object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = WF.getObjectYears(self, object_settings)
 
-        data = self.Data.getTableDataDictionary(object_settings)
-        data = WF.mergeLines(data, object_settings)
+        data, data_settings = self.Data.getTableDataDictionary(object_settings)
+        data = WF.mergeLines(data, data_settings, object_settings)
 
-        headings, rows = Tables.buildTable(object_settings, object_settings['split_by_year'], data)
+        object_settings = Tables.replaceComparisonSettings(object_settings, self.iscomp)
+
+        headings, rows = Tables.buildTable(object_settings, object_settings['split_by_year'], data_settings)
 
         object_settings = self.configureSettingsForID('base', object_settings)
 
-        object_settings['units_list'] = WF.getUnitsList(data)
+        object_settings['units_list'] = WF.getUnitsList(data_settings)
         object_settings['plot_units'] = WF.getPlotUnits(object_settings['units_list'], object_settings)
 
         object_settings = WF.updateFlaggedValues(object_settings, '%%units%%', WF.formatUnitsStrings(object_settings['plot_units'], format='external'))
@@ -1339,7 +1341,7 @@ class MakeAutomatedReport(object):
         headings = WF.updateFlaggedValues(headings, '%%units%%', WF.formatUnitsStrings(object_settings['plot_units'], format='external'))
 
         data = Tables.filterTableData(data, object_settings)
-        data = Tables.correctTableUnits(data, object_settings)
+        data = Tables.correctTableUnits(data, data_settings, object_settings)
 
         if 'description' in object_settings.keys():
             desc = object_settings['description']
@@ -1348,52 +1350,68 @@ class MakeAutomatedReport(object):
 
         desc = WF.updateFlaggedValues(desc, '%%year%%', object_settings['yearstr'])
 
-        self.XML.writeTableStart(desc, 'Statistics')
-        for i, yearheader in enumerate(headings):
-            year = yearheader[0]
-            header = yearheader[1]
-            frmt_rows = []
-            threshold_colors = np.full(len(rows), None)
-            for ri, row in enumerate(rows):
-                s_row = row.split('|')
-                rowname = s_row[0]
-                row_val = s_row[i+1]
-                if '%%' in row_val:
-                    rowdata, sr_month = Tables.getStatsLineData(row_val, data, year=year)
-                    if len(rowdata) == 0:
-                        row_val = None
-                    else:
-                        row_val, stat = Tables.getStatsLine(row_val, rowdata)
-                        if not np.isnan(row_val) and row_val != None:
-                            thresholdsettings = Tables.matchThresholdToStat(stat, object_settings)
-                            for thresh in thresholdsettings:
-                                if thresh['colorwhen'] == 'under':
-                                    if row_val < thresh['value']:
-                                        threshold_colors[ri] = thresh['color']
-                                elif thresh['colorwhen'] == 'over':
-                                    if row_val > thresh['value']:
-                                        threshold_colors[ri] = thresh['color']
-                        data_start_date, data_end_date = Tables.getTableDates(year, object_settings)
-                        self.WAT_log.addLogEntry({'type': 'Statistic',
-                                                  'name': ' '.join([self.ChapterRegion, header, stat]),
-                                                  'description': desc,
-                                                  'value': row_val,
-                                                  'function': stat,
-                                                  'units': object_settings['plot_units'],
-                                                  'value_start_date': WT.translateDateFormat(data_start_date, 'datetime', '',
-                                                                                             self.StartTime, self.EndTime,
-                                                                                             self.ModelAlt.t_offset),
-                                                  'value_end_date': WT.translateDateFormat(data_end_date, 'datetime', '',
-                                                                                           self.StartTime, self.EndTime,
-                                                                                           self.ModelAlt.t_offset),
-                                                  'logoutputfilename': ', '.join([data[flag]['logoutputfilename'] for flag in data])
-                                                  },
-                                                 isdata=True)
+        if self.iscomp:
+            self.XML.writeDateControlledTableStart(desc, 'Statistics')
+        else:
+            self.XML.writeTableStart(desc, 'Statistics')
 
-                header = '' if header == None else header
-                numberFormat = Tables.matchNumberFormatByStat(stat, object_settings)
-                frmt_rows.append('{0}|{1}'.format(rowname, WF.formatNumbers(row_val, numberFormat)))
-            self.XML.writeTableColumn(header, frmt_rows, thresholdcolors=threshold_colors)
+        headings_i = Tables.configureHeadingsGroups(headings)
+
+        for headGroup in headings_i:
+            for hgi, i in enumerate(headGroup):
+                yearheader = headings[i]
+                year = yearheader[0]
+                header = yearheader[1]
+                if self.iscomp and hgi == 0: #if a comparison, write the date column.
+                    if year == 'ALLYEARS':
+                        datecolumn = self.years_str
+                    else:
+                        datecolumn = year
+                    self.XML.writeDateColumn(datecolumn)
+                frmt_rows = []
+                threshold_colors = np.full(len(rows), None)
+                for ri, row in enumerate(rows):
+                    s_row = row.split('|')
+                    rowname = s_row[0]
+                    row_val = s_row[i+1]
+                    if '%%' in row_val:
+                        rowdata, sr_month = Tables.getStatsLineData(row_val, data, year=year)
+                        if len(rowdata) == 0:
+                            row_val = None
+                        else:
+                            row_val, stat = Tables.getStatsLine(row_val, rowdata)
+                            if not np.isnan(row_val) and row_val != None:
+                                thresholdsettings = Tables.matchThresholdToStat(stat, object_settings)
+                                for thresh in thresholdsettings:
+                                    if thresh['colorwhen'] == 'under':
+                                        if row_val < thresh['value']:
+                                            threshold_colors[ri] = thresh['color']
+                                    elif thresh['colorwhen'] == 'over':
+                                        if row_val > thresh['value']:
+                                            threshold_colors[ri] = thresh['color']
+                            data_start_date, data_end_date = Tables.getTableDates(year, object_settings)
+                            self.WAT_log.addLogEntry({'type': 'Statistic',
+                                                      'name': ' '.join([self.ChapterRegion, header, stat]),
+                                                      'description': desc,
+                                                      'value': row_val,
+                                                      'function': stat,
+                                                      'units': object_settings['plot_units'],
+                                                      'value_start_date': WT.translateDateFormat(data_start_date, 'datetime', '',
+                                                                                                 self.StartTime, self.EndTime,
+                                                                                                 self.ModelAlt.t_offset),
+                                                      'value_end_date': WT.translateDateFormat(data_end_date, 'datetime', '',
+                                                                                               self.StartTime, self.EndTime,
+                                                                                               self.ModelAlt.t_offset),
+                                                      'logoutputfilename': ', '.join([data_settings[flag]['logoutputfilename'] for flag in data_settings])
+                                                      },
+                                                     isdata=True)
+
+                    header = '' if header == None else header
+                    numberFormat = Tables.matchNumberFormatByStat(stat, object_settings)
+                    frmt_rows.append('{0}|{1}'.format(rowname, WF.formatNumbers(row_val, numberFormat)))
+                self.XML.writeTableColumn(header, frmt_rows, thresholdcolors=threshold_colors)
+            if self.iscomp:
+                self.XML.writeDateColumnEnd()
         self.XML.writeTableEnd()
 
     def makeMonthlyStatisticsTable(self, object_settings):
@@ -1419,19 +1437,21 @@ class MakeAutomatedReport(object):
 
         object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = WF.getObjectYears(self, object_settings)
 
-        data = self.Data.getTableDataDictionary(object_settings)
-        data = WF.mergeLines(data, object_settings)
+        data, data_settings = self.Data.getTableDataDictionary(object_settings)
+        data = WF.mergeLines(data, data_settings, object_settings)
 
-        headings, rows = Tables.buildTable(object_settings, object_settings['split_by_year'], data)
+        object_settings = Tables.replaceComparisonSettings(object_settings, self.iscomp)
+
+        headings, rows = Tables.buildTable(object_settings, object_settings['split_by_year'], data_settings)
 
         object_settings= self.configureSettingsForID('base', object_settings)
-        object_settings['units_list'] = WF.getUnitsList(data)
+        object_settings['units_list'] = WF.getUnitsList(data_settings)
         object_settings['plot_units'] = WF.getPlotUnits(object_settings['units_list'], object_settings)
 
         object_settings = WF.updateFlaggedValues(object_settings, '%%units%%', WF.formatUnitsStrings(object_settings['plot_units'], format='external'))
 
         data = Tables.filterTableData(data, object_settings)
-        data = Tables.correctTableUnits(data, object_settings)
+        data = Tables.correctTableUnits(data, data_settings, object_settings)
 
         thresholds = Tables.formatThreshold(object_settings)
 
@@ -1441,52 +1461,68 @@ class MakeAutomatedReport(object):
             desc = ''
         desc = WF.updateFlaggedValues(desc, '%%year%%', object_settings['yearstr'])
 
-        self.XML.writeTableStart(desc, 'Month')
-        for i, yearheader in enumerate(headings):
-            year = yearheader[0]
-            header = yearheader[1]
-            frmt_rows = []
-            threshold_colors = np.full(len(rows), None)
-            for ri, row in enumerate(rows):
-                s_row = row.split('|')
-                rowname = s_row[0]
-                row_val = s_row[i+1]
-                stat=None
-                if '%%' in row_val:
-                    rowdata, sr_month = Tables.getStatsLineData(row_val, data, year=year)
-                    if len(rowdata) == 0:
-                        row_val = None
-                    else:
-                        row_val, stat = Tables.getStatsLine(row_val, rowdata)
-                        if not np.isnan(row_val) and row_val != None:
-                            for thresh in thresholds:
-                                if thresh['colorwhen'] == 'under':
-                                    if row_val < thresh['value']:
-                                        threshold_colors[ri] = thresh['color']
-                                elif thresh['colorwhen'] == 'over':
-                                    if row_val > thresh['value']:
-                                        threshold_colors[ri] = thresh['color']
-                        data_start_date, data_end_date = Tables.getTableDates(year, object_settings, month=sr_month)
-                        self.WAT_log.addLogEntry({'type': 'Statistic',
-                                                  'name': ' '.join([self.ChapterRegion, header, stat]),
-                                                  'description': object_settings['description'],
-                                                  'value': row_val,
-                                                  'units': object_settings['units_list'],
-                                                  'function': stat,
-                                                  'value_start_date': WT.translateDateFormat(data_start_date, 'datetime', '',
-                                                                                             self.StartTime, self.EndTime,
-                                                                                             self.ModelAlt.t_offset),
-                                                  'value_end_date': WT.translateDateFormat(data_end_date, 'datetime', '',
-                                                                                           self.StartTime, self.EndTime,
-                                                                                           self.ModelAlt.t_offset),
-                                                  'logoutputfilename': ', '.join([data[flag]['logoutputfilename'] for flag in data])
-                                                  },
-                                                 isdata=True)
+        if self.iscomp:
+            self.XML.writeDateControlledTableStart(desc, 'Month')
+        else:
+            self.XML.writeTableStart(desc, 'Month')
 
-                header = '' if header == None else header
-                numberFormat = Tables.matchNumberFormatByStat(stat, object_settings)
-                frmt_rows.append('{0}|{1}'.format(rowname, WF.formatNumbers(row_val, numberFormat)))
-            self.XML.writeTableColumn(header, frmt_rows, thresholdcolors=threshold_colors)
+        headings_i = Tables.configureHeadingsGroups(headings)
+
+        for headGroup in headings_i:
+            for hgi, i in enumerate(headGroup):
+                yearheader = headings[i]
+                year = yearheader[0]
+                header = yearheader[1]
+                if self.iscomp and hgi == 0: #if a comparison, write the date column.
+                    if year == 'ALLYEARS':
+                        datecolumn = self.years_str
+                    else:
+                        datecolumn = year
+                    self.XML.writeDateColumn(datecolumn)
+                frmt_rows = []
+                threshold_colors = np.full(len(rows), None)
+                for ri, row in enumerate(rows):
+                    s_row = row.split('|')
+                    rowname = s_row[0]
+                    row_val = s_row[i+1]
+                    stat=None
+                    if '%%' in row_val:
+                        rowdata, sr_month = Tables.getStatsLineData(row_val, data, year=year)
+                        if len(rowdata) == 0:
+                            row_val = None
+                        else:
+                            row_val, stat = Tables.getStatsLine(row_val, rowdata)
+                            if not np.isnan(row_val) and row_val != None:
+                                for thresh in thresholds:
+                                    if thresh['colorwhen'] == 'under':
+                                        if row_val < thresh['value']:
+                                            threshold_colors[ri] = thresh['color']
+                                    elif thresh['colorwhen'] == 'over':
+                                        if row_val > thresh['value']:
+                                            threshold_colors[ri] = thresh['color']
+                            data_start_date, data_end_date = Tables.getTableDates(year, object_settings, month=sr_month)
+                            self.WAT_log.addLogEntry({'type': 'Statistic',
+                                                      'name': ' '.join([self.ChapterRegion, header, stat]),
+                                                      'description': object_settings['description'],
+                                                      'value': row_val,
+                                                      'units': object_settings['units_list'],
+                                                      'function': stat,
+                                                      'value_start_date': WT.translateDateFormat(data_start_date, 'datetime', '',
+                                                                                                 self.StartTime, self.EndTime,
+                                                                                                 self.ModelAlt.t_offset),
+                                                      'value_end_date': WT.translateDateFormat(data_end_date, 'datetime', '',
+                                                                                               self.StartTime, self.EndTime,
+                                                                                               self.ModelAlt.t_offset),
+                                                      'logoutputfilename': ', '.join([data_settings[flag]['logoutputfilename'] for flag in data_settings])
+                                                      },
+                                                     isdata=True)
+
+                    header = '' if header == None else header
+                    numberFormat = Tables.matchNumberFormatByStat(stat, object_settings)
+                    frmt_rows.append('{0}|{1}'.format(rowname, WF.formatNumbers(row_val, numberFormat)))
+                self.XML.writeTableColumn(header, frmt_rows, thresholdcolors=threshold_colors)
+            if self.iscomp:
+                self.XML.writeDateColumnEnd()
         self.XML.writeTableEnd()
 
     def makeSingleStatisticTable(self, object_settings):
@@ -1512,31 +1548,47 @@ class MakeAutomatedReport(object):
 
         object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = WF.getObjectYears(self, object_settings)
 
-        data = self.Data.getTableDataDictionary(object_settings)
-        data = WF.mergeLines(data, object_settings)
+        data, data_settings = self.Data.getTableDataDictionary(object_settings)
+        data = WF.mergeLines(data, data_settings, object_settings)
 
-        object_settings['units_list'] = WF.getUnitsList(data)
+        object_settings['units_list'] = WF.getUnitsList(data_settings)
         object_settings['plot_units'] = WF.getPlotUnits(object_settings['units_list'], object_settings)
 
         object_settings = WF.updateFlaggedValues(object_settings, '%%units%%', WF.formatUnitsStrings(object_settings['plot_units'], format='external'))
 
         data = Tables.filterTableData(data, object_settings)
-        data = Tables.correctTableUnits(data, object_settings)
+        data = Tables.correctTableUnits(data, data_settings, object_settings)
+
+        object_settings = Tables.replaceComparisonSettings(object_settings, self.iscomp)
 
         thresholds = Tables.formatThreshold(object_settings)
 
-        computedKeys = self.Data.getComputedData(data)
-        for key in computedKeys:
-            object_settings_blueprint = pickle.loads(pickle.dumps(object_settings, -1))
-            object_settings_blueprint = self.configureSettingsForID(data[key]['ID'], object_settings_blueprint)
-            # self.loadCurrentID(data[key]['ID'])
-            # self.loadCurrentModelAltID(data[key]['ID'])
-            data_filt = self.Data.filterComputed(data, key, computedKeys)
+        object_settings_blueprint = pickle.loads(pickle.dumps(object_settings, -1))
 
-            headings, rows = Tables.buildSingleStatTable(object_settings_blueprint, data_filt)
+        headings, rows = Tables.buildSingleStatTable(object_settings_blueprint, data_settings)
+        object_settings = self.configureSettingsForID('base', object_settings)
 
-            self.XML.writeNarrowTableStart(object_settings_blueprint['description'], 'Year')
+        if 'description' in object_settings.keys():
+            desc = object_settings['description']
+        else:
+            desc = ''
+
+        desc = WF.updateFlaggedValues(desc, '%%year%%', object_settings['yearstr'])
+
+        if self.iscomp:
+            self.XML.writeDateControlledTableStart(desc, 'Year')
+        else:
+            self.XML.writeNarrowTableStart(desc, 'Year')
+
+        if self.iscomp:
+            datecolumns = self.Constants.mo_str_3
+        else:
+            datecolumns = [''] #if not comp run we dont need date headings, months will be in headings
+
+        for mi, month in enumerate(datecolumns):
             for i, header in enumerate(headings):
+                if self.iscomp and i == 0:  #if a comparison, write the date column.
+                    self.XML.writeDateColumn(month)
                 frmt_rows = []
                 threshold_colors = np.full(len(rows), None)
                 for ri, row in enumerate(rows):
@@ -1545,15 +1597,10 @@ class MakeAutomatedReport(object):
                     if rowname == 'ALLYEARS':
                         rowname = 'All'
                     year = object_settings['years'][ri]
-                    # if rowname in [str(n) for n in object_settings_blueprint['years']]:
-                    #     year = int(rowname)
-                    # else:
-                    #     year = 'ALLYEARS'
-                    #     rowname = 'ALL'
-                    row_val = s_row[i+1]
+                    row_val = s_row[i+(len(headings)*mi)+1]
                     stat = None
                     if '%%' in row_val:
-                        rowdata, sr_month = Tables.getStatsLineData(row_val, data_filt, year=year)
+                        rowdata, sr_month = Tables.getStatsLineData(row_val, data, year=year)
                         if len(rowdata) == 0:
                             row_val = None
                         else:
@@ -1582,7 +1629,7 @@ class MakeAutomatedReport(object):
                                                       'value_end_date': WT.translateDateFormat(data_end_date, 'datetime', '',
                                                                                                self.StartTime, self.EndTime,
                                                                                                self.ModelAlt.t_offset),
-                                                      'logoutputfilename': ', '.join([data[flag]['logoutputfilename'] for flag in data])
+                                                      'logoutputfilename': ', '.join([data_settings[flag]['logoutputfilename'] for flag in data_settings])
                                                       },
                                                      isdata=True)
 
@@ -1590,9 +1637,9 @@ class MakeAutomatedReport(object):
                     numberFormat = Tables.matchNumberFormatByStat(stat, object_settings_blueprint)
                     frmt_rows.append('{0}|{1}'.format(rowname, WF.formatNumbers(row_val, numberFormat)))
                 self.XML.writeTableColumn(header, frmt_rows, thresholdcolors=threshold_colors)
-            self.XML.writeTableEnd()
-        self.loadCurrentID('base')
-        self.loadCurrentModelAltID('base')
+            if self.iscomp:
+                self.XML.writeDateColumnEnd()
+        self.XML.writeTableEnd()
 
     def makeSingleStatisticProfileTable(self, object_settings):
         '''
@@ -1627,6 +1674,8 @@ class MakeAutomatedReport(object):
         data, line_settings = self.Data.getProfileDataDictionary(object_settings)
         line_settings = WF.correctDuplicateLabels(line_settings)
 
+        object_settings = Tables.replaceComparisonSettings(object_settings, self.iscomp)
+
         ################ convert yflags ################
         if object_settings['usedepth'].lower() == 'false':
             wse_data = self.Data.getProfileWSE(object_settings, onflag='datapaths')
@@ -1635,8 +1684,6 @@ class MakeAutomatedReport(object):
             wse_data = self.Data.getProfileWSE(object_settings, onflag='datapaths')
             data, object_settings = WProfile.convertElevationsToDepths(data, object_settings, wse_data=wse_data)
 
-        # headings, rows = Tables.buildSingleStatTable(object_settings, line_settings)
-        #
         # object_settings= self.configureSettingsForID('base', object_settings) #will turn on for comparison plot later
         ################# Get plot units #################
         data, line_settings = WProfile.convertProfileDataUnits(object_settings, data, line_settings)
@@ -1653,19 +1700,33 @@ class MakeAutomatedReport(object):
 
         thresholds = Tables.formatThreshold(object_settings)
 
-        computedKeys = self.Data.getComputedData(line_settings)
-        for key in computedKeys:
-            object_settings_blueprint = pickle.loads(pickle.dumps(object_settings, -1))
-            object_settings_blueprint = self.configureSettingsForID(line_settings[key]['ID'], object_settings_blueprint)
-            # self.loadCurrentID(data[key]['ID'])
-            # self.loadCurrentModelAltID(data[key]['ID'])
-            data_filt = self.Data.filterComputed(data, key, computedKeys)
-            line_settings_filt = self.Data.filterComputed(line_settings, key, computedKeys)
+        object_settings_blueprint = pickle.loads(pickle.dumps(object_settings, -1))
 
-            headings, rows = Tables.buildSingleStatTable(object_settings_blueprint, line_settings_filt)
+        headings, rows = Tables.buildSingleStatTable(object_settings_blueprint, line_settings)
+        object_settings = self.configureSettingsForID('base', object_settings)
 
-            self.XML.writeNarrowTableStart(object_settings_blueprint['description'], 'Year')
+        if 'description' in object_settings.keys():
+            desc = object_settings['description']
+        else:
+            desc = ''
+
+        desc = WF.updateFlaggedValues(desc, '%%year%%', object_settings['yearstr'])
+
+        if self.iscomp:
+            self.XML.writeDateControlledTableStart(desc, 'Year')
+        else:
+            self.XML.writeNarrowTableStart(desc, 'Year')
+
+        if self.iscomp:
+            datecolumns = self.Constants.mo_str_3
+        else:
+            datecolumns = [''] #if not comp run we dont need date headings, months will be in headings
+
+        for mi, month in enumerate(datecolumns):
             for i, header in enumerate(headings):
+                if self.iscomp and i == 0:
+                    #if a comparison, write the date column. Otherwise, this will be our header
+                    self.XML.writeDateColumn(month)
                 frmt_rows = []
                 threshold_colors = np.full(len(rows), None)
                 for ri, row in enumerate(rows):
@@ -1674,21 +1735,23 @@ class MakeAutomatedReport(object):
                     if rowname == 'ALLYEARS':
                         rowname = 'All'
                     year = object_settings['years'][ri]
-                    # if rowname in [str(n) for n in object_settings_blueprint['years']]:
-                    #     year = int(rowname)
-                    # else:
-                    #     year = 'ALLYEARS'
-                    #     rowname = 'ALL'
-                    row_val = s_row[i+1]
+                    row_val = s_row[i+(len(headings)*mi)+1]
+
                     stat = None
                     if '%%' in row_val:
                         rowval_stats = {}
                         if year == 'ALLYEARS':
-                            data_idx = WF.getAllMonthIdx(object_settings_blueprint['timestamp_index'], i)
+                            if self.iscomp:
+                                data_idx = WF.getAllMonthIdx(object_settings_blueprint['timestamp_index'], mi)
+                            else:
+                                data_idx = WF.getAllMonthIdx(object_settings_blueprint['timestamp_index'], i)
                         else:
-                            data_idx = object_settings_blueprint['timestamp_index'][ri][i]
+                            if self.iscomp:
+                                data_idx = object_settings_blueprint['timestamp_index'][ri][mi]
+                            else:
+                                data_idx = object_settings_blueprint['timestamp_index'][ri][i]
                         for di in data_idx:
-                            stats_data = Tables.formatStatsProfileLineData(row_val, data_filt, object_settings_blueprint['resolution'],
+                            stats_data = Tables.formatStatsProfileLineData(row_val, data, object_settings_blueprint['resolution'],
                                                                            object_settings_blueprint['usedepth'], di)
                             rowval_stats = WProfile.stackProfileIndicies(rowval_stats, stats_data)
 
@@ -1703,8 +1766,10 @@ class MakeAutomatedReport(object):
                                 elif thresh['colorwhen'] == 'over':
                                     if row_val > thresh['value']:
                                         threshold_colors[ri] = thresh['color']
-
-                        data_start_date, data_end_date = Tables.getTableDates(year, object_settings_blueprint, month=header)
+                        if self.iscomp:
+                            data_start_date, data_end_date = Tables.getTableDates(year, object_settings_blueprint, month=month)
+                        else:
+                            data_start_date, data_end_date = Tables.getTableDates(year, object_settings_blueprint, month=header)
                         self.WAT_log.addLogEntry({'type': 'ProfileTableStatistic',
                                                   'name': ' '.join([self.ChapterRegion, header, stat]),
                                                   'description': object_settings_blueprint['description'],
@@ -1720,11 +1785,10 @@ class MakeAutomatedReport(object):
                     header = '' if header == None else header
                     numberFormat = Tables.matchNumberFormatByStat(stat, object_settings_blueprint)
                     frmt_rows.append('{0}|{1}'.format(rowname, WF.formatNumbers(row_val, numberFormat)))
-
                 self.XML.writeTableColumn(header, frmt_rows, thresholdcolors=threshold_colors)
-            self.XML.writeTableEnd()
-        self.loadCurrentID('base')
-        self.loadCurrentModelAltID('base')
+            if self.iscomp:
+                self.XML.writeDateColumnEnd()
+        self.XML.writeTableEnd()
 
     def makeContourPlot(self, object_settings):
         '''
@@ -1769,9 +1833,9 @@ class MakeAutomatedReport(object):
             #[01jan2016, 04Feb2016, 23May2016] #dates
             #[0, 19, 25, 35] #distances
 
-            contoursbyID = self.Data.getContourDataDictionary(cur_obj_settings)
+            contoursbyID, contoursbyID_settings = self.Data.getContourDataDictionary(cur_obj_settings)
             contoursbyID = WF.filterDataByYear(contoursbyID, year)
-            selectedContourIDs = WF.getUsedIDs(contoursbyID)
+            selectedContourIDs = WF.getUsedIDs(contoursbyID_settings)
 
             straightlines = self.Data.getStraightLineValue(cur_obj_settings)
 
@@ -1796,29 +1860,30 @@ class MakeAutomatedReport(object):
                                          )
 
             for IDi, ID in enumerate(selectedContourIDs):
-                contour_settings = pickle.loads(pickle.dumps(cur_obj_settings, -1))
-                contour_settings = self.configureSettingsForID(ID, contour_settings)
-                contours = WF.selectContourReachesByID(contoursbyID, ID)
-                values, dates, distance, transitions = WF.stackContours(contours)
+                contour_plot_settings = pickle.loads(pickle.dumps(cur_obj_settings, -1))
+                contour_plot_settings = self.configureSettingsForID(ID, contour_plot_settings)
+                contours = WF.selectContourByID(contoursbyID, ID)
+                contour_settings = WF.selectContourByID(contoursbyID_settings, ID)
+                values, dates, distance, transitions = WF.stackContours(contours, contoursbyID_settings)
                 if len(selectedContourIDs) == 1:
                     axes = [axes]
 
                 ax = axes[IDi]
 
-                for contourname in contours:
-                    contour = contours[contourname]
-                    parameter, contour_settings['param_count'] = WF.getParameterCount(contour, contour_settings)
+                for contourname in contour_settings:
+                    c_set = contour_settings[contourname]
+                    parameter, contour_plot_settings['param_count'] = WF.getParameterCount(c_set, contour_plot_settings)
 
-                if 'units' in contour_settings.keys():
-                    units = contour_settings['units']
+                if 'units' in contour_plot_settings.keys():
+                    units = contour_plot_settings['units']
                 else:
-                    if 'parameter' in contour_settings.keys():
-                        parameter = contour_settings['parameter']
+                    if 'parameter' in contour_plot_settings.keys():
+                        parameter = contour_plot_settings['parameter']
                     else:
                         parameter = ''
                         top_count = 0
-                        for key in contour_settings['param_count'].keys():
-                            if contour_settings['param_count'][key] > top_count:
+                        for key in contour_plot_settings['param_count'].keys():
+                            if contour_plot_settings['param_count'][key] > top_count:
                                 parameter = key
                     try:
                         units = self.Constants.units[parameter]
@@ -1826,13 +1891,13 @@ class MakeAutomatedReport(object):
                         units = None
 
                 if isinstance(units, dict):
-                    if 'unitsystem' in contour_settings.keys():
-                        units = units[contour_settings['unitsystem'].lower()]
+                    if 'unitsystem' in contour_plot_settings.keys():
+                        units = units[contour_plot_settings['unitsystem'].lower()]
                     else:
                         units = None
 
-                if 'unitsystem' in contour_settings.keys():
-                    values, units = WF.convertUnitSystem(values, units, contour_settings['unitsystem']) #TODO: confirm
+                if 'unitsystem' in contour_plot_settings.keys():
+                    values, units = WF.convertUnitSystem(values, units, contour_plot_settings['unitsystem']) #TODO: confirm
 
                 chkvals = WF.checkData(values)
                 if not chkvals:
@@ -1841,32 +1906,32 @@ class MakeAutomatedReport(object):
 
                 dates = WT.JDateToDatetime(dates, self.startYear)
 
-                if 'label' not in contour_settings.keys():
-                    contour_settings['label'] = ''
+                if 'label' not in contour_plot_settings.keys():
+                    contour_plot_settings['label'] = ''
 
-                if 'description' not in contour_settings.keys():
-                    contour_settings['description'] = ''
+                if 'description' not in contour_plot_settings.keys():
+                    contour_plot_settings['description'] = ''
 
-                contour_settings = WD.getDefaultContourSettings(contour_settings)
+                contour_plot_settings = WD.getDefaultContourSettings(contour_plot_settings)
 
-                if 'min' in contour_settings['colorbar']:
-                    vmin = float(contour_settings['colorbar']['min'])
+                if 'min' in contour_plot_settings['colorbar']:
+                    vmin = float(contour_plot_settings['colorbar']['min'])
                 else:
                     vmin = np.nanmin(values)
-                if 'max' in contour_settings['colorbar']:
-                    vmax = float(contour_settings['colorbar']['max'])
+                if 'max' in contour_plot_settings['colorbar']:
+                    vmax = float(contour_plot_settings['colorbar']['max'])
                 else:
                     vmax = np.nanmax(values)
 
-                contr = ax.contourf(dates, distance, values.T, cmap=contour_settings['colorbar']['colormap'],
+                contr = ax.contourf(dates, distance, values.T, cmap=contour_plot_settings['colorbar']['colormap'],
                                     vmin=vmin, vmax=vmax,
-                                    levels=np.linspace(vmin, vmax, int(contour_settings['colorbar']['bins'])), #add one to get the desired number..
+                                    levels=np.linspace(vmin, vmax, int(contour_plot_settings['colorbar']['bins'])), #add one to get the desired number..
                                     extend='both') #the .T transposes the array so dates on bottom TODO:make extend variable
                 # ax.invert_yaxis()
 
-                self.WAT_log.addLogEntry({'type': contour_settings['label'] + '_ContourPlot' if contour_settings['label'] != '' else 'ContourPlot',
+                self.WAT_log.addLogEntry({'type': contour_plot_settings['label'] + '_ContourPlot' if contour_plot_settings['label'] != '' else 'ContourPlot',
                                           'name': self.ChapterRegion+'_'+yearstr,
-                                          'description': contour_settings['description'],
+                                          'description': contour_plot_settings['description'],
                                           'units': units,
                                           'value_start_date': WT.translateDateFormat(dates[0], 'datetime', '',
                                                                                      self.StartTime, self.EndTime,
@@ -1874,14 +1939,14 @@ class MakeAutomatedReport(object):
                                           'value_end_date': WT.translateDateFormat(dates[-1], 'datetime', '',
                                                                                    self.StartTime, self.EndTime,
                                                                                    self.ModelAlt.t_offset).strftime('%d %b %Y'),
-                                          'logoutputfilename': contour['logoutputfilename']
+                                          'logoutputfilename': 'NA'
                                           },
                                          isdata=True)
 
-                contour_settings = WF.updateFlaggedValues(contour_settings, '%%units%%', WF.formatUnitsStrings(units))
+                contour_plot_settings = WF.updateFlaggedValues(contour_plot_settings, '%%units%%', WF.formatUnitsStrings(units))
 
-                if 'contourlines' in contour_settings.keys():
-                    for contourline in contour_settings['contourlines']:
+                if 'contourlines' in contour_plot_settings.keys():
+                    for contourline in contour_plot_settings['contourlines']:
                         if 'value' in contourline.keys():
                             val = float(contourline['value'])
                         else:
@@ -1905,53 +1970,53 @@ class MakeAutomatedReport(object):
                                                  label=label)
 
                 ### VERTICAL LINES ###
-                Plots.plotVerticalLines(straightlines, ax, contour_settings, isdate=True)
+                Plots.plotVerticalLines(straightlines, ax, contour_plot_settings, isdate=True)
 
                 ### Horizontal LINES ###
-                Plots.plotHorizontalLines(straightlines, ax, contour_settings)
+                Plots.plotHorizontalLines(straightlines, ax, contour_plot_settings)
 
                 if self.iscomp:
-                    if 'modeltext' in contour_settings.keys():
-                        modeltext = contour_settings['modeltext']
+                    if 'modeltext' in contour_plot_settings.keys():
+                        modeltext = contour_plot_settings['modeltext']
                     else:
                         modeltext = self.SimulationName
                     plt.text(1.02, 0.5, modeltext, fontsize=12, transform=ax.transAxes, verticalalignment='center',
                              horizontalalignment='center', rotation='vertical')
 
-                if 'gridlines' in contour_settings.keys():
-                    if contour_settings['gridlines'].lower() == 'true':
+                if 'gridlines' in contour_plot_settings.keys():
+                    if contour_plot_settings['gridlines'].lower() == 'true':
                         ax.grid(True)
 
-                if 'ylabel' in contour_settings.keys():
-                    if 'ylabelsize' in contour_settings.keys():
-                        ylabsize = float(contour_settings['ylabelsize'])
-                    elif 'fontsize' in contour_settings.keys():
-                        ylabsize = float(contour_settings['fontsize'])
+                if 'ylabel' in contour_plot_settings.keys():
+                    if 'ylabelsize' in contour_plot_settings.keys():
+                        ylabsize = float(contour_plot_settings['ylabelsize'])
+                    elif 'fontsize' in contour_plot_settings.keys():
+                        ylabsize = float(contour_plot_settings['fontsize'])
                     else:
                         ylabsize = 12
-                    ax.set_ylabel(contour_settings['ylabel'], fontsize=ylabsize)
+                    ax.set_ylabel(contour_plot_settings['ylabel'], fontsize=ylabsize)
 
 
                 xmin, xmax = ax.get_xlim()
                 # if contour_settings['dateformat'].lower() == 'datetime':
                 xmin = mpl.dates.num2date(xmin)
                 xmax = mpl.dates.num2date(xmax)
-                if 'xticks' in contour_settings.keys():
-                    xtick_settings = contour_settings['xticks']
+                if 'xticks' in contour_plot_settings.keys():
+                    xtick_settings = contour_plot_settings['xticks']
                 else:
                     xtick_settings = {}
-                Plots.formatTimeSeriesXticks(ax, xtick_settings, contour_settings)
+                Plots.formatTimeSeriesXticks(ax, xtick_settings, contour_plot_settings)
 
                 ax.set_xlim(left=xmin)
                 ax.set_xlim(right=xmax)
 
-                Plots.formatYTicks(ax, contour_settings)
+                Plots.formatYTicks(ax, contour_plot_settings)
 
-                if 'transitions' in contour_settings.keys():
+                if 'transitions' in contour_plot_settings.keys():
                     for transkey in transitions.keys():
                         transition_start = transitions[transkey]
                         trans_name = None
-                        hline = WD.getDefaultStraightLineSettings(contour_settings['transitions'])
+                        hline = WD.getDefaultStraightLineSettings(contour_plot_settings['transitions'])
 
                         linecolor = WF.prioritizeKey(contours[transkey], hline, 'linecolor')
                         linestylepattern = WF.prioritizeKey(contours[transkey], hline, 'linestylepattern')
@@ -1960,20 +2025,20 @@ class MakeAutomatedReport(object):
 
                         ax.axhline(y=transition_start, c=linecolor, ls=linestylepattern, alpha=float(alpha),
                                    lw=float(linewidth))
-                        if 'name' in contour_settings['transitions'].keys():
-                            trans_flag = contour_settings['transitions']['name'].lower() #blue:pink:white:pink:blue
-                            text_settings = WD.getDefaultTextSettings(contour_settings['transitions'])
+                        if 'name' in contour_plot_settings['transitions'].keys():
+                            trans_flag = contour_plot_settings['transitions']['name'].lower() #blue:pink:white:pink:blue
+                            text_settings = WD.getDefaultTextSettings(contour_plot_settings['transitions'])
 
-                            if trans_flag in contours[transkey].keys():
-                                trans_name = contours[transkey][trans_flag]
+                            if trans_flag in contour_settings[transkey].keys():
+                                trans_name = contour_settings[transkey][trans_flag]
                             if trans_name != None:
                                 if ax.get_ylim()[0] <= transition_start <= ax.get_ylim()[1]:
                                     trans_y_value = transition_start + ((ax.get_ylim()[1] - ax.get_ylim()[0]) * .01)
 
-                                    fontcolor = WF.prioritizeKey(contours[transkey], text_settings, 'fontcolor')
-                                    fontsize = WF.prioritizeKey(contours[transkey], text_settings, 'fontsize')
-                                    horizontalalignment = WF.prioritizeKey(contours[transkey], text_settings, 'horizontalalignment')
-                                    text_x_pos = WF.prioritizeKey(contours[transkey], text_settings, 'text_x_pos', backup=0.001)
+                                    fontcolor = WF.prioritizeKey(contour_settings[transkey], text_settings, 'fontcolor')
+                                    fontsize = WF.prioritizeKey(contour_settings[transkey], text_settings, 'fontsize')
+                                    horizontalalignment = WF.prioritizeKey(contour_settings[transkey], text_settings, 'horizontalalignment')
+                                    text_x_pos = WF.prioritizeKey(contour_settings[transkey], text_settings, 'text_x_pos', backup=0.001)
                                     trans_x_value = mpl.dates.num2date(ax.get_xlim()[0] + ((ax.get_xlim()[1] - ax.get_xlim()[0]) * float(text_x_pos)))
 
                                     ax.text(trans_x_value, trans_y_value, trans_name, c=fontcolor, size=float(fontsize),
@@ -2027,17 +2092,17 @@ class MakeAutomatedReport(object):
                 continue
 
             cbar = plt.colorbar(contr, ax=axes[-1], orientation='horizontal', aspect=50.)
-            locs = np.linspace(vmin, vmax, int(contour_settings['colorbar']['numticks']))
+            locs = np.linspace(vmin, vmax, int(contour_plot_settings['colorbar']['numticks']))
             cbar.set_ticks(locs)
             cbar.set_ticklabels(locs.round(2))
-            if 'label' in contour_settings['colorbar']:
-                if 'labelsize' in contour_settings['colorbar'].keys():
-                    labsize = float(contour_settings['colorbar']['labelsize'])
-                elif 'fontsize' in contour_settings['colorbar'].keys():
+            if 'label' in contour_plot_settings['colorbar']:
+                if 'labelsize' in contour_plot_settings['colorbar'].keys():
+                    labsize = float(contour_plot_settings['colorbar']['labelsize'])
+                elif 'fontsize' in contour_plot_settings['colorbar'].keys():
                     labsize = float(cur_obj_settings['colorbar']['fontsize'])
                 else:
                     labsize = 12
-                cbar.set_label(contour_settings['colorbar']['label'], fontsize=labsize)
+                cbar.set_label(contour_plot_settings['colorbar']['label'], fontsize=labsize)
 
             plt.tight_layout()
             plt.subplots_adjust(hspace=0.05)
@@ -2111,7 +2176,7 @@ class MakeAutomatedReport(object):
             #[0, 19, 25, 35] #elevations
             #[0, 19, 25, 35] #top water elevations
 
-            contoursbyID = self.Data.getReservoirContourDataDictionary(cur_obj_settings)
+            contoursbyID, contoursbyID_settings = self.Data.getReservoirContourDataDictionary(cur_obj_settings)
             contoursbyID = WF.filterDataByYear(contoursbyID, year, extraflag='topwater')
             selectedContourIDs = WF.getUsedIDs(contoursbyID)
             straightlines = self.Data.getStraightLineValue(cur_obj_settings)
@@ -2137,9 +2202,17 @@ class MakeAutomatedReport(object):
                                          )
 
             for IDi, ID in enumerate(selectedContourIDs):
-                contour_settings = pickle.loads(pickle.dumps(cur_obj_settings, -1))
-                contour_settings = self.configureSettingsForID(ID, contour_settings)
-                contour = WF.selectContourReservoirByID(contoursbyID, ID)
+                contour_plot_settings = pickle.loads(pickle.dumps(cur_obj_settings, -1))
+                contour_plot_settings = self.configureSettingsForID(ID, contour_plot_settings)
+                contours = WF.selectContourByID(contoursbyID, ID)
+                contours_settings = WF.selectContourByID(contoursbyID_settings, ID)
+                if len(contours.keys()) > 1:
+                    WF.print2stdout(f'Too many reservoir keys defined. Using the first, {list(contours.keys())[0]}')
+                elif len(contours.keys()) == 0:
+                    WF.print2stdout(f'No reservoir keys defined.')
+                    return
+                contour = contours[list(contours.keys())[0]]
+                contour_settings = contours_settings[list(contours.keys())[0]]
 
                 values = contour['values']
                 elevations = contour['elevations']
@@ -2151,18 +2224,18 @@ class MakeAutomatedReport(object):
 
                 ax = axes[IDi]
 
-                parameter, contour_settings['param_count'] = WF.getParameterCount(contour, contour_settings)
+                parameter, contour_plot_settings['param_count'] = WF.getParameterCount(contour_settings, contour_plot_settings)
 
-                if 'units' in contour_settings.keys():
+                if 'units' in contour_plot_settings.keys():
                     units = contour_settings['units']
                 else:
-                    if 'parameter' in contour_settings.keys():
-                        parameter = contour_settings['parameter']
+                    if 'parameter' in contour_plot_settings.keys():
+                        parameter = contour_plot_settings['parameter']
                     else:
                         parameter = ''
                         top_count = 0
-                        for key in contour_settings['param_count'].keys():
-                            if contour_settings['param_count'][key] > top_count:
+                        for key in contour_plot_settings['param_count'].keys():
+                            if contour_plot_settings['param_count'][key] > top_count:
                                 parameter = key
                     try:
                         units = self.Constants.units[parameter]
@@ -2170,13 +2243,13 @@ class MakeAutomatedReport(object):
                         units = None
 
                 if isinstance(units, dict):
-                    if 'unitsystem' in contour_settings.keys():
-                        units = units[contour_settings['unitsystem'].lower()]
+                    if 'unitsystem' in contour_plot_settings.keys():
+                        units = units[contour_plot_settings['unitsystem'].lower()]
                     else:
                         units = None
 
-                if 'unitsystem' in contour_settings.keys():
-                    values, units = WF.convertUnitSystem(values, units, contour_settings['unitsystem']) #TODO: confirm
+                if 'unitsystem' in contour_plot_settings.keys():
+                    values, units = WF.convertUnitSystem(values, units, contour_plot_settings['unitsystem']) #TODO: confirm
 
                 chkvals = WF.checkData(values)
                 if not chkvals:
@@ -2185,34 +2258,34 @@ class MakeAutomatedReport(object):
 
                 dates = WT.JDateToDatetime(dates, self.startYear)
 
-                if 'label' not in contour_settings.keys():
-                    contour_settings['label'] = ''
+                if 'label' not in contour_plot_settings.keys():
+                    contour_plot_settings['label'] = ''
 
-                if 'description' not in contour_settings.keys():
-                    contour_settings['description'] = ''
+                if 'description' not in contour_plot_settings.keys():
+                    contour_plot_settings['description'] = ''
 
-                contour_settings = WD.getDefaultContourSettings(contour_settings)
+                contour_plot_settings = WD.getDefaultContourSettings(contour_plot_settings)
 
-                if 'min' in contour_settings['colorbar']:
-                    vmin = float(contour_settings['colorbar']['min'])
+                if 'min' in contour_plot_settings['colorbar']:
+                    vmin = float(contour_plot_settings['colorbar']['min'])
                 else:
                     vmin = np.nanmin(values)
-                if 'max' in contour_settings['colorbar']:
-                    vmax = float(contour_settings['colorbar']['max'])
+                if 'max' in contour_plot_settings['colorbar']:
+                    vmax = float(contour_plot_settings['colorbar']['max'])
                 else:
                     vmax = np.nanmax(values)
 
                 values = WF.filterContourOverTopWater(values, elevations, topwater)
 
-                contr = ax.contourf(dates, elevations, values.T, cmap=contour_settings['colorbar']['colormap'],
+                contr = ax.contourf(dates, elevations, values.T, cmap=contour_plot_settings['colorbar']['colormap'],
                                     vmin=vmin, vmax=vmax,
-                                    levels=np.linspace(vmin, vmax, int(contour_settings['colorbar']['bins'])), #add one to get the desired number..
+                                    levels=np.linspace(vmin, vmax, int(contour_plot_settings['colorbar']['bins'])), #add one to get the desired number..
                                     extend='both') #the .T transposes the array so dates on bottom TODO:make extend variable
 
                 # ax.plot(dates, topwater, c='red') #debug topwater
-                self.WAT_log.addLogEntry({'type': contour_settings['label'] + '_ContourPlot' if contour_settings['label'] != '' else 'ContourPlot',
+                self.WAT_log.addLogEntry({'type': contour_plot_settings['label'] + '_ContourPlot' if contour_plot_settings['label'] != '' else 'ContourPlot',
                                           'name': self.ChapterRegion+'_'+yearstr,
-                                          'description': contour_settings['description'],
+                                          'description': contour_plot_settings['description'],
                                           'units': units,
                                           'value_start_date': WT.translateDateFormat(dates[0], 'datetime', '',
                                                                                      self.StartTime, self.EndTime,
@@ -2220,14 +2293,14 @@ class MakeAutomatedReport(object):
                                           'value_end_date': WT.translateDateFormat(dates[-1], 'datetime', '',
                                                                                    self.StartTime, self.EndTime,
                                                                                    self.ModelAlt.t_offset).strftime('%d %b %Y'),
-                                          'logoutputfilename': contour['logoutputfilename']
+                                          'logoutputfilename': 'NA'
                                           },
                                          isdata=True)
 
-                contour_settings = WF.updateFlaggedValues(contour_settings, '%%units%%', WF.formatUnitsStrings(units))
+                contour_plot_settings = WF.updateFlaggedValues(contour_plot_settings, '%%units%%', WF.formatUnitsStrings(units))
 
-                if 'contourlines' in contour_settings.keys():
-                    for contourline in contour_settings['contourlines']:
+                if 'contourlines' in contour_plot_settings.keys():
+                    for contourline in contour_plot_settings['contourlines']:
                         if 'value' in contourline.keys():
                             val = float(contourline['value'])
                         else:
@@ -2251,36 +2324,36 @@ class MakeAutomatedReport(object):
                                                  label=label)
 
                 ### VERTICAL LINES ###
-                Plots.plotVerticalLines(straightlines, ax, contour_settings, isdate=True)
+                Plots.plotVerticalLines(straightlines, ax, contour_plot_settings, isdate=True)
 
                 ### Horizontal LINES ###
-                Plots.plotHorizontalLines(straightlines, ax, contour_settings)
+                Plots.plotHorizontalLines(straightlines, ax, contour_plot_settings)
 
                 if self.iscomp:
-                    if 'modeltext' in contour_settings.keys():
-                        modeltext = contour_settings['modeltext']
+                    if 'modeltext' in contour_plot_settings.keys():
+                        modeltext = contour_plot_settings['modeltext']
                     else:
                         modeltext = self.SimulationName
                     plt.text(1.02, 0.5, modeltext, fontsize=12, transform=ax.transAxes, verticalalignment='center',
                              horizontalalignment='center', rotation='vertical')
 
 
-                if 'gridlines' in contour_settings.keys():
-                    if contour_settings['gridlines'].lower() == 'true':
+                if 'gridlines' in contour_plot_settings.keys():
+                    if contour_plot_settings['gridlines'].lower() == 'true':
                         ax.grid(True)
 
-                if 'ylabel' in contour_settings.keys():
-                    if 'ylabelsize' in contour_settings.keys():
-                        ylabsize = float(contour_settings['ylabelsize'])
-                    elif 'fontsize' in contour_settings.keys():
-                        ylabsize = float(contour_settings['fontsize'])
+                if 'ylabel' in contour_plot_settings.keys():
+                    if 'ylabelsize' in contour_plot_settings.keys():
+                        ylabsize = float(contour_plot_settings['ylabelsize'])
+                    elif 'fontsize' in contour_plot_settings.keys():
+                        ylabsize = float(contour_plot_settings['fontsize'])
                     else:
                         ylabsize = 12
-                    ax.set_ylabel(contour_settings['ylabel'], fontsize=ylabsize)
+                    ax.set_ylabel(contour_plot_settings['ylabel'], fontsize=ylabsize)
 
                 ############# xticks and lims #############
 
-                useplot = Plots.formatDateXAxis(ax, contour_settings)
+                useplot = Plots.formatDateXAxis(ax, contour_plot_settings)
                 if not useplot:
                     useAx.append(False)
                 else:
@@ -2290,17 +2363,17 @@ class MakeAutomatedReport(object):
                 xmin = mpl.dates.num2date(xmin)
                 xmax = mpl.dates.num2date(xmax)
 
-                if 'xticks' in contour_settings.keys():
-                    xtick_settings = contour_settings['xticks']
+                if 'xticks' in contour_plot_settings.keys():
+                    xtick_settings = contour_plot_settings['xticks']
                 else:
                     xtick_settings = {}
-                Plots.formatTimeSeriesXticks(ax, xtick_settings, contour_settings)
+                Plots.formatTimeSeriesXticks(ax, xtick_settings, contour_plot_settings)
 
                 ax.set_xlim(left=xmin)
                 ax.set_xlim(right=xmax)
 
                 ############# yticks and lims #############
-                Plots.formatYTicks(ax, contour_settings)
+                Plots.formatYTicks(ax, contour_plot_settings)
 
             # #stuff to call once per plot
             self.configureSettingsForID('base', cur_obj_settings)
@@ -2347,17 +2420,17 @@ class MakeAutomatedReport(object):
                         plt.legend(fontsize=legsize)
 
             cbar = plt.colorbar(contr, ax=axes[-1], orientation='horizontal', aspect=50.)
-            locs = np.linspace(vmin, vmax, int(contour_settings['colorbar']['numticks']))
+            locs = np.linspace(vmin, vmax, int(contour_plot_settings['colorbar']['numticks']))
             cbar.set_ticks(locs)
             cbar.set_ticklabels(locs.round(2))
-            if 'label' in contour_settings['colorbar']:
-                if 'labelsize' in contour_settings['colorbar'].keys():
-                    labsize = float(contour_settings['colorbar']['labelsize'])
+            if 'label' in contour_plot_settings['colorbar']:
+                if 'labelsize' in contour_plot_settings['colorbar'].keys():
+                    labsize = float(contour_plot_settings['colorbar']['labelsize'])
                 elif 'fontsize' in cur_obj_settings['colorbar'].keys():
                     labsize = float(cur_obj_settings['colorbar']['fontsize'])
                 else:
                     labsize = 12
-                cbar.set_label(contour_settings['colorbar']['label'], fontsize=labsize)
+                cbar.set_label(contour_plot_settings['colorbar']['label'], fontsize=labsize)
 
             plt.tight_layout()
             plt.subplots_adjust(hspace=0.05)

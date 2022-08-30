@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-import os
+import os, sys
 import numpy as np
 import datetime as dt
 import h5py
@@ -60,7 +60,11 @@ class ResSim_Results(object):
         :param h5fname: filepath to hdf5 file
         '''
 
-        self.h = h5py.File(h5fname, 'r')
+        if os.path.exists(h5fname):
+            self.h = h5py.File(h5fname, 'r')
+        else:
+            WF.print2stderr(f'ERROR: missing results file {h5fname}')
+            sys.exit(1)
 
     def load_time(self):
         '''
