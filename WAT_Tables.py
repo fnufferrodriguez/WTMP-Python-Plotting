@@ -63,25 +63,18 @@ class Tables(object):
 
         return headers, headers_i
 
-    def buildTable(self, object_settings, split_by_year, data):
+    def buildTable(self, object_settings, split_by_year, data_settings):
         '''
         builds a table header and rows
         :param object_settings: dictionary containing settings for object
         :param split_by_year: boolean flag to determine if table is for all years, or split up
-        :param data: dictionary contining data
         :return: headers and rows lists
         '''
 
         headers = {}
         rows = {}
-        # includeallyears = False
-        # if 'includeallyears' in object_settings.keys():
-        #     if object_settings['includeallyears'].lower() == 'true':
-        #         includeallyears = True
-        # outputyears = [n for n in self.Report.years] #this is usually a range or ALLYEARS
         outputyears = object_settings['years'] #this is usually a range or ALLYEARS
-        # if includeallyears or not split_by_year:
-        #     outputyears.append('ALL') #do this last
+
         for year in outputyears:
             headers[year] = []
             rows[year] = {}
@@ -96,19 +89,24 @@ class Tables(object):
         # -comp run split by year
         # -comp run split by year and include all years
 
+        #comp run but header == '%%year%%'
+        #comp run but header has %%computed%% in it
+
         for i, header in enumerate(object_settings['headers']):
             curheader = pickle.loads(pickle.dumps(header, -1))
             if self.Report.iscomp: #comp run
                 isused = False
-                for datakey in data.keys():
-                    if '%%{0}%%'.format(data[datakey]['flag']) in curheader: #found data specific flag
+                for datakey in data_settings.keys():
+                    if '%%{0}%%'.format(data_settings[datakey]['flag']) in curheader: #found data specific flag
                         isused = True
-                        if 'ID' in data[datakey].keys():
-                            ID = data[datakey]['ID']
+                        if 'ID' in data_settings[datakey].keys():
+                            ID = data_settings[datakey]['ID']
                             tmpheader = self.Report.configureSettingsForID(ID, curheader)
                         else:
                             tmpheader = pickle.loads(pickle.dumps(curheader, -1))
-                        tmpheader = tmpheader.replace('%%{0}%%'.format(data[datakey]['flag']), '')
+                        tmpheader = tmpheader.replace('%%{0}%%'.format(data_settings[datakey]['flag']), '')
+                        if tmpheader == '%%year%%': #find a situation where the header is just the year
+                            tmpheader = self.Report.SimulationName
                         if split_by_year:
                             for year in outputyears:
                                 if year == 'ALLYEARS':
@@ -117,14 +115,14 @@ class Tables(object):
                                     headers[year].append(tmpheader)
                                 for ri, row in enumerate(object_settings['rows']):
                                     srow = row.split('|')[1:][i]
-                                    rows[year][ri].append(srow.replace(data[datakey]['flag'], datakey))
+                                    rows[year][ri].append(srow.replace(data_settings[datakey]['flag'], datakey))
                         else:
                             headers[year].append(tmpheader.replace('%%year%%', self.Report.years_str))
                             for ri, row in enumerate(object_settings['rows']):
                                 srow = row.split('|')[1:][i]
-                                rows['ALLYEARS'][ri].append(srow.replace(data[datakey]['flag'], datakey))
+                                rows['ALLYEARS'][ri].append(srow.replace(data_settings[datakey]['flag'], datakey))
 
-                if not isused: #if a header doesnt get used, probably something observed and not needing replacing.
+                if not isused: #if a header doesnt get used, probably something observed and not needing replacing. OR custom headers for computed data..
                     if split_by_year:
                         for year in outputyears:
                             if year == 'ALLYEARS':
@@ -132,15 +130,21 @@ class Tables(object):
                             else:
                                 headers[year].append(curheader)
                             for ri, row in enumerate(object_settings['rows']):
-                                srow = row.split('|')[1:][i]
-                                rows[year][ri].append(srow)
+                                srow = row.split('|')[1:]
+                                if i > len(srow)-1:
+                                    WF.print2stdout(f'Too many headers for defined rows. Not using data for {header}.')
+                                    rows[year][ri].append(None)
+                                else:
+                                    rows[year][ri].append(srow[i])
+
                     else:
                         headers[year].append(curheader.replace('%%year%%', self.Report.years_str))
                         for ri, row in enumerate(object_settings['rows']):
                             srow = row.split('|')[1:][i]
-                            rows['ALLYEARS'][ri].append(srow.replace(data[datakey]['flag'], datakey))
+                            rows['ALLYEARS'][ri].append(srow.replace(data_settings[datakey]['flag'], datakey))
 
             else: #single run
+
                 if split_by_year:
                     for year in outputyears:
                         if year == 'ALLYEARS':
@@ -178,74 +182,82 @@ class Tables(object):
         :return: headings and rows used to build tables
         '''
 
+        headers = []
         rows = []
-        headers = [n for n in self.Report.Constants.mo_str_3]
+        months = [n for n in self.Report.Constants.mo_str_3]
         stat = object_settings['statistic']
+        datakeys = list(data.keys())
+
         if stat in ['mean', 'count']:
             numflagsneeded = 1
         else:
             numflagsneeded = 2
-        datakeys = list(data.keys())
-        if len(data.keys()) < 2 and numflagsneeded != 1:
-            WF.print2stdout('\nWARNING: Insufficient amount of datapaths defined.')
-            WF.print2stdout(f'Need 2 datapaths to compute statistics for {stat}')
-            WF.print2stdout('Resulting table will not generate correctly.')
-            for year in object_settings['years']:
-                row = f'{year}'
-                for month in self.Report.Constants.mo_str_3:
-                    row += '|-'
-                rows.append(row)
-            # if 'includeallyears' in object_settings.keys():
-            #     if object_settings['includeallyears'].lower() == 'true':
-            #         # row = 'All'
-            #         row = 'ALLYEARS'
-            #         for month in self.Report.Constants.mo_str_3:
-            #             row += '|-'
-            #         rows.append(row)
-            return headers, rows
 
-        elif self.Report.iscomp:
-            computed_flags = [n for n in data.keys() if 'ID' in data[n].keys()]
-            if numflagsneeded > 1:
-                observed_flag = 'Observed' if 'Observed' in data.keys() else [n for n in data.keys() if n not in computed_flags][0]
+        if self.Report.iscomp:
+            if 'headers' in object_settings.keys():
+                hdrs = object_settings['headers']
+                for curheader in hdrs:
+                    isused = False
+                    for datakey in datakeys:
+                        if '%%{0}%%'.format(data[datakey]['flag']) in curheader:
+                            if 'ID' in data[datakey].keys():
+                                ID = data[datakey]['ID']
+                                tmpheader = self.Report.configureSettingsForID(ID, curheader)
+                            else:
+                                tmpheader = pickle.loads(pickle.dumps(curheader, -1))
+                            tmpheader = tmpheader.replace('%%{0}%%'.format(data[datakey]['flag']), '')
+                            headers.append(tmpheader)
+                            isused = True
+                    if not isused:
+                        if '%%' in curheader: #check for unused flags.. if theyre there, move on
+                            continue
+                        else:
+                            headers.append(curheader)
 
-        elif len(data.keys()) > 2:
-            WF.print2stdout('\nWARNING: Too many datapaths defined.')
-            WF.print2stdout(f'Need 2 datapaths to compute statistics for {stat}')
+            else:
+                for datakey in datakeys:
+                    if 'label' in data[datakey].keys():
+                        if numflagsneeded == 2:
+                            if data[datakey]['flag'].lower() != 'computed':
+                                headers.append(data[datakey]['label'])
+                        else:
+                            headers.append(data[datakey]['label'])
+                    else:
+                        headers.append(datakey)
+        else:
+            headers = months
 
-            computed_flags = [n for n in data.keys() if 'ID' in data[n].keys()]
-            if numflagsneeded > 1:
-                observed_flag = 'Observed' if 'Observed' in data.keys() else [n for n in data.keys() if n not in computed_flags][0]
+        computed_keys = []
+        observed_keys = []
+        for datakey in datakeys:
+            if data[datakey]['flag'].lower() == 'computed': #get the easy ones
+                computed_keys.append(datakey)
+            elif data[datakey]['flag'].lower() == 'observed':
+                observed_keys.append(datakey)
+        if len(computed_keys) == 0 and len(observed_keys) > 0: #if none are computed and some are observed, assume the rest computed
+            for datakey in datakeys:
+                if data[datakey]['flag'].lower() not in observed_keys:
+                    computed_keys.append(datakey)
+        if len(observed_keys) == 0 and len(computed_keys) > 0: #if some are computed and none are observed, assume the rest computed
+            for datakey in datakeys:
+                if data[datakey]['flag'].lower() not in computed_keys:
+                    observed_keys.append(datakey)
 
-            WF.print2stdout(f'Resulting table will use the following datapaths: {computed_flags[0]}, {observed_flag}')
-
-        else: #normal case
-            computed_flags = [n for n in data.keys() if 'ID' in data[n].keys()]
-            if numflagsneeded > 1:
-                observed_flag = 'Observed' if 'Observed' in data.keys() else [n for n in data.keys() if n not in computed_flags][0]
 
         for year in object_settings['years']:
-                computed_key = computed_flags[0]
-                row = f'{year}'
-                for month in self.Report.Constants.mo_str_3:
-                    if numflagsneeded == 1:
-                        row += f'|%%{stat}.{computed_key}.MONTH={month.upper()}%%'
-                    else:
-                        row += f'|%%{stat}.{computed_key}.MONTH={month.upper()}.{data[observed_flag]["flag"]}.MONTH={month.upper()}%%'
-                rows.append(row)
-
-        # if 'includeallyears' in object_settings.keys():
-        #     if object_settings['includeallyears'].lower() == 'true':
-        #             row = 'ALLYEARS'
-        #             computed_key = computed_flags[0]
-        #             for month in self.Report.Constants.mo_str_3:
-        #                 if numflagsneeded == 1:
-        #                     row += f'|%%{stat}.{computed_key}.MONTH={month.upper()}%%'
-        #                 else:
-        #                     row += f'|%%{stat}.{computed_key}.MONTH={month.upper()}.{data[observed_flag]["flag"]}.MONTH={month.upper()}%%'
-        #             rows.append(row)
+            row = f'{year}'
+            for month in months:
+                if numflagsneeded == 1:
+                    for datakey in computed_keys:
+                        row += f'|%%{stat}.{datakey}.MONTH={month.upper()}%%'
+                else:
+                    for cflag in computed_keys:
+                        for oflag in observed_keys:
+                            row += f'|%%{stat}.{cflag}.MONTH={month.upper()}.{data[oflag]["flag"]}.MONTH={month.upper()}%%'
+            rows.append(row)
 
         return headers, rows
+
 
     def buildProfileStatsTable(self, object_settings, timestamp, data):
         '''
@@ -360,7 +372,7 @@ class Tables(object):
 
         return data
 
-    def correctTableUnits(self, data, object_settings):
+    def correctTableUnits(self, data, data_settings, object_settings):
         '''
         converts units for table data
         :param data: dictionary containing data
@@ -370,11 +382,11 @@ class Tables(object):
 
         for datapath in data.keys():
             values = data[datapath]['values']
-            units = data[datapath]['units']
-            if 'parameter' in data[datapath].keys():
-                units = WF.configureUnits(object_settings, data[datapath]['parameter'], units)
+            units = data_settings[datapath]['units']
+            if 'parameter' in data_settings[datapath].keys():
+                units = WF.configureUnits(object_settings, data_settings[datapath]['parameter'], units)
             if 'unitsystem' in object_settings.keys():
-                data[datapath]['values'], data[datapath]['units'] = WF.convertUnitSystem(values, units, object_settings['unitsystem'])
+                data[datapath]['values'], data_settings[datapath]['units'] = WF.convertUnitSystem(values, units, object_settings['unitsystem'])
 
         return data
 
@@ -840,3 +852,27 @@ class Tables(object):
 
         return out_data
 
+    def replaceComparisonSettings(self, object_settings, iscomp):
+        replace_flags = {'comparisonheaders': 'headers'}
+        replaced_defaults = object_settings['replaced_defaults']
+        if iscomp:
+            for comparisonflag in replace_flags.keys():
+                normalflag = replace_flags[comparisonflag]
+                if comparisonflag in object_settings.keys():
+                    if normalflag in replaced_defaults:
+                        continue
+                    object_settings[normalflag] = object_settings[comparisonflag]
+
+        return object_settings
+
+    def configureHeadingsGroups(self, headings):
+        headings_groups = []
+        for h in headings:
+            if h[0] not in headings_groups:
+                headings_groups.append(h[0])
+        headings_i = [[] for n in headings_groups]
+        for hgi, hgroup in enumerate(headings_groups):
+            for hi, h in enumerate(headings):
+                if str(h[0]) == str(hgroup):
+                    headings_i[hgi].append(hi)
+        return headings_i

@@ -55,9 +55,6 @@ class DataOrganizer(object):
 
         if 'dss_path' in Data_info.keys(): #Get data from DSS record
             if 'dss_filename' in Data_info.keys():
-                # outname = f"{os.path.basename(Data_info['dss_filename']).split('.')[0]}_" \
-                #           f"{Data_info['dss_path'].replace('/', '').replace(':', '')}_" \
-                #           f"{very_special_flags}"
                 outname = WF.sanitizeText(os.path.basename(Data_info['dss_filename'])[:-4])
                 dssnamesplit = Data_info['dss_path'].split('/')
                 dssname_pick = WF.sanitizeText(f"{dssnamesplit[1]}_{dssnamesplit[2]}_{dssnamesplit[3]}_{dssnamesplit[-2]}")
@@ -112,7 +109,7 @@ class DataOrganizer(object):
     #TimeSeries Functions
     #################################################################
 
-    def updateTimeSeriesDataDictionary(self, data, line):
+    def updateTimeSeriesDataDictionary(self, data, line_settings, line):
         '''
         organizes line information and places it into a data dictionary
         :param data: dictionary containing line data
@@ -120,11 +117,10 @@ class DataOrganizer(object):
         :return: updated data dictionary
         '''
 
-        #TODO: split into 2 like profiles
         dates, values, units = self.getTimeSeries(line, makecopy=False) #TODO: update
         if WF.checkData(values):
             flag = line['flag']
-            if flag in data.keys():
+            if flag in line_settings.keys() or flag in data.keys():
                 count = 1
                 newflag = flag + '_{0}'.format(count)
                 while newflag in data.keys():
@@ -135,16 +131,18 @@ class DataOrganizer(object):
             datamem_key = self.buildMemoryKey(line)
             if 'units' in line.keys() and units == None:
                 units = line['units']
+            line_settings[flag] = {'units': units,
+                                   'numtimesused': line['numtimesused'],
+                                   'logoutputfilename': datamem_key}
+
             data[flag] = {'values': values,
-                          'dates': dates,
-                          'units': units,
-                          'numtimesused': line['numtimesused'],
-                          'logoutputfilename': datamem_key}
+                          'dates': dates}
+
 
             for key in line.keys():
-                if key not in data[flag].keys():
-                    data[flag][key] = line[key]
-        return data
+                if key not in line_settings[flag].keys():
+                    line_settings[flag][key] = line[key]
+        return data, line_settings
 
     def getProfileWSE(self, settings, onflag='lines'):
         '''
@@ -168,10 +166,10 @@ class DataOrganizer(object):
 
         return wse_data
 
-    def filterByTargetElev(self, data):
+    def filterByTargetElev(self, data, line_settings):
         for d in data.keys():
-            if 'target_elevation' in data[d].keys():
-                target_elevation = float(data[d]['target_elevation'])
+            if 'target_elevation' in line_settings[d].keys():
+                target_elevation = float(line_settings[d]['target_elevation'])
                 values = data[d]['values']
                 if isinstance(values, dict): #w2 results kept in dict with elev
                     for sn in values.keys():
@@ -203,6 +201,7 @@ class DataOrganizer(object):
         '''
 
         data = {}
+        line_settings = {}
         if 'lines' in settings.keys():
             for line in settings['lines']:
                 numtimesused = 0
@@ -219,7 +218,7 @@ class DataOrganizer(object):
                             continue
                         curline['numtimesused'] = numtimesused
                         numtimesused += 1
-                        data = self.updateTimeSeriesDataDictionary(data, curline)
+                        data, line_settings = self.updateTimeSeriesDataDictionary(data, line_settings, curline)
                 else:
                     if self.Report.currentlyloadedID != 'base':
                         line = self.Report.configureSettingsForID('base', line)
@@ -228,9 +227,9 @@ class DataOrganizer(object):
                     line['numtimesused'] = 0
                     if not self.Report.checkModelType(line):
                         continue
-                    data = self.updateTimeSeriesDataDictionary(data, line)
+                    data, line_settings = self.updateTimeSeriesDataDictionary(data, line_settings, line)
 
-        return data
+        return data, line_settings
 
     def getStraightLineValue(self, settings):
         straightlines = {}
@@ -254,16 +253,16 @@ class DataOrganizer(object):
                         if 'units' not in straightlines[tosl][const_key].keys():
                             straightlines[tosl][const_key]['units'] = None
                     else:
-                        timeserieslines = self.getTimeSeriesDataDictionary({'lines': [line]})
+                        timeserieslines, timeserieslinesettings = self.getTimeSeriesDataDictionary({'lines': [line]})
                         for timeserieslinekey in timeserieslines.keys():
                             values = timeserieslines[timeserieslinekey]['values']
                             dates = timeserieslines[timeserieslinekey]['dates']
                             if 'timestamps' in settings.keys():
                                 idx = WR.getClosestTime(settings['timestamps'], dates)
                                 straightlines[tosl][timeserieslinekey] = {'values': values[idx]}
-                            for key in timeserieslines[timeserieslinekey].keys():
+                            for key in timeserieslinesettings[timeserieslinekey].keys():
                                 if key not in straightlines[tosl][timeserieslinekey].keys():
-                                    straightlines[tosl][timeserieslinekey][key] = timeserieslines[timeserieslinekey][key]
+                                    straightlines[tosl][timeserieslinekey][key] = timeserieslinesettings[timeserieslinekey][key]
 
         return straightlines
 
@@ -595,6 +594,7 @@ class DataOrganizer(object):
         '''
 
         data = {}
+        data_settings = {}
         for datapath in settings['datapaths']:
             for ID in self.Report.accepted_IDs:
                 curreach = pickle.loads(pickle.dumps(datapath, -1))
@@ -634,21 +634,23 @@ class DataOrganizer(object):
                     else:
                         units = None
 
+                    data_settings[flag] = {'units': units,
+                                           'ID': ID,
+                                           'logoutputfilename': datamem_key}
+
                     data[flag] = {'values': values,
                                   'dates': dates,
-                                  'units': units,
                                   'elevations': elevations,
                                   'topwater': topwater,
-                                  'ID': ID,
-                                  'logoutputfilename': datamem_key}
+                                  'ID': ID}
 
                     for key in datapath.keys():
-                        if key not in data[flag].keys():
-                            data[flag][key] = datapath[key]
+                        if key not in data_settings[flag].keys():
+                            data_settings[flag][key] = datapath[key]
         #reset
         self.Report.loadCurrentID('base')
         self.Report.loadCurrentModelAltID('base')
-        return data
+        return data, data_settings
 
     def getProfileTopWater(self, profile, timesteps):
         '''
@@ -760,6 +762,7 @@ class DataOrganizer(object):
         '''
 
         data = {}
+        line_settings = {}
         for dp in object_settings['datapaths']:
             numtimesused = 0
             if 'flag' not in dp.keys():
@@ -775,7 +778,7 @@ class DataOrganizer(object):
                     if not self.Report.checkModelType(cur_dp):
                         continue
                     numtimesused += 1
-                    data = self.updateTimeSeriesDataDictionary(data, cur_dp)
+                    data, line_settings = self.updateTimeSeriesDataDictionary(data, line_settings, cur_dp)
             else:
                 if self.Report.currentlyloadedID != 'base':
                     dp = self.Report.configureSettingsForID('base', dp)
@@ -784,9 +787,9 @@ class DataOrganizer(object):
                 dp['numtimesused'] = 0
                 if not self.Report.checkModelType(dp):
                     continue
-                data = self.updateTimeSeriesDataDictionary(data, dp)
+                data, line_settings = self.updateTimeSeriesDataDictionary(data, line_settings, dp)
 
-        return data
+        return data, line_settings
 
     #################################################################
     #Contour Functions
@@ -855,6 +858,7 @@ class DataOrganizer(object):
         '''
 
         data = {}
+        data_settings = {}
         for reach in settings['reaches']:
             for ID in self.Report.accepted_IDs:
                 curreach = pickle.loads(pickle.dumps(reach, -1))
@@ -886,20 +890,22 @@ class DataOrganizer(object):
                         y_scalar = float(settings['y_scalar'])
                         distance *= y_scalar
 
+                    data_settings[flag] = {'units': units,
+                                           'distance': distance,
+                                           'ID': ID,
+                                           'logoutputfilename': datamem_key}
+
                     data[flag] = {'values': values,
                                   'dates': dates,
-                                  'units': units,
-                                  'distance': distance,
-                                  'ID': ID,
-                                  'logoutputfilename': datamem_key}
+                                  'ID': ID}
 
                     for key in reach.keys():
-                        if key not in data[flag].keys():
-                            data[flag][key] = reach[key]
+                        if key not in data_settings[flag].keys():
+                            data_settings[flag][key] = reach[key]
         #reset
         self.Report.loadCurrentID('base')
         self.Report.loadCurrentModelAltID('base')
-        return data
+        return data, data_settings
 
     #################################################################
     #Gate Functions
@@ -914,23 +920,28 @@ class DataOrganizer(object):
         '''
 
         data = {}
+        line_data = {}
         if 'gateops' in settings.keys():
             for gi, gateop in enumerate(settings['gateops']):
 
                 if 'flag' in gateop.keys():
                     if gateop['flag'] not in data.keys():
                         data[gateop['flag']] = {}
+                        line_data[gateop['flag']] = {}
                         gateopkey = gateop['flag']
                 elif 'label' in gateop.keys():
                     if gateop['label'] not in data.keys():
                         data[gateop['label']] = {}
+                        line_data[gateop['flag']] = {}
                         gateopkey = gateop['label']
                 else:
                     if 'GATEOP_{0}'.format(gi) not in data.keys():
                         gateopkey = 'GATEOP_{0}'.format(gi)
                         data[gateopkey] = {}
+                        line_data[gateopkey] = {}
 
                 data[gateopkey]['gates'] = {}
+                line_data[gateopkey]['gates'] = {}
                 for gate in gateop['gates']:
                     dates, values, _ = self.getTimeSeries(gate, makecopy=makecopy)
                     if 'flag' in gate.keys():
@@ -952,19 +963,22 @@ class DataOrganizer(object):
                     else:
                         gategroup = 'gategroup_{0}'.format(gi)
                     data[gateopkey]['gates'][flag] = {'values': values,
-                                                      'dates': dates,
-                                                      'logoutputfilename': datamem_key,
-                                                      'gategroup': gategroup}
+                                                      'dates': dates}
+
+                    line_data[gateopkey]['gates'][flag] = {'logoutputfilename': datamem_key,
+                                                          'gategroup': gategroup}
 
                     for key in gate.keys():
-                        if key not in data[gateopkey]['gates'][flag].keys():
-                            data[gateopkey]['gates'][flag][key] = gate[key]
+                        if key not in line_data[gateopkey]['gates'][flag].keys():
+                            line_data[gateopkey]['gates'][flag][key] = gate[key]
 
                 for key in gateop.keys():
                     if key not in data[gateopkey].keys():
                         data[gateopkey][key] = gateop[key]
+                    if key not in line_data[gateopkey].keys():
+                        line_data[gateopkey][key] = gateop[key]
 
-        return data
+        return data, line_data
 
     #################################################################
     #Logging Functions
@@ -1005,6 +1019,7 @@ class DataOrganizer(object):
                             df = pd.DataFrame(colvals)
                 elif 'iscontour' in self.Memory[key].keys():
                     continue #were not doing this for now, takes ~ 5 seconds per 3yr reach..
+
                     # if self.Data.Memory[key]['iscontour'] == True:
                     #     alltimes = self.Data.Memory[key]['dates']
                     #     allvalues = self.Data.Memory[key]['values'].T #this gets transposed a few times.. we want distance/date
@@ -1036,8 +1051,6 @@ class DataOrganizer(object):
             except:
                 WF.print2stdout('ERROR WRITING CSV FILE')
                 WF.print2stdout(traceback.format_exc())
-                # with open(csv_name, 'w') as inf:
-                #     inf.write('ERROR WRITING FILE.')
 
     def getComputedData(self, data):
         computedKeys = []
@@ -1047,10 +1060,8 @@ class DataOrganizer(object):
         return computedKeys
 
     def filterComputed(self, data, targetkey, computedKeys):
-        # outdata = pickle.loads(pickle.dumps(data, -1))
         outdata = {}
         for key in data.keys():
             if key == targetkey or key not in computedKeys:
-                # data.pop(key)
                 outdata[key] = data[key]
         return outdata

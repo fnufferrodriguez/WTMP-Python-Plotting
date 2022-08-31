@@ -44,7 +44,7 @@ def print2stderr(*a):
     '''
 
     print(*a, file=sys.stderr)
-    print(*a, file=sys.stdout)
+    # print(*a, file=sys.stdout)
 
 def printVersion(VERSIONNUMBER):
     '''
@@ -542,7 +542,7 @@ def replaceFlaggedValue(Report, value, itemset):
         value = pattern.sub(repr(flagged_values[fv])[1:-1], value) #this seems weird with [1:-1] but paths wont work otherwise
     return value
 
-def selectContourReachesByID(contoursbyID, ID):
+def selectContourByID(contoursbyID, ID):
     '''
     selects contour data based on the ID
     :param contoursbyID: dictionary containing all contours
@@ -556,20 +556,7 @@ def selectContourReachesByID(contoursbyID, ID):
             output_contours[key] = contoursbyID[key]
     return output_contours
 
-def selectContourReservoirByID(contoursbyID, ID):
-    '''
-    returns the correct contour from dictionary based on ID
-    :param contoursbyID: dictionary containing several contours
-    :param ID: selected ID to find in data
-    :return: dictionary for corresponding ID, or empty
-    '''
-
-    for key in contoursbyID:
-        if contoursbyID[key]['ID'] == ID:
-            return contoursbyID[key]
-    return {}
-
-def stackContours(contours):
+def stackContours(contours, contours_settings):
     '''
     stacks data for multiple contour reaches so they appear as a single reach. Adds distances to stay consistent.
     keeps track of the distances in which defined reaches change
@@ -587,6 +574,7 @@ def stackContours(contours):
     transitions = {}
     for contourname in contours.keys():
         contour = contours[contourname]
+        contour_settings = contours_settings[contourname]
         if len(output_values) == 0:
             output_values = pickle.loads(pickle.dumps(contour['values'], -1))
         else:
@@ -594,27 +582,27 @@ def stackContours(contours):
         if len(output_dates) == 0:
             output_dates = contour['dates']
         if len(output_distance) == 0:
-            output_distance = contour['distance']
+            output_distance = contour_settings['distance']
             transitions[contourname] = 0
         else:
             last_distance = output_distance[-1]
-            current_distances = contour['distance'][1:] + last_distance
+            current_distances = contour_settings['distance'][1:] + last_distance
             output_distance = np.append(output_distance, current_distances)
             transitions[contourname] = current_distances[0]
     return output_values, output_dates, output_distance, transitions
 
-def mergeLines(data, settings):
+def mergeLines(data, data_settings, plot_settings):
     '''
     reads in mergeline settings and combines time series as defined. returns a single time series based on the
     controller flag. then removes lines if dictated.
     :param data: dictionary containing data
-    :param settings: list of settings including mergeline settings
+    :param plot_settings: list of settings including mergeline settings
     :return: updated data dictionary
     '''
 
     removekeys = []
-    if 'mergelines' in settings.keys():
-        for mergeline in settings['mergelines']:
+    if 'mergelines' in plot_settings.keys():
+        for mergeline in plot_settings['mergelines']:
             dataflags = mergeline['flags']
             if 'controller' in mergeline.keys():
                 controller = mergeline['controller']
@@ -637,9 +625,9 @@ def mergeLines(data, settings):
                 math = mergeline['math'].lower()
             else:
                 math = 'add'
-            baseunits = data[controller]['units']
+            baseunits = data_settings[controller]['units']
             for flag in otherflags:
-                if data[flag]['units'] != baseunits:
+                if data_settings[flag]['units'] != baseunits:
                     print2stdout('WARNING: Attempting to merge lines with differing units')
                     print2stdout('{0}: {1} and {2}: {3}'.format(flag, data[flag]['units'], controller, baseunits))
                     print2stdout('If incorrect, please modify/append input settings to ensure lines '
@@ -1439,21 +1427,27 @@ def replaceDefaults(Report, default_settings, object_settings):
 
     default_settings = pickle.loads(pickle.dumps(replaceflaggedValues(Report, default_settings, 'general'), -1))
     object_settings = pickle.loads(pickle.dumps(replaceflaggedValues(Report, object_settings, 'general'), -1))
-
+    replaced_flags = []
     for key in object_settings.keys():
         if key not in default_settings.keys(): #if defaults doesnt have key
             default_settings[key] = object_settings[key]
+            replaced_flags.append(key)
         elif default_settings[key] == None: #if defaults has key, but is none
             default_settings[key] = object_settings[key]
+            replaced_flags.append(key)
         elif isinstance(object_settings[key], list): #if settings is a list, aka rows or lines
             # if key.lower() == 'rows': #if the default has rows defined, just overwrite them.
             if key in default_settings.keys():
                 default_settings[key] = object_settings[key]
+                replaced_flags.append(key)
             elif key.lower() not in default_settings.keys():
                 default_settings[key] = object_settings[key] #if the defaults dont have anything defined, fill it in
+                replaced_flags.append(key)
         else:
             default_settings[key] = object_settings[key]
+            replaced_flags.append(key)
 
+    default_settings['replaced_defaults'] = replaced_flags
     return default_settings
 
 def getDateSourceFlag(object_settings):
@@ -1502,7 +1496,6 @@ def formatNumbers(number, numberformatsettings):
     for numberformat in numberformatsettings:
         if 'decimalplaces' in numberformat.keys():
             decplaces = int(numberformat['decimalplaces'])
-            # if 'range' in numberformat.keys():
             if 'max' in numberformat.keys() and 'min' in numberformat.keys():
                 if float(numberformat['min']) < abs(number) <= float(numberformat['max']):
                     print(f'Number {number} with settings {numberformat}')
