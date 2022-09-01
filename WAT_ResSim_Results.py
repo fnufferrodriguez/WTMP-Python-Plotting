@@ -521,6 +521,15 @@ class ResSim_Results(object):
         self.t_computed = np.array(self.t_computed)
 
     def getProfileTargetTimeseries(self, ResName, parameter, target_info):
+        '''
+        get profile values for target parameter. Target info contains info about what parameter and value to output at
+        examples: give elevation when profile is 15 C, give temperature at elevation 400 ft, etc..
+        :param ResName: name of reservoir
+        :param parameter: parameter we want output
+        :param target_info: info about target we want to hit and output values at
+        :return: times, output values
+        '''
+
         target_parameter = target_info['parameter']
         target_value = float(target_info['value'])
         self.loadResults('all', target_parameter.lower(), alt_subdomain_name=ResName)

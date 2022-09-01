@@ -55,6 +55,7 @@ class WAT_Logger(object):
     def writeLogFile(self, images_path):
         '''
         Writes out logfile data to csv file in report dir
+        :param images_path: path to images file
         '''
 
         df = pd.DataFrame({'observed_data_path': self.Log['observed_data_path'],
@@ -97,6 +98,10 @@ class WAT_Logger(object):
     def addSimLogEntry(self, accepted_IDs, SimulationVariables, observedDir):
         '''
         adds entries for a simulation with relevenat metadata
+        :param accepted_IDs: IDs to add
+        :param SimulationVariables: variables for each ID
+        :param observedDir: observed dir path
+        :return:
         '''
 
         for ID in accepted_IDs:

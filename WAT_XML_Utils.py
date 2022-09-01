@@ -57,6 +57,12 @@ class XMLReport(object):
                 XML.write(line)
 
     def insertAfter(self, StringToAddAfter, StringToAdd):
+        '''
+        adds a string after a target string
+        :param StringToAddAfter: string to look for to add text after
+        :param StringToAdd: string to add in after target string
+        '''
+
         xml_text = []
         with open(self.XML_fn, 'r') as XML:
             for line in XML:
@@ -71,6 +77,11 @@ class XMLReport(object):
                 XML.write(line)
 
     def removeLine(self, inputStr):
+        '''
+        removes target string from XML document
+        :param inputStr: string to be removed
+        '''
+
         xml_text = []
         with open(self.XML_fn, 'r') as XML:
             for line in XML:
@@ -81,7 +92,6 @@ class XMLReport(object):
         with open(self.XML_fn, 'w') as XML:
             for line in xml_text:
                 XML.write(line)
-
 
     def primeCounters(self):
         '''
@@ -118,7 +128,7 @@ class XMLReport(object):
     def writeIntroLine(self, Plugin):
         '''
         writes line in intro for a given plugin
-        :param Plugin:
+        :param Plugin: name of plugin to be added to model order
         '''
 
         with open(self.XML_fn, 'a') as XML:
@@ -293,6 +303,12 @@ class XMLReport(object):
         self.column_order = 0
 
     def writeDateControlledTableStart(self, desc, type):
+        '''
+        writes the start of a datecontrolledtable
+        :param desc: description of table
+        :param type: table type (text in top left)
+        '''
+
         with open(self.XML_fn, 'a') as XML:
             XML.write('<Report_Element ReportElementOrder="{0}" Element="DateControlledTable">\n'.format(self.current_reportelem_num))
             XML.write('<Output_Temp_Flow Location="{0}">\n'.format(desc))
@@ -325,11 +341,20 @@ class XMLReport(object):
         self.column_order += 1
 
     def writeDateColumn(self, header):
+        '''
+        writes datecolumn for datecontrolledtables
+        :param header: string inside of datecolumn
+        '''
+
         with open(self.XML_fn, 'a') as XML:
             XML.write('<DateColumn DateColumn_Order="{0}" DateColumn_Name="{1}">\n'.format(self.datecolumn_order, header))
         self.datecolumn_order += 1
 
     def writeDateColumnEnd(self):
+        '''
+        write end of datecolumn for datecontrolledtable
+        '''
+
         with open(self.XML_fn, 'a') as XML:
             XML.write('</DateColumn>\n')
 

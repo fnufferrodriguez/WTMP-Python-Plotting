@@ -100,11 +100,12 @@ def getProfileTimestampYearMonthIndex(object_settings, years):
 def convertDepthsToElevations(data, object_settings, wse_data={}):
     '''
     handles data to convert depths into elevations for observed data
+    :param data: dictionary containing values for lines
     :param object_settings: dicitonary of user defined settings for current object
+    :param wse_data: contains info about WSE for conversion
     :return: object settings dictionary with updated elevation data
     '''
 
-    #
     for ld in data.keys():
         found_elevs = False
         if data[ld]['elevations'] == []:
@@ -135,7 +136,9 @@ def convertDepthsToElevations(data, object_settings, wse_data={}):
 def convertElevationsToDepths(data, object_settings, wse_data={}):
     '''
     handles data to convert depths into elevations for observed data
+     :param data: dictionary containing values for lines
     :param object_settings: dicitonary of user defined settings for current object
+    :param wse_data: contains info about WSE for conversion
     :return: object settings dictionary with updated elevation data
     '''
 
