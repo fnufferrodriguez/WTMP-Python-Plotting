@@ -39,11 +39,11 @@ def definedVarCheck(Block, flags):
 
 def readSimulationFile(simulation_name, studyfolder, iscomp=False):
     '''
-       Read the right csv file, and determine what region you are working with.
-       Simulation CSV files are named after the simulation, and consist of plugin, model alter name, and then region(s)
-       :param simulation_name: name of simulation to find file
-       :param studyfolder: full path to study folder
-       :returns: dictionary containing information from file
+    Read the right csv file, and determine what region you are working with.
+    Simulation CSV files are named after the simulation, and consist of plugin, model alter name, and then region(s)
+    :param simulation_name: name of simulation to find file
+    :param studyfolder: full path to study folder
+    :returns: dictionary containing information from file
     '''
 
     if iscomp:
@@ -580,6 +580,13 @@ def readComparisonSimulationsCSV(Report):
 
 
 def readTemplate(Report, templatefilename):
+    '''
+    read template file
+    :param Report: main report class object
+    :param templatefilename: name of template file
+    :return: formated dictionary for template file
+    '''
+
     templatefile = os.path.join(Report.studyDir, 'reports', templatefilename)
     tree = ET.parse(templatefile)
     root = tree.getroot()

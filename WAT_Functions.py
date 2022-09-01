@@ -1465,12 +1465,25 @@ def getDateSourceFlag(object_settings):
     return datessource_flag
 
 def getMaxWSEFromElev(input_data):
+    '''
+    gets the max elevations for a timeseries
+    :param input_data: list of elevations over timeseries
+    :return: list of WSE
+    '''
+
     elevations = []
     for e in input_data:
         elevations.append(max(e))
     return elevations
 
 def formatUnitsStrings(units, format='internal'):
+    '''
+    cleans strings and formats units
+    :param units: string of units
+    :param format: internal or eternal, determines which flags to use
+    :return: formated units
+    '''
+
     if units == None:
         return units
     if format == 'internal':
@@ -1485,6 +1498,12 @@ def formatUnitsStrings(units, format='internal'):
     return output
 
 def formatNumbers(number, numberformatsettings):
+    '''
+    formats numbers to use the correct amount of decimal places
+    :param number: number to be formatted
+    :param numberformatsettings: settings to format from
+    :return: formatted number
+    '''
 
     try:
         number = float(number)
@@ -1514,6 +1533,11 @@ def formatNumbers(number, numberformatsettings):
     return f'{number:,.2f}'
 
 def checkJasperFiles(study_dir):
+    '''
+    checks existing jasper and jrxml files, and if the jrxml files are newer, deletes jasper files so they can be regen
+    :param study_dir: directory to look for jasper files
+    '''
+
     files_in_directory = os.listdir(study_dir)
     jrxml_files = [file for file in files_in_directory if file.endswith('.jrxml')]
     for jrxml_file in jrxml_files:
@@ -1528,6 +1552,12 @@ def checkJasperFiles(study_dir):
                 os.remove(jasper_file)
 
 def organizePlotYears(object_settings):
+    '''
+    orgnaizes years and year strings for report objects
+    :param object_settings: settings to parse for year information
+    :return: years, year strings
+    '''
+
     if 'years' in object_settings.keys():
         years = []
         if 'yearstr' in object_settings.keys():
@@ -1550,9 +1580,22 @@ def organizePlotYears(object_settings):
     return [], []
 
 def sanitizeText(intext):
+    '''
+    cleans incoming text
+    :param intext: text to be cleaned
+    :return: clean text :)
+    '''
+
     return str(intext).replace('.','').replace(' ', '').replace(':', '').replace("_","")
 
 def calculateStorageFromElevation(values, curline):
+    '''
+    reads in elevation storage area file, and interpolates across it, then calcs storage based off of elevation vals
+    :param values: elevation values
+    :param curline: current line with info about file
+    :return: storage interp values
+    '''
+    
     elevation_storage_area_file = curline['elevation_storage_area_file']
     elev_stor_area = np.loadtxt(elevation_storage_area_file, delimiter=',')
     elevstorcurve = interpolate.interp1d(elev_stor_area[:, 0], elev_stor_area[:, 1], bounds_error=False, fill_value=np.nan)

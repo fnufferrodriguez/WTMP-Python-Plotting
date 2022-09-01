@@ -113,7 +113,8 @@ class DataOrganizer(object):
         '''
         organizes line information and places it into a data dictionary
         :param data: dictionary containing line data
-        :param line: dictionary containing line settings
+        :param line_settings: dictionary containing line settings for all lines
+        :param line: dictionary containing line settings for current line
         :return: updated data dictionary
         '''
 
@@ -167,6 +168,13 @@ class DataOrganizer(object):
         return wse_data
 
     def filterByTargetElev(self, data, line_settings):
+        '''
+        filters data read from W2 results files to a target elevation
+        :param data: dictionary of data
+        :param line_settings: dictionary containing settings for all lines
+        :return: modified data dictionary
+        '''
+
         for d in data.keys():
             if 'target_elevation' in line_settings[d].keys():
                 target_elevation = float(line_settings[d]['target_elevation'])
@@ -232,6 +240,13 @@ class DataOrganizer(object):
         return data, line_settings
 
     def getStraightLineValue(self, settings):
+        '''
+        reads settings to get value for straight lines on plots, either by getting value at timestamp or configuring
+        timestamp
+        :param settings: dictionary of settings for plots
+        :return: dictionary with settings for straight lines
+        '''
+
         straightlines = {}
         types_of_straightlines = ['hlines', 'vlines']
         for tosl in types_of_straightlines:
@@ -270,6 +285,7 @@ class DataOrganizer(object):
         '''
         gets time series data from defined sources
         :param Line_info: dictionary of line setttings containing datasources
+        :param makecopy: flag that determines if the data is grabbed or just copied
         :return: dates, values, units
         '''
 
@@ -724,6 +740,8 @@ class DataOrganizer(object):
     def commitProfileDataToMemory(self, data, line_settings, object_settings):
         '''
         commits updated data to data memory dictionary that keeps track of data
+        :param data: dictionary containing data
+        :param line_settings: dictionary containing settings about lines
         :param object_settings:  dicitonary of user defined settings for current object
         '''
 
@@ -853,7 +871,6 @@ class DataOrganizer(object):
         '''
         Gets Contour line data from defined data sources in XML files
         :param settings: currently selected object settings dictionary
-        :param keyval: determines what key to iterate over for data
         :return: dictionary containing data and information about each data set
         '''
 
@@ -915,7 +932,7 @@ class DataOrganizer(object):
         '''
         Gets profile line data from defined data sources in XML files
         :param settings: currently selected object settings dictionary
-        :param keyval: determines what key to iterate over for data
+        :param makecopy: optional flag that determines if data is grabbed or copied. turn off for speed
         :return: dictionary containing data and information about each data set
         '''
 
@@ -1052,16 +1069,3 @@ class DataOrganizer(object):
                 WF.print2stdout('ERROR WRITING CSV FILE')
                 WF.print2stdout(traceback.format_exc())
 
-    def getComputedData(self, data):
-        computedKeys = []
-        for datakey in data.keys():
-            if 'ID' in data[datakey].keys():
-                computedKeys.append(datakey)
-        return computedKeys
-
-    def filterComputed(self, data, targetkey, computedKeys):
-        outdata = {}
-        for key in data.keys():
-            if key == targetkey or key not in computedKeys:
-                outdata[key] = data[key]
-        return outdata

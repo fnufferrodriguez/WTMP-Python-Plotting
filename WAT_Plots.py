@@ -576,6 +576,12 @@ class Plots(object):
                            alpha=float(vline_settings['alpha']))
 
     def fixEmptyYAxis(self, ax, ax2):
+        '''
+        checks for empty axis and if there is, removes the yticks on that side
+        :param ax: left axis object
+        :param ax2: right axis object
+        '''
+
         ax_lines, _ = ax.get_legend_handles_labels()
         ax2_lines, _ = ax2.get_legend_handles_labels()
         if len(ax_lines) == 0:
@@ -585,8 +591,13 @@ class Plots(object):
             ax2.set_yticks([])
             ax2.set_yticklabels([])
 
-
     def setInitialXlims(self, ax, year):
+        '''
+        sets xlimits for plots depending on plot limits to then be modified
+        :param ax: axis object
+        :param year: current plot year, or ALLYEARS
+        '''
+
         if year == 'ALLYEARS':
             xmin = self.Report.StartTime
             xmax = self.Report.EndTime
@@ -603,7 +614,6 @@ class Plots(object):
                 xmax = tmpmax
 
         ax.set_xlim(left=xmin, right=xmax)
-
 
 def translateLineStylePatterns(LineSettings):
     '''

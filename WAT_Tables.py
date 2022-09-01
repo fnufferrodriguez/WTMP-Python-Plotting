@@ -376,6 +376,7 @@ class Tables(object):
         '''
         converts units for table data
         :param data: dictionary containing data
+        :param data_settings: data metadata
         :param object_settings: settings for plot/table
         :return: data with updated units
         '''
@@ -567,6 +568,13 @@ class Tables(object):
         return thresholds
 
     def matchNumberFormatByStat(self, stat, settings):
+        '''
+        matches how numbers should be formatted by what stat they are using user settings in tables
+        :param stat: current statistical value
+        :param settings: dictionary of settings to parse
+        :return: formatting
+        '''
+
         numberFormats_default = []
         numberFormats_statspec = []
 
@@ -853,6 +861,13 @@ class Tables(object):
         return out_data
 
     def replaceComparisonSettings(self, object_settings, iscomp):
+        '''
+        replaces normal settings with comparison settings if found to be comparison plot
+        :param object_settings: dictionary containing settings
+        :param iscomp: boolean, is comparison run or not
+        :return: settings with replaced settings
+        '''
+
         replace_flags = {'comparisonheaders': 'headers'}
         replaced_defaults = object_settings['replaced_defaults']
         if iscomp:
@@ -866,6 +881,12 @@ class Tables(object):
         return object_settings
 
     def configureHeadingsGroups(self, headings):
+        '''
+        finds indicies of groupings for headers
+        :param headings: list of headings
+        :return: indicies of headers
+        '''
+
         headings_groups = []
         for h in headings:
             if h[0] not in headings_groups:
