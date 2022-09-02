@@ -119,7 +119,9 @@ class DataOrganizer(object):
         '''
 
         dates, values, units = self.getTimeSeries(line, makecopy=False) #TODO: update
+        datacheck = False
         if WF.checkData(values):
+            datacheck = True
             flag = line['flag']
             if flag in line_settings.keys() or flag in data.keys():
                 count = 1
@@ -133,17 +135,16 @@ class DataOrganizer(object):
             if 'units' in line.keys() and units == None:
                 units = line['units']
             line_settings[flag] = {'units': units,
-                                   'numtimesused': line['numtimesused'],
                                    'logoutputfilename': datamem_key}
 
             data[flag] = {'values': values,
                           'dates': dates}
 
-
             for key in line.keys():
                 if key not in line_settings[flag].keys():
                     line_settings[flag][key] = line[key]
-        return data, line_settings
+
+        return data, line_settings, datacheck
 
     def getProfileWSE(self, settings, onflag='lines'):
         '''
@@ -225,17 +226,20 @@ class DataOrganizer(object):
                         if not self.Report.checkModelType(curline):
                             continue
                         curline['numtimesused'] = numtimesused
-                        numtimesused += 1
-                        data, line_settings = self.updateTimeSeriesDataDictionary(data, line_settings, curline)
+                        data, line_settings, success = self.updateTimeSeriesDataDictionary(data, line_settings, curline)
+                        if success:
+                            numtimesused += 1
                 else:
                     if self.Report.currentlyloadedID != 'base':
                         line = self.Report.configureSettingsForID('base', line)
                     else:
                         line = WF.replaceflaggedValues(self.Report, line, 'modelspecific')
-                    line['numtimesused'] = 0
+                    line['numtimesused'] = numtimesused
                     if not self.Report.checkModelType(line):
                         continue
-                    data, line_settings = self.updateTimeSeriesDataDictionary(data, line_settings, line)
+                    data, line_settings, success = self.updateTimeSeriesDataDictionary(data, line_settings, line)
+                    if success:
+                        numtimesused += 1
 
         return data, line_settings
 
@@ -469,17 +473,20 @@ class DataOrganizer(object):
                     curline['ID'] = ID
                     if not self.Report.checkModelType(curline):
                         continue
-                    numtimesused += 1
-                    data, line_settings = self.updateProfileDataDictionary(data, line_settings, curline, timestamps)
+                    data, line_settings, success = self.updateProfileDataDictionary(data, line_settings, curline, timestamps)
+                    if success:
+                        numtimesused += 1
             else:
                 if self.Report.currentlyloadedID != 'base':
                     line = self.Report.configureSettingsForID('base', line)
                 else:
                     line = WF.replaceflaggedValues(self.Report, line, 'modelspecific')
-                line['numtimesused'] = 0
+                line['numtimesused'] = numtimesused
                 if not self.Report.checkModelType(line):
                     continue
-                data, line_settings = self.updateProfileDataDictionary(data, line_settings, line, timestamps)
+                data, line_settings, success = self.updateProfileDataDictionary(data, line_settings, line, timestamps)
+                if success:
+                    numtimesused += 1
 
         return data, line_settings
 
@@ -494,7 +501,9 @@ class DataOrganizer(object):
         '''
 
         vals, elevations, depths, times, flag = self.getProfileValues(profile, timestamps) #Test this speed for grabbing all profiles and then choosing
+        datacheck = False
         if len(vals) > 0:
+            datacheck = True
             datamem_key = self.buildMemoryKey(profile)
             if 'units' in profile.keys():
                 units = profile['units']
@@ -526,7 +535,7 @@ class DataOrganizer(object):
                 if key not in line_settings[datakey].keys():
                     line_settings[datakey][key] = profile[key]
 
-        return data, line_settings
+        return data, line_settings, datacheck
 
     def getProfileValues(self, Profile_info, timesteps):
         '''
@@ -795,17 +804,20 @@ class DataOrganizer(object):
                     cur_dp['ID'] = ID
                     if not self.Report.checkModelType(cur_dp):
                         continue
-                    numtimesused += 1
-                    data, line_settings = self.updateTimeSeriesDataDictionary(data, line_settings, cur_dp)
+                    data, line_settings, success = self.updateTimeSeriesDataDictionary(data, line_settings, cur_dp)
+                    if success:
+                        numtimesused += 1
             else:
                 if self.Report.currentlyloadedID != 'base':
                     dp = self.Report.configureSettingsForID('base', dp)
                 else:
                     dp = WF.replaceflaggedValues(self.Report, dp, 'modelspecific')
-                dp['numtimesused'] = 0
+                dp['numtimesused'] = numtimesused
                 if not self.Report.checkModelType(dp):
                     continue
-                data, line_settings = self.updateTimeSeriesDataDictionary(data, line_settings, dp)
+                data, line_settings, success = self.updateTimeSeriesDataDictionary(data, line_settings, dp)
+                if success:
+                    numtimesused += 1
 
         return data, line_settings
 
