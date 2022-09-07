@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '5.2.3'
+VERSIONNUMBER = '5.2.4'
 
 import os
 import sys
@@ -22,6 +22,7 @@ import numpy as np
 import pickle
 import itertools
 import traceback
+import time
 
 import WAT_Reader as WR
 import WAT_Functions as WF
@@ -162,6 +163,8 @@ class MakeAutomatedReport(object):
         WF.print2stdout('\n################################')
         WF.print2stdout('Now making TimeSeries Plot.')
         WF.print2stdout('################################\n')
+
+        objectstarttime = time.time()
 
         Plots = WPlot.Plots(self)
 
@@ -723,7 +726,11 @@ class MakeAutomatedReport(object):
                     exists = False
             figname = tfn + '.png'
             # plt.tight_layout()
-            plt.savefig(figname)
+            # plt.savefig(figname)
+            if self.highres:
+                plt.savefig(figname, dpi=300)
+            else:
+                plt.savefig(figname)
             # plt.savefig(figname, bbox_inches='tight')
             plt.close('all')
 
@@ -731,6 +738,8 @@ class MakeAutomatedReport(object):
                 self.XML.writeHalfPagePlot(os.path.basename(figname), cur_obj_settings['description'])
             if pageformat == 'full':
                 self.XML.writeFullPagePlot(os.path.basename(figname), cur_obj_settings['description'])
+
+        WF.print2stdout(f'Timeseries Plot took {time.time() - objectstarttime} seconds.')
 
     def makeProfileStatisticsTable(self, object_settings):
         '''
@@ -743,6 +752,8 @@ class MakeAutomatedReport(object):
         WF.print2stdout('\n################################')
         WF.print2stdout('Now making Profile Stats Table.')
         WF.print2stdout('################################\n')
+
+        objectstarttime = time.time()
 
         Tables = WTable.Tables(self)
 
@@ -859,6 +870,8 @@ class MakeAutomatedReport(object):
                     self.XML.writeDateColumnEnd()
             self.XML.writeTableEnd()
 
+        WF.print2stdout(f'Profile Stat Table took {time.time() - objectstarttime} seconds.')
+
     def makeProfilePlot(self, object_settings):
         '''
         takes in object settings to build profile plot and write to XML
@@ -869,6 +882,8 @@ class MakeAutomatedReport(object):
         WF.print2stdout('\n################################')
         WF.print2stdout('Now making Profile Plot.')
         WF.print2stdout('################################\n')
+
+        objectstarttime = time.time()
 
         Plots = WPlot.Plots(self)
 
@@ -1275,7 +1290,12 @@ class MakeAutomatedReport(object):
 
                 figname = tfn + '.png'
 
-                plt.savefig(os.path.join(self.images_path, figname))
+                if self.highres:
+                    plt.savefig(os.path.join(self.images_path, figname), dpi=300)
+                else:
+                    plt.savefig(os.path.join(self.images_path, figname))
+
+                # plt.savefig(os.path.join(self.images_path, figname))
                 plt.close('all')
 
                 ################################################
@@ -1301,6 +1321,8 @@ class MakeAutomatedReport(object):
 
         self.XML.writeProfilePlotEnd()
 
+        WF.print2stdout(f'Profile Plot took {time.time() - objectstarttime} seconds.')
+
     def makeErrorStatisticsTable(self, object_settings):
         '''
         takes in object settings to build error stats table and write to XML
@@ -1311,6 +1333,8 @@ class MakeAutomatedReport(object):
         WF.print2stdout('\n################################')
         WF.print2stdout('Now making Error Stats table.')
         WF.print2stdout('################################\n')
+
+        objectstarttime = time.time()
 
         Tables = WTable.Tables(self)
 
@@ -1414,6 +1438,8 @@ class MakeAutomatedReport(object):
                 self.XML.writeDateColumnEnd()
         self.XML.writeTableEnd()
 
+        WF.print2stdout(f'Error Stats table took {time.time() - objectstarttime} seconds.')
+
     def makeMonthlyStatisticsTable(self, object_settings):
         '''
         takes in object settings to build monthly stats table and write to XML
@@ -1424,6 +1450,8 @@ class MakeAutomatedReport(object):
         WF.print2stdout('\n################################')
         WF.print2stdout('Now making Monthly Stats Table.')
         WF.print2stdout('################################\n')
+
+        objectstarttime = time.time()
 
         Tables = WTable.Tables(self)
 
@@ -1525,6 +1553,8 @@ class MakeAutomatedReport(object):
                 self.XML.writeDateColumnEnd()
         self.XML.writeTableEnd()
 
+        WF.print2stdout(f'Monthly Stat Table took {time.time() - objectstarttime} seconds.')
+
     def makeSingleStatisticTable(self, object_settings):
         '''
         takes in object settings to build Single Statistic table and write to XML
@@ -1535,6 +1565,8 @@ class MakeAutomatedReport(object):
         WF.print2stdout('\n################################')
         WF.print2stdout('Now making Single Statistic Table.')
         WF.print2stdout('################################\n')
+
+        objectstarttime = time.time()
 
         Tables = WTable.Tables(self)
 
@@ -1641,6 +1673,8 @@ class MakeAutomatedReport(object):
                 self.XML.writeDateColumnEnd()
         self.XML.writeTableEnd()
 
+        WF.print2stdout(f'Single Stat Table took {time.time() - objectstarttime} seconds.')
+
     def makeSingleStatisticProfileTable(self, object_settings):
         '''
         takes in object settings to build Single Statistic profile table and write to XML
@@ -1651,6 +1685,8 @@ class MakeAutomatedReport(object):
         WF.print2stdout('\n################################')
         WF.print2stdout('Now making Single Statistic Profile Table.')
         WF.print2stdout('################################\n')
+
+        objectstarttime = time.time()
 
         Tables = WTable.Tables(self)
 
@@ -1790,6 +1826,8 @@ class MakeAutomatedReport(object):
                 self.XML.writeDateColumnEnd()
         self.XML.writeTableEnd()
 
+        WF.print2stdout(f'Single Profile Stat Table took {time.time() - objectstarttime} seconds.')
+
     def makeContourPlot(self, object_settings):
         '''
         takes in object settings to build contour plot and write to XML
@@ -1800,6 +1838,8 @@ class MakeAutomatedReport(object):
         WF.print2stdout('\n################################')
         WF.print2stdout('Now making Contour Plot.')
         WF.print2stdout('################################\n')
+
+        objectstarttime = time.time()
 
         Plots = WPlot.Plots(self)
 
@@ -2123,13 +2163,18 @@ class MakeAutomatedReport(object):
                     exists = False
             figname = tfn + '.png'
             # plt.savefig(figname, bbox_inches='tight')
-            plt.savefig(figname)
+            if self.highres:
+                plt.savefig(figname, dpi=300)
+            else:
+                plt.savefig(figname)
             plt.close('all')
 
             if pageformat == 'full':
                 self.XML.writeFullPagePlot(os.path.basename(figname), cur_obj_settings['description'])
             elif pageformat == 'half':
                 self.XML.writeHalfPagePlot(os.path.basename(figname), cur_obj_settings['description'])
+
+        WF.print2stdout(f'Contour Plot took {time.time() - objectstarttime} seconds.')
 
     def makeReservoirContourPlot(self, object_settings):
         '''
@@ -2141,6 +2186,8 @@ class MakeAutomatedReport(object):
         WF.print2stdout('\n################################')
         WF.print2stdout('Now making Reservoir Contour Plot.')
         WF.print2stdout('################################\n')
+
+        objectstarttime = time.time()
 
         Plots = WPlot.Plots(self)
 
@@ -2451,7 +2498,11 @@ class MakeAutomatedReport(object):
                     exists = False
             figname = tfn + '.png'
             # plt.savefig(figname, bbox_inches='tight')
-            plt.savefig(figname)
+            # plt.savefig(figname)
+            if self.highres:
+                plt.savefig(figname, dpi=300)
+            else:
+                plt.savefig(figname)
             plt.close('all')
 
             if pageformat == 'full':
@@ -2459,16 +2510,23 @@ class MakeAutomatedReport(object):
             elif pageformat == 'half':
                 self.XML.writeHalfPagePlot(os.path.basename(figname), cur_obj_settings['description'])
 
+        WF.print2stdout(f'Reservoir Contour Plot took {time.time() - objectstarttime} seconds.')
+
     def makeTextBox(self, object_settings):
         '''
         Makes a text box object in the report
         :param object_settings: currently selected object settings dictionary
         :return:
         '''
+
+        objectstarttime = time.time()
+
         if 'text' not in object_settings.keys():
             WF.print2stdout('Failed to input textbox contents using <text> flag.')
 
         self.XML.writeTextBox(object_settings['text'])
+
+        WF.print2stdout(f'Text box took {time.time() - objectstarttime} seconds.')
 
     def setSimulationCSVVars(self, simlist):
         '''
@@ -2590,6 +2648,12 @@ class MakeAutomatedReport(object):
             self.ChapterName = Chapter['name']
             self.ChapterRegion = Chapter['region']
             self.ChapterText = Chapter['grouptext']
+            self.ChapterResolution = Chapter['resolution']
+            if self.ChapterResolution.lower() == 'low':
+                self.highres = False
+                WF.print2stdout('Running Low Res Mode!')
+            else:
+                self.highres = True
             self.WAT_log.addLogEntry({'region': self.ChapterRegion})
             self.XML.writeChapterStart(self.ChapterName, self.ChapterText)
             for section in Chapter['sections']:

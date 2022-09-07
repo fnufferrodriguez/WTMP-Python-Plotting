@@ -124,6 +124,15 @@ def readChapterDefFile(CD_file):
                     break
             ChapterDef['grouptext'] = grouptext
 
+            resolution = 'high'
+            resolution_flags = ['resolution', 'Resolution', 'RESOLUTION']
+            for flag in resolution_flags:
+                findtext = chapter.find(flag)
+                if isinstance(findtext, ET.Element):
+                    resolution = findtext.text
+                    break
+            ChapterDef['resolution'] = resolution
+
             cd_sections = chapter.findall('Sections/Section')
             for section in cd_sections:
                 section_objects = {}
