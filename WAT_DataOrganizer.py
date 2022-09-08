@@ -185,10 +185,10 @@ class DataOrganizer(object):
                         targelev_failed = np.where(values[sn]['elevcl'] != target_elevation)
                         data[d]['values'][sn]['q(m3/s)'][targelev_failed] = 0.
                 elif isinstance(values, (list, np.ndarray)):
-                    if 'elevation' in data[d].keys():
-                        if 'flag' not in data[d]['elevation'].keys():
-                            data[d]['elevation']['flag'] = data[d]['flag']+'_elev'
-                            elev_times, elev_values, elev_units = self.getTimeSeries(data[d]['elevation'])
+                    if 'elevation' in line_settings[d].keys():
+                        if 'flag' not in line_settings[d]['elevation'].keys():
+                            line_settings[d]['elevation']['flag'] = line_settings[d]['flag']+'_elev'
+                            elev_times, elev_values, elev_units = self.getTimeSeries(line_settings[d]['elevation'])
                             targelev_failed = np.where(elev_values != target_elevation)
                             if len(elev_times) == len(data[d]['values']):
                                 data[d]['values'][targelev_failed] = 0.
@@ -1080,4 +1080,40 @@ class DataOrganizer(object):
             except:
                 WF.print2stdout('ERROR WRITING CSV FILE')
                 WF.print2stdout(traceback.format_exc())
+
+    def scaleValuesByTable(self, data, line_settings):
+        '''
+        scales values based on table target values. Looks for SPECIFIC values, not ranges.
+        :param data: dictionary containing data values
+        :param line_settings: dictionary containing line settings
+        :return: updated dictionary
+        '''
+
+        for d in data.keys():
+            if 'scalartable' in line_settings[d].keys() and 'scalefrom' in line_settings[d].keys():
+                WF.print2stdout(f'Scalar table found for {d}')
+                tablevalues = WDR.readScalarTable(line_settings[d]['scalartable'])
+                scalefromflag = line_settings[d]['flag']+'_scalefrom'
+                scalefrom_dates, scalefrom_values, scalefrom_units = self.getTimeSeries(line_settings[d]['scalefrom'])
+                if len(scalefrom_values) != len(data[d]['values']):
+                    WF.print2stdout(f'Values and Scaledby in different time intervals. Equalizing..')
+                    base_data, scaledFrom_data = WF.matchData({'dates': data[d]['dates'], 'values': data[d]['values']},
+                                                         {'dates': scalefrom_dates, 'values': scalefrom_values})
+                else:
+                    base_data = data[d]
+                    scaledFrom_data = {'values': scalefrom_values,
+                                       'dates': scalefrom_dates,
+                                       'units': scalefrom_units}
+
+                #MAKE SURE NPARRAY
+                for target in tablevalues.keys():
+                    if target in scaledFrom_data['values']:
+                        scalar = tablevalues[target]
+                        target_i = [i for i, n in enumerate(scaledFrom_data['values']) if n == target]
+                        base_data['values'][target_i] *= scalar
+
+                data[d]['values'] = base_data['values']
+                data[d][scalefromflag] = scaledFrom_data
+
+        return data
 

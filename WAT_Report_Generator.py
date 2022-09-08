@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '5.2.4'
+VERSIONNUMBER = '5.2.5'
 
 import os
 import sys
@@ -246,6 +246,7 @@ class MakeAutomatedReport(object):
                 stackplots = {}
                 linedata, line_settings = self.Data.getTimeSeriesDataDictionary(ax_settings)
                 linedata = self.Data.filterByTargetElev(linedata, line_settings)
+                linedata = self.Data.scaleValuesByTable(linedata, line_settings)
                 linedata = WF.mergeLines(linedata, line_settings, ax_settings)
                 ax_settings = self.configureSettingsForID('base', ax_settings)
                 gatedata, gate_settings = self.Data.getGateDataDictionary(ax_settings, makecopy=False)

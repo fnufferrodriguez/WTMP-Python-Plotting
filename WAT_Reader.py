@@ -602,3 +602,42 @@ def readTemplate(Report, templatefilename):
     templateObjects = root.findall('Object')
     reportObjects = iterateGraphicsDefaults(templateObjects, 'Type')
     return reportObjects
+
+def readScalarTable(scalartablepath):
+    '''
+    reads in scalar tables. headers ignored but not necessary
+    format must be
+    name, scaled by, scalar
+    OR
+    scaled by, scalar
+    so ex
+    1out, 363, .34
+    OR
+    363, .43
+    :param scalartablepath: path to table file
+    :return: dictionary [scaledbyval: scalar]
+    '''
+
+    scalars = {}
+    scalartable = np.genfromtxt(scalartablepath, delimiter=',', dtype=None, encoding="utf8")
+    for line in scalartable:
+        if len(line) == 2:
+            try:
+                line_flt = [float(n) for n in line]
+                scalars[line_flt[0]] = line_flt[1]
+            except:
+                #probably header line
+                continue
+        elif len(line) > 2:
+            try:
+                line_flt = [float(n) for n in line[1:3]]
+                scalars[line_flt[0]] = line_flt[1]
+            except:
+                #probably header line
+                continue
+        else:
+            WF.print2stderr(f'Scalar table {scalartablepath} formatted incorrectly. Should be [target, scalar]')
+            WF.print2stderr('Now exiting')
+            sys.exit(1)
+
+    return scalars
