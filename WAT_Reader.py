@@ -192,8 +192,16 @@ def readDSSData(dss_file, pathname, startdate, enddate):
     if ts.dtype == 'Regular TimeSeries':
         interval_seconds = ts.interval
         times = []
-        current_time = startdate
-        while current_time <= enddate:
+        # current_time = startdate
+        current_time = ts.startPyDateTime
+        end_time = ts.endDateTime #bugged where the pydatetime shows start time..
+        try:
+            end_pytime = dt.datetime.strptime(end_time, '%d%b%Y %H:%M:%S')
+        except ValueError:
+            end_time_repl = end_time.replace(' 24:', ' 23:')
+            end_pytime = dt.datetime.strptime(end_time_repl, '%d%b%Y %H:%M:%S')
+            end_pytime += dt.timedelta(hours=1)
+        while current_time <= end_pytime:
             times.append(current_time)
             current_time += dt.timedelta(seconds=interval_seconds)
         if len(times) == len(values):

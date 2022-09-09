@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '5.2.5'
+VERSIONNUMBER = '5.2.6'
 
 import os
 import sys
@@ -512,6 +512,10 @@ class MakeAutomatedReport(object):
 
                     matched_dates = list(set(stackdates[0]).intersection(*stackdates)) #find dates that ALL dates have.
                     matched_dates.sort()
+
+                    if len(matched_dates) == 0:
+                        WF.print2stdout('Mismatching dates for stack plot..')
+                        WF.print2stdout('Please check inputs are on the date interval and time stamps are on the same hours.')
 
                     #now filter values associated with dates not in this list
                     for di, datelist in enumerate(stackdates):
