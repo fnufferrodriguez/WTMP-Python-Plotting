@@ -528,6 +528,8 @@ def readSimulationInfo(Report, simulationInfoFile):
     Report.reportType = root.find('ReportType').text
     Report.studyDir = root.find('Study/Directory').text
     Report.observedDir = root.find('Study/ObservedData').text
+    Report.installDir = root.find('Study/InstallDirectory').text #TODO: update
+    Report.outputDir = root.find('Study/WriteDirectory').text #TODO: update
 
     if Report.reportType == 'alternativecomparison':
         Report.iscomp = True

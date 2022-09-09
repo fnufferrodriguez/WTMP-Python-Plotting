@@ -1532,18 +1532,24 @@ def formatNumbers(number, numberformatsettings):
 
     return f'{number:,.2f}'
 
-def checkJasperFiles(study_dir):
+def checkJasperFiles(study_dir, install_dir):
     '''
     checks existing jasper and jrxml files, and if the jrxml files are newer, deletes jasper files so they can be regen
     :param study_dir: directory to look for jasper files
     '''
 
-    files_in_directory = os.listdir(study_dir)
-    jrxml_files = [file for file in files_in_directory if file.endswith('.jrxml')]
-    for jrxml_file in jrxml_files:
+    files_in_study_directory = os.listdir(study_dir)
+    files_in_install_directory = os.listdir(install_dir)
+    jrxml_study_files = [file for file in files_in_study_directory if file.endswith('.jrxml')]
+    jrxml_install_files = [file for file in files_in_install_directory if file.endswith('.jrxml')] #default included in install
+    for jrxml_file in jrxml_install_files:
         jasper_file = os.path.join(study_dir, jrxml_file.split('.jrxml')[0] + '.jasper')
+        if jrxml_file in jrxml_study_files:
+            jrxml_source = study_dir
+        else:
+            jrxml_source = install_dir
         if os.path.exists(jasper_file):
-            jrxml_time = os.path.getmtime(os.path.join(study_dir, jrxml_file))
+            jrxml_time = os.path.getmtime(os.path.join(jrxml_source, jrxml_file))
             jasper_time = os.path.getmtime(os.path.join(study_dir, jasper_file))
 
             if jrxml_time > jasper_time: #if the jasper if older than the jrxml

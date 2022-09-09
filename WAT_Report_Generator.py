@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '5.2.6'
+VERSIONNUMBER = '5.2.6b'
 
 import os
 import sys
@@ -65,7 +65,7 @@ class MakeAutomatedReport(object):
         self.definePaths()
         self.Constants = WC.WAT_Constants()
         self.cleanOutputDirs()
-        WF.checkJasperFiles(os.path.join(self.studyDir, 'reports'))
+        WF.checkJasperFiles(os.path.join(self.studyDir, 'reports'), self.installDir)
         WR.readGraphicsDefaultFile(self) #read graphical component defaults
         self.defaultLineStyles = WD.readDefaultLineStylesFile(self)
         self.WAT_log = WL.WAT_Logger()
@@ -135,7 +135,8 @@ class MakeAutomatedReport(object):
                     self.images_path
         '''
 
-        self.images_path = os.path.join(self.studyDir, 'reports', 'Images')
+        # self.images_path = os.path.join(self.studyDir, 'reports', 'Images')
+        self.images_path = os.path.join(self.outputDir, 'reports', 'Images')
         if not os.path.exists(self.images_path):
             try:
                 os.makedirs(self.images_path)
@@ -144,7 +145,9 @@ class MakeAutomatedReport(object):
                 WF.print2stderr(f'Unable to make {self.images_path}')
                 sys.exit(1)
 
-        self.CSVPath = os.path.join(self.studyDir, 'reports', 'CSVData')
+        # self.CSVPath = os.path.join(self.studyDir, 'reports', 'CSVData')
+        self.CSVPath = os.path.join(self.outputDir, 'reports', 'CSVData') #TODO: update
+
         if not os.path.exists(self.CSVPath):
             try:
                 os.makedirs(self.CSVPath)
@@ -2798,7 +2801,8 @@ class MakeAutomatedReport(object):
                     self.XML
         '''
 
-        new_xml = os.path.join(self.studyDir, 'reports', 'Datasources', 'USBRAutomatedReportOutput.xml') #required name for file
+        new_xml = os.path.join(self.OutputDirectory, 'reports', 'Datasources', 'USBRAutomatedReportOutput.xml') #required name for file
+
         self.XML = WXMLU.XMLReport(new_xml)
         self.XML.writeCover('DRAFT Temperature Validation Summary Report')
 
