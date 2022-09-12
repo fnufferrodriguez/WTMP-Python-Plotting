@@ -1538,12 +1538,21 @@ def checkJasperFiles(study_dir, install_dir):
     :param study_dir: directory to look for jasper files
     '''
 
-    files_in_study_directory = os.listdir(study_dir)
-    files_in_install_directory = os.listdir(install_dir)
+    jrxml_study_directory = os.path.join(study_dir, 'reports', 'Jasper')
+    jrxml_install_directory = os.path.join(install_dir, 'reports', 'Jasper')
+
+    if os.path.exists(jrxml_study_directory):
+        files_in_study_directory = os.listdir(jrxml_study_directory)
+    else:
+        files_in_study_directory = []
+    if os.path.exists(jrxml_install_directory):
+        files_in_install_directory = os.listdir(jrxml_install_directory)
+    else:
+        files_in_install_directory = []
     jrxml_study_files = [file for file in files_in_study_directory if file.endswith('.jrxml')]
     jrxml_install_files = [file for file in files_in_install_directory if file.endswith('.jrxml')] #default included in install
     for jrxml_file in jrxml_install_files:
-        jasper_file = os.path.join(study_dir, jrxml_file.split('.jrxml')[0] + '.jasper')
+        jasper_file = os.path.join(study_dir, 'reports', 'JasperC', jrxml_file.split('.jrxml')[0] + '.jasper')
         if jrxml_file in jrxml_study_files:
             jrxml_source = study_dir
         else:

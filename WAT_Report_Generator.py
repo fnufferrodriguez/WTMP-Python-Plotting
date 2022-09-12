@@ -65,7 +65,7 @@ class MakeAutomatedReport(object):
         self.definePaths()
         self.Constants = WC.WAT_Constants()
         self.cleanOutputDirs()
-        WF.checkJasperFiles(os.path.join(self.studyDir, 'reports'), self.installDir)
+        WF.checkJasperFiles(self.studyDir, self.installDir)
         WR.readGraphicsDefaultFile(self) #read graphical component defaults
         self.defaultLineStyles = WD.readDefaultLineStylesFile(self)
         self.WAT_log = WL.WAT_Logger()
@@ -136,7 +136,7 @@ class MakeAutomatedReport(object):
         '''
 
         # self.images_path = os.path.join(self.studyDir, 'reports', 'Images')
-        self.images_path = os.path.join(self.outputDir, 'reports', 'Images')
+        self.images_path = os.path.join(self.outputDir, 'Images')
         if not os.path.exists(self.images_path):
             try:
                 os.makedirs(self.images_path)
@@ -146,7 +146,7 @@ class MakeAutomatedReport(object):
                 sys.exit(1)
 
         # self.CSVPath = os.path.join(self.studyDir, 'reports', 'CSVData')
-        self.CSVPath = os.path.join(self.outputDir, 'reports', 'CSVData') #TODO: update
+        self.CSVPath = os.path.join(self.outputDir, 'CSVData') #TODO: update
 
         if not os.path.exists(self.CSVPath):
             try:
@@ -2801,7 +2801,7 @@ class MakeAutomatedReport(object):
                     self.XML
         '''
 
-        new_xml = os.path.join(self.OutputDirectory, 'reports', 'Datasources', 'USBRAutomatedReportOutput.xml') #required name for file
+        new_xml = os.path.join(self.studyDir, 'reports', 'Datasources', 'USBRAutomatedReportOutput.xml') #required name for file
 
         self.XML = WXMLU.XMLReport(new_xml)
         self.XML.writeCover('DRAFT Temperature Validation Summary Report')
