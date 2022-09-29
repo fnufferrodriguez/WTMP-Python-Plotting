@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '5.2.6b'
+VERSIONNUMBER = '5.2.7'
 
 import os
 import sys
@@ -2801,7 +2801,9 @@ class MakeAutomatedReport(object):
                     self.XML
         '''
 
-        new_xml = os.path.join(self.studyDir, 'reports', 'Datasources', 'USBRAutomatedReportOutput.xml') #required name for file
+        # new_xml = os.path.join(self.studyDir, 'reports', 'Datasources', 'USBRAutomatedReportOutput.xml') #required name for file
+        new_xml = os.path.join(self.outputDir, 'Datasources', 'USBRAutomatedReportOutput.xml') #required name for file
+        print(f'CREATING NEW XML AT {new_xml}')
 
         self.XML = WXMLU.XMLReport(new_xml)
         self.XML.writeCover('DRAFT Temperature Validation Summary Report')
