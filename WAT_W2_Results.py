@@ -13,6 +13,8 @@ Created on 7/15/2021
 '''
 
 import os
+import sys
+
 import numpy as np
 import datetime as dt
 import pandas as pd
@@ -43,7 +45,19 @@ class W2_Results(object):
         self.endtime = endtime
         self.Report = Report
         self.interval_min = interval_min #output time series
-        self.control_file = os.path.join(self.run_path, 'w2_con.npt') #this should always be the same
+
+        control_file_csv = os.path.join(self.run_path, 'w2_con.csv') #this should always be the same, UNTIL IT WASNT
+        control_file_npt = os.path.join(self.run_path, 'w2_con.npt') #this should always be the same, UNTIL IT WASNT
+        if os.path.exists(control_file_csv):
+            self.control_file = control_file_csv
+            self.control_file_type = 'csv'
+        elif os.path.exists(control_file_npt):
+            self.control_file = control_file_npt
+            self.control_file_type = 'npt'
+        else:
+            WF.print2stderr('Unknown or missing W2 control file.')
+            sys.exit(1)
+
         self.readControlFile()
         # dates are output irregular, so we need to build a regular time series to interpolate to
         self.jd_dates, self.dt_dates, self.t_offset = self.buildTimes(self.starttime, self.endtime, self.interval_min)
@@ -59,7 +73,10 @@ class W2_Results(object):
         '''
 
         self.cf_lines = self.getControlFileLines(self.control_file)
-        self.line_sections = self.formatCFLines(self.cf_lines)
+        if self.control_file_type == 'npt':
+            self.line_sections = self.formatCFLines(self.cf_lines)
+        # else:
+            #csv?
 
     def get_tempprofile_layers(self):
         '''

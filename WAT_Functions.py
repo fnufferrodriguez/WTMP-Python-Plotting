@@ -1538,28 +1538,34 @@ def checkJasperFiles(study_dir, install_dir):
     :param study_dir: directory to look for jasper files
     '''
 
+    #JRXML files can exist in two places, study and install. Study overwrites install.
     jrxml_study_directory = os.path.join(study_dir, 'reports', 'Jasper')
     jrxml_install_directory = os.path.join(install_dir, 'reports', 'Jasper')
 
-    if os.path.exists(jrxml_study_directory):
-        files_in_study_directory = os.listdir(jrxml_study_directory)
+    if os.path.exists(jrxml_study_directory): #if the study dir exsits
+        files_in_study_directory = os.listdir(jrxml_study_directory) #then get files in study dir
     else:
-        files_in_study_directory = []
-    if os.path.exists(jrxml_install_directory):
-        files_in_install_directory = os.listdir(jrxml_install_directory)
+        files_in_study_directory = [] #otherwise, there are none
+
+    if os.path.exists(jrxml_install_directory): #then check the install dir
+        files_in_install_directory = os.listdir(jrxml_install_directory) #get install dir files
     else:
-        files_in_install_directory = []
-    jrxml_study_files = [file for file in files_in_study_directory if file.endswith('.jrxml')]
+        files_in_install_directory = [] #otherwise there are none
+
+    jrxml_study_files = [file for file in files_in_study_directory if file.endswith('.jrxml')] #get jrxml files
     jrxml_install_files = [file for file in files_in_install_directory if file.endswith('.jrxml')] #default included in install
-    for jrxml_file in jrxml_install_files:
-        jasper_file = os.path.join(study_dir, 'reports', 'JasperC', jrxml_file.split('.jrxml')[0] + '.jasper')
-        if jrxml_file in jrxml_study_files:
+
+    for jrxml_file in jrxml_install_files: #should contain ALL files, as this is the base set
+        jasper_file = os.path.join(study_dir, 'reports', 'JasperC', jrxml_file.split('.jrxml')[0] + '.jasper') #link to where compiled jasper file would be
+
+        if jrxml_file in jrxml_study_files: #if the jrxml file is in the study dir, use that one
             jrxml_source = study_dir
-        else:
+        else: #otherwise use the one in the study fir
             jrxml_source = install_dir
+
         if os.path.exists(jasper_file):
-            jrxml_time = os.path.getmtime(os.path.join(jrxml_source, jrxml_file))
-            jasper_time = os.path.getmtime(os.path.join(study_dir, jasper_file))
+            jrxml_time = os.path.getmtime(os.path.join(jrxml_source, 'reports', 'Jasper', jrxml_file))
+            jasper_time = os.path.getmtime(jasper_file)
 
             if jrxml_time > jasper_time: #if the jasper if older than the jrxml
                 print2stdout(f'\nNewer JRXML file detected for {jrxml_file}')
