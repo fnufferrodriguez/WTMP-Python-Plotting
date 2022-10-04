@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '5.2.8'
+VERSIONNUMBER = '5.2.9'
 
 import os
 import sys
@@ -2658,11 +2658,15 @@ class MakeAutomatedReport(object):
             self.ChapterRegion = Chapter['region']
             self.ChapterText = Chapter['grouptext']
             self.ChapterResolution = Chapter['resolution']
-            if self.ChapterResolution.lower() == 'low':
+
+            self.highres = True #default
+            if self.ChapterResolution.lower() == 'high':
+                self.highres = True
+                WF.print2stdout('Running High Res Mode!')
+            elif self.ChapterResolution.lower() == 'low':
                 self.highres = False
                 WF.print2stdout('Running Low Res Mode!')
-            else:
-                self.highres = True
+
             self.WAT_log.addLogEntry({'region': self.ChapterRegion})
             self.XML.writeChapterStart(self.ChapterName, self.ChapterText)
             for section in Chapter['sections']:

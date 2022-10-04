@@ -679,17 +679,21 @@ def getYearlyFilterIdx(dates, year):
     end_date = dates[-1]
     e_year_date = dt.datetime(year,12,31,23,59)
     s_year_date = dt.datetime(year,1,1,0,0)
-    interval = (dates[1] - start_date).total_seconds()
-    if start_date.year == year:
-        s_idx = 0
-    else:
-        s_idx = round(int((s_year_date - start_date).total_seconds() / interval))
-    if end_date.year == year:
-        e_idx = len(dates)
-    else:
-        e_idx = round(int((e_year_date - start_date).total_seconds() / interval))
 
-    return s_idx, e_idx
+    if start_date != end_date:
+        interval = (dates[1] - start_date).total_seconds()
+        if start_date.year == year:
+            s_idx = 0
+        else:
+            s_idx = round(int((s_year_date - start_date).total_seconds() / interval))
+        if end_date.year == year:
+            e_idx = len(dates)
+        else:
+            e_idx = round(int((e_year_date - start_date).total_seconds() / interval))
+
+        return s_idx, e_idx
+    else:
+        return 0, 1
 
 def getMonthlyFilterIdx(dates, month):
     '''
