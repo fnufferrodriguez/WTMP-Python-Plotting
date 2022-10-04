@@ -45,6 +45,7 @@ import warnings
 warnings.filterwarnings("always")
 
 mpl.rcParams['axes.autolimit_mode'] = 'round_numbers'
+mpl.use("Agg")
 
 class MakeAutomatedReport(object):
     '''
