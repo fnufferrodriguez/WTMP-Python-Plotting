@@ -316,6 +316,40 @@ def removeNaNs(data1, data2, flag='values'):
 
     return data1, data2
 
+def removeINFs(data1, data2, flag='values'):
+    '''
+    removes data points from both datasets where either ones are infinity. This way, the nans dont throw off any stat
+    analysis
+    :param data1: input dataset list, array or dict
+    :param data2: input dataset list, array or dict
+    :param flag: flag to get data from dataset if dict
+    :return:
+    '''
+
+    if isinstance(data1, dict):
+        d1_msk = np.where(~np.isinf(data1[flag]))
+    elif isinstance(data1, list) or isinstance(data1, np.ndarray):
+        d1_msk = np.where(~np.isinf(data1))
+
+    if isinstance(data2, dict):
+        d2_msk = np.where(~np.isinf(data2[flag]))
+    elif isinstance(data2, list) or isinstance(data2, np.ndarray):
+        d2_msk = np.where(~np.isinf(data2))
+
+    msk = np.intersect1d(d1_msk, d2_msk)
+
+    if isinstance(data1, dict):
+        data1[flag] = np.asarray(data1[flag])[msk]
+    elif isinstance(data1, list) or isinstance(data1, np.ndarray):
+        data1 = np.asarray(data1)[msk]
+
+    if isinstance(data2, dict):
+        data2[flag] = np.asarray(data2[flag])[msk]
+    elif isinstance(data2, list) or isinstance(data2, np.ndarray):
+        data2 = np.asarray(data2)[msk]
+
+    return data1, data2
+
 def calcMAE(data1, data2):
     '''
     calculates the mean absolute error for two datasets
@@ -326,11 +360,14 @@ def calcMAE(data1, data2):
 
     data1, data2 = matchData(data1, data2)
     data1, data2 = removeNaNs(data1, data2, flag='values')
+    data1, data2 = removeINFs(data1, data2, flag='values')
     dcheck1 = checkData(data1, flag='values')
     dcheck2 = checkData(data2, flag='values')
     if not dcheck1 or not dcheck2:
         return np.nan
+
     return mean_absolute_error(data2['values'], data1['values'])
+
 
 def calcMeanBias(data1, data2):
     '''
@@ -342,6 +379,7 @@ def calcMeanBias(data1, data2):
 
     data1, data2 = matchData(data1, data2)
     data1, data2 = removeNaNs(data1, data2, flag='values')
+    data1, data2 = removeINFs(data1, data2, flag='values')
     dcheck1 = checkData(data1, flag='values')
     dcheck2 = checkData(data2, flag='values')
     if not dcheck1 or not dcheck2:
@@ -361,6 +399,7 @@ def calcRMSE(data1, data2):
 
     data1, data2 = matchData(data1, data2)
     data1, data2 = removeNaNs(data1, data2, flag='values')
+    data1, data2 = removeINFs(data1, data2, flag='values')
     dcheck1 = checkData(data1, flag='values')
     dcheck2 = checkData(data2, flag='values')
     if not dcheck1 or not dcheck2:
@@ -393,6 +432,7 @@ def calcNSE(data1, data2):
 
     data1, data2 = matchData(data1, data2)
     data1, data2 = removeNaNs(data1, data2, flag='values')
+    data1, data2 = removeINFs(data1, data2, flag='values')
     dcheck1 = checkData(data1, flag='values')
     dcheck2 = checkData(data2, flag='values')
     if not dcheck1 or not dcheck2:
@@ -435,6 +475,8 @@ def calcMean(data1):
     '''
 
     dcheck1 = checkData(data1, flag='values')
+    data1_msk = np.where(np.isinf(data1['values']))
+    data1['values'][data1_msk] = np.nan
     if not dcheck1:
         return np.nan
     return(np.nanmean(data1['values']))
