@@ -132,7 +132,7 @@ class Tables(object):
                             for ri, row in enumerate(object_settings['rows']):
                                 srow = row.split('|')[1:]
                                 if i > len(srow)-1:
-                                    WF.print2stdout(f'Too many headers for defined rows. Not using data for {header}.')
+                                    WF.print2stdout(f'Too many headers for defined rows. Not using data for {header}.', debug=self.Report.debug)
                                     rows[year][ri].append(None)
                                 else:
                                     rows[year][ri].append(srow[i])
@@ -387,7 +387,7 @@ class Tables(object):
             if 'parameter' in data_settings[datapath].keys():
                 units = WF.configureUnits(object_settings, data_settings[datapath]['parameter'], units)
             if 'unitsystem' in object_settings.keys():
-                data[datapath]['values'], data_settings[datapath]['units'] = WF.convertUnitSystem(values, units, object_settings['unitsystem'])
+                data[datapath]['values'], data_settings[datapath]['units'] = WF.convertUnitSystem(values, units, object_settings['unitsystem'], debug=self.Report.debug)
 
         return data
 
@@ -423,15 +423,15 @@ class Tables(object):
                             try:
                                 sr_month = self.Report.Constants.month2num[sr_month.lower()]
                             except KeyError:
-                                WF.print2stdout('Invalid Entry for {0}'.format(sr))
-                                WF.print2stdout('Try using interger values or 3 letter monthly code.')
-                                WF.print2stdout('Ex: MONTH=1 or MONTH=JAN')
+                                WF.print2stdout('Invalid Entry for {0}'.format(sr), debug=self.Report.debug)
+                                WF.print2stdout('Try using interger values or 3 letter monthly code.', debug=self.Report.debug)
+                                WF.print2stdout('Ex: MONTH=1 or MONTH=JAN', debug=self.Report.debug)
                                 continue
                         if curflag == None:
-                            WF.print2stdout('Invalid Table row for {0}'.format(row))
-                            WF.print2stdout('Data Key not contained within {0}'.format(data_dict.keys()))
+                            WF.print2stdout('Invalid Table row for {0}'.format(row), debug=self.Report.debug)
+                            WF.print2stdout('Data Key not contained within {0}'.format(data_dict.keys()), debug=self.Report.debug)
                             WF.print2stdout('Please check Datapaths in the XML file, or modify the rows to have the correct flags'
-                                  ' for the data present')
+                                  ' for the data present', debug=self.Report.debug)
                             return data, ''
 
                         newvals = np.array([])
@@ -475,77 +475,75 @@ class Tables(object):
             stat: string name for stat
         '''
 
-        stat_flag_Req = {'%%meanbias': 2,
-                         '%%mae': 2,
-                         '%%rmse': 2,
-                         '%%nse': 2,
-                         '%%count': 1,
-                         '%%mean': 1}
+        # stat_flag_Req = {'%%meanbias': 2,
+        #                  '%%mae': 2,
+        #                  '%%rmse': 2,
+        #                  '%%nse': 2,
+        #                  '%%count': 2, #can also be 1
+        #                  '%%mean': 1}
 
-        numFlagsReqd=2 #start with most restrictive..
-        for key in stat_flag_Req.keys():
-            if row.lower().startswith(key):
-                numFlagsReqd = stat_flag_Req[key]
-                break
+        # numFlagsReqd=2 #start with most restrictive..
+        # for key in stat_flag_Req.keys():
+        #     if row.lower().startswith(key):
+        #         numFlagsReqd = stat_flag_Req[key]
+        #         break
 
         flags = list(data.keys())
 
         if len(flags) > 0:
-            getdata = True
             if 'Computed' in flags:
                 flag1 = 'Computed'
-                if numFlagsReqd == 2:
-                    if len(flags) >= 2:
-                        if 'Observed' in flags:
-                            flag2 = 'Observed'
-                        else:
-                            flag2 = [n for n in flags if n != flag1][0] #not computed
+                if len(flags) >= 2:
+                    if 'Observed' in flags:
+                        flag2 = 'Observed'
                     else:
-                        getdata=False
+                        flag2 = [n for n in flags if n != flag1][0] #not computed
+
             else:
                 flag1 = flags[0]
-                if numFlagsReqd == 2:
-                    if len(flags) >= 2:
-                        flag2 = flags[1]
-                    else:
-                        getdata = False
+                if len(flags) >= 2:
+                    flag2 = flags[1]
         else:
-            getdata = False
+            WF.print2stdout(f'Insufficient data for row {row}.', debug=self.Report.debug)
+            WF.print2stdout(f'Flags: {flags}', debug=self.Report.debug)
+            return np.nan, ''
 
         out_stat = np.nan
 
         for key in data.keys():
             if len(data[key]) == 0:
-                WF.print2stdout('Insufficient data.')
-                getdata = False
+                WF.print2stdout(f'No data in dataset {key}.', debug=self.Report.debug)
+                return np.nan, ''
 
         if row.lower().startswith('%%meanbias'):
-            if getdata:
+            if len(flags) > 1:
                 out_stat = WF.calcMeanBias(data[flag1], data[flag2])
             stat = 'meanbias'
         elif row.lower().startswith('%%mae'):
-            if getdata:
+            if len(flags) > 1:
                 out_stat = WF.calcMAE(data[flag1], data[flag2])
             stat = 'mae'
         elif row.lower().startswith('%%rmse'):
-            if getdata:
+            if len(flags) > 1:
                 out_stat = WF.calcRMSE(data[flag1], data[flag2])
             stat = 'rmse'
         elif row.lower().startswith('%%nse'):
-            if getdata:
+            if len(flags) > 1:
                 out_stat = WF.calcNSE(data[flag1], data[flag2])
             stat = 'nse'
         elif row.lower().startswith('%%count'):
-            if getdata:
+            if len(flags) == 1:
                 out_stat = WF.getCount(data[flag1])
+            elif len(flags) > 1:
+                out_stat = WF.getMultiDatasetCount(data[flag1], data[flag2])
             stat = 'count'
         elif row.lower().startswith('%%mean'):
-            if getdata:
+            if len(flags) == 1:
                 out_stat = WF.calcMean(data[flag1])
             stat = 'mean'
         else:
             if '%%' in row:
-                WF.print2stdout('Unable to convert flag in row', row)
+                WF.print2stdout('Unable to convert flag in row', row, debug=self.Report.debug)
             return row, ''
 
         return out_stat, stat
@@ -624,8 +622,9 @@ class Tables(object):
                     if any([n.lower() == threshold['colorwhen'].lower() for n in accepted_threshold_conditions]):
                         threshold_colorwhen = threshold['colorwhen'].lower()
                     else:
-                        WF.print2stdout(f"Invalid threshold setting {threshold['colorwhen']}")
-                        WF.print2stdout(f'Please select value in {accepted_threshold_conditions}')
+                        WF.print2stdout(f"Invalid threshold setting {threshold['colorwhen']}", debug=self.Report.debug)
+                        WF.print2stdout(f'Please select value in {accepted_threshold_conditions}', debug=self.Report.debug)
+                        threshold_colorwhen = default_colorwhen
                 else:
                     threshold_colorwhen = default_colorwhen
 
@@ -648,7 +647,7 @@ class Tables(object):
             try:
                 threshold_color = to_hex(in_color)
             except ValueError:
-                WF.print2stdout(f'Invalid color of {in_color}')
+                WF.print2stdout(f'Invalid color of {in_color}', debug=self.Report.debug)
 
         return threshold_color
 
@@ -667,12 +666,12 @@ class Tables(object):
             if 'min' in object_settings['xlims'].keys():
                 xmin = WT.translateDateFormat(object_settings['xlims']['min'], 'datetime', self.StartTime,
                                               self.StartTime, self.EndTime,
-                                              self.ModelAlt.t_offset)
+                                              self.ModelAlt.t_offset, debug=self.Report.debug)
                 xmin = xmin.strftime('%d %b %Y')
             if 'max' in object_settings['xlims'].keys():
                 xmax = WT.translateDateFormat(object_settings['xlims']['max'], 'datetime', self.EndTime,
                                               self.StartTime, self.EndTime,
-                                              self.ModelAlt.t_offset)
+                                              self.ModelAlt.t_offset, debug=self.Report.debug)
                 xmax = xmax.strftime('%d %b %Y')
 
         if xmin != 'NONE':
@@ -740,12 +739,12 @@ class Tables(object):
                 if object_settings['dateformat'].lower() == 'datetime':
                     header = WT.translateDateFormat(header, 'datetime', '',
                                                     self.Report.StartTime, self.Report.EndTime,
-                                                    self.Report.ModelAlt.t_offset)
+                                                    self.Report.ModelAlt.t_offset, debug=self.Report.debug)
                     header = header.strftime('%d%b%Y')
                 elif object_settings['dateformat'].lower() == 'jdate':
                     header = WT.translateDateFormat(header, 'jdate', '',
                                                     self.Report.StartTime, self.Report.EndTime,
-                                                    self.Report.ModelAlt.t_offset)
+                                                    self.Report.ModelAlt.t_offset, debug=self.Report.debug)
                     header = str(header)
                 nh.append(header)
             new_headers.append(nh)
@@ -829,21 +828,21 @@ class Tables(object):
             #interpolate over all values and then get interp values
 
             if len(data_dict[flag]['values'][index]) < 2:
-                WF.print2stdout('Insufficient data points with current bounds for {0}'.format(flag))
+                WF.print2stdout('Insufficient data points with current bounds for {0}'.format(flag), debug=self.Report.debug)
                 out_data[flag]['values'] = []
                 out_data[flag]['depths'] = []
                 out_data[flag]['elevations'] = []
                 continue
             elif usedepth.lower() == 'true':
                 if len(output_interp_depths) == 0:
-                    WF.print2stdout(f'Insufficient depth points for row {flag} in {row}')
+                    WF.print2stdout(f'Insufficient depth points for row {flag} in {row}', debug=self.Report.debug)
                     out_data[flag]['values'] = []
                     out_data[flag]['depths'] = []
                     out_data[flag]['elevations'] = []
                     continue
             elif usedepth.lower() == 'false':
                 if len(output_interp_elevations) == 0:
-                    WF.print2stdout(f'Insufficient elevation points for row {flag} in {row}')
+                    WF.print2stdout(f'Insufficient elevation points for row {flag} in {row}', debug=self.Report.debug)
                     out_data[flag]['values'] = []
                     out_data[flag]['depths'] = []
                     out_data[flag]['elevations'] = []

@@ -57,7 +57,7 @@ def getDefaultDefaultTextStyles():
 
     return {'fontsize': 9, 'fontcolor': 'black', 'alpha': 1.0, 'horizontalalignment': 'left'}
 
-def getDefaultLineSettings(defaultLineStyles, LineSettings, param, i):
+def getDefaultLineSettings(defaultLineStyles, LineSettings, param, i, debug=False):
     '''
     gets line settings and adds missing needed settings with defaults. Then translates java style inputs to
     python commands. Gets colors and styles.
@@ -84,7 +84,7 @@ def getDefaultLineSettings(defaultLineStyles, LineSettings, param, i):
             if key not in LineSettings.keys():
                 LineSettings[key] = default_default_lines[key]
 
-        LineSettings['linecolor'] = WF.confirmColor(LineSettings['linecolor'], default_default_lines['linecolor'])
+        LineSettings['linecolor'] = WF.confirmColor(LineSettings['linecolor'], default_default_lines['linecolor'], debug=debug)
         LineSettings = WP.translateLineStylePatterns(LineSettings)
 
     if LineSettings['drawpoints'] == 'true':
@@ -102,22 +102,22 @@ def getDefaultLineSettings(defaultLineStyles, LineSettings, param, i):
             if key not in LineSettings.keys():
                 LineSettings[key] = default_default_points[key]
 
-        LineSettings['pointfillcolor'] = WF.confirmColor(LineSettings['pointfillcolor'], default_default_points['pointfillcolor'])
-        LineSettings['pointlinecolor'] = WF.confirmColor(LineSettings['pointlinecolor'], default_default_points['pointlinecolor'])
+        LineSettings['pointfillcolor'] = WF.confirmColor(LineSettings['pointfillcolor'], default_default_points['pointfillcolor'], debug=debug)
+        LineSettings['pointlinecolor'] = WF.confirmColor(LineSettings['pointlinecolor'], default_default_points['pointlinecolor'], debug=debug)
 
         try:
             if int(LineSettings['numptsskip']) == 0:
                 LineSettings['numptsskip'] = 1
         except ValueError:
-            WF.print2stdout('Invalid setting for numptsskip.', LineSettings['numptsskip'])
-            WF.print2stdout('defaulting to 25')
+            WF.print2stdout('Invalid setting for numptsskip.', LineSettings['numptsskip'], debug=debug)
+            WF.print2stdout('defaulting to 25', debug=debug)
             LineSettings['numptsskip'] = 25
 
         LineSettings = WP.translatePointStylePatterns(LineSettings)
 
     return LineSettings
 
-def getDefaultGateLineSettings(GateLineSettings, i):
+def getDefaultGateLineSettings(GateLineSettings, i, debug=False):
     '''
     gets line settings and adds missing needed settings with defaults. Then translates java style inputs to
     python commands. Gets colors and styles.
@@ -135,7 +135,7 @@ def getDefaultGateLineSettings(GateLineSettings, i):
                 GateLineSettings[key] = default_default_lines[key]
 
         GateLineSettings = WP.translateLineStylePatterns(GateLineSettings)
-        GateLineSettings['linecolor'] = WF.confirmColor(GateLineSettings['linecolor'], default_default_lines['linecolor'])
+        GateLineSettings['linecolor'] = WF.confirmColor(GateLineSettings['linecolor'], default_default_lines['linecolor'], debug=debug)
 
     if GateLineSettings['drawpoints'] == 'true':
         default_default_points = getDefaultDefaultPointStyles(i)
@@ -146,12 +146,12 @@ def getDefaultGateLineSettings(GateLineSettings, i):
             if int(GateLineSettings['numptsskip']) == 0:
                 GateLineSettings['numptsskip'] = 1
         except ValueError:
-            WF.print2stdout('Invalid setting for numptsskip.', GateLineSettings['numptsskip'])
-            WF.print2stdout('defaulting to 25')
+            WF.print2stdout('Invalid setting for numptsskip.', GateLineSettings['numptsskip'], debug=debug)
+            WF.print2stdout('defaulting to 25', debug=debug)
             GateLineSettings['numptsskip'] = 25
 
-        GateLineSettings['pointlinecolor'] = WF.confirmColor(GateLineSettings['pointlinecolor'], default_default_lines['pointlinecolor'])
-        GateLineSettings['pointfillcolor'] = WF.confirmColor(GateLineSettings['pointfillcolor'], default_default_lines['pointfillcolor'])
+        GateLineSettings['pointlinecolor'] = WF.confirmColor(GateLineSettings['pointlinecolor'], default_default_lines['pointlinecolor'], debug=debug)
+        GateLineSettings['pointfillcolor'] = WF.confirmColor(GateLineSettings['pointfillcolor'], default_default_lines['pointfillcolor'], debug=debug)
         GateLineSettings = WP.translatePointStylePatterns(GateLineSettings)
 
     return GateLineSettings
@@ -186,7 +186,7 @@ def getDefaultContourLineSettings(contour_settings):
 
     return contour_settings
 
-def getDefaultContourSettings(object_settings):
+def getDefaultContourSettings(object_settings, debug=False):
     '''
     gets default settings for contours adn overwrites missing settings in object settings to be sure
     contour plots have everything that they need
@@ -205,9 +205,9 @@ def getDefaultContourSettings(object_settings):
                 usercolormap = mpl.cm.get_cmap(object_settings['colorbar']['colormap'])
                 object_settings['colormap'] = usercolormap
             except ValueError:
-                WF.print2stdout('User selected invalid colormap:', object_settings['colorbar']['colormap'])
-                WF.print2stdout('Tip: make sure capitalization is correct!')
-                WF.print2stdout('Defaulting to Jet.')
+                WF.print2stdout('User selected invalid colormap:', object_settings['colorbar']['colormap'], debug=debug)
+                WF.print2stdout('Tip: make sure capitalization is correct!', debug=debug)
+                WF.print2stdout('Defaulting to Jet.', debug=debug)
                 object_settings['colormap'] = defaultColormap
     else:
         object_settings['colorbar'] = {}
@@ -218,7 +218,7 @@ def getDefaultContourSettings(object_settings):
 
     return object_settings
 
-def getDefaultStraightLineSettings(LineSettings):
+def getDefaultStraightLineSettings(LineSettings, debug):
     '''
     gets line settings and adds missing needed settings with defaults. Then translates java style inputs to
     python commands. Gets colors and styles.
@@ -235,11 +235,11 @@ def getDefaultStraightLineSettings(LineSettings):
             LineSettings[key] = default_default_lines[key]
 
     LineSettings = WP.translateLineStylePatterns(LineSettings)
-    LineSettings['linecolor'] = WF.confirmColor(LineSettings['linecolor'], default_default_lines['linecolor'])
+    LineSettings['linecolor'] = WF.confirmColor(LineSettings['linecolor'], default_default_lines['linecolor'], debug=debug)
 
     return LineSettings
 
-def getDefaultTextSettings(TextSettings):
+def getDefaultTextSettings(TextSettings, debug):
     '''
     gets text settings and adds missing needed settings with defaults. Then translates java style inputs to
     python commands. Gets colors and styles.
@@ -253,7 +253,7 @@ def getDefaultTextSettings(TextSettings):
         if key not in TextSettings.keys():
             TextSettings[key] = default_default_text[key]
 
-    TextSettings['fontcolor'] = WF.confirmColor(TextSettings['fontcolor'], default_default_text['fontcolor'])
+    TextSettings['fontcolor'] = WF.confirmColor(TextSettings['fontcolor'], default_default_text['fontcolor'], debug=debug)
 
     return TextSettings
 

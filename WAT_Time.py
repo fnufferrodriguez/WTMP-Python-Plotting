@@ -39,7 +39,7 @@ def changeTimeSeriesInterval(times, values, Line_info, t_offset, startYear):
         convert_to_jdate = True
 
     if 'type' in Line_info.keys() and 'interval' not in Line_info.keys():
-        WF.print2stdout('Defined Type but no interval..')
+        # WF.print2stdout('Defined Type but no interval..')
         if convert_to_jdate:
             return DatetimeToJDate(times, t_offset), values
         else:
@@ -61,7 +61,7 @@ def changeTimeSeriesInterval(times, values, Line_info, t_offset, startYear):
             interval = Line_info['interval'].upper()
             pd_interval = getPandasTimeFreq(interval)
         else:
-            WF.print2stdout('No time interval Defined.')
+            # WF.print2stdout('No time interval Defined.')
             return times, values
 
         if avgtype == 'INST-VAL':
@@ -155,7 +155,7 @@ def changeTimeSeriesInterval(times, values, Line_info, t_offset, startYear):
                 new_values = np.asarray(new_values).T #transpose back..
 
         else:
-            WF.print2stdout('INVALID INPUT TYPE DETECTED', avgtype)
+            # WF.print2stdout('INVALID INPUT TYPE DETECTED', avgtype)
             return times, values
 
     if convert_to_jdate:
@@ -233,7 +233,7 @@ def setSimulationDateTimes(Report, ID):
         EndTime = dt.datetime.strptime(EndTimeStr, '%d %B %Y, %H:%M')
     Report.SimulationVariables[ID]['EndTime'] = EndTime
 
-def makeRegularTimesteps(starttime, endtime, days=15):
+def makeRegularTimesteps(starttime, endtime, debug, days=15):
     '''
     makes regular time series for profile plots if there are no times defined
     :param starttime: start time for new timeseries
@@ -243,7 +243,7 @@ def makeRegularTimesteps(starttime, endtime, days=15):
     '''
 
     timesteps = []
-    WF.print2stdout('No Timesteps found. Setting to Regular interval')
+    WF.print2stdout('No Timesteps found. Setting to Regular interval', debug=debug)
     cur_date = starttime
     while cur_date < endtime:
         timesteps.append(cur_date)
@@ -274,7 +274,7 @@ def getIdxForTimestamp(time_Array, t_in, offset):
     tol = 1. / (24. * 60.)  # 1 minute tolerance
     timestep = np.where((np.abs(time_Array - ttmp) - min_diff) < tol)[0][0]
     if min_diff > 1.:
-        WF.print2stdout('nearest time step > 1 day away')
+        # WF.print2stdout('nearest time step > 1 day away')
         return -1
     return timestep
 
@@ -337,7 +337,7 @@ def getPandasTimeFreq(intervalstring):
         timeint = intervalstringlr.replace(replaceflag,'') + 'A'
         return timeint
     else:
-        WF.print2stdout('Unidentified time interval')
+        # WF.print2stdout('Unidentified time interval')
         return intervalstring
 
 def buildTimeSeries(startTime, endTime, interval):
@@ -406,7 +406,7 @@ def DatetimeToJDate(dates):
     else:
         return dates
 
-def translateDateFormat(lim, dateformat, fallback, StartTime, EndTime, time_offset):
+def translateDateFormat(lim, dateformat, fallback, StartTime, EndTime, time_offset, debug=False):
     '''
     translates date formats between datetime and jdate, as desired
     :param lim: limit value, either int or datetime
@@ -431,52 +431,52 @@ def translateDateFormat(lim, dateformat, fallback, StartTime, EndTime, time_offs
                 return lim_frmt
             except IndexError:
                 WF.print2stdout('Xlim of {0} not between start and endtime {1} - {2}'.format(lim_frmt, StartTime,
-                                                                                          EndTime))
+                                                                                          EndTime), debug=debug)
             except:
-                WF.print2stdout('Error Reading Limit: {0} as a dt.datetime object.'.format(lim))
-                WF.print2stdout('If this is wrong, try format: Apr 2014 1 12:00')
+                WF.print2stdout('Error Reading Limit: {0} as a dt.datetime object.'.format(lim), debug=debug)
+                WF.print2stdout('If this is wrong, try format: Apr 2014 1 12:00', debug=debug)
 
-            WF.print2stdout('Trying as Jdate..')
+            WF.print2stdout('Trying as Jdate..', debug=debug)
             try:
                 lim_frmt = float(lim)
                 lim_frmt = JDateToDatetime(lim_frmt, StartTime.year)
-                WF.print2stdout('JDate {0} as {1} Accepted!'.format(lim, lim_frmt))
+                WF.print2stdout('JDate {0} as {1} Accepted!'.format(lim, lim_frmt), debug=debug)
                 return lim_frmt
             except:
-                WF.print2stdout('Limit value of {0} also invalid as jdate.'.format(lim))
+                WF.print2stdout('Limit value of {0} also invalid as jdate.'.format(lim), debug=debug)
 
             if fallback != None and fallback != '':
-                WF.print2stdout('Setting to fallback {0}.'.format(fallback))
+                WF.print2stdout('Setting to fallback {0}.'.format(fallback), debug=debug)
             else:
-                WF.print2stdout('Setting to fallback.')
+                WF.print2stdout('Setting to fallback.', debug=debug)
             return fallback
 
     elif dateformat.lower() == 'jdate':
         try:
             return float(lim)
         except:
-            WF.print2stdout('Error Reading Limit: {0} as a jdate.'.format(lim))
-            WF.print2stdout('If this is wrong, try format: 180')
-            WF.print2stdout('Trying as Datetime..')
+            WF.print2stdout('Error Reading Limit: {0} as a jdate.'.format(lim), debug=debug)
+            WF.print2stdout('If this is wrong, try format: 180', debug=debug)
+            WF.print2stdout('Trying as Datetime..', debug=debug)
             if isinstance(lim, (dt.datetime, str)):
                 try:
                     if isinstance(lim, str):
                         lim_frmt = pendulum.parse(lim, strict=False).replace(tzinfo=None)
-                        WF.print2stdout('Datetime {0} as {1} Accepted!'.format(lim, lim_frmt))
+                        WF.print2stdout('Datetime {0} as {1} Accepted!'.format(lim, lim_frmt), debug=debug)
                     else:
                         lim_frmt = lim
-                    WF.print2stdout('converting to jdate..')
+                    WF.print2stdout('converting to jdate..', debug=debug)
                     lim_frmt = DatetimeToJDate(lim_frmt, time_offset)
-                    WF.print2stdout('Converted to jdate!', lim_frmt)
+                    WF.print2stdout('Converted to jdate!', lim_frmt, debug=debug)
                     return lim_frmt
                 except:
-                    WF.print2stdout('Error Reading Limit: {0} as a dt.datetime object.'.format(lim))
-                    WF.print2stdout('If this is wrong, try format: Apr 2014 1 12:00')
+                    WF.print2stdout('Error Reading Limit: {0} as a dt.datetime object.'.format(lim), debug=debug)
+                    WF.print2stdout('If this is wrong, try format: Apr 2014 1 12:00', debug=debug)
 
                 fallback = DatetimeToJDate(fallback, time_offset)
 
                 if fallback != None and fallback != '':
-                    WF.print2stdout('Setting to fallback {0}.'.format(fallback))
+                    WF.print2stdout('Setting to fallback {0}.'.format(fallback), debug=debug)
                 else:
-                    WF.print2stdout('Setting to fallback.')
+                    WF.print2stdout('Setting to fallback.', debug=debug)
                 return fallback
