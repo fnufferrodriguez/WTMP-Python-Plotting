@@ -22,7 +22,6 @@ import WAT_Functions as WF
 import WAT_Reader as WDR
 import WAT_Time as WT
 import WAT_Reader as WR
-import WAT_Profiles as WProfile
 
 class DataOrganizer(object):
 
@@ -129,8 +128,9 @@ class DataOrganizer(object):
                 while newflag in data.keys():
                     count += 1
                     newflag = flag + '_{0}'.format(count)
+                WF.print2stdout(f'The current flag was {flag}', debug=self.Report.debug)
                 flag = newflag
-                WF.print2stdout('The new flag is {0}'.format(newflag))
+                WF.print2stdout(f'The new flag is {newflag}', debug=self.Report.debug)
             datamem_key = self.buildMemoryKey(line)
             if 'units' in line.keys() and units == None:
                 units = line['units']
@@ -193,7 +193,7 @@ class DataOrganizer(object):
                             if len(elev_times) == len(data[d]['values']):
                                 data[d]['values'][targelev_failed] = 0.
                             else:
-                                WF.print2stdout(f'Values and Elevations in {d} different. Equalizing..')
+                                WF.print2stdout(f'Values and Elevations in {d} different. Equalizing.', debug=self.Report.debug)
                                 mainvalues, elev_data = WF.matchData({'dates': data[d]['dates'], 'values': data[d]['values']},
                                                                      {'dates': elev_times, 'values': elev_values})
                                 targelev_failed = np.where(elev_data['values'] != target_elevation)
@@ -215,8 +215,8 @@ class DataOrganizer(object):
             for line in settings['lines']:
                 numtimesused = 0
                 if 'flag' not in line.keys():
-                    WF.print2stdout('Flag not set for line (Computed/Observed/etc)')
-                    WF.print2stdout('Not plotting Line:', line)
+                    WF.print2stdout('Flag not set for line (Computed/Observed/etc)', debug=self.Report.debug)
+                    WF.print2stdout('Not plotting Line:', line, debug=self.Report.debug)
                     continue
 
                 elif line['flag'].lower() == 'computed':
@@ -295,12 +295,12 @@ class DataOrganizer(object):
 
         if 'dss_path' in Line_info.keys(): #Get data from DSS record
             if 'dss_filename' not in Line_info.keys():
-                WF.print2stdout('DSS_Filename not set for Line: {0}'.format(Line_info))
+                WF.print2stdout('DSS_Filename not set for Line: {0}'.format(Line_info), debug=self.Report.debug)
                 return np.array([]), np.array([]), None
             else:
                 datamem_key = self.buildMemoryKey(Line_info)
                 if datamem_key in self.Memory.keys():
-                    # WF.print2stdout('Reading {0} from memory'.format(datamem_key)) #noisy
+                    WF.print2stdout('Reading {0} from memory'.format(datamem_key), debug=self.Report.debug) #noisy
                     if makecopy:
                         datamementry = pickle.loads(pickle.dumps(self.Memory[datamem_key], -1))
                     else:
@@ -310,7 +310,7 @@ class DataOrganizer(object):
                     units = datamementry['units']
                 else:
                     times, values, units = WDR.readDSSData(Line_info['dss_filename'], Line_info['dss_path'],
-                                                           self.Report.StartTime, self.Report.EndTime)
+                                                           self.Report.StartTime, self.Report.EndTime, self.Report.debug)
 
                     self.Memory[datamem_key] = {'times': pickle.loads(pickle.dumps(times, -1)),
                                                      'values': pickle.loads(pickle.dumps(values, -1)),
@@ -326,7 +326,7 @@ class DataOrganizer(object):
                 return np.array([]), np.array([]), None
             datamem_key = self.buildMemoryKey(Line_info)
             if datamem_key in self.Memory.keys():
-                # WF.print2stdout('READING {0} FROM MEMORY'.format(datamem_key))
+                WF.print2stdout('READING {0} FROM MEMORY'.format(datamem_key), debug=self.Report.debug)
                 datamementry = pickle.loads(pickle.dumps(self.Memory[datamem_key], -1))
                 times = datamementry['times']
                 values = datamementry['values']
@@ -351,7 +351,7 @@ class DataOrganizer(object):
             datamem_key = self.buildMemoryKey(Line_info)
 
             if datamem_key in self.Memory.keys():
-                # WF.print2stdout('READING {0} FROM MEMORY'.format(datamem_key))
+                WF.print2stdout('READING {0} FROM MEMORY'.format(datamem_key), debug=self.Report.debug)
                 datamementry = pickle.loads(pickle.dumps(self.Memory[datamem_key], -1))
                 times = datamementry['times']
                 values = datamementry['values']
@@ -360,7 +360,7 @@ class DataOrganizer(object):
             else:
                 filename = Line_info['h5file']
                 if not os.path.exists(filename):
-                    WF.print2stdout('ERROR: H5 file does not exist:', filename)
+                    WF.print2stdout('ERROR: H5 file does not exist:', filename, debug=self.Report.debug)
                     return [], [], None
                 externalResSim = WDR.ResSim_Results('', '', '', '', self.Report, external=True)
                 externalResSim.openH5File(filename)
@@ -381,7 +381,7 @@ class DataOrganizer(object):
         elif 'easting' in Line_info.keys() and 'northing' in Line_info.keys():
             datamem_key = self.buildMemoryKey(Line_info)
             if datamem_key in self.Memory.keys():
-                # WF.print2stdout('READING {0} FROM MEMORY'.format(datamem_key))
+                WF.print2stdout('READING {0} FROM MEMORY'.format(datamem_key), debug=self.Report.debug)
                 datamementry = pickle.loads(pickle.dumps(self.Memory[datamem_key], -1))
                 times = datamementry['times']
                 values = datamementry['values']
@@ -403,7 +403,7 @@ class DataOrganizer(object):
         elif "ressimresname" in Line_info.keys():
             datamem_key = self.buildMemoryKey(Line_info)
             if datamem_key in self.Memory.keys():
-                # WF.print2stdout('READING {0} FROM MEMORY'.format(datamem_key))
+                WF.print2stdout('READING {0} FROM MEMORY'.format(datamem_key), debug=self.Report.debug)
                 datamementry = pickle.loads(pickle.dumps(self.Memory[datamem_key], -1))
                 times = datamementry['times']
                 values = datamementry['values']
@@ -411,15 +411,15 @@ class DataOrganizer(object):
 
             else:
                 if self.Report.plugin.lower() != 'ressim':
-                    WF.print2stdout('Incorrect model type for line using ResSimResName')
+                    WF.print2stdout('Incorrect model type for line using ResSimResName', debug=self.Report.debug)
                     return [], [], None
                 if 'target' not in Line_info.keys():
-                    WF.print2stdout('No target data for profile target timeseries.')
-                    WF.print2stdout('Please enter target data including value and parameter.')
+                    WF.print2stdout('No target data for profile target timeseries.', debug=self.Report.debug)
+                    WF.print2stdout('Please enter target data including value and parameter.', debug=self.Report.debug)
                     return [], [], None
                 if 'parameter' not in Line_info.keys():
-                    WF.print2stdout('No parameter for profile target timeseries.')
-                    WF.print2stdout('Assuming output is elevation.')
+                    WF.print2stdout('No parameter for profile target timeseries.', debug=self.Report.debug)
+                    WF.print2stdout('Assuming output is elevation.', debug=self.Report.debug)
                     Line_info['parameter'] = 'elevation'
 
                 times, values = self.Report.ModelAlt.getProfileTargetTimeseries(Line_info['ressimresname'],
@@ -431,12 +431,12 @@ class DataOrganizer(object):
                     units = None
 
         else:
-            WF.print2stdout('No Data Defined for line')
+            WF.print2stdout('No Data Defined for line', debug=self.Report.debug)
             return np.array([]), np.array([]), None
 
         if 'omitvalue' in Line_info.keys():
             omitval = float(Line_info['omitvalue'])
-            values = WF.replaceOmittedValues(values, omitval)
+            values = WF.replaceOmittedValues(values, omitval, debug=self.Report.debug)
 
         if 'interval' in Line_info.keys():
             times, values = WT.changeTimeSeriesInterval(times, values, Line_info, self.Report.ModelAlt.t_offset, self.Report.startYear)
@@ -461,8 +461,8 @@ class DataOrganizer(object):
         for line in settings[settings['datakey']]:
             numtimesused = 0
             if 'flag' not in line.keys():
-                WF.print2stdout('Flag not set for line (Computed/Observed/etc)')
-                WF.print2stdout('Not plotting Line:', line)
+                WF.print2stdout('Flag not set for line (Computed/Observed/etc)', debug=self.Report.debug)
+                WF.print2stdout('Not plotting Line:', line, debug=self.Report.debug)
                 continue
             elif line['flag'].lower() == 'computed':
                 # for ID in self.SimulationVariables.keys():
@@ -550,16 +550,16 @@ class DataOrganizer(object):
 
         if datamemkey in self.Memory.keys():
             dm = pickle.loads(pickle.dumps(self.Memory[datamemkey], -1))
-            WF.print2stdout('retrieving profile from datamem')
+            WF.print2stdout(f'retrieving {datamemkey} profile from datamem', debug=self.Report.debug)
             if isinstance(timesteps, str): #if looking for all
                 if dm['subset'] == 'false': #the last time data was grabbed, it was not a subset, aka all
                     return dm['values'], dm['elevations'], dm['depths'], dm['times'], Profile_info['flag']
                 else:
-                    WF.print2stdout('Incorrect Timesteps in data memory. Re-extracting data for', datamemkey)
+                    WF.print2stdout('Incorrect Timesteps in data memory. Re-extracting data for', datamemkey, debug=self.Report.debug)
             elif np.array_equal(timesteps, dm['times']):
                 return dm['values'], dm['elevations'], dm['depths'], dm['times'], Profile_info['flag']
             else:
-                WF.print2stdout('Incorrect Timesteps in data memory. Re-extracting data for', datamemkey)
+                WF.print2stdout('Incorrect Timesteps in data memory. Re-extracting data for', datamemkey, debug=self.Report.debug)
 
         if 'filename' in Profile_info.keys(): #Get data from Observed
             filename = Profile_info['filename']
@@ -570,19 +570,19 @@ class DataOrganizer(object):
                 elif Profile_info['y_convention'].lower() == 'elevation':
                     return values, yvals, [], times, Profile_info['flag']
                 else:
-                    WF.print2stdout('Unknown value for flag y_convention: {0}'.format(Profile_info['y_convention']))
-                    WF.print2stdout('Please use "depth" or "elevation"')
-                    WF.print2stdout('Assuming depths...')
+                    WF.print2stdout('Unknown value for flag y_convention: {0}'.format(Profile_info['y_convention']), debug=self.Report.debug)
+                    WF.print2stdout('Please use "depth" or "elevation"', debug=self.Report.debug)
+                    WF.print2stdout('Assuming depths...', debug=self.Report.debug)
                     return values, [], yvals, times, Profile_info['flag']
             else:
-                WF.print2stdout('No value for flag y_convention')
-                WF.print2stdout('Assuming depths...')
+                WF.print2stdout('No value for flag y_convention', debug=self.Report.debug)
+                WF.print2stdout('Assuming depths...', debug=self.Report.debug)
                 return values, [], yvals, times, Profile_info['flag']
 
         elif 'h5file' in Profile_info.keys() and 'ressimresname' in Profile_info.keys():
             filename = Profile_info['h5file']
             if not os.path.exists(filename):
-                WF.print2stdout('ERROR: H5 file does not exist:', filename)
+                WF.print2stdout('ERROR: H5 file does not exist:', filename, debug=self.Report.debug)
                 return [], [], [], [], Profile_info['flag']
             externalResSim = WDR.ResSim_Results('', '', '', '', self.Report, external=True)
             externalResSim.openH5File(filename)
@@ -597,7 +597,7 @@ class DataOrganizer(object):
                 return [], [], [], [], None
             vals, elevations, depths, times = self.Report.ModelAlt.readProfileData(Profile_info['w2_segment'], timesteps)
             if isinstance(timesteps, str):
-                vals, elevations = WProfile.normalize2DElevations(vals, elevations)
+                vals, elevations = self.Report.Profiles.normalize2DElevations(vals, elevations)
             return vals, elevations, depths, times, Profile_info['flag']
 
         elif 'ressimresname' in Profile_info.keys():
@@ -607,8 +607,8 @@ class DataOrganizer(object):
                                                                             Profile_info['parameter'], timesteps)
             return vals, elevations, depths, times, Profile_info['flag']
 
-        WF.print2stdout('No Data Defined for Profile')
-        WF.print2stdout('Profile:', Profile_info)
+        WF.print2stdout('No Data Defined for Profile', debug=self.Report.debug)
+        WF.print2stdout('Profile:', Profile_info, debug=self.Report.debug)
         return [], [], [], [], None
 
     def getReservoirContourDataDictionary(self, settings):
@@ -650,8 +650,9 @@ class DataOrganizer(object):
                         while newflag in data.keys():
                             count += 1
                             newflag = flag + '_{0}'.format(count)
+                        WF.print2stdout('The current flag is {0}'.format(flag), debug=self.Report.debug)
                         flag = newflag
-                        WF.print2stdout('The new flag is {0}'.format(newflag))
+                        WF.print2stdout('The new flag is {0}'.format(newflag), debug=self.Report.debug)
                     datamem_key = self.buildMemoryKey(datapath)
 
                     if 'units' in datapath.keys():
@@ -688,16 +689,16 @@ class DataOrganizer(object):
         datamemkey = self.buildMemoryKey(profile)
         if datamemkey in self.Memory.keys():
             dm = pickle.loads(pickle.dumps(self.Memory[datamemkey], -1))
-            WF.print2stdout('retrieving profile topwater from datamem')
+            WF.print2stdout('retrieving profile topwater from datamem', debug=self.Report.debug)
             if isinstance(timesteps, str): #if looking for all
                 if dm['subset'] == 'false': #the last time data was grabbed, it was not a subset, aka all
                     return dm['topwater']
                 else:
-                    WF.print2stdout('Incorrect Timesteps in data memory. Re-extracting data for', datamemkey)
+                    WF.print2stdout('Incorrect Timesteps in data memory. Re-extracting data for', datamemkey, debug=self.Report.debug)
             elif np.array_equal(timesteps, dm['times']):
                 return dm['topwater']
             else:
-                WF.print2stdout('Incorrect Timesteps in data memory. Re-extracting data for', datamemkey)
+                WF.print2stdout('Incorrect Timesteps in data memory. Re-extracting data for', datamemkey, debug=self.Report.debug)
 
         if 'filename' in profile.keys(): #Get data from Observed
             filename = profile['filename']
@@ -706,22 +707,22 @@ class DataOrganizer(object):
                 if profile['y_convention'].lower() == 'elevation':
                     return [yval[0] for yval in yvals]
                 elif profile['y_convention'].lower() == 'depth':
-                    WF.print2stdout('Unable to get topwater from depth.')
+                    WF.print2stdout('Unable to get topwater from depth.', debug=self.Report.debug)
                     return []
                 else:
-                    WF.print2stdout('Unknown value for flag y_convention: {0}'.format(profile['y_convention']))
-                    WF.print2stdout('Please use "elevation"')
-                    WF.print2stdout('Assuming elevations...')
+                    WF.print2stdout('Unknown value for flag y_convention: {0}'.format(profile['y_convention']), debug=self.Report.debug)
+                    WF.print2stdout('Please use "elevation"', debug=self.Report.debug)
+                    WF.print2stdout('Assuming elevations...', debug=self.Report.debug)
                     return [yval[0] for yval in yvals]
             else:
-                WF.print2stdout('No value for flag y_convention')
-                WF.print2stdout('Assuming elevation...')
+                WF.print2stdout('No value for flag y_convention', debug=self.Report.debug)
+                WF.print2stdout('Assuming elevation...', debug=self.Report.debug)
                 return [yval[0] for yval in yvals]
 
         elif 'h5file' in profile.keys() and 'ressimresname' in profile.keys():
             filename = profile['h5file']
             if not os.path.exists(filename):
-                WF.print2stdout('ERROR: H5 file does not exist:', filename)
+                WF.print2stdout('ERROR: H5 file does not exist:', filename, debug=self.Report.debug)
                 return []
             externalResSim = WDR.ResSim_Results('', '', '', '', self.Report, external=True)
             externalResSim.openH5File(filename)
@@ -742,8 +743,8 @@ class DataOrganizer(object):
             topwater = self.Report.ModelAlt.readProfileTopwater(profile['ressimresname'], timesteps)
             return topwater
 
-        WF.print2stdout('No Data Defined for line')
-        WF.print2stdout('Profile:', profile)
+        WF.print2stdout('No Data Defined for line', debug=self.Report.debug)
+        WF.print2stdout('Profile:', profile, debug=self.Report.debug)
         return []
 
     def commitProfileDataToMemory(self, data, line_settings, object_settings):
@@ -793,8 +794,8 @@ class DataOrganizer(object):
         for dp in object_settings['datapaths']:
             numtimesused = 0
             if 'flag' not in dp.keys():
-                WF.print2stdout('Flag not set for line (Computed/Observed/etc)')
-                WF.print2stdout('Not using Line:', dp)
+                WF.print2stdout('Flag not set for line (Computed/Observed/etc)', debug=self.Report.debug)
+                WF.print2stdout('Not using Line:', dp, debug=self.Report.debug)
                 continue
             elif dp['flag'].lower() == 'computed':
                 for ID in self.Report.accepted_IDs:
@@ -835,7 +836,7 @@ class DataOrganizer(object):
         if 'ressimresname' in settings.keys(): #Ressim subdomain
             datamem_key = self.buildMemoryKey(settings)
             if datamem_key in self.Memory.keys():
-                WF.print2stdout('READING {0} FROM MEMORY'.format(datamem_key))
+                WF.print2stdout('READING {0} FROM MEMORY'.format(datamem_key), debug=self.Report.debug)
                 datamem_entry = pickle.loads(pickle.dumps(self.Memory[datamem_key], -1))
                 times = datamem_entry['dates']
                 values = datamem_entry['values']
@@ -863,7 +864,7 @@ class DataOrganizer(object):
         elif 'w2_file' in settings.keys():
             datamem_key = self.buildMemoryKey(settings)
             if datamem_key in self.Memory.keys():
-                WF.print2stdout('READING {0} FROM MEMORY'.format(datamem_key))
+                WF.print2stdout('READING {0} FROM MEMORY'.format(datamem_key), debug=self.Report.debug)
                 datamementry = pickle.loads(pickle.dumps(self.Memory[datamem_key], -1))
                 times = datamementry['dates']
                 values = datamementry['values']
@@ -908,8 +909,9 @@ class DataOrganizer(object):
                         while newflag in data.keys():
                             count += 1
                             newflag = flag + '_{0}'.format(count)
+                        WF.print2stdout('The current flag is {0}'.format(flag), debug=self.Report.debug)
                         flag = newflag
-                        WF.print2stdout('The new flag is {0}'.format(newflag))
+                        WF.print2stdout('The new flag is {0}'.format(newflag), debug=self.Report.debug)
                     datamem_key = self.buildMemoryKey(reach)
 
                     if 'units' in reach.keys() and units == None:
@@ -1078,8 +1080,8 @@ class DataOrganizer(object):
                 df.to_csv(csv_name, index=False)
 
             except:
-                WF.print2stdout('ERROR WRITING CSV FILE')
-                WF.print2stdout(traceback.format_exc())
+                WF.print2stdout(f'ERROR WRITING CSV FILE {csv_name}')
+                WF.print2stdout(traceback.format_exc(), debug=self.Report.debug)
 
     def scaleValuesByTable(self, data, line_settings):
         '''
@@ -1091,12 +1093,12 @@ class DataOrganizer(object):
 
         for d in data.keys():
             if 'scalartable' in line_settings[d].keys() and 'scalefrom' in line_settings[d].keys():
-                WF.print2stdout(f'Scalar table found for {d}')
+                WF.print2stdout(f'Scalar table found for {d}', debug=self.Report.debug)
                 tablevalues = WDR.readScalarTable(line_settings[d]['scalartable'])
                 scalefromflag = line_settings[d]['flag']+'_scalefrom'
                 scalefrom_dates, scalefrom_values, scalefrom_units = self.getTimeSeries(line_settings[d]['scalefrom'])
                 if len(scalefrom_values) != len(data[d]['values']):
-                    WF.print2stdout(f'Values and Scaledby in different time intervals. Equalizing..')
+                    WF.print2stdout(f'Values and Scaledby in different time intervals. Equalizing..', debug=self.Report.debug)
                     base_data, scaledFrom_data = WF.matchData({'dates': data[d]['dates'], 'values': data[d]['values']},
                                                          {'dates': scalefrom_dates, 'values': scalefrom_values})
                 else:

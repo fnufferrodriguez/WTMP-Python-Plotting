@@ -133,6 +133,15 @@ def readChapterDefFile(CD_file):
                     break
             ChapterDef['resolution'] = resolution
 
+            debug = 'false'
+            debug_flags = ['debug', 'Debug', 'DEBUG']
+            for flag in debug_flags:
+                findtext = chapter.find(flag)
+                if isinstance(findtext, ET.Element):
+                    debug = findtext.text
+                    break
+            ChapterDef['debug'] = debug
+
             cd_sections = chapter.findall('Sections/Section')
             for section in cd_sections:
                 section_objects = {}
@@ -156,7 +165,7 @@ def readChapterDefFile(CD_file):
     return Chapters
 
 
-def readDSSData(dss_file, pathname, startdate, enddate):
+def readDSSData(dss_file, pathname, startdate, enddate, debug):
     '''
     calls pydsstools from https://github.com/gyanz/pydsstools to read dss data
     :param dss_file: full path to DSS file
@@ -176,14 +185,14 @@ def readDSSData(dss_file, pathname, startdate, enddate):
     endDatestr = enddate.strftime('%d%b%Y %H:%M:%S')
 
     if not os.path.exists(dss_file):
-        WF.print2stdout('DSS file not found!', dss_file)
+        WF.print2stdout('DSS file not found!', dss_file, debug=debug)
         return [], [], None
 
     fid = HecDss.Open(dss_file)
     ts = fid.read_ts(pathname,window=(startDatestr,endDatestr),regular=True,trim_missing=False)
     if ts.empty: #if empty, it must be the path or time window. DSS record must exist
-        WF.print2stdout('Invalid Timeseries record path of {0} or time window of {1} - {2}'.format(pathname, startDatestr, endDatestr))
-        WF.print2stdout('Please check these parameters and rerun.')
+        WF.print2stdout('Invalid Timeseries record path of {0} or time window of {1} - {2}'.format(pathname, startDatestr, endDatestr), debug=debug)
+        WF.print2stdout('Please check these parameters and rerun.', debug=debug)
         return [], [], None
     values = np.array(ts.values)
     values[ts.nodata] = np.nan
@@ -209,8 +218,8 @@ def readDSSData(dss_file, pathname, startdate, enddate):
 
     if not made_ts:
         times = np.asarray(ts.pytimes)
-        WF.print2stdout('Irregular DSS detected with {0} in {1}'.format(pathname, dss_file))
-        WF.print2stdout('Recommend changing to regular time series for speed increases.')
+        WF.print2stdout('Irregular DSS detected with {0} in {1}'.format(pathname, dss_file), debug=debug)
+        WF.print2stdout('Recommend changing to regular time series for speed increases.', debug=debug)
     else:
         times = np.asarray(times)
 

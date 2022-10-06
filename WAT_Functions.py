@@ -29,13 +29,15 @@ import WAT_Time as WT
 
 constants = WC.WAT_Constants()
 
-def print2stdout(*a):
+
+def print2stdout(*a, debug=True):
     '''
     prints standard message to the console standard out
     :param a: print message
     '''
 
-    print(*a, file=sys.stdout)
+    if debug:
+        print(*a, file=sys.stdout)
 
 def print2stderr(*a):
     '''
@@ -44,14 +46,13 @@ def print2stderr(*a):
     '''
 
     print(*a, file=sys.stderr)
-    # print(*a, file=sys.stdout)
 
 def printVersion(VERSIONNUMBER):
     '''
     print current version number
     '''
 
-    print2stdout('VERSION:', VERSIONNUMBER)
+    print2stdout(f'VERSION: {VERSIONNUMBER}')
 
 def checkExists(infile):
     '''
@@ -455,6 +456,18 @@ def calcNSE(data1, data2):
 
     return nse_
 
+def getMultiDatasetCount(data1, data2):
+    data1, data2 = matchData(data1, data2)
+    data1, data2 = removeNaNs(data1, data2, flag='values')
+    data1, data2 = removeINFs(data1, data2, flag='values')
+    dcheck1 = checkData(data1, flag='values')
+    dcheck2 = checkData(data2, flag='values')
+    if not dcheck1 or not dcheck2:
+        return np.nan
+    if len(data1['values']) != len(data2['values']):
+        return np.nan
+    return len(data1['values'])
+
 def getCount(data1):
     '''
     calculates the length of datasets
@@ -496,7 +509,7 @@ def convertTempUnits(values, units):
         values = convert_temperature(values, 'C', 'F')
         return values
     else:
-        print2stdout('Undefined temp units:', units)
+        # print2stdout('Undefined temp units:', units)
         return values
 
 def filterContourOverTopWater(values, elevations, topwater):
@@ -829,7 +842,6 @@ def getPlotUnits(unitslist, object_settings):
         plotunits = getMostCommon(unitslist)
 
     else:
-        print2stdout('No units defined.')
         plotunits = ''
 
     plotunits = translateUnits(plotunits)
@@ -858,10 +870,9 @@ def translateUnits(units):
             if units.lower().strip() in constants.unit_alt_names[key]:
                 return key
 
-    print2stdout('Units Undefined:', units)
     return units
 
-def convertUnitSystem(values, units, target_unitsystem):
+def convertUnitSystem(values, units, target_unitsystem, debug=False):
     '''
     converts unit systems if defined english/metric
     :param values: list of values
@@ -879,38 +890,38 @@ def convertUnitSystem(values, units, target_unitsystem):
     metric_units = constants.metric_units
 
     if units == None:
-        print2stdout('Units undefined.')
+        print2stdout('Units undefined.', debug=debug)
         return values, units
 
     if target_unitsystem.lower() == 'english':
         if units.lower() in english_units.keys():
             new_units = english_units[units.lower()]
-            print2stdout('Converting {0} to {1}'.format(units, new_units))
+            print2stdout('Converting {0} to {1}'.format(units, new_units), debug=debug)
         elif units.lower() in english_units.values():
-            print2stdout('Values already in target unit system. {0} {1}'.format(units, target_unitsystem))
+            print2stdout('Values already in target unit system. {0} {1}'.format(units, target_unitsystem), debug=debug)
             return values, units
         else:
-            print2stdout('Units not found in definitions. Not Converting.')
+            print2stdout('Units not found in definitions. Not Converting.', debug=debug)
             return values, units
 
     elif target_unitsystem.lower() == 'metric':
         if units.lower() in metric_units.keys():
             new_units = metric_units[units.lower()]
-            print2stdout('Converting {0} to {1}'.format(units, new_units))
+            print2stdout('Converting {0} to {1}'.format(units, new_units), debug=debug)
         elif units.lower() in metric_units.values():
-            print2stdout('Values already in target unit system. {0} {1}'.format(units, target_unitsystem))
+            print2stdout('Values already in target unit system. {0} {1}'.format(units, target_unitsystem), debug=debug)
             return values, units
         else:
-            print('Units not found in definitions. Not Converting.')
+            print2stdout('Units not found in definitions. Not Converting.', debug=debug)
             return values, units
 
     else:
-        print('Target Unit System undefined.', target_unitsystem)
-        print('Try english or metric')
+        print2stdout('Target Unit System undefined.', target_unitsystem, debug=debug)
+        print2stdout('Try english or metric', debug=debug)
         return values, units
 
     if units == new_units:
-        print('data already in target unit system.')
+        print2stdout('data already in target unit system.', debug=debug)
         return values, units
 
     if units.lower() in ['c', 'f']:
@@ -922,8 +933,8 @@ def convertUnitSystem(values, units, target_unitsystem):
         conversion_factor = 1/constants.conversion[units.lower()]
         new_values = values * conversion_factor
     else:
-        print('Undefined Units conversion for units {0}.'.format(units))
-        print('No Conversions taking place.')
+        print2stdout('Undefined Units conversion for units {0}.'.format(units), debug=debug)
+        print2stdout('No Conversions taking place.', debug=debug)
         return values, units
 
     return new_values, new_units
@@ -1120,7 +1131,7 @@ def getTimeInterval(times):
 
     return getMostCommon(t_ints)
 
-def confirmColor(user_color, default_color):
+def confirmColor(user_color, default_color, debug=False):
     '''
     confirms the color choice is valid. If not, checks to see if common mistake with spaces.
     If neither work, return a default color.
@@ -1131,12 +1142,12 @@ def confirmColor(user_color, default_color):
 
     if not is_color_like(user_color):
         if not is_color_like(user_color.replace(' ', '')):
-            print2stdout('Invalid color with {0}'.format(user_color))
-            print2stdout('Replacing with default color')
+            print2stdout('Invalid color with {0}'.format(user_color), debug=debug)
+            print2stdout('Replacing with default color', debug=debug)
             return default_color
         else:
-            print2stdout('Misspelling in color with {0}'.format(user_color))
-            print2stdout('Replacing with {0}'.format(user_color.replace(' ', '')))
+            print2stdout('Misspelling in color with {0}'.format(user_color), debug=debug)
+            print2stdout('Replacing with {0}'.format(user_color.replace(' ', '')), debug=debug)
             return user_color.replace(' ', '')
     else:
         return user_color
@@ -1436,7 +1447,7 @@ def getListItemsFromDict(indict):
             outdict[key] = indict[key]
     return outdict
 
-def replaceOmittedValues(values, omitval):
+def replaceOmittedValues(values, omitval, debug):
     '''
     replaces a specified value in time series. Can be variable depending on data source (-99999, 0, 100, etc)
     :param values: array of values
@@ -1447,17 +1458,17 @@ def replaceOmittedValues(values, omitval):
     if isinstance(values, dict):
         new_values = {}
         for key in values:
-            new_values[key] = replaceOmittedValues(values[key], omitval)
+            new_values[key] = replaceOmittedValues(values[key], omitval, debug)
         return new_values
     else:
         if len(values) > 0:
             o_msk = np.where(values == omitval)
             values[o_msk] = np.nan
             new_values = np.asarray(values)
-            print2stdout('Omitted {0} values of {1}'.format(len(o_msk[0]), omitval))
+            print2stdout('Omitted {0} values of {1}'.format(len(o_msk[0]), omitval), debug=debug)
             return new_values
         else:
-            print2stdout('No Values to omit.')
+            print2stdout('No Values to omit.', debug=debug)
             return values
 
 def replaceDefaults(Report, default_settings, object_settings):

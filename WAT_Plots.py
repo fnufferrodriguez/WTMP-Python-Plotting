@@ -19,7 +19,6 @@ import matplotlib as mpl
 
 import WAT_Functions as WF
 import WAT_Time as WT
-import WAT_Profiles as WProfile
 import WAT_Defaults as WD
 
 class Plots(object):
@@ -100,7 +99,7 @@ class Plots(object):
         for li, line in enumerate(linedata.keys()):
             curline = pickle.loads(pickle.dumps(linedata[line], -1))
             curline_settings = pickle.loads(pickle.dumps(line_settings[line], -1))
-            curline['values'], curline_settings['units'] = WF.convertUnitSystem(curline['values'], curline_settings['units'], 'metric') #just make everything metric..
+            curline['values'], curline_settings['units'] = WF.convertUnitSystem(curline['values'], curline_settings['units'], 'metric', debug=self.Report.debug) #just make everything metric..
             units.append(curline_settings['units'])
             if li == 0:
                 if biggest_interval != None:
@@ -185,7 +184,7 @@ class Plots(object):
             if 'xlims2' in object_settings.keys():
                 xlims_flag = 'xlims2'
             else:
-                WF.print2stdout('Using Same Xlims for top and bottom.')
+                WF.print2stdout('Using Same Xlims for top and bottom.', debug=self.Report.debug)
                 xlims_flag = 'xlims'
         else:
             xlims_flag = 'xlims'
@@ -224,7 +223,7 @@ class Plots(object):
                 endtime = self.Report.EndTime
             else:
                 endtime = current_xlims[1]
-            xmin = WT.translateDateFormat(xmin, 'datetime', starttime, starttime, endtime, self.Report.ModelAlt.t_offset)
+            xmin = WT.translateDateFormat(xmin, 'datetime', starttime, starttime, endtime, self.Report.ModelAlt.t_offset, debug=self.Report.debug)
 
             try:
                 xmax = float(xmax)
@@ -233,7 +232,7 @@ class Plots(object):
                     starttime = dt.datetime(tmp_starttime.year, 1, 1, 0, 0)
             except:
                 pass
-            xmax = WT.translateDateFormat(xmax, 'datetime', endtime, starttime, endtime, self.Report.ModelAlt.t_offset)
+            xmax = WT.translateDateFormat(xmax, 'datetime', endtime, starttime, endtime, self.Report.ModelAlt.t_offset, debug=self.Report.debug)
 
             if xmax > current_xlims[1]:
                 xmax = current_xlims[1]
@@ -246,8 +245,8 @@ class Plots(object):
             curax.set_xlim(left=xmin, right=xmax)
 
         else:
-            WF.print2stdout('No Xlims flag set for {0}'.format(xlims_flag))
-            WF.print2stdout('Not setting Xlims.')
+            WF.print2stdout('No Xlims flag set for {0}'.format(xlims_flag), debug=self.Report.debug)
+            WF.print2stdout('Not setting Xlims.', debug=self.Report.debug)
 
         return useplot
 
@@ -330,7 +329,7 @@ class Plots(object):
             try:
                 locator = mpl.dates.MonthLocator([int(n) for n in xtick_settings['onmonths']], bymonthday=bymonthday)
             except ValueError:
-                WF.print2stdout('Invalid month values. Please use integer representation of Months (aka 1, 3, 5, etc...)')
+                WF.print2stdout('Invalid month values. Please use integer representation of Months (aka 1, 3, 5, etc...)', debug=self.Report.debug)
                 formatted_months = [self.Report.Constants.month2num[n.lower()] for n in xtick_settings['onmonths']]
                 locator = mpl.dates.MonthLocator(formatted_months, bymonthday=bymonthday)
 
@@ -500,12 +499,12 @@ class Plots(object):
                 if 'parameter' in hline_settings.keys():
                     if object_settings['usedepth'].lower() == 'true':
                         if hline_settings['parameter'].lower() == 'elevation':
-                            valueconv, _ = WProfile.convertElevationsToDepths({'hline': {'depths': [],
+                            valueconv, _ = self.Report.Profiles.convertElevationsToDepths({'hline': {'depths': [],
                                                                                       'elevations': [value]}})
                             value = valueconv['hline']['depth'][0]
                     elif object_settings['usedepth'].lower() == 'false':
                         if hline_settings['parameter'].lower() == 'depth':
-                            valueconv, _ = WProfile.convertDepthsToElevations({'hline': {'depths': [value],
+                            valueconv, _ = self.Report.Profiles.convertDepthsToElevations({'hline': {'depths': [value],
                                                                                       'elevations': []}})
                             value = valueconv['hline']['elevations'][0]
 
@@ -515,14 +514,14 @@ class Plots(object):
                         unitsystem = object_settings['y_unitsystem']
                     else:
                         unitsystem = object_settings['unitsystem']
-                    valueconv, units = WF.convertUnitSystem(value, units, unitsystem)
+                    valueconv, units = WF.convertUnitSystem(value, units, unitsystem, debug=self.Report.debug)
                     value = valueconv
 
                 ### instead, use scalar to be manual
                 if 'scalar' in hline_settings.keys():
                     value *= float(hline_settings['scalar'])
 
-                hline_settings = WD.getDefaultStraightLineSettings(hline_settings)
+                hline_settings = WD.getDefaultStraightLineSettings(hline_settings, self.Report.debug)
                 hline_settings = WF.fixDuplicateColors(hline_settings) #used the line, used param, then double up so subtract 1
 
                 if 'label' not in hline_settings.keys():
@@ -555,8 +554,8 @@ class Plots(object):
 
                 if isdate:
                     value = WT.translateDateFormat(value, 'datetime', '',
-                                                         self.Report.StartTime, self.Report.EndTime,
-                                                         self.Report.ModelAlt.t_offset)
+                                                   self.Report.StartTime, self.Report.EndTime,
+                                                   self.Report.ModelAlt.t_offset, debug=self.Report.debug)
 
                 if 'label' not in vline_settings.keys():
                     vline_settings['label'] = None
@@ -564,10 +563,10 @@ class Plots(object):
                     vline_settings['zorder'] = 3
 
                 if units != None:
-                    valueconv, units = WF.convertUnitSystem(value, units, object_settings['unitsystem'])
+                    valueconv, units = WF.convertUnitSystem(value, units, object_settings['unitsystem'], debug=self.Report.debug)
                     value = valueconv
 
-                vline_settings = WD.getDefaultStraightLineSettings(vline_settings)
+                vline_settings = WD.getDefaultStraightLineSettings(vline_settings, self.Report.debug)
                 vline_settings = WF.fixDuplicateColors(vline_settings) #used the line, used param, then double up so subtract 1
 
                 ax.axvline(value, label=vline_settings['label'], c=vline_settings['linecolor'],

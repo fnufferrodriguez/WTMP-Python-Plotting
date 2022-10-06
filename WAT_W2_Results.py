@@ -173,9 +173,9 @@ class W2_Results(object):
             try:
                 outputs.append(np.asarray(cur_otpt).astype(pref_output_type))
             except ValueError:
-                WF.print2stdout('Array values not able to be converted to {0}'.format(pref_output_type))
-                WF.print2stdout('Reverting to strings.')
-                WF.print2stdout('Array:', cur_otpt)
+                WF.print2stdout('Array values not able to be converted to {0}'.format(pref_output_type), debug=self.Report.debug)
+                WF.print2stdout('Reverting to strings.', debug=self.Report.debug)
+                WF.print2stdout('Array:', cur_otpt, debug=self.Report.debug)
                 outputs.append(np.asarray(cur_otpt).astype(np.string))
         if len(outputs) == 1:
             return outputs[0]
@@ -372,7 +372,7 @@ class W2_Results(object):
 
         ofn_path = os.path.join(self.run_path, output_file_name)
         if not os.path.exists(ofn_path):
-            WF.print2stdout('Data File not found!', ofn_path)
+            WF.print2stdout(f'File {ofn_path} not found!')
             return [], []
 
         structure_nums = [int(n) for n in structure_nums]
@@ -421,8 +421,8 @@ class W2_Results(object):
                        'waterlevel': 'elevcl'}
 
         if 'parameter' not in line_info.keys():
-            WF.print2stdout('Parameter not specified.')
-            WF.print2stdout('Line Info:', line_info)
+            WF.print2stdout('Parameter not specified.', debug=self.Report.debug)
+            WF.print2stdout('Line Info:', line_info, debug=self.Report.debug)
             return values, ''
         new_values = {}
         target_header = headerparam[line_info['parameter']]
@@ -547,8 +547,6 @@ class W2_Results(object):
                     checkForVar = True
 
 
-        WF.print2stdout('stp')
-
         # otf.split('\n')
 
 
@@ -575,7 +573,7 @@ class W2_Results(object):
                       'vertical velocity': 'Vertical velocity'}
 
         if parameter.lower() not in fileparams:
-            WF.print2stdout('Parameter {0} not in acceptable parameters.'.format(parameter))
+            WF.print2stdout('Parameter {0} not in acceptable parameters.'.format(parameter), debug=self.Report.debug)
             return None
         else:
             return fileparams[parameter.lower()]

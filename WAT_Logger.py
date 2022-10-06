@@ -19,11 +19,12 @@ import WAT_Functions as WF
 
 class WAT_Logger(object):
 
-    def __init__(self):
+    def __init__(self, Report):
         '''
         class that handles logging
         '''
 
+        self.Report = Report
         self.buildLogFile()
 
     def buildLogFile(self):
