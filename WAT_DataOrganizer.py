@@ -595,7 +595,12 @@ class DataOrganizer(object):
         elif 'w2_segment' in Profile_info.keys():
             if self.Report.plugin.lower() != 'cequalw2':
                 return [], [], [], [], None
-            vals, elevations, depths, times = self.Report.ModelAlt.readProfileData(Profile_info['w2_segment'], timesteps)
+            if 'w2_file' in Profile_info.keys():
+                resultsfile = Profile_info['w2_file']
+            else:
+                resultsfile = None
+            vals, elevations, depths, times = self.Report.ModelAlt.readProfileData(Profile_info['w2_segment'], timesteps,
+                                                                                   resultsfile=resultsfile)
             if isinstance(timesteps, str):
                 vals, elevations = self.Report.Profiles.normalize2DElevations(vals, elevations)
             return vals, elevations, depths, times, Profile_info['flag']
@@ -603,8 +608,10 @@ class DataOrganizer(object):
         elif 'ressimresname' in Profile_info.keys():
             if self.Report.plugin.lower() != 'ressim':
                 return [], [], [], [], None
+
             vals, elevations, depths, times = self.Report.ModelAlt.readProfileData(Profile_info['ressimresname'],
-                                                                            Profile_info['parameter'], timesteps)
+                                                                                   Profile_info['parameter'], timesteps,
+                                                                                   )
             return vals, elevations, depths, times, Profile_info['flag']
 
         WF.print2stdout('No Data Defined for Profile', debug=self.Report.debug)

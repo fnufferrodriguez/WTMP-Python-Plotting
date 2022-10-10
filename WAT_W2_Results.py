@@ -61,7 +61,11 @@ class W2_Results(object):
         self.readControlFile()
         # dates are output irregular, so we need to build a regular time series to interpolate to
         self.jd_dates, self.dt_dates, self.t_offset = self.buildTimes(self.starttime, self.endtime, self.interval_min)
-        self.getOutputFileName() #get the W2 sanctioned output file name convention
+        if self.control_file_type == 'npt': #turn off, make user input full W2 file instead of trying to build it?
+            self.getOutputFileName_NPT() #get the W2 sanctioned output file name convention
+        elif self.control_file_type == 'csv':
+            self.getOutputFileName_CSV()
+
 
     def readControlFile(self):
         '''
@@ -75,7 +79,9 @@ class W2_Results(object):
         self.cf_lines = self.getControlFileLines(self.control_file)
         if self.control_file_type == 'npt':
             self.line_sections = self.formatCFLines(self.cf_lines)
-        # else:
+        else:
+            self.line_sections = self.formatCFLines(self.cf_lines)
+            # self.line_sections = [] #csv file output contains depths and elevations in the output, which is nice.
             #csv?
 
     def get_tempprofile_layers(self):
@@ -87,13 +93,26 @@ class W2_Results(object):
 
         self.layers = self.getControlVariable(self.line_sections, 'TSR LAYE', pref_output_type=float)
 
-    def getOutputFileName(self):
+    def getOutputFileName_NPT(self):
         '''
         gets the name of output files
         :return:
         '''
 
-        self.output_file_name = self.getControlVariable(self.line_sections, 'TSR FILE')[0]
+        # self.output_file_name = self.getControlVariable(self.line_sections, 'TSR FILE')[0]
+        output_file_name = self.getControlVariable(self.line_sections, 'TSR FILE')
+        if len(output_file_name) > 0:
+            self.output_file_name = output_file_name[0]
+
+    def getOutputFileName_CSV(self):
+        '''
+        gets the name of output files
+        :return:
+        '''
+
+        output_file_name = self.getControlVariable(self.line_sections, 'TSR')
+        if len(output_file_name) > 0:
+            self.output_file_name = output_file_name[3]
 
     def getControlFileLines(self, control_file):
         '''
@@ -128,6 +147,8 @@ class W2_Results(object):
         sections = []
         small_section = ''
         for line in cf_lines:
+            if self.control_file_type == 'csv':
+                line = ''.join(list(filter((',').__ne__, list(line))))
             if len(line.strip()) == 0 and len(small_section) == 0:
                 continue
             if len(line.strip()) == 0 and len(small_section) != 0:
@@ -206,7 +227,7 @@ class W2_Results(object):
 
         return np.asarray(jd_dates), np.asarray(dt_dates), t_offset
 
-    def readProfileData(self, seg, timesteps):
+    def readProfileData(self, seg, timesteps, resultsfile=None):
         '''
         Gets the temperature profile values from the output files.
         organizes results into np arrays. Arrays are full of Nan values by default for all possible values, then filled
@@ -220,6 +241,89 @@ class W2_Results(object):
         :return: array of water temperatures, elevations and depths
         '''
 
+        if self.control_file_type == 'npt':
+            values, elevations, depths, dates = self.readProfileData_NPT(seg, timesteps)
+        elif self.control_file_type == 'csv':
+            values, elevations, depths, dates = self.readProfileData_CSV(seg, timesteps, resultsfile)
+
+        return values, elevations, depths, dates
+
+    def readProfileData_CSV(self, seg, timesteps, resultsfile=None):
+        '''
+        output for CSV W2 runs are not always in the spr.csv file. Headers look like this
+        Constituent	Julian_day	Depth	Elevation	Seg_111	Elevation	Seg_113
+        :param seg:
+        :param timesteps:
+        :return:
+        '''
+
+        if resultsfile == None:
+            resultsfile = 'spr.csv'
+        outputfile = os.path.join(self.run_path, resultsfile)
+        if not os.path.exists(outputfile):
+            WF.print2stdout(f'Results file {outputfile} does not exist.', debug=self.Report.debug)
+            return [], [], [], []
+        output = pd.read_csv(outputfile)
+        segment_header = f'Seg_{seg}'
+        # segment_index = np.where(output.columns.startswith(segment_header))[0] #should only ever be 1
+        segment_index = [i for i, col in enumerate(output.columns) if col.startswith(segment_header)] #should only ever be 1
+        if len(segment_index) == 0:
+            WF.print2stdout(f'ERROR: segment {seg} not found in output file {outputfile}', debug=self.Report.debug)
+            return [], [], [], []
+        segment_elevation_header = output.columns[segment_index[0]-1]
+        segment_value_header = output.columns[segment_index[0]] #stupid segment header can have a space at the end...
+        all_jdates = output['Julian_day'].values #csv depths are always the same for all segments output
+        all_depths = output['Depth'].values #csv jdates are always the same for all segments output
+        all_values = output[segment_value_header].values
+        all_elevations = output[segment_elevation_header].values
+        unique_dates = np.asarray(list(set(all_jdates)))
+        # number_layers = len(np.where(all_jdates == unique_dates[0])[0]) #get number of records for each timestamp.. hopefully these are always the same len?
+
+        values = np.full(len(unique_dates), None)
+        elevations = np.full(len(unique_dates), None)
+        depths = np.full(len(unique_dates), None)
+
+        for ln, unique_date in enumerate(unique_dates):
+            indicies = np.where(all_jdates == unique_date)
+            # print((len(indicies[0])))
+            values[ln] = all_values[indicies]
+            elevations[ln] = all_elevations[indicies]
+            depths[ln] = all_depths[indicies]
+
+        if isinstance(timesteps, (list, np.ndarray)):
+            select_values = []
+            select_elevations = []
+            select_depths = []
+            select_times = []
+            for t, time in enumerate(timesteps):
+                timestep = WT.getIdxForTimestamp(unique_dates, time, self.t_offset)
+                if timestep > -1:#timestep in model
+                    WSE = elevations[timestep] #Meters #get WSE
+                    if not WF.checkData(WSE): #if WSE is bad, skip usually first timestep...
+                        select_elevations.append(np.array([]))
+                        select_depths.append(np.array([]))
+                        select_values.append(np.array([]))
+                        select_times.append(time)
+                        continue
+
+                    select_elevations.append(elevations[timestep][:] * 3.28)
+                    select_depths.append(depths[timestep][:] * 3.28)
+                    select_values.append(values[timestep][:])
+                    select_times.append(time)
+
+                else: #if timestep NOT in model, add empties
+                    select_values.append(np.array([])) #find WTs
+                    select_elevations.append(np.array([]))
+                    select_depths.append(np.array([]))
+                    select_times.append(time)
+
+            select_values, select_elevations, select_depths = self.matchProfileLengths(select_values, select_elevations, select_depths)
+            return select_values, select_elevations, select_depths, unique_dates,
+        else:
+            return values, elevations, depths, unique_dates
+
+
+    def readProfileData_NPT(self, seg, timesteps):
         self.get_tempprofile_layers() #get the output layers. out at 2m depths
 
         wt = np.full((len(self.layers), len(self.jd_dates)), np.nan)
