@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '5.3.0'
+VERSIONNUMBER = '5.3.1'
 
 import os
 import sys
@@ -32,10 +32,8 @@ import WAT_Constants as WC
 import WAT_Time as WT
 import WAT_Defaults as WD
 import WAT_DataOrganizer as WDO
-
 import WAT_ResSim_Results as WRSS
 import WAT_W2_Results as WW2
-
 import WAT_Profiles as WProfile
 import WAT_Tables as WTable
 import WAT_Plots as WPlot
@@ -1364,7 +1362,7 @@ class MakeAutomatedReport(object):
 
         object_settings = self.Tables.replaceComparisonSettings(object_settings, self.iscomp)
 
-        headings, rows = self.Tables.buildTable(object_settings, object_settings['split_by_year'], data_settings)
+        headings, rows = self.Tables.buildErrorStatsTable(object_settings, data_settings)
 
         object_settings = self.configureSettingsForID('base', object_settings)
 
@@ -1390,25 +1388,24 @@ class MakeAutomatedReport(object):
         else:
             self.XML.writeTableStart(desc, 'Statistics')
 
-        headings_i = self.Tables.configureHeadingsGroups(headings)
+        for year in object_settings['years']: #iterate years. If comp, thats the date header.
+            if year == 'ALLYEARS':
+                yearheader = self.years_str
+            else:
+                yearheader = str(year)
+            for hi, header in enumerate(headings):
+                if self.iscomp and hi == 0:
+                    #if a comparison, write the date column. Otherwise, this will be our header
+                    self.XML.writeDateColumn(yearheader)
 
-        for headGroup in headings_i:
-            for hgi, i in enumerate(headGroup):
-                yearheader = headings[i]
-                year = yearheader[0]
-                header = yearheader[1]
-                if self.iscomp and hgi == 0: #if a comparison, write the date column.
-                    if year == 'ALLYEARS':
-                        datecolumn = self.years_str
-                    else:
-                        datecolumn = year
-                    self.XML.writeDateColumn(datecolumn)
+                header_frmt = header.replace('%%year%%', yearheader)
+
                 frmt_rows = []
                 threshold_colors = np.full(len(rows), None)
                 for ri, row in enumerate(rows):
                     s_row = row.split('|')
                     rowname = s_row[0]
-                    row_val = s_row[i+1]
+                    row_val = s_row[hi+1]
                     if '%%' in row_val:
                         rowdata, sr_month = self.Tables.getStatsLineData(row_val, data, year=year)
                         if len(rowdata) == 0:
@@ -1426,7 +1423,7 @@ class MakeAutomatedReport(object):
                                             threshold_colors[ri] = thresh['color']
                             data_start_date, data_end_date = self.Tables.getTableDates(year, object_settings)
                             self.WAT_log.addLogEntry({'type': 'Statistic',
-                                                      'name': ' '.join([self.ChapterRegion, header, stat]),
+                                                      'name': ' '.join([self.ChapterRegion, header_frmt, stat]),
                                                       'description': desc,
                                                       'value': row_val,
                                                       'function': stat,
@@ -1441,10 +1438,10 @@ class MakeAutomatedReport(object):
                                                       },
                                                      isdata=True)
 
-                    header = '' if header == None else header
+                    header_frmt = '' if header_frmt == None else header_frmt
                     numberFormat = self.Tables.matchNumberFormatByStat(stat, object_settings)
                     frmt_rows.append('{0}|{1}'.format(rowname, WF.formatNumbers(row_val, numberFormat)))
-                self.XML.writeTableColumn(header, frmt_rows, thresholdcolors=threshold_colors)
+                self.XML.writeTableColumn(header_frmt, frmt_rows, thresholdcolors=threshold_colors)
             if self.iscomp:
                 self.XML.writeDateColumnEnd()
         self.XML.writeTableEnd()
@@ -1481,7 +1478,7 @@ class MakeAutomatedReport(object):
 
         object_settings = self.Tables.replaceComparisonSettings(object_settings, self.iscomp)
 
-        headings, rows = self.Tables.buildTable(object_settings, object_settings['split_by_year'], data_settings)
+        headings, rows = self.Tables.buildMonthlyStatsTable(object_settings, data_settings)
 
         object_settings= self.configureSettingsForID('base', object_settings)
         object_settings['units_list'] = WF.getUnitsList(data_settings)
@@ -1505,26 +1502,24 @@ class MakeAutomatedReport(object):
         else:
             self.XML.writeTableStart(desc, 'Month')
 
-        headings_i = self.Tables.configureHeadingsGroups(headings)
+        for year in object_settings['years']: #iterate years. If comp, thats the date header.
+            if year == 'ALLYEARS':
+                yearheader = self.years_str
+            else:
+                yearheader = str(year)
+            for hi, header in enumerate(headings):
+                if self.iscomp and hi == 0:
+                    #if a comparison, write the date column. Otherwise, this will be our header
+                    self.XML.writeDateColumn(yearheader)
 
-        for headGroup in headings_i:
-            for hgi, i in enumerate(headGroup):
-                yearheader = headings[i]
-                year = yearheader[0]
-                header = yearheader[1]
-                if self.iscomp and hgi == 0: #if a comparison, write the date column.
-                    if year == 'ALLYEARS':
-                        datecolumn = self.years_str
-                    else:
-                        datecolumn = year
-                    self.XML.writeDateColumn(datecolumn)
+                header_frmt = header.replace('%%year%%', yearheader)
+
                 frmt_rows = []
                 threshold_colors = np.full(len(rows), None)
                 for ri, row in enumerate(rows):
                     s_row = row.split('|')
                     rowname = s_row[0]
-                    row_val = s_row[i+1]
-                    stat=None
+                    row_val = s_row[hi+1]
                     if '%%' in row_val:
                         rowdata, sr_month = self.Tables.getStatsLineData(row_val, data, year=year)
                         if len(rowdata) == 0:
@@ -1539,13 +1534,13 @@ class MakeAutomatedReport(object):
                                     elif thresh['colorwhen'] == 'over':
                                         if row_val > thresh['value']:
                                             threshold_colors[ri] = thresh['color']
-                            data_start_date, data_end_date = self.Tables.getTableDates(year, object_settings, month=sr_month)
+                            data_start_date, data_end_date = self.Tables.getTableDates(year, object_settings)
                             self.WAT_log.addLogEntry({'type': 'Statistic',
-                                                      'name': ' '.join([self.ChapterRegion, header, stat]),
-                                                      'description': object_settings['description'],
+                                                      'name': ' '.join([self.ChapterRegion, header_frmt, stat]),
+                                                      'description': desc,
                                                       'value': row_val,
-                                                      'units': object_settings['units_list'],
                                                       'function': stat,
+                                                      'units': object_settings['plot_units'],
                                                       'value_start_date': WT.translateDateFormat(data_start_date, 'datetime', '',
                                                                                                  self.StartTime, self.EndTime,
                                                                                                  self.ModelAlt.t_offset, debug=self.debug),
@@ -1556,10 +1551,10 @@ class MakeAutomatedReport(object):
                                                       },
                                                      isdata=True)
 
-                    header = '' if header == None else header
+                    header_frmt = '' if header_frmt == None else header_frmt
                     numberFormat = self.Tables.matchNumberFormatByStat(stat, object_settings)
                     frmt_rows.append('{0}|{1}'.format(rowname, WF.formatNumbers(row_val, numberFormat)))
-                self.XML.writeTableColumn(header, frmt_rows, thresholdcolors=threshold_colors)
+                self.XML.writeTableColumn(header_frmt, frmt_rows, thresholdcolors=threshold_colors)
             if self.iscomp:
                 self.XML.writeDateColumnEnd()
         self.XML.writeTableEnd()
@@ -1629,6 +1624,9 @@ class MakeAutomatedReport(object):
             datecolumns = [''] #if not comp run we dont need date headings, months will be in headings
 
         for mi, month in enumerate(datecolumns):
+            if len(headings) == 0:
+                WF.print2stdout('No headings for table.', debug=self.debug)
+                self.XML.writeDateColumn(month)
             for i, header in enumerate(headings):
                 if self.iscomp and i == 0:  #if a comparison, write the date column.
                     self.XML.writeDateColumn(month)
@@ -1771,6 +1769,9 @@ class MakeAutomatedReport(object):
             datecolumns = [''] #if not comp run we dont need date headings, months will be in headings
 
         for mi, month in enumerate(datecolumns):
+            if len(headings) == 0:
+                WF.print2stdout('No headings for table.', debug=self.debug)
+                self.XML.writeDateColumn(month)
             for i, header in enumerate(headings):
                 if self.iscomp and i == 0:
                     #if a comparison, write the date column. Otherwise, this will be our header

@@ -63,116 +63,113 @@ class Tables(object):
 
         return headers, headers_i
 
-    def buildTable(self, object_settings, split_by_year, data_settings):
-        '''
-        builds a table header and rows
-        :param object_settings: dictionary containing settings for object
-        :param split_by_year: boolean flag to determine if table is for all years, or split up
-        :return: headers and rows lists
-        '''
+    def buildErrorStatsTable(self, object_settings, data_settings):
+        headers = []
+        rows = []
+        for ri, row in enumerate(object_settings['rows']):
+            rows.append(row.split('|')[0])
 
-        headers = {}
-        rows = {}
-        outputyears = object_settings['years'] #this is usually a range or ALLYEARS
-
-        for year in outputyears:
-            headers[year] = []
-            rows[year] = {}
-            for ri, row in enumerate(object_settings['rows']):
-                rows[year][ri] = []
-
-        # conditions
-        # -single run all years
-        # -single run split by year
-        # -single run split by year and include all years
-        # -comp run all years
-        # -comp run split by year
-        # -comp run split by year and include all years
-
-        #comp run but header == '%%year%%'
-        #comp run but header has %%computed%% in it
-
-        for i, header in enumerate(object_settings['headers']):
-            curheader = pickle.loads(pickle.dumps(header, -1))
-            if self.Report.iscomp: #comp run
-                isused = False
+        if self.Report.iscomp: #comp run
+            for i, header in enumerate(object_settings['headers']):
+                curheader = pickle.loads(pickle.dumps(header, -1))
                 for datakey in data_settings.keys():
-                    if '%%{0}%%'.format(data_settings[datakey]['flag']) in curheader: #found data specific flag
+                    ds = data_settings[datakey]
+                    dk_flag = ds['flag']
+                    dk_keys = ds.keys()
+                    isused = False
+                    if '%%{0}%%'.format(dk_flag) in curheader:
+                        #like %%Computed%%%%SimulationName%%, %%Observed%%, etc..
+                        if 'label' in dk_keys: #if theres a label, just use that, easy
+                            curheader = curheader.replace('%%{0}%%'.format(dk_flag), ds['label'])
+                        elif 'ID' in dk_keys: #otherwise we will go find the settings and search for flags that are model spec
+                            ID = ds['ID']
+                            curheader = self.Report.configureSettingsForID(ID, curheader)
+                        else: #if there are none, just remove the flag and we will add the flag based off of the flag :thumbsup:
+                            #example "%%Computed%% Computed"
+                            #this is less than ideal for comparison plots and I hope doesnt really happen, but I have to catch it
+                            curheader = curheader.replace('%%{0}%%'.format(dk_flag), '')
+                        headers.append(curheader)
                         isused = True
-                        if 'ID' in data_settings[datakey].keys():
-                            ID = data_settings[datakey]['ID']
-                            tmpheader = self.Report.configureSettingsForID(ID, curheader)
-                        else:
-                            tmpheader = pickle.loads(pickle.dumps(curheader, -1))
-                        tmpheader = tmpheader.replace('%%{0}%%'.format(data_settings[datakey]['flag']), '')
-                        if tmpheader == '%%year%%': #find a situation where the header is just the year
-                            tmpheader = self.Report.SimulationName
-                        if split_by_year:
-                            for year in outputyears:
-                                if year == 'ALLYEARS':
-                                    headers[year].append(tmpheader.replace('%%year%%', self.Report.years_str))
-                                else:
-                                    headers[year].append(tmpheader)
-                                for ri, row in enumerate(object_settings['rows']):
-                                    srow = row.split('|')[1:][i]
-                                    rows[year][ri].append(srow.replace(data_settings[datakey]['flag'], datakey))
-                        else:
-                            headers[year].append(tmpheader.replace('%%year%%', self.Report.years_str))
-                            for ri, row in enumerate(object_settings['rows']):
-                                srow = row.split('|')[1:][i]
-                                rows['ALLYEARS'][ri].append(srow.replace(data_settings[datakey]['flag'], datakey))
-
-                if not isused: #if a header doesnt get used, probably something observed and not needing replacing. OR custom headers for computed data..
-                    if split_by_year:
-                        for year in outputyears:
-                            if year == 'ALLYEARS':
-                                headers[year].append(curheader.replace('%%year%%', self.Report.years_str))
-                            else:
-                                headers[year].append(curheader)
-                            for ri, row in enumerate(object_settings['rows']):
-                                srow = row.split('|')[1:]
-                                if i > len(srow)-1:
-                                    WF.print2stdout(f'Too many headers for defined rows. Not using data for {header}.', debug=self.Report.debug)
-                                    rows[year][ri].append(None)
-                                else:
-                                    rows[year][ri].append(srow[i])
 
                     else:
-                        headers[year].append(curheader.replace('%%year%%', self.Report.years_str))
+                        #if the headers dont call out a flag, we need to build these smarter..
+                        if dk_flag.lower() != 'observed': #ignore the observed data for error stat plots
+                            if 'label' in dk_keys: #if theres a label, just use that, easy
+                                curheader = ds['label']
+                            elif 'ID' in dk_keys: #otherwise we will go find the settings and search for flags that are model spec
+                                ID = ds['ID']
+                                self.Report.loadCurrentID(ID)
+                                curheader = self.Report.SimulationName
+                            else: #if nothing else...
+                                curheader = datakey
+                            headers.append(curheader)
+                            isused = True
+
+                    if isused:
                         for ri, row in enumerate(object_settings['rows']):
                             srow = row.split('|')[1:][i]
-                            rows['ALLYEARS'][ri].append(srow.replace(data_settings[datakey]['flag'], datakey))
+                            rows[ri] += '|{0}'.format(srow.replace(dk_flag, datakey))
 
-            else: #single run
+        else:
+            headers = object_settings['headers']
+            rows = object_settings['rows']
 
-                if split_by_year:
-                    for year in outputyears:
-                        if year == 'ALLYEARS':
-                            headers[year].append(curheader.replace('%%year%%', self.Report.years_str))
-                        else:
-                            headers[year].append(curheader)
-                        for ri, row in enumerate(object_settings['rows']):
-                            srow = row.split('|')[1:][i]
-                            rows[year][ri].append(srow)
-                else:
-                    headers[year].append(curheader.replace('%%year%%', self.Report.years_str))
-                    for ri, row in enumerate(object_settings['rows']):
-                        srow = row.split('|')[1:][i]
-                        rows['ALLYEARS'][ri].append(srow)
+        return headers, rows
 
-        organizedheaders = []
-        organizedrows = []
-        for row in object_settings['rows']:
-            organizedrows.append(row.split('|')[0])
-        for year in outputyears:
-            yrstr = str(year) if split_by_year and year != 'ALLYEARS' else self.Report.years_str
-            for hdr in headers[year]:
-                organizedheaders.append([year, WF.updateFlaggedValues(hdr, '%%year%%', yrstr)])
-            for ri in rows[year].keys():
-                for rw in rows[year][ri]:
-                    organizedrows[ri] += '|{0}'.format(rw)
+    def buildMonthlyStatsTable(self, object_settings, data_settings):
+        headers = []
+        rows = []
+        for ri, row in enumerate(object_settings['rows']):
+            rows.append(row.split('|')[0])
+        if 'headers' in object_settings.keys():
+            assigned_headers = object_settings['headers']
+        else:
+            assigned_headers = []
+        #unlike error tables, we need to build by row here..
 
-        return organizedheaders, organizedrows
+        if self.Report.iscomp: #comp run
+            for ri, row in enumerate(object_settings['rows']):
+                srows = row.split('|')[1:]
+                for sri, srow in enumerate(srows):
+                    if len(assigned_headers) >= sri+1:
+                        assigned_header = assigned_headers[sri]
+                    else:
+                        assigned_header = None
+                    for datakey in data_settings:
+                        ds = data_settings[datakey]
+                        dk_flag = ds['flag']
+                        dk_keys = ds.keys()
+                        isused = False
+                        if dk_flag in srow.split('.'):
+                            if assigned_header != None:
+                                if f'%%{dk_flag}%%' in assigned_header: #check assigned headers first
+                                    curheader = assigned_header.replace(f'%%{dk_flag}%%', '')
+                                    if 'ID' in dk_keys:
+                                        ID = ds['ID']
+                                        curheader = self.Report.configureSettingsForID(ID, curheader)
+                                    if curheader not in headers:
+                                        headers.append(curheader)
+                                    isused = True
+                            if not isused:
+                                if 'label' in dk_keys: #if theres a label, just use that, easy
+                                    curheader = ds['label']
+                                elif 'ID' in dk_keys: #otherwise we will go find the settings and search for flags that are model spec
+                                    ID = ds['ID']
+                                    self.Report.loadCurrentID(ID)
+                                    curheader = self.Report.SimulationName
+                                else: #if nothing else...
+                                    curheader = datakey
+                                if curheader not in headers:
+                                    headers.append(curheader)
+                                isused = True
+                        if isused:
+                            rows[ri] += '|{0}'.format(srow.replace(dk_flag, datakey))
+
+        else:
+            headers = object_settings['headers']
+            rows = object_settings['rows']
+
+        return headers, rows
 
     def buildSingleStatTable(self, object_settings, data):
         '''
@@ -218,12 +215,24 @@ class Tables(object):
                 for datakey in datakeys:
                     if 'label' in data[datakey].keys():
                         if numflagsneeded == 2:
-                            if data[datakey]['flag'].lower() != 'computed':
+                            if data[datakey]['flag'].lower() != 'observed':
                                 headers.append(data[datakey]['label'])
                         else:
                             headers.append(data[datakey]['label'])
+                    elif 'ID' in data[datakey].keys():
+                        if numflagsneeded == 2:
+                            if data[datakey]['flag'].lower() != 'observed':
+                                ID = data[datakey]['ID']
+                                self.Report.loadCurrentID(ID)
+                                headers.append(self.Report.SimulationName)
                     else:
-                        headers.append(datakey)
+                        if numflagsneeded == 2:
+                            if data[datakey]['flag'].lower() != 'observed':
+                                headers.append(datakey)
+                            else:
+                               continue
+                        else:
+                            headers.append(datakey)
         else:
             headers = months
 
@@ -289,6 +298,7 @@ class Tables(object):
                             srow = row.split('|')[1:][i]
                             rows[ri] += '|{0}'.format(srow.replace(data[datakey]['flag'], datakey))
 
+
         else: #single run
             headers = [timestamp]
             rows = object_settings['rows']
@@ -336,9 +346,11 @@ class Tables(object):
                         filtbylims = True
 
             if 'omitvalue' in line.keys():
-                omitvalue = float(line['omitvalue'])
+                omitvalues = [float(line['omitvalue'])]
+            elif 'omitvalues' in line.keys():
+                omitvalues = [float(n) for n in line['omitvalues']]
             else:
-                omitvalue = None
+                omitvalues = None
 
             if xmax != None and filtbylims:
                 xmax_filt = np.where(values <= xmax)
@@ -360,12 +372,15 @@ class Tables(object):
             else:
                 ymin_filt = np.arange(len(dates))
 
-            if omitvalue != None:
-                omitval_filt = np.where(values != omitvalue)
+            if omitvalues != None:
+                omitvals_filt = []
+                for omitval in omitvalues:
+                    omitval_filt = np.where(values != omitval)
+                    omitvals_filt = np.append(omitvals_filt, omitval_filt)
             else:
-                omitval_filt = np.arange(len(values))
+                omitvals_filt = np.arange(len(values))
 
-            master_filter = reduce(np.intersect1d, (xmax_filt, xmin_filt, ymax_filt, ymin_filt, omitval_filt))
+            master_filter = reduce(np.intersect1d, (xmax_filt, xmin_filt, ymax_filt, ymin_filt, omitvals_filt)).astype(int)
 
             data[lineflag]['values'] = values[master_filter]
             data[lineflag]['dates'] = dates[master_filter]

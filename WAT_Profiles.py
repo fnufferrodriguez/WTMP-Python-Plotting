@@ -303,9 +303,11 @@ class Profiles(object):
                         filtbylims = True
 
             if 'omitvalue' in cur_line_settings.keys():
-                omitvalue = float(cur_line_settings['omitvalue'])
+                omitvalues = [float(cur_line_settings['omitvalue'])]
+            elif 'omitvalues' in cur_line_settings.keys():
+                omitvalues = [float(n) for n in cur_line_settings['omitvalues']]
             else:
-                omitvalue = None
+                omitvalues = None
 
             for pi, profile in enumerate(cur_data['values']):
                 ydata = cur_data[yflag][pi]
@@ -330,12 +332,15 @@ class Profiles(object):
                 else:
                     ymin_filt = np.arange(len(ydata))
 
-                if omitvalue != None:
-                    omitval_filt = np.where(profile != omitvalue)
+                if omitvalues != None:
+                    omitvals_filt = []
+                    for omitval in omitvalues:
+                        omitval_filt = np.where(profile != omitval)
+                        omitvals_filt = np.append(omitvals_filt, omitval_filt)
                 else:
-                    omitval_filt = np.arange(len(profile))
+                    omitvals_filt = np.arange(len(profile))
 
-                master_filter = reduce(np.intersect1d, (xmax_filt, xmin_filt, ymax_filt, ymin_filt, omitval_filt))
+                master_filter = reduce(np.intersect1d, (xmax_filt, xmin_filt, ymax_filt, ymin_filt, omitvals_filt)).astype(int)
 
                 data[lineflag]['values'][pi] = profile[master_filter]
                 data[lineflag][yflag][pi] = ydata[master_filter]

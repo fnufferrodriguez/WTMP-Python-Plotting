@@ -56,7 +56,7 @@ class DataOrganizer(object):
             if 'dss_filename' in Data_info.keys():
                 outname = WF.sanitizeText(os.path.basename(Data_info['dss_filename'])[:-4])
                 dssnamesplit = Data_info['dss_path'].split('/')
-                dssname_pick = WF.sanitizeText(f"{dssnamesplit[1]}_{dssnamesplit[2]}_{dssnamesplit[3]}_{dssnamesplit[-2]}")
+                dssname_pick = WF.sanitizeText(f"{dssnamesplit[1]}_{dssnamesplit[2]}_{dssnamesplit[3]}_{dssnamesplit[5]}_{dssnamesplit[-2]}")
                 outname = very_special_flags + '_' + outname + '_' + dssname_pick
 
         elif 'w2_file' in Data_info.keys():
@@ -102,7 +102,7 @@ class DataOrganizer(object):
         else:
             outname = 'NULL'
 
-        return outname[:200]
+        return outname[:150]
 
     #################################################################
     #TimeSeries Functions
@@ -436,7 +436,11 @@ class DataOrganizer(object):
 
         if 'omitvalue' in Line_info.keys():
             omitval = float(Line_info['omitvalue'])
-            values = WF.replaceOmittedValues(values, omitval, debug=self.Report.debug)
+            values = WF.NaNOmittedValues(values, omitval, debug=self.Report.debug)
+        elif 'omitvalues' in Line_info.keys():
+            omitvals = [float(n) for n in Line_info['omitvalues']]
+            for omitval in omitvals:
+                values = WF.NaNOmittedValues(values, omitval, debug=self.Report.debug)
 
         if 'interval' in Line_info.keys():
             times, values = WT.changeTimeSeriesInterval(times, values, Line_info, self.Report.ModelAlt.t_offset, self.Report.startYear)

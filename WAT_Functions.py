@@ -1447,7 +1447,7 @@ def getListItemsFromDict(indict):
             outdict[key] = indict[key]
     return outdict
 
-def replaceOmittedValues(values, omitval, debug):
+def NaNOmittedValues(values, omitval, debug):
     '''
     replaces a specified value in time series. Can be variable depending on data source (-99999, 0, 100, etc)
     :param values: array of values
@@ -1458,7 +1458,7 @@ def replaceOmittedValues(values, omitval, debug):
     if isinstance(values, dict):
         new_values = {}
         for key in values:
-            new_values[key] = replaceOmittedValues(values[key], omitval, debug)
+            new_values[key] = NaNOmittedValues(values[key], omitval, debug)
         return new_values
     else:
         if len(values) > 0:
