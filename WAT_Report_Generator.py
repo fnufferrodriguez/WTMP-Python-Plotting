@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '5.3.1'
+VERSIONNUMBER = '5.3.2'
 
 import os
 import sys
@@ -1406,10 +1406,12 @@ class MakeAutomatedReport(object):
                     s_row = row.split('|')
                     rowname = s_row[0]
                     row_val = s_row[hi+1]
+                    stat = None
                     if '%%' in row_val:
                         rowdata, sr_month = self.Tables.getStatsLineData(row_val, data, year=year)
                         if len(rowdata) == 0:
                             row_val = None
+                            stat = None
                         else:
                             row_val, stat = self.Tables.getStatsLine(row_val, rowdata)
                             if not np.isnan(row_val) and row_val != None:
@@ -1520,10 +1522,12 @@ class MakeAutomatedReport(object):
                     s_row = row.split('|')
                     rowname = s_row[0]
                     row_val = s_row[hi+1]
+                    stat = None
                     if '%%' in row_val:
                         rowdata, sr_month = self.Tables.getStatsLineData(row_val, data, year=year)
                         if len(rowdata) == 0:
                             row_val = None
+                            stat = None
                         else:
                             row_val, stat = self.Tables.getStatsLine(row_val, rowdata)
                             if not np.isnan(row_val) and row_val != None:

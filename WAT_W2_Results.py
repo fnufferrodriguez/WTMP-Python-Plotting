@@ -578,7 +578,7 @@ class W2_Results(object):
             return [], []
 
         if isinstance(column, str):
-            header = linecache.getline(ofn_path, int(skiprows)).strip().lower().split() #1 indexed, for some reason
+            header = linecache.getline(ofn_path, int(skiprows)).strip().lower().split(',') #1 indexed, for some reason
             cidx = np.where(np.asarray(header) == column.lower())[0]
             if len(cidx) > 0:
                 column = cidx[0]
