@@ -578,10 +578,13 @@ class W2_Results(object):
             return [], []
 
         if isinstance(column, str):
-            header = linecache.getline(ofn_path, int(skiprows)).strip().lower().split(',') #1 indexed, for some reason
-            cidx = np.where(np.asarray(header) == column.lower())[0]
+            header = linecache.getline(ofn_path, int(skiprows)).strip().replace(' ','').lower().split(',') #1 indexed, for some reason
+            cidx = np.where(np.asarray(header) == column.replace(' ','').lower())[0]
             if len(cidx) > 0:
                 column = cidx[0]
+            else:
+                WF.print2stdout(f'Header {column} not found in file', debug=self.Report.debug)
+                return [], []
 
         dates = []
         values = []
