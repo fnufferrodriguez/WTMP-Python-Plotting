@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '5.3.3'
+VERSIONNUMBER = '5.3.4'
 
 import os
 import sys
@@ -2926,15 +2926,20 @@ class MakeAutomatedReport(object):
         return settings
 
 if __name__ == '__main__':
-    rundir = sys.argv[0]
-    simInfoFile = sys.argv[1]
 
-    # import cProfile
-    # ar = cProfile.run('MakeAutomatedReport(simInfoFile, rundir)')
+    if '--version' in sys.argv:
+        WF.print2stdout(VERSIONNUMBER)
+        sys.exit(0)
+    else:
+        rundir = sys.argv[0]
+        simInfoFile = sys.argv[1]
 
-    try:
-        MakeAutomatedReport(simInfoFile, rundir)
-    except:
-        WF.print2stderr(traceback.format_exc())
-        sys.exit(1)
+        # import cProfile
+        # ar = cProfile.run('MakeAutomatedReport(simInfoFile, rundir)')
+
+        try:
+            MakeAutomatedReport(simInfoFile, rundir)
+        except:
+            WF.print2stderr(traceback.format_exc())
+            sys.exit(1)
 
