@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '5.3.4'
+VERSIONNUMBER = '5.3.5'
 
 import os
 import sys
@@ -810,35 +810,35 @@ class MakeAutomatedReport(object):
 
         object_settings['resolution'] = self.Profiles.getProfileInterpResolution(object_settings)
 
-        object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = WF.getObjectYears(self, object_settings)
+        object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = WF.getObjectYears(self, object_settings, allowIncludeAllYears=False)
 
         yrheaders, yrheaders_i = self.Tables.buildHeadersByTimestamps(object_settings['timestamps'], self.years)
         yrheaders = self.Tables.convertHeaderFormats(yrheaders, object_settings)
+
+
+
         if not object_settings['split_by_year']: #if we dont want to split by year, just make a big ass list
             yrheaders = [list(itertools.chain.from_iterable(yrheaders))]
             yrheaders_i = [list(itertools.chain.from_iterable(yrheaders_i))]
         for yi, yrheader_group in enumerate(yrheaders):
-            if object_settings['split_by_year']:
-                yearstr = object_settings['yearstr'][yi]
-            else:
-                yearstr = self.years_str
+
+            yearstr = object_settings['yearstr'][yi]
+            table_constructor = {}
 
             if len(yrheader_group) == 0:
                 WF.print2stdout('No data for', yearstr, debug=self.debug)
                 continue
 
             object_desc = WF.updateFlaggedValues(object_settings['description'], '%%year%%', yearstr)
-            if self.iscomp:
-                self.XML.writeDateControlledTableStart(object_desc, 'Statistics')
-            else:
-                self.XML.writeTableStart(object_desc, 'Statistics')
+
             for yhi, yrheader in enumerate(yrheader_group):
-                if self.iscomp:
-                    #if a comparison, write the date column. Otherwise, this will be our header
-                    self.XML.writeDateColumn(yrheader)
                 header_i = yrheaders_i[yi][yhi]
                 headings, rows = self.Tables.buildProfileStatsTable(table_blueprint, yrheader, line_settings)
                 for hi,heading in enumerate(headings):
+                    tcnum = len(table_constructor.keys())
+                    table_constructor[tcnum] = {}
+                    if self.iscomp:
+                        table_constructor[tcnum]['datecolumn'] = yrheader
                     frmt_rows = []
                     threshold_colors = np.full(len(rows), None)
                     for ri, row in enumerate(rows):
@@ -873,10 +873,53 @@ class MakeAutomatedReport(object):
                                                      isdata=True)
                         numberFormat = self.Tables.matchNumberFormatByStat(stat, object_settings)
                         frmt_rows.append('{0}|{1}'.format(rowname, WF.formatNumbers(row_val, numberFormat)))
-                    self.XML.writeTableColumn(heading, frmt_rows, thresholdcolors=threshold_colors)
+                    table_constructor[tcnum]['rows'] = frmt_rows
+                    table_constructor[tcnum]['thresholdcolors'] = threshold_colors
+                    table_constructor[tcnum]['header'] = heading
+
+            keeptable = False
+            keepall = True
+            keepcolumn = {}
+            for row_num in table_constructor.keys():
+                constructor = table_constructor[row_num]
+                rows = constructor['rows']
+                header = constructor['header']
+                for row in rows:
+                    srow = row.split('|')
+                    if header not in keepcolumn.keys():
+                        keepcolumn[header] = False
+                        if srow[1].lower() not in ['nan', '-', 'none']:
+                            keepcolumn[header] = True
+
+            for key in keepcolumn.keys():
+                if keepcolumn[key] == True:
+                    keeptable = True
+                else:
+                    keepall = False
+
+            if keeptable: #quick check if we're even writing a table..
+                if not keepall:
+                    new_table_constructor = {}
+                    for row_num in table_constructor.keys():
+                        constructor = table_constructor[row_num]
+                        header = constructor['header']
+                        if keepcolumn[header] == True:
+                            new_table_constructor[row_num] = constructor
+                else:
+                    new_table_constructor = table_constructor
+
+                #THEN write table
                 if self.iscomp:
-                    self.XML.writeDateColumnEnd()
-            self.XML.writeTableEnd()
+                    self.XML.writeDateControlledTableStart(object_desc, 'Statistics')
+                else:
+                    self.XML.writeTableStart(object_desc, 'Statistics')
+
+                self.Tables.writeTable(new_table_constructor)
+                if not keepall:
+                    self.Tables.writeMissingTableItemsWarning(object_desc)
+            else:
+                self.Tables.writeMissingTableWarning(object_desc)
+                WF.print2stdout('No values found for table. Not writing table.', debug=self.debug)
 
         WF.print2stdout(f'Profile Stat Table took {time.time() - objectstarttime} seconds.')
 
@@ -942,14 +985,15 @@ class MakeAutomatedReport(object):
         self.Data.commitProfileDataToMemory(data, line_settings, object_settings)
         linedata, object_settings = self.Profiles.filterProfileData(data, line_settings, object_settings)
 
-        object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = WF.getObjectYears(self, object_settings)
+        object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = WF.getObjectYears(self, object_settings, allowIncludeAllYears=False)
 
         ################ Build Plots ################
         for yi, year in enumerate(object_settings['years']):
-            if object_settings['split_by_year']:
-                yearstr = str(year)
-            else:
-                yearstr = object_settings['yearstr']
+            yearstr = object_settings['yearstr'][yi]
+            # if object_settings['split_by_year']:
+            #     yearstr = str(year)
+            # else:
+            #     yearstr = self.years_str
 
             t_stmps = WT.filterTimestepByYear(object_settings['timestamps'], year)
 
@@ -1383,23 +1427,18 @@ class MakeAutomatedReport(object):
 
         desc = WF.updateFlaggedValues(desc, '%%year%%', object_settings['yearstr'])
 
-        if self.iscomp:
-            self.XML.writeDateControlledTableStart(desc, 'Statistics')
-        else:
-            self.XML.writeTableStart(desc, 'Statistics')
+        table_constructor = {}
 
-        for year in object_settings['years']: #iterate years. If comp, thats the date header.
-            if year == 'ALLYEARS':
-                yearheader = self.years_str
-            else:
-                yearheader = str(year)
+        for yi, year in enumerate(object_settings['years']): #iterate years. If comp, thats the date header.
+
+            yearheader = object_settings['yearstr'][yi]
             for hi, header in enumerate(headings):
-                if self.iscomp and hi == 0:
-                    #if a comparison, write the date column. Otherwise, this will be our header
-                    self.XML.writeDateColumn(yearheader)
+                tcnum = len(table_constructor.keys())
+                table_constructor[tcnum] = {}
+                if self.iscomp:
+                    table_constructor[tcnum]['datecolumn'] = yearheader
 
                 header_frmt = header.replace('%%year%%', yearheader)
-
                 frmt_rows = []
                 threshold_colors = np.full(len(rows), None)
                 for ri, row in enumerate(rows):
@@ -1443,10 +1482,54 @@ class MakeAutomatedReport(object):
                     header_frmt = '' if header_frmt == None else header_frmt
                     numberFormat = self.Tables.matchNumberFormatByStat(stat, object_settings)
                     frmt_rows.append('{0}|{1}'.format(rowname, WF.formatNumbers(row_val, numberFormat)))
-                self.XML.writeTableColumn(header_frmt, frmt_rows, thresholdcolors=threshold_colors)
+                table_constructor[tcnum]['rows'] = frmt_rows
+                table_constructor[tcnum]['thresholdcolors'] = threshold_colors
+                table_constructor[tcnum]['header'] = header_frmt
+
+        keeptable = False
+        keepall = True
+        keepcolumn = {}
+        for row_num in table_constructor.keys():
+            constructor = table_constructor[row_num]
+            rows = constructor['rows']
+            header = constructor['header']
+            for row in rows:
+                srow = row.split('|')
+                if header not in keepcolumn.keys():
+                    keepcolumn[header] = False
+                if srow[1].lower() not in ['nan', '-', 'none']:
+                    keepcolumn[header] = True
+
+        for key in keepcolumn.keys():
+            if keepcolumn[key] == True:
+                keeptable = True
+            else:
+                keepall = False
+
+        if keeptable: #quick check if we're even writing a table..
+            if not keepall:
+                new_table_constructor = {}
+                for row_num in table_constructor.keys():
+                    constructor = table_constructor[row_num]
+                    header = constructor['header']
+                    if keeptable[header] == True:
+                        new_table_constructor[row_num] = constructor
+            else:
+                new_table_constructor = table_constructor
+
+            #THEN write table
             if self.iscomp:
-                self.XML.writeDateColumnEnd()
-        self.XML.writeTableEnd()
+                self.XML.writeDateControlledTableStart(desc, 'Year')
+            else:
+                self.XML.writeTableStart(desc, 'Year')
+
+            self.Tables.writeTable(new_table_constructor)
+            if not keepall:
+                self.Tables.writeMissingTableItemsWarning(desc)
+        else:
+            self.Tables.writeMissingTableWarning(desc)
+            WF.print2stdout('No values found for table. Not writing table.', debug=self.debug)
+
 
         WF.print2stdout(f'Error Stats table took {time.time() - objectstarttime} seconds.')
 
@@ -1499,20 +1582,16 @@ class MakeAutomatedReport(object):
             desc = ''
         desc = WF.updateFlaggedValues(desc, '%%year%%', object_settings['yearstr'])
 
-        if self.iscomp:
-            self.XML.writeDateControlledTableStart(desc, 'Month')
-        else:
-            self.XML.writeTableStart(desc, 'Month')
+        table_constructor = {}
 
-        for year in object_settings['years']: #iterate years. If comp, thats the date header.
-            if year == 'ALLYEARS':
-                yearheader = self.years_str
-            else:
-                yearheader = str(year)
+        for yi, year in enumerate(object_settings['years']): #iterate years. If comp, thats the date header.
+
+            yearheader = object_settings['yearstr'][yi]
             for hi, header in enumerate(headings):
-                if self.iscomp and hi == 0:
-                    #if a comparison, write the date column. Otherwise, this will be our header
-                    self.XML.writeDateColumn(yearheader)
+                tcnum = len(table_constructor.keys())
+                table_constructor[tcnum] = {}
+                if self.iscomp:
+                    table_constructor[tcnum]['datecolumn'] = yearheader
 
                 header_frmt = header.replace('%%year%%', yearheader)
 
@@ -1558,10 +1637,53 @@ class MakeAutomatedReport(object):
                     header_frmt = '' if header_frmt == None else header_frmt
                     numberFormat = self.Tables.matchNumberFormatByStat(stat, object_settings)
                     frmt_rows.append('{0}|{1}'.format(rowname, WF.formatNumbers(row_val, numberFormat)))
-                self.XML.writeTableColumn(header_frmt, frmt_rows, thresholdcolors=threshold_colors)
+                table_constructor[tcnum]['rows'] = frmt_rows
+                table_constructor[tcnum]['thresholdcolors'] = threshold_colors
+                table_constructor[tcnum]['header'] = header_frmt
+
+        keeptable = False
+        keepall = True
+        keepcolumn = {}
+        for row_num in table_constructor.keys():
+            constructor = table_constructor[row_num]
+            rows = constructor['rows']
+            header = constructor['header']
+            for row in rows:
+                srow = row.split('|')
+                if header not in keepcolumn.keys():
+                    keepcolumn[header] = False
+                if srow[1].lower() not in ['nan', '-', 'none']:
+                    keepcolumn[header] = True
+
+        for key in keepcolumn.keys():
+            if keepcolumn[key] == True:
+                keeptable = True
+            else:
+                keepall = False
+
+        if keeptable: #quick check if we're even writing a table..
+            if not keepall:
+                new_table_constructor = {}
+                for row_num in table_constructor.keys():
+                    constructor = table_constructor[row_num]
+                    header = constructor['header']
+                    if keepcolumn[header] == True:
+                        new_table_constructor[row_num] = constructor
+            else:
+                new_table_constructor = table_constructor
+
+            #THEN write table
             if self.iscomp:
-                self.XML.writeDateColumnEnd()
-        self.XML.writeTableEnd()
+                self.XML.writeDateControlledTableStart(desc, 'Month')
+            else:
+                self.XML.writeTableStart(desc, 'Month')
+
+            self.Tables.writeTable(new_table_constructor)
+            if not keepall:
+                self.Tables.writeMissingTableItemsWarning(desc)
+        else:
+            self.Tables.writeMissingTableWarning(desc)
+            WF.print2stdout('No values found for table. Not writing table.', debug=self.debug)
 
         WF.print2stdout(f'Monthly Stat Table took {time.time() - objectstarttime} seconds.')
 
@@ -1617,10 +1739,7 @@ class MakeAutomatedReport(object):
 
         desc = WF.updateFlaggedValues(desc, '%%year%%', object_settings['yearstr'])
 
-        if self.iscomp:
-            self.XML.writeDateControlledTableStart(desc, 'Year')
-        else:
-            self.XML.writeNarrowTableStart(desc, 'Year')
+        table_constructor = {}
 
         if self.iscomp:
             datecolumns = self.Constants.mo_str_3
@@ -1630,10 +1749,12 @@ class MakeAutomatedReport(object):
         for mi, month in enumerate(datecolumns):
             if len(headings) == 0:
                 WF.print2stdout('No headings for table.', debug=self.debug)
-                self.XML.writeDateColumn(month)
+                # self.XML.writeDateColumn(month)
             for i, header in enumerate(headings):
-                if self.iscomp and i == 0:  #if a comparison, write the date column.
-                    self.XML.writeDateColumn(month)
+                tcnum = len(table_constructor.keys())
+                table_constructor[tcnum] = {}
+                if self.iscomp:  #if a comparison, write the date column.
+                    table_constructor[tcnum]['datecolumn'] = month
                 frmt_rows = []
                 threshold_colors = np.full(len(rows), None)
                 for ri, row in enumerate(rows):
@@ -1681,10 +1802,57 @@ class MakeAutomatedReport(object):
                     header = '' if header == None else header
                     numberFormat = self.Tables.matchNumberFormatByStat(stat, object_settings_blueprint)
                     frmt_rows.append('{0}|{1}'.format(rowname, WF.formatNumbers(row_val, numberFormat)))
-                self.XML.writeTableColumn(header, frmt_rows, thresholdcolors=threshold_colors)
+                table_constructor[tcnum]['rows'] = frmt_rows
+                table_constructor[tcnum]['thresholdcolors'] = threshold_colors
+                table_constructor[tcnum]['header'] = header
+
+        #check for entire rows/columns that can be sniped
+        keeptable = False
+        keepall = True
+        keepheader = {}
+        for row_num in table_constructor.keys():
+            constructor = table_constructor[row_num]
+            rows = constructor['rows']
+            for row in rows:
+                srow = row.split('|')
+                if srow[0] not in keepheader.keys():
+                    keepheader[srow[0]] = False
+                if srow[1].lower() not in ['nan', '-', 'none']:
+                    keepheader[srow[0]] = True
+
+        for key in keepheader.keys():
+            if keepheader[key] == True:
+                keeptable = True
+            else:
+                keepall = False
+
+        if keeptable: #quick check if we're even writing a table..
+            if not keepall:
+                for row_num in table_constructor.keys():
+                    constructor = table_constructor[row_num]
+                    rows = constructor['rows']
+                    new_rows = []
+                    new_thresh = []
+                    for row in rows:
+                        srow = row.split('|')
+                        if keepheader[srow[0]] == True:
+                            new_rows.append(row)
+                            new_thresh.append(constructor['thresholdcolors'][ri])
+                    table_constructor[row_num]['rows'] = new_rows
+                    table_constructor[row_num]['thresholdcolors'] = new_thresh
+
+            #THEN write table
             if self.iscomp:
-                self.XML.writeDateColumnEnd()
-        self.XML.writeTableEnd()
+                self.XML.writeDateControlledTableStart(desc, 'Year')
+            else:
+                self.XML.writeNarrowTableStart(desc, 'Year')
+
+            self.Tables.writeTable(table_constructor)
+            if not keepall:
+                self.Tables.writeMissingTableItemsWarning(desc)
+        else:
+            self.Tables.writeMissingTableWarning(desc)
+            WF.print2stdout('No values found for table. Not writing table.', debug=self.debug)
 
         WF.print2stdout(f'Single Stat Table took {time.time() - objectstarttime} seconds.')
 
@@ -1762,10 +1930,7 @@ class MakeAutomatedReport(object):
 
         desc = WF.updateFlaggedValues(desc, '%%year%%', object_settings['yearstr'])
 
-        if self.iscomp:
-            self.XML.writeDateControlledTableStart(desc, 'Year')
-        else:
-            self.XML.writeNarrowTableStart(desc, 'Year')
+        table_constructor = {}
 
         if self.iscomp:
             datecolumns = self.Constants.mo_str_3
@@ -1775,11 +1940,11 @@ class MakeAutomatedReport(object):
         for mi, month in enumerate(datecolumns):
             if len(headings) == 0:
                 WF.print2stdout('No headings for table.', debug=self.debug)
-                self.XML.writeDateColumn(month)
             for i, header in enumerate(headings):
-                if self.iscomp and i == 0:
-                    #if a comparison, write the date column. Otherwise, this will be our header
-                    self.XML.writeDateColumn(month)
+                tcnum = len(table_constructor.keys())
+                table_constructor[tcnum] = {}
+                if self.iscomp:
+                    table_constructor[tcnum]['datecolumn'] = month
                 frmt_rows = []
                 threshold_colors = np.full(len(rows), None)
                 for ri, row in enumerate(rows):
@@ -1838,10 +2003,57 @@ class MakeAutomatedReport(object):
                     header = '' if header == None else header
                     numberFormat = self.Tables.matchNumberFormatByStat(stat, object_settings_blueprint)
                     frmt_rows.append('{0}|{1}'.format(rowname, WF.formatNumbers(row_val, numberFormat)))
-                self.XML.writeTableColumn(header, frmt_rows, thresholdcolors=threshold_colors)
+                table_constructor[tcnum]['rows'] = frmt_rows
+                table_constructor[tcnum]['thresholdcolors'] = threshold_colors
+                table_constructor[tcnum]['header'] = header
+
+        keeptable = False
+        keepall = True
+        keepheader = {}
+        for row_num in table_constructor.keys():
+            constructor = table_constructor[row_num]
+            rows = constructor['rows']
+            for row in rows:
+                srow = row.split('|')
+                if srow[0] not in keepheader.keys():
+                    keepheader[srow[0]] = False
+                if srow[1].lower() not in ['nan', '-', 'none']:
+                    keepheader[srow[0]] = True
+
+        for key in keepheader.keys():
+            if keepheader[key] == True:
+                keeptable = True
+            else:
+                keepall = False
+
+        if keeptable: #quick check if we're even writing a table..
+            if not keepall:
+                for row_num in table_constructor.keys():
+                    constructor = table_constructor[row_num]
+                    rows = constructor['rows']
+                    new_rows = []
+                    new_thresh = []
+                    for r, row in enumerate(rows):
+                        srow = row.split('|')
+                        if keepheader[srow[0]] == True:
+                            new_rows.append(row)
+                            new_thresh.append(constructor['thresholdcolors'][ri])
+                    table_constructor[row_num]['rows'] = new_rows
+                    table_constructor[row_num]['thresholdcolors'] = new_thresh
+
+            #THEN write table
             if self.iscomp:
-                self.XML.writeDateColumnEnd()
-        self.XML.writeTableEnd()
+                self.XML.writeDateControlledTableStart(desc, 'Year')
+            else:
+                self.XML.writeNarrowTableStart(desc, 'Year')
+
+            self.Tables.writeTable(table_constructor)
+            if not keepall:
+                self.Tables.writeMissingTableItemsWarning(desc)
+
+        else:
+            self.Tables.writeMissingTableWarning(desc)
+            WF.print2stdout('No values found for table. Not writing table.', debug=self.debug)
 
         WF.print2stdout(f'Single Profile Stat Table took {time.time() - objectstarttime} seconds.')
 
