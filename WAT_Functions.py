@@ -1022,7 +1022,7 @@ def ValueSum(dates, values):
         sum_vals.append(sum)
     return np.asarray(sum_vals)
 
-def getObjectYears(Report, object_settings):
+def getObjectYears(Report, object_settings, allowIncludeAllYears=True):
     '''
     formats years settings for plots/tables. Figures out years used, if split by year, and year strings
     years is set to "ALLYEARS" if not split by year. This tells other parts of script to include all.
@@ -1044,12 +1044,13 @@ def getObjectYears(Report, object_settings):
         yearstr = [Report.years_str]
         years = ['ALLYEARS']
 
-    if 'includeallyears' in object_settings.keys():
-        if object_settings['includeallyears'].lower() == 'true':
-            if 'ALLYEARS' not in years:
-                if len(years) > 1: #if theres only one year in here, please don't do another copy of that..
-                    years.append('ALLYEARS')
-                    yearstr.append(Report.years_str)
+    if allowIncludeAllYears:
+        if 'includeallyears' in object_settings.keys():
+            if object_settings['includeallyears'].lower() == 'true':
+                if 'ALLYEARS' not in years:
+                    if len(years) > 1: #if theres only one year in here, please don't do another copy of that..
+                        years.append('ALLYEARS')
+                        yearstr.append(Report.years_str)
 
     return split_by_year, years, yearstr
 

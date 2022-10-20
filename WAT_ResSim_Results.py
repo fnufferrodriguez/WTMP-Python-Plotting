@@ -277,6 +277,9 @@ class ResSim_Results(object):
         '''
 
         i, subdomain_name = self.findComputedStationCell(x, y)
+        if subdomain_name == None:
+            WF.print2stdout(f'XY coords ({x}, {y}) not found', debug=self.Report.debug)
+            return [], []
 
         if metric.lower() == 'flow':
             dataset_name = 'Cell flow'
@@ -476,6 +479,8 @@ class ResSim_Results(object):
         '''
 
         nearest_dist = 1e6
+        data_index = 0
+        data_subdomain = None
         for subdomain, sd_data in self.subdomains.items():
             x = sd_data['x']
             y = sd_data['y']
@@ -486,6 +491,7 @@ class ResSim_Results(object):
                 data_index = min_cell
                 data_subdomain = subdomain
                 nearest_dist = min_dist
+
         return data_index, data_subdomain
 
     def loadComputedTime(self):

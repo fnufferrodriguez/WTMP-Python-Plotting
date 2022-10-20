@@ -81,6 +81,16 @@ class Profiles(object):
                 else:
                     WF.print2stdout('Invalid Timestamp', d, debug=self.Report.debug)
 
+        elif isinstance(object_settings['datessource_flag'], list): #single date instance..
+            timestamps = []
+            tstamp_dates = object_settings['datessource']
+            for d in tstamp_dates:
+                dfrmt = WT.translateDateFormat(d, 'datetime', None, StartTime, EndTime, None, debug=self.Report.debug)
+                if dfrmt != None:
+                    timestamps.append(dfrmt)
+                else:
+                    WF.print2stdout('Invalid Timestamp', d, debug=self.Report.debug)
+
         if len(timestamps) == 0:
             #if something fails, or not implemented, or theres just no dates in the window, make some up
             timestamps = WT.makeRegularTimesteps(StartTime, EndTime, self.Report.debug, days=15)

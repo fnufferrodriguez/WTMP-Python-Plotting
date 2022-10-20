@@ -911,3 +911,25 @@ class Tables(object):
                 if str(h[0]) == str(hgroup):
                     headings_i[hgi].append(hi)
         return headings_i
+
+    def writeTable(self, table_constructor):
+        lastdatecol = ''
+        for i in range(len(table_constructor.keys())):
+            current_col = table_constructor[i]
+            if self.Report.iscomp:
+                if current_col['datecolumn'] != lastdatecol:
+                    if lastdatecol != '':
+                        self.Report.XML.writeDateColumnEnd()
+                    self.Report.XML.writeDateColumn(current_col['datecolumn'])
+                    lastdatecol = current_col['datecolumn']
+            self.Report.XML.writeTableColumn(current_col['header'], current_col['rows'], thresholdcolors=current_col['thresholdcolors'])
+            if self.Report.iscomp:
+                if i == (len(table_constructor.keys())-1):
+                    self.Report.XML.writeDateColumnEnd()
+        self.Report.XML.writeTableEnd()
+
+    def writeMissingTableItemsWarning(self, description):
+        self.Report.makeTextBox({'text': f'Some items in Table "{description}" omitted. Some data required is missing/unavailable.'})
+
+    def writeMissingTableWarning(self, description):
+        self.Report.makeTextBox({'text': f'\nTable "{description}" omitted. Some data required is missing/unavailable.'})
