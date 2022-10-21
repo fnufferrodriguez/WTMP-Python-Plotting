@@ -601,8 +601,13 @@ class Plots(object):
             xmin = self.Report.StartTime
             xmax = self.Report.EndTime
         else:
-            tmpmin = dt.datetime(year, 1, 1, 0, 0)
-            tmpmax = dt.datetime(year+1, 1, 1, 0, 0)
+            if isinstance(year, str):
+                yrsplit = year.split('-')
+                tmpmin = dt.datetime(int(yrsplit[0]), 1, 1, 0, 0)
+                tmpmax = dt.datetime(int(yrsplit[1])+1, 1, 1, 0, 0)
+            else:
+                tmpmin = dt.datetime(year, 1, 1, 0, 0)
+                tmpmax = dt.datetime(year+1, 1, 1, 0, 0)
             if tmpmin < self.Report.StartTime:
                 xmin = self.Report.StartTime
             else:
