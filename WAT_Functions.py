@@ -1044,6 +1044,25 @@ def getObjectYears(Report, object_settings, allowIncludeAllYears=True):
         yearstr = [Report.years_str]
         years = ['ALLYEARS']
 
+    if 'yearblocks' in object_settings.keys():
+        try:
+            yearblocks = int(object_settings['yearblocks'])
+            startyear = Report.startYear
+            endyear = Report.startYear
+            while endyear < Report.endYear:
+                if startyear != Report.startYear:
+                    startyear = endyear
+                endyear = startyear + yearblocks - 1 #last year
+                if endyear > Report.endYear:
+                    endyear = Report.endYear
+                frmtyear = f'{startyear}-{endyear}'
+                years.append(frmtyear)
+                yearstr.append(frmtyear)
+
+        except TypeError:
+            print2stdout(f"Invalid yearblock value: {object_settings['yearblocks']}", debug=Report.debug)
+
+
     if allowIncludeAllYears:
         if 'includeallyears' in object_settings.keys():
             if object_settings['includeallyears'].lower() == 'true':
