@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '5.3.6'
+VERSIONNUMBER = '5.3.7'
 
 import os
 import sys
@@ -534,7 +534,10 @@ class MakeAutomatedReport(object):
                 self.Plots.plotHorizontalLines(straightlines, ax, cur_obj_settings)
 
                 plotunits = WF.getPlotUnits(unitslist, ax_settings)
-                plotunits2 = WF.getPlotUnits(unitslist2, ax_settings)
+                if len(unitslist2) == 0 and 'unitsystem2' in ax_settings.keys():
+                    _, plotunits2 = WF.convertUnitSystem([], plotunits, ax_settings['unitsystem2'], debug=self.debug)
+                else:
+                    plotunits2 = WF.getPlotUnits(unitslist2, ax_settings)
                 ax_settings = WF.updateFlaggedValues(ax_settings, '%%units%%', WF.formatUnitsStrings(plotunits))
                 ax_settings = WF.updateFlaggedValues(ax_settings, '%%units2%%', WF.formatUnitsStrings(plotunits2))
 
@@ -581,12 +584,12 @@ class MakeAutomatedReport(object):
 
                         handles, labels = ax.get_legend_handles_labels()
 
-                        plot_blank = True
+                        plot_blank = False
                         if _usetwinx:
                             if len(handles) > 0:
                                 if 'useblanklegendentry' in ax_settings.keys():
-                                    if ax_settings['useblanklegendentry'].lower() == 'false':
-                                        plot_blank = False
+                                    if ax_settings['useblanklegendentry'].lower() == 'true':
+                                        plot_blank = True
                                 if plot_blank:
                                     empty_handle, = ax.plot([],[],color="w", alpha=0.0)
                                     handles.append(empty_handle)
@@ -663,7 +666,15 @@ class MakeAutomatedReport(object):
                 self.Plots.formatYTicks(ax, ax_settings, gatedata, gate_placement)
 
                 if _usetwinx:
-                    self.Plots.fixEmptyYAxis(ax, ax2)
+                    if 'keepblankax' in ax_settings.keys():
+                        keepblankax = ax_settings['keepblankax']
+                    else:
+                        keepblankax = 'false'
+                    if 'keepblankax2' in ax_settings.keys():
+                        keepblankax2 = ax_settings['keepblankax2']
+                    else:
+                        keepblankax2 = 'false'
+                    self.Plots.fixEmptyYAxis(ax, ax2, keepblankax, keepblankax2)
 
                 if len(gatelabels_positions) > 0:
                     ax.set_yticks(gatelabels_positions)
@@ -680,7 +691,13 @@ class MakeAutomatedReport(object):
                             ylabsize2 = 12
                         ax2.set_ylabel(ax_settings['ylabel2'].replace("\\n", "\n"), fontsize=ylabsize2)
 
-                    self.Plots.formatYTicks(ax2, ax_settings, gatedata, gate_placement, axis='right')
+                    copied_ticks = False
+                    if 'sameyticks' in ax_settings:
+                        if ax_settings['sameyticks'].lower() == 'true':
+                            self.Plots.copyYTicks(ax, ax2, units, ax_settings)
+                            copied_ticks = True
+                    if not copied_ticks:
+                        self.Plots.formatYTicks(ax2, ax_settings, gatedata, gate_placement, axis='right')
 
                     if len(ax.get_lines()) > 0:
                         ax2.grid(False)

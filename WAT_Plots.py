@@ -396,6 +396,7 @@ class Plots(object):
         ax.set_ylim(bottom=ymin)
         ax.set_ylim(top=ymax)
 
+
         if yticksflag in ax_settings.keys():
             ytick_settings = ax_settings[yticksflag]
             if 'fontsize' in ytick_settings.keys():
@@ -574,19 +575,21 @@ class Plots(object):
                            zorder=float(vline_settings['zorder']),
                            alpha=float(vline_settings['alpha']))
 
-    def fixEmptyYAxis(self, ax, ax2):
+    def fixEmptyYAxis(self, ax, ax2, keepblankax, keepblankax2):
         '''
         checks for empty axis and if there is, removes the yticks on that side
         :param ax: left axis object
         :param ax2: right axis object
+        :param keepblankax: keeps left axis even if there is no data
+        :param keepblankax2: keeps right axis even if there is no data
         '''
 
         ax_lines, _ = ax.get_legend_handles_labels()
         ax2_lines, _ = ax2.get_legend_handles_labels()
-        if len(ax_lines) == 0:
+        if len(ax_lines) == 0 and keepblankax.lower() != 'true':
             ax.set_yticks([])
             ax.set_yticklabels([])
-        if len(ax2_lines) == 0:
+        if len(ax2_lines) == 0 and keepblankax2.lower() != 'true':
             ax2.set_yticks([])
             ax2.set_yticklabels([])
 
@@ -618,6 +621,21 @@ class Plots(object):
                 xmax = tmpmax
 
         ax.set_xlim(left=xmin, right=xmax)
+
+    def copyYTicks(self, ax, ax2, units, ax_settings):
+        axylims = ax.get_ylim()
+        axyticks = ax.get_yticks()
+        axyticklabels = ax.get_yticklabels()
+
+        if 'unitsystem2' in ax_settings.keys():
+            axylims, _ = WF.convertUnitSystem(axylims, units, ax_settings['unitsystem2'], debug=self.Report.debug)
+            axyticks, _ = WF.convertUnitSystem(axyticks, units, ax_settings['unitsystem2'], debug=self.Report.debug)
+            axyticklabels = self.formatTickLabels(axyticks, {})
+
+        ax2.set_ylim(axylims)
+        ax2.set_yticks(axyticks)
+        ax2.set_yticklabels(axyticklabels)
+
 
 def translateLineStylePatterns(LineSettings):
     '''
