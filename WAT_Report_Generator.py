@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '5.3.5'
+VERSIONNUMBER = '5.3.5b'
 
 import os
 import sys
@@ -1512,7 +1512,7 @@ class MakeAutomatedReport(object):
                 for row_num in table_constructor.keys():
                     constructor = table_constructor[row_num]
                     header = constructor['header']
-                    if keeptable[header] == True:
+                    if keepcolumn[header] == True:
                         new_table_constructor[row_num] = constructor
             else:
                 new_table_constructor = table_constructor

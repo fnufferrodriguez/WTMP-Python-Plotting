@@ -914,7 +914,9 @@ class Tables(object):
 
     def writeTable(self, table_constructor):
         lastdatecol = ''
-        for i in range(len(table_constructor.keys())):
+        for i in range(max(table_constructor.keys())+1):
+            if i not in table_constructor.keys():
+                continue
             current_col = table_constructor[i]
             if self.Report.iscomp:
                 if current_col['datecolumn'] != lastdatecol:
