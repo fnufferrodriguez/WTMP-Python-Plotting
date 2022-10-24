@@ -488,10 +488,10 @@ def calcMean(data1):
     '''
 
     dcheck1 = checkData(data1, flag='values')
-    data1_msk = np.where(np.isinf(data1['values']))
-    data1['values'][data1_msk] = np.nan
     if not dcheck1:
         return np.nan
+    data1_msk = np.where(np.isinf(data1['values']))
+    data1['values'][data1_msk] = np.nan
     return(np.nanmean(data1['values']))
 
 def convertTempUnits(values, units):
