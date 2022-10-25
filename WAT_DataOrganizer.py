@@ -504,15 +504,16 @@ class DataOrganizer(object):
         :return: updated data dictionary, updated line_settings dictionary
         '''
 
-        vals, elevations, depths, times, flag = self.getProfileValues(profile, timestamps) #Test this speed for grabbing all profiles and then choosing
+        vals, elevations, depths, times, flag, units = self.getProfileValues(profile, timestamps) #Test this speed for grabbing all profiles and then choosing
         datacheck = False
         if len(vals) > 0:
             datacheck = True
             datamem_key = self.buildMemoryKey(profile)
-            if 'units' in profile.keys():
-                units = profile['units']
-            else:
-                units = None
+            if units == None:
+                if 'units' in profile.keys():
+                    units = profile['units']
+            # else:
+            #     units = None
 
             if profile['flag'] in line_settings.keys() or profile['flag'] in data.keys():
                 datakey = '{0}_{1}'.format(profile['flag'], profile['numtimesused'])
@@ -557,11 +558,11 @@ class DataOrganizer(object):
             WF.print2stdout(f'retrieving {datamemkey} profile from datamem', debug=self.Report.debug)
             if isinstance(timesteps, str): #if looking for all
                 if dm['subset'] == 'false': #the last time data was grabbed, it was not a subset, aka all
-                    return dm['values'], dm['elevations'], dm['depths'], dm['times'], Profile_info['flag']
+                    return dm['values'], dm['elevations'], dm['depths'], dm['times'], Profile_info['flag'], Profile_info['units']
                 else:
                     WF.print2stdout('Incorrect Timesteps in data memory. Re-extracting data for', datamemkey, debug=self.Report.debug)
             elif np.array_equal(timesteps, dm['times']):
-                return dm['values'], dm['elevations'], dm['depths'], dm['times'], Profile_info['flag']
+                return dm['values'], dm['elevations'], dm['depths'], dm['times'], Profile_info['flag'], dm['units']
             else:
                 WF.print2stdout('Incorrect Timesteps in data memory. Re-extracting data for', datamemkey, debug=self.Report.debug)
 
@@ -577,11 +578,11 @@ class DataOrganizer(object):
                     WF.print2stdout('Unknown value for flag y_convention: {0}'.format(Profile_info['y_convention']), debug=self.Report.debug)
                     WF.print2stdout('Please use "depth" or "elevation"', debug=self.Report.debug)
                     WF.print2stdout('Assuming depths...', debug=self.Report.debug)
-                    return values, [], yvals, times, Profile_info['flag']
+                    return values, [], yvals, times, Profile_info['flag'], None
             else:
                 WF.print2stdout('No value for flag y_convention', debug=self.Report.debug)
                 WF.print2stdout('Assuming depths...', debug=self.Report.debug)
-                return values, [], yvals, times, Profile_info['flag']
+                return values, [], yvals, times, Profile_info['flag'], None
 
         elif 'h5file' in Profile_info.keys() and 'ressimresname' in Profile_info.keys():
             filename = Profile_info['h5file']
@@ -594,7 +595,7 @@ class DataOrganizer(object):
             externalResSim.loadSubdomains()
             vals, elevations, depths, times = externalResSim.readProfileData(Profile_info['ressimresname'],
                                                                              Profile_info['parameter'], timesteps)
-            return vals, elevations, depths, times, Profile_info['flag']
+            return vals, elevations, depths, times, Profile_info['flag'], None
 
         elif 'w2_segment' in Profile_info.keys():
             if self.Report.plugin.lower() != 'cequalw2':
@@ -607,7 +608,7 @@ class DataOrganizer(object):
                                                                                    resultsfile=resultsfile)
             if isinstance(timesteps, str):
                 vals, elevations = self.Report.Profiles.normalize2DElevations(vals, elevations)
-            return vals, elevations, depths, times, Profile_info['flag']
+            return vals, elevations, depths, times, Profile_info['flag'], None
 
         elif 'ressimresname' in Profile_info.keys():
             if self.Report.plugin.lower() != 'ressim':
@@ -616,11 +617,11 @@ class DataOrganizer(object):
             vals, elevations, depths, times = self.Report.ModelAlt.readProfileData(Profile_info['ressimresname'],
                                                                                    Profile_info['parameter'], timesteps,
                                                                                    )
-            return vals, elevations, depths, times, Profile_info['flag']
+            return vals, elevations, depths, times, Profile_info['flag'], None
 
         WF.print2stdout('No Data Defined for Profile', debug=self.Report.debug)
         WF.print2stdout('Profile:', Profile_info, debug=self.Report.debug)
-        return [], [], [], [], None
+        return [], [], [], [], None, None
 
     def getReservoirContourDataDictionary(self, settings):
         '''
@@ -638,7 +639,7 @@ class DataOrganizer(object):
                 if not self.Report.checkModelType(curreach):
                     continue
                 # object_settings['timestamps'] = 'all'
-                values, elevations, depths, dates, flag = self.getProfileValues(curreach, 'all')
+                values, elevations, depths, dates, flag, units = self.getProfileValues(curreach, 'all')
                 topwater = self.getProfileTopWater(curreach, 'all')
                 if 'interval' in curreach.keys():
                     dates_change, values = WT.changeTimeSeriesInterval(dates, values, curreach,
