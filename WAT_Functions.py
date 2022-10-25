@@ -732,16 +732,21 @@ def getYearlyFilterIdx(dates, year):
 
     start_date = dates[0]
     end_date = dates[-1]
-    e_year_date = dt.datetime(year,12,31,23,59)
-    s_year_date = dt.datetime(year,1,1,0,0)
+    if isinstance(year, str):
+        yrsplit = year.split('-')
+        s_year_date = dt.datetime(int(yrsplit[0]),1,1,0,0)
+        e_year_date = dt.datetime(int(yrsplit[1]),12,31,23,59)
+    else:
+        s_year_date = dt.datetime(year,1,1,0,0)
+        e_year_date = dt.datetime(year,12,31,23,59)
 
     if start_date != end_date:
         interval = (dates[1] - start_date).total_seconds()
-        if start_date.year == year:
+        if start_date.year == s_year_date.year:
             s_idx = 0
         else:
             s_idx = round(int((s_year_date - start_date).total_seconds() / interval))
-        if end_date.year == year:
+        if end_date.year == e_year_date.year:
             e_idx = len(dates)
         else:
             e_idx = round(int((e_year_date - start_date).total_seconds() / interval))
@@ -1043,6 +1048,31 @@ def getObjectYears(Report, object_settings, allowIncludeAllYears=True):
     if not split_by_year:
         yearstr = [Report.years_str]
         years = ['ALLYEARS']
+
+    if 'yearblocks' in object_settings.keys():
+        try:
+            yearblocks = int(object_settings['yearblocks'])
+            startyear = Report.startYear
+            endyear = Report.startYear
+            if yearblocks > (Report.endYear - Report.startYear + 1):
+                print2stdout(f'Yearblock setting of {yearblocks} is larger than total number of years of {(Report.endYear - Report.startYear + 1)}. Not using yearblocks.', debug=Report.debug)
+            else:
+                while endyear < Report.endYear:
+                    if endyear != Report.startYear:
+                        startyear = endyear + 1
+                    endyear = startyear + yearblocks - 1 #last year
+                    if endyear > Report.endYear:
+                        endyear = Report.endYear
+                    if startyear == endyear:
+                        frmtyear = startyear
+                    else:
+                        frmtyear = f'{startyear}-{endyear}'
+                    if frmtyear not in years:
+                        years.append(frmtyear)
+                        yearstr.append(frmtyear)
+
+        except TypeError:
+            print2stdout(f"Invalid yearblock value: {object_settings['yearblocks']}", debug=Report.debug)
 
     if allowIncludeAllYears:
         if 'includeallyears' in object_settings.keys():
@@ -1647,6 +1677,12 @@ def organizePlotYears(object_settings):
                 years.append(year)
                 if _isyrstr:
                     yrstrs.append(object_settings['yearstr'][yi])
+        for yi, year in enumerate(object_settings['years']):
+            if isinstance(year, str):
+                if '-' in year:
+                    years.append(year)
+                    if _isyrstr:
+                        yrstrs.append(object_settings['yearstr'][yi])
         for yi, year in enumerate(object_settings['years']):
             if year != 'ALLYEARS':
                 years.append(year)
