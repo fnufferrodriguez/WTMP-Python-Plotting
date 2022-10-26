@@ -73,7 +73,11 @@ class Profiles(object):
                     timestamps = self.getProfileDates(line, StartTime, EndTime)
         elif isinstance(object_settings['datessource_flag'], dict): #single date instance..
             timestamps = []
-            tstamp_dates = object_settings['datessource']['dates']
+            if 'dates' in object_settings['datessource'].keys():
+                datekey = 'dates'
+            elif 'date' in object_settings['datessource'].keys():
+                datekey = 'date'
+            tstamp_dates = object_settings['datessource'][datekey]
             for d in tstamp_dates:
                 dfrmt = WT.translateDateFormat(d, 'datetime', None, StartTime, EndTime, None, debug=self.Report.debug)
                 if dfrmt != None:
