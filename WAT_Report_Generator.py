@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '5.3.9'
+VERSIONNUMBER = '5.3.10'
 
 import os
 import sys
@@ -862,20 +862,31 @@ class MakeAutomatedReport(object):
                         s_row = row.split('|')
                         rowname = s_row[0]
                         row_val = s_row[hi+1]
+                        addasterisk = False
                         if '%%' in row_val:
-
                             stats_data = self.Tables.formatStatsProfileLineData(row_val, data, object_settings['resolution'],
                                                                                 object_settings['usedepth'], header_i)
                             row_val, stat = self.Tables.getStatsLine(row_val, stats_data)
                             if not np.isnan(row_val) and row_val != None:
                                 thresholdsettings = self.Tables.matchThresholdToStat(stat, object_settings)
+
                                 for thresh in thresholdsettings:
                                     if thresh['colorwhen'] == 'under':
                                         if row_val < thresh['value']:
                                             threshold_colors[ri] = thresh['color']
+                                            if 'addasterisk' in object_settings.keys():
+                                                if object_settings['addasterisk'].lower() == 'true':
+                                                    addasterisk = True
                                     elif thresh['colorwhen'] == 'over':
                                         if row_val > thresh['value']:
                                             threshold_colors[ri] = thresh['color']
+                                            if 'addasterisk' in object_settings.keys():
+                                                if object_settings['addasterisk'].lower() == 'true':
+                                                    addasterisk = True
+
+                            else:
+                                if np.isnan(row_val):
+                                    row_val = object_settings['missingmarker']
 
                             self.WAT_log.addLogEntry({'type': 'ProfileTableStatistic',
                                                       'name': ' '.join([self.ChapterRegion, heading, stat]),
@@ -889,7 +900,10 @@ class MakeAutomatedReport(object):
                                                       },
                                                      isdata=True)
                         numberFormat = self.Tables.matchNumberFormatByStat(stat, object_settings)
-                        frmt_rows.append('{0}|{1}'.format(rowname, WF.formatNumbers(row_val, numberFormat)))
+                        formattedNumber = WF.formatNumbers(row_val, numberFormat)
+                        if addasterisk:
+                            formattedNumber += '*'
+                        frmt_rows.append('{0}|{1}'.format(rowname, formattedNumber))
                     table_constructor[tcnum]['rows'] = frmt_rows
                     table_constructor[tcnum]['thresholdcolors'] = threshold_colors
                     table_constructor[tcnum]['header'] = heading
@@ -897,6 +911,9 @@ class MakeAutomatedReport(object):
             keeptable = False
             keepall = True
             keepcolumn = {}
+            missing_value_objects = ['nan', '-', 'none', '--']
+            if 'missingmarker' in object_settings:
+                missing_value_objects.append(object_settings['missingmarker'])
             for row_num in table_constructor.keys():
                 constructor = table_constructor[row_num]
                 rows = constructor['rows']
@@ -905,7 +922,7 @@ class MakeAutomatedReport(object):
                     srow = row.split('|')
                     if header not in keepcolumn.keys():
                         keepcolumn[header] = False
-                        if srow[1].lower() not in ['nan', '-', 'none']:
+                        if srow[1].lower() not in missing_value_objects:
                             keepcolumn[header] = True
 
             for key in keepcolumn.keys():
@@ -1463,6 +1480,7 @@ class MakeAutomatedReport(object):
                     rowname = s_row[0]
                     row_val = s_row[hi+1]
                     stat = None
+                    addasterisk = False
                     if '%%' in row_val:
                         rowdata, sr_month = self.Tables.getStatsLineData(row_val, data, year=year)
                         if len(rowdata) == 0:
@@ -1476,9 +1494,20 @@ class MakeAutomatedReport(object):
                                     if thresh['colorwhen'] == 'under':
                                         if row_val < thresh['value']:
                                             threshold_colors[ri] = thresh['color']
+                                            if 'addasterisk' in object_settings.keys():
+                                                if object_settings['addasterisk'].lower() == 'true':
+                                                    addasterisk = True
                                     elif thresh['colorwhen'] == 'over':
                                         if row_val > thresh['value']:
                                             threshold_colors[ri] = thresh['color']
+                                            if 'addasterisk' in object_settings.keys():
+                                                if object_settings['addasterisk'].lower() == 'true':
+                                                    addasterisk = True
+
+                            else:
+                                if 'missingmarker' in object_settings.keys():
+                                    row_val = object_settings['missingmarker']
+
                             data_start_date, data_end_date = self.Tables.getTableDates(year, object_settings)
                             self.WAT_log.addLogEntry({'type': 'Statistic',
                                                       'name': ' '.join([self.ChapterRegion, header_frmt, stat]),
@@ -1498,7 +1527,10 @@ class MakeAutomatedReport(object):
 
                     header_frmt = '' if header_frmt == None else header_frmt
                     numberFormat = self.Tables.matchNumberFormatByStat(stat, object_settings)
-                    frmt_rows.append('{0}|{1}'.format(rowname, WF.formatNumbers(row_val, numberFormat)))
+                    formatted_number = WF.formatNumbers(row_val, numberFormat)
+                    if addasterisk:
+                        formatted_number += '*'
+                    frmt_rows.append('{0}|{1}'.format(rowname, formatted_number))
                 table_constructor[tcnum]['rows'] = frmt_rows
                 table_constructor[tcnum]['thresholdcolors'] = threshold_colors
                 table_constructor[tcnum]['header'] = header_frmt
@@ -1506,6 +1538,9 @@ class MakeAutomatedReport(object):
         keeptable = False
         keepall = True
         keepcolumn = {}
+        missing_value_objects = ['nan', '-', 'none', '--']
+        if 'missingmarker' in object_settings:
+            missing_value_objects.append(object_settings['missingmarker'])
         for row_num in table_constructor.keys():
             constructor = table_constructor[row_num]
             rows = constructor['rows']
@@ -1514,7 +1549,7 @@ class MakeAutomatedReport(object):
                 srow = row.split('|')
                 if header not in keepcolumn.keys():
                     keepcolumn[header] = False
-                if srow[1].lower() not in ['nan', '-', 'none']:
+                if srow[1].lower() not in missing_value_objects:
                     keepcolumn[header] = True
 
         for key in keepcolumn.keys():
@@ -1619,6 +1654,7 @@ class MakeAutomatedReport(object):
                     rowname = s_row[0]
                     row_val = s_row[hi+1]
                     stat = None
+                    addasterisk = False
                     if '%%' in row_val:
                         rowdata, sr_month = self.Tables.getStatsLineData(row_val, data, year=year)
                         if len(rowdata) == 0:
@@ -1631,9 +1667,18 @@ class MakeAutomatedReport(object):
                                     if thresh['colorwhen'] == 'under':
                                         if row_val < thresh['value']:
                                             threshold_colors[ri] = thresh['color']
+                                            if 'addasterisk' in object_settings.keys():
+                                                if object_settings['addasterisk'].lower() == 'true':
+                                                    addasterisk = True
                                     elif thresh['colorwhen'] == 'over':
                                         if row_val > thresh['value']:
                                             threshold_colors[ri] = thresh['color']
+                                            if 'addasterisk' in object_settings.keys():
+                                                if object_settings['addasterisk'].lower() == 'true':
+                                                    addasterisk = True
+                            else:
+                                if 'missingmarker' in object_settings.keys():
+                                    row_val = object_settings['missingmarker']
                             data_start_date, data_end_date = self.Tables.getTableDates(year, object_settings)
                             self.WAT_log.addLogEntry({'type': 'Statistic',
                                                       'name': ' '.join([self.ChapterRegion, header_frmt, stat]),
@@ -1653,7 +1698,10 @@ class MakeAutomatedReport(object):
 
                     header_frmt = '' if header_frmt == None else header_frmt
                     numberFormat = self.Tables.matchNumberFormatByStat(stat, object_settings)
-                    frmt_rows.append('{0}|{1}'.format(rowname, WF.formatNumbers(row_val, numberFormat)))
+                    formattedNumber = WF.formatNumbers(row_val, numberFormat)
+                    if addasterisk:
+                        formattedNumber += '*'
+                    frmt_rows.append('{0}|{1}'.format(rowname, formattedNumber))
                 table_constructor[tcnum]['rows'] = frmt_rows
                 table_constructor[tcnum]['thresholdcolors'] = threshold_colors
                 table_constructor[tcnum]['header'] = header_frmt
@@ -1661,6 +1709,9 @@ class MakeAutomatedReport(object):
         keeptable = False
         keepall = True
         keepcolumn = {}
+        missing_value_objects = ['nan', '-', 'none', '--']
+        if 'missingmarker' in object_settings:
+            missing_value_objects.append(object_settings['missingmarker'])
         for row_num in table_constructor.keys():
             constructor = table_constructor[row_num]
             rows = constructor['rows']
@@ -1669,7 +1720,7 @@ class MakeAutomatedReport(object):
                 srow = row.split('|')
                 if header not in keepcolumn.keys():
                     keepcolumn[header] = False
-                if srow[1].lower() not in ['nan', '-', 'none']:
+                if srow[1].lower() not in missing_value_objects:
                     keepcolumn[header] = True
 
         for key in keepcolumn.keys():
@@ -1782,6 +1833,7 @@ class MakeAutomatedReport(object):
                     year = object_settings['years'][ri]
                     row_val = s_row[i+(len(headings)*mi)+1]
                     stat = None
+                    addasterisk = False
                     if '%%' in row_val:
                         rowdata, sr_month = self.Tables.getStatsLineData(row_val, data, year=year)
                         if len(rowdata) == 0:
@@ -1789,15 +1841,24 @@ class MakeAutomatedReport(object):
                         else:
                             row_val, stat = self.Tables.getStatsLine(row_val, rowdata)
                             if np.isnan(row_val):
-                                row_val = '-'
+                                if 'missingmarker' in object_settings.keys():
+                                    row_val = object_settings['missingmarker']
+                                else:
+                                    row_val = '-'
                             else:
                                 for thresh in thresholds:
                                     if thresh['colorwhen'] == 'under':
                                         if row_val < thresh['value']:
                                             threshold_colors[ri] = thresh['color']
+                                            if 'addasterisk' in object_settings.keys():
+                                                if object_settings['addasterisk'].lower() == 'true':
+                                                    addasterisk = True
                                     elif thresh['colorwhen'] == 'over':
                                         if row_val > thresh['value']:
                                             threshold_colors[ri] = thresh['color']
+                                            if 'addasterisk' in object_settings.keys():
+                                                if object_settings['addasterisk'].lower() == 'true':
+                                                    addasterisk = True
 
                             data_start_date, data_end_date = self.Tables.getTableDates(year, object_settings_blueprint, month=sr_month)
                             self.WAT_log.addLogEntry({'type': 'Statistic',
@@ -1818,7 +1879,10 @@ class MakeAutomatedReport(object):
 
                     header = '' if header == None else header
                     numberFormat = self.Tables.matchNumberFormatByStat(stat, object_settings_blueprint)
-                    frmt_rows.append('{0}|{1}'.format(rowname, WF.formatNumbers(row_val, numberFormat)))
+                    formattedNumber = WF.formatNumbers(row_val, numberFormat)
+                    if addasterisk:
+                        formattedNumber += '*'
+                    frmt_rows.append('{0}|{1}'.format(rowname, formattedNumber))
                 table_constructor[tcnum]['rows'] = frmt_rows
                 table_constructor[tcnum]['thresholdcolors'] = threshold_colors
                 table_constructor[tcnum]['header'] = header
@@ -1827,6 +1891,9 @@ class MakeAutomatedReport(object):
         keeptable = False
         keepall = True
         keepheader = {}
+        missing_value_objects = ['nan', '-', 'none', '--']
+        if 'missingmarker' in object_settings:
+            missing_value_objects.append(object_settings['missingmarker'])
         for row_num in table_constructor.keys():
             constructor = table_constructor[row_num]
             rows = constructor['rows']
@@ -1834,7 +1901,7 @@ class MakeAutomatedReport(object):
                 srow = row.split('|')
                 if srow[0] not in keepheader.keys():
                     keepheader[srow[0]] = False
-                if srow[1].lower() not in ['nan', '-', 'none']:
+                if srow[1].lower() not in missing_value_objects:
                     keepheader[srow[0]] = True
 
         for key in keepheader.keys():
@@ -1850,11 +1917,11 @@ class MakeAutomatedReport(object):
                     rows = constructor['rows']
                     new_rows = []
                     new_thresh = []
-                    for row in rows:
+                    for r, row in enumerate(rows):
                         srow = row.split('|')
                         if keepheader[srow[0]] == True:
                             new_rows.append(row)
-                            new_thresh.append(constructor['thresholdcolors'][ri])
+                            new_thresh.append(constructor['thresholdcolors'][r])
                     table_constructor[row_num]['rows'] = new_rows
                     table_constructor[row_num]['thresholdcolors'] = new_thresh
 
@@ -1971,8 +2038,8 @@ class MakeAutomatedReport(object):
                         rowname = 'All'
                     year = object_settings['years'][ri]
                     row_val = s_row[i+(len(headings)*mi)+1]
-
                     stat = None
+                    addasterisk = False
                     if '%%' in row_val:
                         rowval_stats = {}
                         if year == 'ALLYEARS':
@@ -1992,15 +2059,24 @@ class MakeAutomatedReport(object):
 
                         row_val, stat = self.Tables.getStatsLine(row_val, rowval_stats)
                         if np.isnan(row_val):
-                            row_val = '-'
+                            if 'missingmarker' in object_settings.keys():
+                                row_val = object_settings['missingmarker']
+                            else:
+                                row_val = '-'
                         else:
                             for thresh in thresholds:
                                 if thresh['colorwhen'] == 'under':
                                     if row_val < thresh['value']:
                                         threshold_colors[ri] = thresh['color']
+                                        if 'addasterisk' in object_settings.keys():
+                                            if object_settings['addasterisk'].lower() == 'true':
+                                                addasterisk = True
                                 elif thresh['colorwhen'] == 'over':
                                     if row_val > thresh['value']:
                                         threshold_colors[ri] = thresh['color']
+                                        if 'addasterisk' in object_settings.keys():
+                                            if object_settings['addasterisk'].lower() == 'true':
+                                                addasterisk = True
                         if self.iscomp:
                             data_start_date, data_end_date = self.Tables.getTableDates(year, object_settings_blueprint, month=month)
                         else:
@@ -2019,7 +2095,10 @@ class MakeAutomatedReport(object):
 
                     header = '' if header == None else header
                     numberFormat = self.Tables.matchNumberFormatByStat(stat, object_settings_blueprint)
-                    frmt_rows.append('{0}|{1}'.format(rowname, WF.formatNumbers(row_val, numberFormat)))
+                    formattedNumber = WF.formatNumbers(row_val, numberFormat)
+                    if addasterisk:
+                        formattedNumber += '*'
+                    frmt_rows.append('{0}|{1}'.format(rowname, formattedNumber))
                 table_constructor[tcnum]['rows'] = frmt_rows
                 table_constructor[tcnum]['thresholdcolors'] = threshold_colors
                 table_constructor[tcnum]['header'] = header
@@ -2027,6 +2106,9 @@ class MakeAutomatedReport(object):
         keeptable = False
         keepall = True
         keepheader = {}
+        missing_value_objects = ['nan', '-', 'none', '--']
+        if 'missingmarker' in object_settings:
+            missing_value_objects.append(object_settings['missingmarker'])
         for row_num in table_constructor.keys():
             constructor = table_constructor[row_num]
             rows = constructor['rows']
@@ -2034,7 +2116,7 @@ class MakeAutomatedReport(object):
                 srow = row.split('|')
                 if srow[0] not in keepheader.keys():
                     keepheader[srow[0]] = False
-                if srow[1].lower() not in ['nan', '-', 'none']:
+                if srow[1].lower() not in missing_value_objects:
                     keepheader[srow[0]] = True
 
         for key in keepheader.keys():
@@ -2054,7 +2136,7 @@ class MakeAutomatedReport(object):
                         srow = row.split('|')
                         if keepheader[srow[0]] == True:
                             new_rows.append(row)
-                            new_thresh.append(constructor['thresholdcolors'][ri])
+                            new_thresh.append(constructor['thresholdcolors'][r])
                     table_constructor[row_num]['rows'] = new_rows
                     table_constructor[row_num]['thresholdcolors'] = new_thresh
 
