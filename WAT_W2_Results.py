@@ -258,7 +258,7 @@ class W2_Results(object):
         '''
 
         if resultsfile == None:
-            resultsfile = 'spr.csv'
+            resultsfile = self.getResultsFile_CSV()
         outputfile = os.path.join(self.run_path, resultsfile)
         if not os.path.exists(outputfile):
             WF.print2stdout(f'Results file {outputfile} does not exist.', debug=self.Report.debug)
@@ -684,3 +684,43 @@ class W2_Results(object):
             return None
         else:
             return fileparams[parameter.lower()]
+
+    def getResultsFile_CSV(self):
+        '''
+        Finds the output file name in CSV files for profiles
+        Ryan Miles says this is fixed and can be calculated, so here we are.
+        Reference email form 10/11/2022 at 10:35
+        :return: results file name
+        '''
+
+        rootrow = 768
+
+        structureoffsetline = [int(i) for i in self.cf_lines[135].strip().split(',') if i]
+        structureoffset = (max(5, max(structureoffsetline))) * 6
+
+        constituentsoffsetline = [int(i) for i in self.cf_lines[21].strip().split(',') if i]
+        #Offset = NGC + NSS + NAL + (NBOD * 3) + 32 + NZP + 4
+        #NGC, NSS, NAL, NEP, NBOD, NMC, NZP
+        NGC = constituentsoffsetline[0]
+        NSS = constituentsoffsetline[1]
+        NAL = constituentsoffsetline[2]
+        NEP = constituentsoffsetline[3]
+        NBOD = constituentsoffsetline[4]
+        NMC = constituentsoffsetline[5]
+        NZP = constituentsoffsetline[6]
+
+        constituentsoffset = NGC + NSS + NAL + (NBOD * 3) + 32 + NZP + 4
+
+        #Offset = Max(5, NEP) * 3
+        epiphytonoffset = (max(5, NEP)) * 3
+
+        #Offset = Max(5, NAL) + Max(5, NZP)
+        zooplanktonoffset = max(5, NAL) + max(5, NZP)
+
+        #Offset = Max(5, NMC) * 3
+        macrophyteoffset = max(5, NMC) * 3
+
+        totaloffset = structureoffset + constituentsoffset + epiphytonoffset + zooplanktonoffset + macrophyteoffset
+        inputfile_idx = rootrow + totaloffset
+        results_file = self.cf_lines[inputfile_idx-1].strip().split()[0] #excel is 1 idx..
+        return results_file
