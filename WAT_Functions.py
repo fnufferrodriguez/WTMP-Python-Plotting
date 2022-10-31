@@ -716,8 +716,12 @@ def filterDataByYear(data, year, extraflag=None):
         for flag in data.keys():
             if len(data[flag]['dates']) > 0:
                 s_idx, e_idx = getYearlyFilterIdx(data[flag]['dates'], year)
-                data[flag]['values'] = data[flag]['values'][s_idx:e_idx+1]
-                data[flag]['dates'] = data[flag]['dates'][s_idx:e_idx+1]
+                if None not in [s_idx, e_idx]:
+                    data[flag]['values'] = data[flag]['values'][s_idx:e_idx+1]
+                    data[flag]['dates'] = data[flag]['dates'][s_idx:e_idx+1]
+                else:
+                    data[flag]['values'] = []
+                    data[flag]['dates'] = []
                 if extraflag != None:
                     data[flag][extraflag] = data[flag][extraflag][s_idx:e_idx+1]
     return data
@@ -744,16 +748,24 @@ def getYearlyFilterIdx(dates, year):
         interval = (dates[1] - start_date).total_seconds()
         if start_date.year == s_year_date.year:
             s_idx = 0
+        elif start_date.year > s_year_date.year: #if the filter year is bigger than the start year (aka data for
+            s_idx = None
         else:
             s_idx = round(int((s_year_date - start_date).total_seconds() / interval))
+            if s_idx < 0:
+                s_idx = 0
         if end_date.year == e_year_date.year:
             e_idx = len(dates)
+        elif start_date.year > e_year_date.year:
+            e_idx = None
         else:
             e_idx = round(int((e_year_date - start_date).total_seconds() / interval))
+            if e_idx < 0:
+                e_idx = 0
 
         return s_idx, e_idx
     else:
-        return 0, 1
+        return 0, -1
 
 def getMonthlyFilterIdx(dates, month):
     '''

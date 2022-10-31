@@ -320,9 +320,19 @@ class Tables(object):
 
         if 'xlims' in object_settings.keys():
             if 'max' in object_settings['xlims'].keys():
-                xmax = float(object_settings['xlims']['max'])
+                # xmax = float(object_settings['xlims']['max'])
+                xmax = WF.updateFlaggedValues(object_settings['xlims']['max'],'%%year%%', str(self.Report.years[0]))
+                xmax = WT.translateDateFormat(xmax, 'datetime', self.Report.EndTime, self.Report.StartTime,
+                                              self.Report.EndTime, self.Report.ModelAlt.t_offset,
+                                              debug=self.Report.debug)
+
             if 'min' in object_settings['xlims'].keys():
-                xmin = float(object_settings['xlims']['min'])
+                # xmin = float(object_settings['xlims']['min'])
+                xmin = WF.updateFlaggedValues(object_settings['xlims']['min'],'%%year%%', str(self.Report.years[0]))
+
+                xmin = WT.translateDateFormat(xmin, 'datetime', self.Report.StartTime, self.Report.StartTime,
+                                              self.Report.EndTime, self.Report.ModelAlt.t_offset,
+                                              debug=self.Report.debug)
 
         if 'ylims' in object_settings.keys():
             if 'max' in object_settings['ylims'].keys():
@@ -336,14 +346,14 @@ class Tables(object):
             values = line['values']
             dates = line['dates']
 
-            filtbylims = False
+            filtbylims = True
             if 'filterbylimits' in line.keys():
-                if line['filterbylimits'].lower() == 'true':
-                    filtbylims = True
+                if line['filterbylimits'].lower() == 'false':
+                    filtbylims = False
             else:
                 if 'filterbylimits' in object_settings.keys():
-                    if object_settings['filterbylimits'].lower() == 'true':
-                        filtbylims = True
+                    if object_settings['filterbylimits'].lower() == 'false':
+                        filtbylims = False
 
             if 'omitvalue' in line.keys():
                 omitvalues = [float(line['omitvalue'])]
@@ -353,14 +363,14 @@ class Tables(object):
                 omitvalues = None
 
             if xmax != None and filtbylims:
-                xmax_filt = np.where(values <= xmax)
+                xmax_filt = np.where(dates <= xmax)
             else:
-                xmax_filt = np.arange(len(values))
+                xmax_filt = np.arange(len(dates))
 
             if xmin != None and filtbylims:
-                xmin_filt = np.where(values >= xmin)
+                xmin_filt = np.where(dates >= xmin)
             else:
-                xmin_filt = np.arange(len(values))
+                xmin_filt = np.arange(len(dates))
 
             if ymax != None and filtbylims:
                 ymax_filt = np.where(dates <= ymax)
@@ -458,8 +468,12 @@ class Tables(object):
                         if len(curdates) > 0:
                             for yearloop in year_loops:
                                 s_idx, e_idx = WF.getYearlyFilterIdx(curdates, yearloop)
-                                yearvals = curvalues[s_idx:e_idx+1]
-                                yeardates = curdates[s_idx:e_idx+1]
+                                if None not in [s_idx, e_idx]:
+                                    yearvals = curvalues[s_idx:e_idx+1]
+                                    yeardates = curdates[s_idx:e_idx+1]
+                                else:
+                                    yearvals = []
+                                    yeardates = []
 
                                 if len(yeardates) > 0:
                                     s_idx, e_idx = WF.getMonthlyFilterIdx(yeardates, sr_month)
@@ -475,8 +489,12 @@ class Tables(object):
                 if len(data[flag]['dates']) == 0:
                     continue
                 s_idx, e_idx = WF.getYearlyFilterIdx(data[flag]['dates'], year)
-                data[flag]['values'] = data[flag]['values'][s_idx:e_idx+1]
-                data[flag]['dates'] = data[flag]['dates'][s_idx:e_idx+1]
+                if None not in [s_idx, e_idx]:
+                    data[flag]['values'] = data[flag]['values'][s_idx:e_idx+1]
+                    data[flag]['dates'] = data[flag]['dates'][s_idx:e_idx+1]
+                else:
+                    data[flag]['values'] = []
+                    data[flag]['dates'] = []
 
         return data, sr_month
 
@@ -679,14 +697,14 @@ class Tables(object):
         xmax = 'NONE'
         if 'xlims' in object_settings.keys():
             if 'min' in object_settings['xlims'].keys():
-                xmin = WT.translateDateFormat(object_settings['xlims']['min'], 'datetime', self.StartTime,
-                                              self.StartTime, self.EndTime,
-                                              self.ModelAlt.t_offset, debug=self.Report.debug)
+                xmin = WT.translateDateFormat(object_settings['xlims']['min'], 'datetime', self.Report.StartTime,
+                                              self.Report.StartTime, self.Report.EndTime,
+                                              self.Report.ModelAlt.t_offset, debug=self.Report.debug)
                 xmin = xmin.strftime('%d %b %Y')
             if 'max' in object_settings['xlims'].keys():
-                xmax = WT.translateDateFormat(object_settings['xlims']['max'], 'datetime', self.EndTime,
-                                              self.StartTime, self.EndTime,
-                                              self.ModelAlt.t_offset, debug=self.Report.debug)
+                xmax = WT.translateDateFormat(object_settings['xlims']['max'], 'datetime', self.Report.EndTime,
+                                              self.Report.StartTime, self.Report.EndTime,
+                                              self.Report.ModelAlt.t_offset, debug=self.Report.debug)
                 xmax = xmax.strftime('%d %b %Y')
 
         if xmin != 'NONE':
@@ -700,7 +718,7 @@ class Tables(object):
                 start_date = '01 Jan {0}'.format(year)
 
         if xmax != 'NONE':
-            start_date = xmax
+            end_date = xmax
         elif year == self.Report.endYear:
             end_date = self.Report.EndTime.strftime('%d %b %Y')
         else:
@@ -708,28 +726,29 @@ class Tables(object):
                 end_date = '31 Dec {0}'.format(self.Report.endYear)
             else:
                 end_date = '31 Dec {0}'.format(year)
-            if month != 'None':
-                try:
-                    month = int(month)
-                except ValueError:
-                    month = self.Report.Constants.month2num[month.lower()]
 
-                try:
-                    start_date = dt.datetime.strptime(start_date, '%d %b %Y').replace(month=month).strftime('%d %b %Y')
-                except ValueError:
-                    start_date = dt.datetime.strptime(start_date, '%d %b %Y')
-                    start_date = start_date.replace(day=1)
-                    start_date = start_date.replace(month=month+1)
-                    start_date -= dt.timedelta(days=1)
-                    start_date = start_date.strftime('%d %b %Y')
-                try:
-                    end_date = dt.datetime.strptime(end_date, '%d %b %Y').replace(month=month).strftime('%d %b %Y')
-                except ValueError:
-                    end_date = dt.datetime.strptime(end_date, '%d %b %Y')
-                    end_date = end_date.replace(day=1)
-                    end_date = end_date.replace(month=month+1)
-                    end_date -= dt.timedelta(days=1)
-                    end_date = end_date.strftime('%d %b %Y')
+        if month != 'None':
+            try:
+                month = int(month)
+            except ValueError:
+                month = self.Report.Constants.month2num[month.lower()]
+
+            try:
+                start_date = dt.datetime.strptime(start_date, '%d %b %Y').replace(month=month).strftime('%d %b %Y')
+            except ValueError:
+                start_date = dt.datetime.strptime(start_date, '%d %b %Y')
+                start_date = start_date.replace(day=1)
+                start_date = start_date.replace(month=month+1)
+                start_date -= dt.timedelta(days=1)
+                start_date = start_date.strftime('%d %b %Y')
+            try:
+                end_date = dt.datetime.strptime(end_date, '%d %b %Y').replace(month=month).strftime('%d %b %Y')
+            except ValueError:
+                end_date = dt.datetime.strptime(end_date, '%d %b %Y')
+                end_date = end_date.replace(day=1)
+                end_date = end_date.replace(month=month+1)
+                end_date -= dt.timedelta(days=1)
+                end_date = end_date.strftime('%d %b %Y')
 
         return start_date, end_date
 
