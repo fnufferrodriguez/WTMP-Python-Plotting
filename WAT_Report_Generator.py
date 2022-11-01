@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '5.3.12'
+VERSIONNUMBER = '5.3.14'
 
 import os
 import sys
@@ -886,7 +886,8 @@ class MakeAutomatedReport(object):
 
                             else:
                                 if np.isnan(row_val):
-                                    row_val = object_settings['missingmarker']
+                                    if 'missingmarker' in object_settings.keys():
+                                        row_val = object_settings['missingmarker']
 
                             self.WAT_log.addLogEntry({'type': 'ProfileTableStatistic',
                                                       'name': ' '.join([self.ChapterRegion, heading, stat]),
@@ -912,7 +913,7 @@ class MakeAutomatedReport(object):
             keepall = True
             keepcolumn = {}
             missing_value_objects = ['nan', '-', 'none', '--']
-            if 'missingmarker' in object_settings:
+            if 'missingmarker' in object_settings.keys():
                 missing_value_objects.append(object_settings['missingmarker'])
             for row_num in table_constructor.keys():
                 constructor = table_constructor[row_num]
@@ -1539,7 +1540,7 @@ class MakeAutomatedReport(object):
         keepall = True
         keepcolumn = {}
         missing_value_objects = ['nan', '-', 'none', '--']
-        if 'missingmarker' in object_settings:
+        if 'missingmarker' in object_settings.keys():
             missing_value_objects.append(object_settings['missingmarker'])
         for row_num in table_constructor.keys():
             constructor = table_constructor[row_num]
@@ -1710,7 +1711,7 @@ class MakeAutomatedReport(object):
         keepall = True
         keepcolumn = {}
         missing_value_objects = ['nan', '-', 'none', '--']
-        if 'missingmarker' in object_settings:
+        if 'missingmarker' in object_settings.keys():
             missing_value_objects.append(object_settings['missingmarker'])
         for row_num in table_constructor.keys():
             constructor = table_constructor[row_num]
@@ -1892,7 +1893,7 @@ class MakeAutomatedReport(object):
         keepall = True
         keepheader = {}
         missing_value_objects = ['nan', '-', 'none', '--']
-        if 'missingmarker' in object_settings:
+        if 'missingmarker' in object_settings.keys():
             missing_value_objects.append(object_settings['missingmarker'])
         for row_num in table_constructor.keys():
             constructor = table_constructor[row_num]
@@ -2107,7 +2108,7 @@ class MakeAutomatedReport(object):
         keepall = True
         keepheader = {}
         missing_value_objects = ['nan', '-', 'none', '--']
-        if 'missingmarker' in object_settings:
+        if 'missingmarker' in object_settings.keys():
             missing_value_objects.append(object_settings['missingmarker'])
         for row_num in table_constructor.keys():
             constructor = table_constructor[row_num]
