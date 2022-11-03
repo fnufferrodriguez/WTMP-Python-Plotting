@@ -269,7 +269,7 @@ def getIdxForTimestamp(time_Array, t_in, offset):
     :return: timestep index
     '''
 
-    ttmp = t_in.toordinal() + float(t_in.hour) / 24. + float(t_in.minute) / (24. * 60.) - offset
+    ttmp = t_in.toordinal() + float(t_in.hour) / 24. + float(t_in.minute) / (24. * 60.) - offset + 1 #jdate offsets...
     min_diff = np.min(np.abs(time_Array - ttmp))
     tol = 1. / (24. * 60.)  # 1 minute tolerance
     timestep = np.where((np.abs(time_Array - ttmp) - min_diff) < tol)[0][0]
