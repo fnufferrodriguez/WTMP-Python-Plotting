@@ -373,10 +373,10 @@ def JDateToDatetime(dates, startyear):
     elif isinstance(dates, (list, np.ndarray)):
         if isinstance(dates[0], dt.datetime):
             return dates
-        dtimes = np.asarray([first_year_Date + dt.timedelta(days=n) for n in dates])
+        dtimes = np.asarray([first_year_Date + dt.timedelta(days=n-1) for n in dates])
         return dtimes
     elif isinstance(dates, (float, int)):
-        dtime = first_year_Date + dt.timedelta(days=dates)
+        dtime = first_year_Date + dt.timedelta(days=dates-1)
         return dtime
     else:
         return dates
