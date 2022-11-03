@@ -269,7 +269,7 @@ def getIdxForTimestamp(time_Array, t_in, offset):
     :return: timestep index
     '''
 
-    ttmp = t_in.toordinal() + float(t_in.hour) / 24. + float(t_in.minute) / (24. * 60.) - offset
+    ttmp = t_in.toordinal() + float(t_in.hour) / 24. + float(t_in.minute) / (24. * 60.) - offset + 1 #jdate offsets...
     min_diff = np.min(np.abs(time_Array - ttmp))
     tol = 1. / (24. * 60.)  # 1 minute tolerance
     timestep = np.where((np.abs(time_Array - ttmp) - min_diff) < tol)[0][0]
@@ -367,16 +367,16 @@ def JDateToDatetime(dates, startyear):
 
     # first_year_Date = dt.datetime(self.ModelAlt.dt_dates[0].year, 1, 1, 0, 0)
     first_year_Date = dt.datetime(startyear, 1, 1, 0, 0)
-
+    #JDATES first day is at 1.0, so we need to subtract 1 or else we get an extra day..
     if isinstance(dates, dt.datetime):
         return dates
     elif isinstance(dates, (list, np.ndarray)):
         if isinstance(dates[0], dt.datetime):
             return dates
-        dtimes = np.asarray([first_year_Date + dt.timedelta(days=n) for n in dates])
+        dtimes = np.asarray([first_year_Date + dt.timedelta(days=n-1) for n in dates])
         return dtimes
     elif isinstance(dates, (float, int)):
-        dtime = first_year_Date + dt.timedelta(days=dates)
+        dtime = first_year_Date + dt.timedelta(days=dates-1)
         return dtime
     else:
         return dates

@@ -54,7 +54,7 @@ class Tables(object):
                         hi.append(ti)
 
                 elif isinstance(timestamp, float):
-                    ts_dt = WT.JDateToDatetime(timestamp)
+                    ts_dt = WT.JDateToDatetime(timestamp, self.Report.startYear)
                     if year == ts_dt.year:
                         h.append(str(timestamp))
                         hi.append(ti)
