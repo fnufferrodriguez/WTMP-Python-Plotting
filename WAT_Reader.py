@@ -52,7 +52,8 @@ def readSimulationFile(simulation_name, studyfolder, iscomp=False):
         simulation_file = os.path.join(studyfolder, 'reports', '{0}.csv'.format(simulation_name.replace(' ', '_')))
     WF.print2stdout('Attempting to read {0}'.format(simulation_file))
     if not os.path.exists(simulation_file):
-        WF.print2stderr('ERROR: no Simulation CSV file {0}.csv for simulation: {1}'.format(simulation_name.replace(' ', '_'), simulation_name))
+        WF.print2stderr('Could not find CSV file: {0}.csv '.format(simulation_name.replace(' ', '_')))
+        WF.print2stderr('Please create {0}.csv in the Reports Directory and run report again.'.format(simulation_name.replace(' ', '_')))
         sys.exit(1)
     sim_info = {}
     with open(simulation_file, 'r') as sf:
