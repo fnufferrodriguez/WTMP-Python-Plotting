@@ -54,10 +54,14 @@ class Profiles(object):
 
         if 'resolution' in object_settings.keys():
             resolution = object_settings['resolution']
+            return int(resolution)
+        if 'interpolationsource' in object_settings.keys():
+            resolution = object_settings['interpolationsource']
+            return resolution
         else:
             WF.print2stdout('Resolution not defined. Setting to default values.', debug=self.Report.debug)
             resolution = default
-        return int(resolution)
+            return int(resolution)
 
     def getProfileTimestamps(self, object_settings, StartTime, EndTime):
         '''

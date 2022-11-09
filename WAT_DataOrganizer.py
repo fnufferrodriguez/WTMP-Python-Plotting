@@ -606,8 +606,8 @@ class DataOrganizer(object):
                 resultsfile = None
             vals, elevations, depths, times = self.Report.ModelAlt.readProfileData(Profile_info['w2_segment'], timesteps,
                                                                                    resultsfile=resultsfile)
-            if isinstance(timesteps, str):
-                vals, elevations = self.Report.Profiles.normalize2DElevations(vals, elevations)
+            # if isinstance(timesteps, str):
+            #     vals, elevations = self.Report.Profiles.normalize2DElevations(vals, elevations)
             return vals, elevations, depths, times, Profile_info['flag'], None
 
         elif 'ressimresname' in Profile_info.keys():

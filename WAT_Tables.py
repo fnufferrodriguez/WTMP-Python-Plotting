@@ -785,13 +785,13 @@ class Tables(object):
 
         return new_headers
 
-    def formatStatsProfileLineData(self, row, data_dict, resolution, usedepth, index):
+    def formatStatsProfileLineData(self, row, data_dict, interpolation, usedepth, index):
         '''
         formats Profile line statistics for table using user inputs
         finds the highest and lowest overlapping profile points and uses them as end points, then interpolates
         :param row: Row line from inputs. String seperated by '|' and using flags surrounded by '%%'
         :param data_dict: dictionary containing available line data to be used
-        :param resolution: number of values to interpolate to. this way each dataset has values at the same levels
+        :param interpolation: number of values to interpolate to. this way each dataset has values at the same levels
                             and there is enough data to do stats over.
         :param usedepth: string bool for using depth or elevation fields
         :param index: date index for profile to use
@@ -806,56 +806,71 @@ class Tables(object):
         for sr in s_row:
             if sr in data_dict.keys():
                 flags.append(sr)
-        top = None
-        bottom = None
 
-        for flag in flags:
-            #get elevs
-            if usedepth.lower() == 'true':
-                depths = data_dict[flag]['depths'][index]
-                if len(depths) > 0:
-                    top_depth = np.min(depths)
-                    bottom_depth = np.max(depths)
-                    #find limits comparing flags so we can be sure to interpolate over the same data
-                    if top == None:
-                        top = top_depth
-                    else:
-                        if top_depth > top:
-                            top = top_depth
-
-                    if bottom == None:
-                        bottom = bottom_depth
-                    else:
-                        if bottom_depth < bottom:
-                            bottom = bottom_depth
-
+        useflagforinterp = False
+        if isinstance(interpolation, str):
+            if interpolation in flags:
+                useflagforinterp = True
             else:
-                elevs = data_dict[flag]['elevations'][index]
-                if len(elevs) > 0:
-                    top_elev = np.max(elevs)
-                    bottom_elev = np.min(elevs)
-                    #find limits comparing flags so we can be sure to interpolate over the same data
-                    if top == None:
-                        top = top_elev
-                    else:
-                        if top_elev < top:
-                            top = top_elev
+                WF.print2stdout(f'Flag for output {interpolation} not found in data flags {flags}. Defaulting to '
+                                f'interpolating both at 30 pt resolution', debug=self.Report.debug)
+                interpolation = 30
 
-                    if bottom == None:
-                        bottom = bottom_elev
-                    else:
-                        if bottom_elev > bottom:
-                            bottom = bottom_elev
-
-        if bottom != None and top != None:
-            if usedepth.lower() == 'true':
-                #build elev profiles
-                output_interp_depths = np.arange(top, bottom, (bottom-top)/float(resolution))
-            else:
-                output_interp_elevations = np.arange(bottom, top, (top-bottom)/float(resolution))
+        if usedepth.lower() == 'true':
+            y_flag = 'depths'
         else:
-            output_interp_elevations = []
-            output_interp_depths = []
+            y_flag = 'elevations'
+
+        if not useflagforinterp:
+            top = None
+            bottom = None
+
+            for flag in flags:
+                #get elevs
+                if usedepth.lower() == 'true':
+                    depths = data_dict[flag]['depths'][index]
+                    if len(depths) > 0:
+                        top_depth = np.min(depths)
+                        bottom_depth = np.max(depths)
+                        #find limits comparing flags so we can be sure to interpolate over the same data
+                        if top == None:
+                            top = top_depth
+                        else:
+                            if top_depth > top:
+                                top = top_depth
+
+                        if bottom == None:
+                            bottom = bottom_depth
+                        else:
+                            if bottom_depth < bottom:
+                                bottom = bottom_depth
+
+                else:
+                    elevs = data_dict[flag]['elevations'][index]
+                    if len(elevs) > 0:
+                        top_elev = np.max(elevs)
+                        bottom_elev = np.min(elevs)
+                        #find limits comparing flags so we can be sure to interpolate over the same data
+                        if top == None:
+                            top = top_elev
+                        else:
+                            if top_elev < top:
+                                top = top_elev
+
+                        if bottom == None:
+                            bottom = bottom_elev
+                        else:
+                            if bottom_elev > bottom:
+                                bottom = bottom_elev
+
+            if bottom != None and top != None:
+                if usedepth.lower() == 'true':
+                    #build elev profiles
+                    output_interp_yvalues = np.arange(top, bottom, (bottom-top) / float(interpolation))
+                else:
+                    output_interp_yvalues = np.arange(bottom, top, (top-bottom) / float(interpolation))
+            else:
+                output_interp_yvalues = []
 
         for flag in flags:
             out_data[flag] = {}
@@ -867,29 +882,36 @@ class Tables(object):
                 out_data[flag]['depths'] = []
                 out_data[flag]['elevations'] = []
                 continue
-            elif usedepth.lower() == 'true':
-                if len(output_interp_depths) == 0:
-                    WF.print2stdout(f'Insufficient depth points for row {flag} in {row}', debug=self.Report.debug)
+
+            if not useflagforinterp:
+                if len(output_interp_yvalues) == 0:
+                    WF.print2stdout(f'Insufficient {y_flag} points for row {flag} in {row}', debug=self.Report.debug)
                     out_data[flag]['values'] = []
                     out_data[flag]['depths'] = []
                     out_data[flag]['elevations'] = []
                     continue
-            elif usedepth.lower() == 'false':
-                if len(output_interp_elevations) == 0:
-                    WF.print2stdout(f'Insufficient elevation points for row {flag} in {row}', debug=self.Report.debug)
-                    out_data[flag]['values'] = []
-                    out_data[flag]['depths'] = []
-                    out_data[flag]['elevations'] = []
-                    continue
-            # else:
-            if usedepth.lower() == 'true':
-                f_interp = interpolate.interp1d(data_dict[flag]['depths'][index], data_dict[flag]['values'][index], fill_value='extrapolate')
-                out_data[flag]['depths'] = output_interp_depths
-                out_data[flag]['values'] = f_interp(output_interp_depths)
+
             else:
-                f_interp = interpolate.interp1d(data_dict[flag]['elevations'][index], data_dict[flag]['values'][index], fill_value='extrapolate')
-                out_data[flag]['elevations'] = output_interp_elevations
-                out_data[flag]['values'] = f_interp(output_interp_elevations)
+                if len(data_dict[interpolation][y_flag][index]) == 0:
+                    WF.print2stdout(f'Insufficient {y_flag} points for row {interpolation} in {row}', debug=self.Report.debug)
+                    out_data[flag]['values'] = []
+                    out_data[flag]['depths'] = []
+                    out_data[flag]['elevations'] = []
+                    continue
+
+            if useflagforinterp:
+                if flag == interpolation:
+                    out_data[flag][y_flag] = data_dict[flag][y_flag][index]
+                    out_data[flag]['values'] = data_dict[flag]['values'][index]
+                else:
+                    f_interp = interpolate.interp1d(data_dict[flag][y_flag][index], data_dict[flag]['values'][index],
+                                                    bounds_error=False, fill_value=np.nan)
+                    out_data[flag][y_flag] = data_dict[interpolation][y_flag][index]
+                    out_data[flag]['values'] = f_interp(data_dict[interpolation][y_flag][index])
+            else:
+                f_interp = interpolate.interp1d(data_dict[flag][y_flag][index], data_dict[flag]['values'][index], fill_value='extrapolate')
+                out_data[flag][y_flag] = output_interp_yvalues
+                out_data[flag]['values'] = f_interp(output_interp_yvalues)
 
         return out_data
 
