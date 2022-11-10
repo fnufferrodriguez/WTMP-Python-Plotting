@@ -168,7 +168,7 @@ class DataOrganizer(object):
 
         return wse_data
 
-    def filterByTargetElev(self, data, line_settings):
+    def filterTimeSeries(self, data, line_settings):
         '''
         filters data read from W2 results files to a target elevation
         :param data: dictionary of data
@@ -200,6 +200,38 @@ class DataOrganizer(object):
                                 mainvalues['values'][targelev_failed] = 0.
                                 data[d]['values'] = mainvalues['values']
                                 data[d]['dates'] = mainvalues['dates']
+
+            if 'filters' in line_settings[d].keys():
+                for filter in line_settings[d]['filters']:
+                    if 'value' not in filter.keys():
+                        WF.print2stdout('Value not defined in filter. Not using filter.', debug=self.Report.debug)
+                    else:
+                        value = float(filter['value'])
+                    use_filter_ts = False
+                    if np.any([n.lower() in ['w2_file', 'dss_path', 'easting', 'h5file', 'ressimresname'] for n in filter.keys()]):
+                        use_filter_ts = True
+                        filter_times, filter_values, filter_units = self.getTimeSeries(filter)
+                    if use_filter_ts:
+                        data_to_filter = filter_values
+                    else:
+                        data_to_filter = data[d]['values']
+
+                    if 'when' in filter.keys():
+                        if filter['when'].lower() == 'under':
+                            filtermask = np.where(data_to_filter < value)
+                        elif filter['when'].lower() == 'over':
+                            filtermask = np.where(data_to_filter > value)
+                        elif filter['when'].lower() == 'equals':
+                            filtermask = np.where(data_to_filter == value)
+                    else:
+                        WF.print2stdout('When condition not set in filter. Assuming equals.', debug=self.Report.debug)
+                        filtermask = np.where(data_to_filter == value)
+                    try:
+                        data[d]['values'][filtermask] = np.nan
+                    except IndexError:
+                        WF.print2stdout('Filter and Data Index not equal. Not Filtering data.', debug=self.Report.debug)
+                        WF.print2stdout('Confirm that Data and Filter are on the same timeseries interval', debug=self.Report.debug)
+
         return data
 
     def getTimeSeriesDataDictionary(self, settings):
