@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '5.3.18'
+VERSIONNUMBER = '5.3.19'
 
 import os
 import sys
@@ -247,7 +247,7 @@ class MakeAutomatedReport(object):
                 unitslist2 = []
                 stackplots = {}
                 linedata, line_settings = self.Data.getTimeSeriesDataDictionary(ax_settings)
-                linedata = self.Data.filterByTargetElev(linedata, line_settings)
+                linedata = self.Data.filterTimeSeries(linedata, line_settings)
                 linedata = self.Data.scaleValuesByTable(linedata, line_settings)
                 linedata = WF.mergeLines(linedata, line_settings, ax_settings)
                 ax_settings = self.configureSettingsForID('base', ax_settings)
@@ -1439,6 +1439,8 @@ class MakeAutomatedReport(object):
         data, data_settings = self.Data.getTableDataDictionary(object_settings)
         data = WF.mergeLines(data, data_settings, object_settings)
 
+        data = self.Data.filterTimeSeries(data, data_settings)
+
         object_settings = self.Tables.replaceComparisonSettings(object_settings, self.iscomp)
 
         headings, rows = self.Tables.buildErrorStatsTable(object_settings, data_settings)
@@ -1614,6 +1616,8 @@ class MakeAutomatedReport(object):
         data, data_settings = self.Data.getTableDataDictionary(object_settings)
         data = WF.mergeLines(data, data_settings, object_settings)
 
+        data = self.Data.filterTimeSeries(data, data_settings)
+
         object_settings = self.Tables.replaceComparisonSettings(object_settings, self.iscomp)
 
         headings, rows = self.Tables.buildMonthlyStatsTable(object_settings, data_settings)
@@ -1680,6 +1684,8 @@ class MakeAutomatedReport(object):
                             else:
                                 if 'missingmarker' in object_settings.keys():
                                     row_val = object_settings['missingmarker']
+                                else:
+                                    row_val = '-'
                             data_start_date, data_end_date = self.Tables.getTableDates(year, object_settings)
                             self.WAT_log.addLogEntry({'type': 'Statistic',
                                                       'name': ' '.join([self.ChapterRegion, header_frmt, stat]),
@@ -1783,6 +1789,8 @@ class MakeAutomatedReport(object):
 
         data, data_settings = self.Data.getTableDataDictionary(object_settings)
         data = WF.mergeLines(data, data_settings, object_settings)
+
+        data = self.Data.filterTimeSeries(data, data_settings)
 
         object_settings['units_list'] = WF.getUnitsList(data_settings)
         object_settings['plot_units'] = WF.getPlotUnits(object_settings['units_list'], object_settings)
