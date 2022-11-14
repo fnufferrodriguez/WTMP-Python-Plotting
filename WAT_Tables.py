@@ -809,6 +809,7 @@ class Tables(object):
 
         useflagforinterp = False
         if isinstance(interpolation, str):
+            # if interpolation in [n.lower() for n in flags]:
             if interpolation in flags:
                 useflagforinterp = True
             else:

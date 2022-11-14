@@ -327,10 +327,10 @@ def readTextProfile(observed_data_filename, timestamps, starttime=None, endtime=
                 wt_profile = [float(sline[1])]
                 d_profile = [float(sline[2])]
             else:
-                if float(sline[2]) not in d_profile:
-                    t_profile.append(dt_tmp)
-                    wt_profile.append(float(sline[1]))
-                    d_profile.append(float(sline[2]))
+                # if float(sline[2]) not in d_profile:
+                t_profile.append(dt_tmp)
+                wt_profile.append(float(sline[1]))
+                d_profile.append(float(sline[2]))
             hold_dt = dt_tmp
 
     if len(t_profile) != 0 and len(wt_profile) != 0 and len(d_profile) != 0:
