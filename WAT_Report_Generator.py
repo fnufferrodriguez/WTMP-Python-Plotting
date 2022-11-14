@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '5.3.19'
+VERSIONNUMBER = '5.3.20'
 
 import os
 import sys
@@ -801,6 +801,8 @@ class MakeAutomatedReport(object):
 
         ################# Get data #################
         data, line_settings = self.Data.getProfileDataDictionary(object_settings)
+        object_settings['warnings'] = self.Profiles.checkProfileValidity(data, object_settings)
+
         line_settings = WF.correctDuplicateLabels(line_settings)
         table_blueprint = pickle.loads(pickle.dumps(object_settings, -1))
 
@@ -832,15 +834,15 @@ class MakeAutomatedReport(object):
         yrheaders, yrheaders_i = self.Tables.buildHeadersByTimestamps(object_settings['timestamps'], self.years)
         yrheaders = self.Tables.convertHeaderFormats(yrheaders, object_settings)
 
-
-
         if not object_settings['split_by_year']: #if we dont want to split by year, just make a big ass list
             yrheaders = [list(itertools.chain.from_iterable(yrheaders))]
             yrheaders_i = [list(itertools.chain.from_iterable(yrheaders_i))]
         for yi, yrheader_group in enumerate(yrheaders):
-
+            year = object_settings['years'][yi]
             yearstr = object_settings['yearstr'][yi]
             table_constructor = {}
+            object_settings['warnings'] = self.Profiles.checkProfileValidity(data, object_settings)
+
 
             if len(yrheader_group) == 0:
                 WF.print2stdout('No data for', yearstr, debug=self.debug)
@@ -956,6 +958,14 @@ class MakeAutomatedReport(object):
                 self.Tables.writeMissingTableWarning(object_desc)
                 WF.print2stdout('No values found for table. Not writing table.', debug=self.debug)
 
+            ignorewarnings = False
+            if 'ignorewarnings' in object_settings.keys():
+                if object_settings['ignorewarnings'] == 'true'.lower():
+                    ignorewarnings = True
+            if not ignorewarnings:
+                # self.Profiles.writeWarnings(object_settings['warnings'], year)
+                WF.print2stdout('Not currently writing out warnings to report', debug=self.debug)
+
         WF.print2stdout(f'Profile Stat Table took {time.time() - objectstarttime} seconds.')
 
     def makeProfilePlot(self, object_settings):
@@ -985,7 +995,7 @@ class MakeAutomatedReport(object):
         object_settings['datakey'] = 'lines'
 
         obj_desc = WF.updateFlaggedValues(object_settings['description'], '%%year%%', self.years_str)
-        self.XML.writeProfilePlotStart(obj_desc)
+        # self.XML.writeProfilePlotStart(obj_desc)
 
         ################# Get timestamps #################
         object_settings['datessource_flag'] = WF.getDateSourceFlag(object_settings)
@@ -996,6 +1006,7 @@ class MakeAutomatedReport(object):
 
         ################# Get data #################
         data, line_settings = self.Data.getProfileDataDictionary(object_settings)
+
         straightlines = self.Data.getStraightLineValue(object_settings)
 
         line_settings = WF.correctDuplicateLabels(line_settings)
@@ -1022,8 +1033,11 @@ class MakeAutomatedReport(object):
 
         object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = WF.getObjectYears(self, object_settings, allowIncludeAllYears=False)
 
+        object_settings['warnings'] = self.Profiles.checkProfileValidity(data, object_settings)
+
         ################ Build Plots ################
         for yi, year in enumerate(object_settings['years']):
+            self.XML.writeProfilePlotStart(obj_desc)
             yearstr = object_settings['yearstr'][yi]
             # if object_settings['split_by_year']:
             #     yearstr = str(year)
@@ -1355,7 +1369,7 @@ class MakeAutomatedReport(object):
                             plt.subplots_adjust(bottom=.1*n_legends_row)
                             # fig_ratio = (axs[int(n_nrow_active)-1,0].bbox.extents[1] - (fig.bbox.height * (.1025 * n_legends_row))) / fig.bbox.height
                             fig_ratio = (axs[int(n_nrow_active)-1,0].bbox.extents[1] - (fig.bbox.height * .055)) / fig.bbox.height
-
+                            # fig_ratio += text_y * linestext
                             # plt.legend(bbox_to_anchor=(.5,fig_ratio), loc="lower center", fontsize=legsize,
                             plt.legend(bbox_to_anchor=(.5,fig_ratio), loc="upper center", fontsize=legsize,
                                        bbox_transform=fig.transFigure, ncol=ncolumns, handles=leg_handles,
@@ -1407,7 +1421,15 @@ class MakeAutomatedReport(object):
                                           },
                                          isdata=True)
 
-        self.XML.writeProfilePlotEnd()
+            self.XML.writeProfilePlotEnd()
+
+            ignorewarnings = False
+            if 'ignorewarnings' in object_settings.keys():
+                if object_settings['ignorewarnings'] == 'true'.lower():
+                    ignorewarnings = True
+            if not ignorewarnings:
+                # self.Profiles.writeWarnings(object_settings['warnings'], year)
+                WF.print2stdout('Not currently writing out warnings to report', debug=self.debug)
 
         WF.print2stdout(f'Profile Plot took {time.time() - objectstarttime} seconds.')
 
@@ -1984,6 +2006,7 @@ class MakeAutomatedReport(object):
 
         data, line_settings = self.Data.getProfileDataDictionary(object_settings)
         line_settings = WF.correctDuplicateLabels(line_settings)
+        object_settings['warnings'] = self.Profiles.checkProfileValidity(data, object_settings, combineyears=True)
 
         object_settings = self.Tables.replaceComparisonSettings(object_settings, self.iscomp)
 
@@ -2162,6 +2185,14 @@ class MakeAutomatedReport(object):
         else:
             self.Tables.writeMissingTableWarning(desc)
             WF.print2stdout('No values found for table. Not writing table.', debug=self.debug)
+
+        ignorewarnings = False
+        if 'ignorewarnings' in object_settings.keys():
+            if object_settings['ignorewarnings'] != 'true'.lower():
+                ignorewarnings = True
+        if not ignorewarnings:
+            # self.Profiles.writeWarnings(object_settings['warnings'], 'ALLYEARS')
+            WF.print2stdout('Not currently writing out warnings to report', debug=self.debug)
 
         WF.print2stdout(f'Single Profile Stat Table took {time.time() - objectstarttime} seconds.')
 

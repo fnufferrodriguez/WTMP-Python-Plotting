@@ -52,16 +52,26 @@ class Profiles(object):
         :return: interpolation int value
         '''
 
+        keys = [n['flag'] for n in object_settings[object_settings['datakey']]]
         if 'resolution' in object_settings.keys():
             resolution = object_settings['resolution']
             return int(resolution)
-        if 'interpolationsource' in object_settings.keys():
+        elif 'interpolationsource' in object_settings.keys():
             resolution = object_settings['interpolationsource']
-            return resolution
+            if resolution in keys:
+                return resolution
+            else:
+                WF.print2stdout(f'InterpolationSource {resolution} not found in keys. Setting to default value '
+                                f'resolution: {default}', debug=self.Report.debug)
+                resolution = default
+                return int(resolution)
         else:
-            WF.print2stdout('Resolution not defined. Setting to default values.', debug=self.Report.debug)
-            resolution = default
-            return int(resolution)
+            if 'Observed' in keys:
+                return 'Observed'
+            else:
+                WF.print2stdout('Resolution not defined. Setting to default value resolution: {default}', debug=self.Report.debug)
+                resolution = default
+                return int(resolution)
 
     def getProfileTimestamps(self, object_settings, StartTime, EndTime):
         '''
@@ -426,3 +436,144 @@ class Profiles(object):
                 output[key] = timeseries_dict[key]
         return output
 
+    def checkProfileValidity(self, data, object_settings, combineyears=False, includeallyears=False):
+        if 'warnings' not in object_settings.keys():
+            object_settings['warnings'] = {}
+        range_percent_threshold = 1 #percent of the range to use for clustering detection
+        percent_vals_under_threshold = 25 #percent of values in threshold for clustering detection
+        minimum_number_values = 5 #min amount of points
+
+        if 'splitbyyear' in object_settings.keys():
+            if object_settings['splitbyyear'].lower() == 'false':
+                combineyears = True
+        if 'includeallyears' in object_settings.keys():
+            if object_settings['includeallyears'].lower() == 'true':
+                includeallyears = True
+
+        for di, d in enumerate(data.keys()):
+            WF.print2stdout(f'Assessing Dataset: {d}')
+            if d not in object_settings['warnings'].keys():
+                object_settings['warnings'][d] = {}
+            usedepth = False
+            yflag = None
+            if 'depths' in data[d].keys():
+                if len(data[d]['depths']) > 0: #try and use depths if possible, easier to detect negative
+                    usedepth = True
+                    yflag = 'depths'
+            if not usedepth:
+                if 'elevations' in data[d].keys():
+                    if len(data[d]['elevations']) > 0:
+                        usedepth = False
+                        yflag = 'elevations'
+
+            if yflag == None:
+                WF.print2stdout('No values for dataset.', debug=self.Report.debug)
+                continue
+
+            yvalues = data[d][yflag]
+
+            for yvsi, yvalset in enumerate(yvalues):
+                yearflag = data[d]['times'][yvsi].year
+                if yearflag not in object_settings['warnings'][d].keys():
+                    object_settings['warnings'][d][yearflag] = []
+                datarange = max(yvalset) - min(yvalset)
+                number_of_points = len(yvalset)
+                monotonic = []
+                has_duplicates = False
+                has_negative = False
+                enough_points = True
+
+                if yvalset[0] > yvalset[-1]:
+                    increasing = False
+                else:
+                    increasing = True
+
+                if len(yvalset) > len(list(set(yvalset))):
+                    has_duplicates = True
+
+                if len(yvalset) < minimum_number_values:
+                    enough_points = False
+
+                for yvi, yval in enumerate(yvalset):
+                    if yvi == 0:
+                        continue
+                    else:
+                        if yval < 0:
+                            has_negative = True
+                        if increasing:
+                            if yval >= yvalset[yvi-1]:
+                                monotonic.append(True)
+                            else:
+                                monotonic.append(False)
+                        else:
+                            if yval <= yvalset[yvi-1]:
+                                monotonic.append(True)
+                            else:
+                                monotonic.append(False)
+
+                if usedepth: #clustering when close to 0
+                    top_yval = min(yvalset)
+                    #add the percent threshold for depth, 0 and going downwards by increasing values
+                    threshold_datarange = top_yval + (datarange * (range_percent_threshold / 100))
+                    threshold_number_vals = len(np.where(yvalset < threshold_datarange)[0])
+                else: #clustering when close to the max
+                    top_yval = max(yvalset)
+                    #subtract the percent threshold for depth, 0 and going downwards by decreasing values
+                    threshold_datarange = top_yval - (datarange * (range_percent_threshold / 100))
+                    threshold_number_vals = len(np.where(yvalset > threshold_datarange)[0])
+
+                WF.print2stdout(f"\nProfile Date: {data[d]['times'][yvsi]}", debug=self.Report.debug)
+                WF.print2stdout(f'Number under {range_percent_threshold}% ({round(threshold_datarange, 2)}): {threshold_number_vals}/{number_of_points} '
+                                f'({round((threshold_number_vals / number_of_points) * 100, 2)}%)', debug=self.Report.debug)
+
+                if not np.all(monotonic):
+                    WF.print2stdout(f'Profile non-monotonic.', debug=self.Report.debug)
+                    object_settings['warnings'][d][yearflag].append('non-monotonic values')
+                if has_negative:
+                    WF.print2stdout(f'Profile contains negative {yflag}', debug=self.Report.debug)
+                    object_settings['warnings'][d][yearflag].append('negative values')
+                if has_duplicates:
+                    WF.print2stdout(f'Profile contains duplicate {yflag}', debug=self.Report.debug)
+                    object_settings['warnings'][d][yearflag].append('duplicate values')
+                if not enough_points:
+                    WF.print2stdout(f'Profile contains insufficient {yflag} points', debug=self.Report.debug)
+                    object_settings['warnings'][d][yearflag].append('insufficient values')
+                else:
+
+                    if (threshold_number_vals / number_of_points) * 100 > percent_vals_under_threshold:
+                        WF.print2stdout(f'Profile may contain top clustering.', debug=self.Report.debug)
+                        object_settings['warnings'][d][yearflag].append('clustering')
+
+            if combineyears or includeallyears:
+                allwarnings = []
+                for yearflag in object_settings['warnings'][d].keys():
+                    for warningflag in object_settings['warnings'][d][yearflag]:
+                        allwarnings.append(warningflag)
+                if combineyears: #only output all years
+                    object_settings['warnings'][d] = {'ALLYEARS': allwarnings}
+                elif includeallyears:
+                    object_settings['warnings'][d]['ALLYEARS'] = allwarnings
+            for yearkey in object_settings['warnings'][d].keys():
+                object_settings['warnings'][d][yearkey] = list(set(object_settings['warnings'][d][yearkey]))
+
+        return object_settings['warnings']
+
+    def writeWarnings(self, warnings, year):
+        for key in warnings.keys():
+            if len(warnings[key][year]) > 0:
+                message = self.formatWarningMessage(warnings[key][year], key)
+                self.Report.makeTextBox({'text': message})
+
+    def formatWarningMessage(self, warnings, key):
+        message = f'Some profiles in {key} may be invalid due to'
+        if len(warnings) > 2:
+            for wi, warn in enumerate(warnings):
+                if wi == len(warnings) - 1:
+                    message += f' and {warn}.'
+                else:
+                    message += f' {warn},'
+        elif len(warnings) == 2:
+            message += f' {warnings[0]} and {warnings[1]}'
+        else:
+            message += f' {warnings[0]}.'
+        return message
