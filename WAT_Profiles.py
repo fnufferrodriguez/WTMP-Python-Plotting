@@ -437,6 +437,8 @@ class Profiles(object):
         return output
 
     def checkProfileValidity(self, data, object_settings, combineyears=False, includeallyears=False):
+        if not self.Report.debug:
+            return {}
         if 'warnings' not in object_settings.keys():
             object_settings['warnings'] = {}
         range_percent_threshold = 1 #percent of the range to use for clustering detection
@@ -451,7 +453,7 @@ class Profiles(object):
                 includeallyears = True
 
         for di, d in enumerate(data.keys()):
-            WF.print2stdout(f'Assessing Dataset: {d}')
+            WF.print2stdout(f'Assessing Dataset: {d}', debug=self.Report.debug)
             if d not in object_settings['warnings'].keys():
                 object_settings['warnings'][d] = {}
             usedepth = False
