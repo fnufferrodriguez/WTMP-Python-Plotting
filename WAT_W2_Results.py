@@ -290,6 +290,10 @@ class W2_Results(object):
             elevations[ln] = all_elevations[indicies]
             depths[ln] = all_depths[indicies]
 
+        if len(unique_dates) == 0:
+            WF.print2stdout('No values found in output.', debug=self.Report.debug)
+            return [], [], [], []
+
         if isinstance(timesteps, (list, np.ndarray)):
             select_values = []
             select_elevations = []
