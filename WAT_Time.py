@@ -368,7 +368,9 @@ def JDateToDatetime(dates, startyear):
     # first_year_Date = dt.datetime(self.ModelAlt.dt_dates[0].year, 1, 1, 0, 0)
     first_year_Date = dt.datetime(startyear, 1, 1, 0, 0)
     #JDATES first day is at 1.0, so we need to subtract 1 or else we get an extra day..
-    if isinstance(dates, dt.datetime):
+    if len(dates) == 0:
+        return dates
+    elif isinstance(dates, dt.datetime):
         return dates
     elif isinstance(dates, (list, np.ndarray)):
         if isinstance(dates[0], dt.datetime):
@@ -392,7 +394,9 @@ def DatetimeToJDate(dates):
         dates: original date if unable to convert
     '''
 
-    if isinstance(dates, (float, int)):
+    if len(dates) == 0:
+        return dates
+    elif isinstance(dates, (float, int)):
         return dates
     elif isinstance(dates, (list, np.ndarray)):
         if isinstance(dates[0], (float, int)):

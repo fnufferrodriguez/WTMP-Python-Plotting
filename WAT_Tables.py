@@ -184,6 +184,10 @@ class Tables(object):
         months = [n for n in self.Report.Constants.mo_str_3]
         stat = object_settings['statistic']
         datakeys = list(data.keys())
+        if len(datakeys) == 0:
+            hasdata = False
+        else:
+            hasdata = True
 
         if stat in ['mean', 'count']:
             numflagsneeded = 1
@@ -238,31 +242,39 @@ class Tables(object):
 
         computed_keys = []
         observed_keys = []
-        for datakey in datakeys:
-            if data[datakey]['flag'].lower() == 'computed': #get the easy ones
-                computed_keys.append(datakey)
-            elif data[datakey]['flag'].lower() == 'observed':
-                observed_keys.append(datakey)
-        if len(computed_keys) == 0 and len(observed_keys) > 0: #if none are computed and some are observed, assume the rest computed
+        if hasdata:
             for datakey in datakeys:
-                if data[datakey]['flag'].lower() not in observed_keys:
+                if data[datakey]['flag'].lower() == 'computed': #get the easy ones
                     computed_keys.append(datakey)
-        if len(observed_keys) == 0 and len(computed_keys) > 0: #if some are computed and none are observed, assume the rest computed
-            for datakey in datakeys:
-                if data[datakey]['flag'].lower() not in computed_keys:
+                elif data[datakey]['flag'].lower() == 'observed':
                     observed_keys.append(datakey)
+            if len(computed_keys) == 0 and len(observed_keys) > 0: #if none are computed and some are observed, assume the rest computed
+                for datakey in datakeys:
+                    if data[datakey]['flag'].lower() not in observed_keys:
+                        computed_keys.append(datakey)
+            if len(observed_keys) == 0 and len(computed_keys) > 0: #if some are computed and none are observed, assume the rest computed
+                for datakey in datakeys:
+                    if data[datakey]['flag'].lower() not in computed_keys:
+                        observed_keys.append(datakey)
 
+        if 'missingmarker' in object_settings.keys():
+            missingmarker = object_settings['missingmarker']
+        else:
+            missingmarker = '-'
 
         for year in object_settings['years']:
             row = f'{year}'
             for month in months:
-                if numflagsneeded == 1:
-                    for datakey in computed_keys:
-                        row += f'|%%{stat}.{datakey}.MONTH={month.upper()}%%'
+                if not hasdata:
+                    row += f'|{missingmarker}'
                 else:
-                    for cflag in computed_keys:
-                        for oflag in observed_keys:
-                            row += f'|%%{stat}.{cflag}.MONTH={month.upper()}.{data[oflag]["flag"]}.MONTH={month.upper()}%%'
+                    if numflagsneeded == 1:
+                        for datakey in computed_keys:
+                            row += f'|%%{stat}.{datakey}.MONTH={month.upper()}%%'
+                    else:
+                        for cflag in computed_keys:
+                            for oflag in observed_keys:
+                                row += f'|%%{stat}.{cflag}.MONTH={month.upper()}.{data[oflag]["flag"]}.MONTH={month.upper()}%%'
             rows.append(row)
 
         return headers, rows
