@@ -402,10 +402,10 @@ def DatetimeToJDate(dates):
         if isinstance(dates[0], (float, int)):
             return dates
         # jdates = np.asarray([(datetime2Ordinal(n) - time_offset) + 1 for n in dates])
-        jdates = [(n.replace(tzinfo=None) - dt.datetime(n.year, 1, 1, 0, 0)).total_seconds() / (24*60*60) for n in dates]
+        jdates = [((n.replace(tzinfo=None) - dt.datetime(n.year, 1, 1, 0, 0)).total_seconds() / (24*60*60)+1) for n in dates]
         return jdates
     elif isinstance(dates, dt.datetime):
-        jdate = (dates.replace(tzinfo=None) - dt.datetime(dates.year, 1, 1, 0, 0)).total_seconds() / (24*60*60)
+        jdate = (dates.replace(tzinfo=None) - dt.datetime(dates.year, 1, 1, 0, 0)).total_seconds() / (24*60*60) + 1
         return jdate
     else:
         return dates

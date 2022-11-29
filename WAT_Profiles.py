@@ -283,8 +283,10 @@ class Profiles(object):
         if 'usedepth' in object_settings.keys():
             if object_settings['usedepth'].lower() == 'true':
                 yflag = 'depths'
+                other_yflag = 'elevations'
             else:
                 yflag = 'elevations'
+                other_yflag = 'depths'
         else:
             WF.print2stdout('UseDepth flag not set. Cannot filter properly.', debug=self.Report.debug)
             return data, object_settings
@@ -372,6 +374,7 @@ class Profiles(object):
 
                 data[lineflag]['values'][pi] = profile[master_filter]
                 data[lineflag][yflag][pi] = ydata[master_filter]
+                data[lineflag][other_yflag][pi] = cur_data[other_yflag][pi][master_filter]
 
         return data, object_settings
 
@@ -579,3 +582,50 @@ class Profiles(object):
         else:
             message += f' {warnings[0]}.'
         return message
+
+    def confirmValidDepths(self, data):
+        '''
+        checks to confirm profile tables can use depths
+        :param data: dictionary of profile data
+        :return: boolean value
+        '''
+
+        usedepths = 'True' #innocent until proven guilty
+        for key in data.keys():
+            numDepthProfiles = len(data[key]['depths'])
+            numElevProfiles = len(data[key]['elevations'])
+            if numDepthProfiles == 0 and numElevProfiles > 0:
+                WF.print2stdout(f'Not using depths for {key}.', debug=self.Report.debug)
+                usedepths = 'False'
+            for dpi, depthprofile in enumerate(data[key]['depths']):
+                if len(depthprofile) == 0 and len(data[key]['elevations'][dpi]) > 0:
+                    WF.print2stdout(f'Not using depths for {key}.', debug=self.Report.debug)
+                    usedepths = 'False'
+        return usedepths
+
+    def snapTo0Depth(self, data, line_settings):
+        '''
+        takes depth data and adds an entry in the data using the last known value
+        :param data: dictionary of profile data
+        :param line_settings: dictionary of line settings
+        :return:
+        '''
+
+        for key in data.keys():
+            if 'snapto0depth' in line_settings[key].keys():
+                if line_settings[key]['snapto0depth'].lower() == 'true':
+                    for dsi, depthset in enumerate(data[key]['depths']):
+                        if 0.0 not in depthset:
+                            distance_from_wse = min(depthset)
+                            min_depth_i = np.where(depthset == distance_from_wse)
+                            max_elevation = max(data[key]['elevations'][dsi])
+                            wse_elevation = max_elevation + distance_from_wse
+                            data[key]['elevations'][dsi][min_depth_i] = wse_elevation
+                            data[key]['depths'][dsi][min_depth_i] = 0.0
+
+        return data
+
+
+
+
+

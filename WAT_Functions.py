@@ -307,11 +307,17 @@ def removeNaNs(data1, data2, flag='values'):
 
     if isinstance(data1, dict):
         data1[flag] = np.asarray(data1[flag])[msk]
+        for otherflag in data1.keys():
+            if otherflag != flag:
+                data1[otherflag] = np.asarray(data1[otherflag])[msk]
     elif isinstance(data1, list) or isinstance(data1, np.ndarray):
         data1 = np.asarray(data1)[msk]
 
     if isinstance(data2, dict):
         data2[flag] = np.asarray(data2[flag])[msk]
+        for otherflag in data2.keys():
+            if otherflag != flag:
+                data2[otherflag] = np.asarray(data2[otherflag])[msk]
     elif isinstance(data2, list) or isinstance(data2, np.ndarray):
         data2 = np.asarray(data2)[msk]
 
@@ -341,11 +347,17 @@ def removeINFs(data1, data2, flag='values'):
 
     if isinstance(data1, dict):
         data1[flag] = np.asarray(data1[flag])[msk]
+        for otherflag in data1.keys():
+            if otherflag != flag:
+                data1[otherflag] = np.asarray(data1[otherflag])[msk]
     elif isinstance(data1, list) or isinstance(data1, np.ndarray):
         data1 = np.asarray(data1)[msk]
 
     if isinstance(data2, dict):
         data2[flag] = np.asarray(data2[flag])[msk]
+        for otherflag in data2.keys():
+            if otherflag != flag:
+                data2[otherflag] = np.asarray(data2[otherflag])[msk]
     elif isinstance(data2, list) or isinstance(data2, np.ndarray):
         data2 = np.asarray(data2)[msk]
 
