@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '5.3.22'
+VERSIONNUMBER = '5.3.23'
 
 import os
 import sys
@@ -808,14 +808,6 @@ class MakeAutomatedReport(object):
 
         object_settings = self.configureSettingsForID('base', object_settings)
 
-        ################ convert yflags ################
-        if object_settings['usedepth'].lower() == 'false':
-            wse_data = self.Data.getProfileWSE(object_settings, onflag='datapaths')
-            data, object_settings = self.Profiles.convertDepthsToElevations(data, object_settings, wse_data=wse_data)
-        elif object_settings['usedepth'].lower() == 'true':
-            wse_data = self.Data.getProfileWSE(object_settings, onflag='datapaths')
-            data, object_settings = self.Profiles.convertElevationsToDepths(data, object_settings, wse_data=wse_data)
-
         ################# Get plot units #################
         data, line_settings = self.Profiles.convertProfileDataUnits(object_settings, data, line_settings)
         object_settings['units_list'] = WF.getUnitsList(line_settings)
@@ -825,6 +817,11 @@ class MakeAutomatedReport(object):
         table_blueprint = WF.updateFlaggedValues(table_blueprint, '%%units%%', WF.formatUnitsStrings(object_settings['plot_units'], format='external'))
 
         self.Data.commitProfileDataToMemory(data, line_settings, object_settings)
+
+        object_settings['usedepth'] = self.Profiles.confirmValidDepths(data)
+        if object_settings['usedepth']:
+            data = self.Profiles.snapTo0Depth(data, line_settings)
+
         data, object_settings = self.Profiles.filterProfileData(data, line_settings, object_settings)
 
         object_settings['resolution'] = self.Profiles.getProfileInterpResolution(object_settings)
@@ -841,8 +838,6 @@ class MakeAutomatedReport(object):
             year = object_settings['years'][yi]
             yearstr = object_settings['yearstr'][yi]
             table_constructor = {}
-            object_settings['warnings'] = self.Profiles.checkProfileValidity(data, object_settings)
-
 
             if len(yrheader_group) == 0:
                 WF.print2stdout('No data for', yearstr, debug=self.debug)
@@ -2010,15 +2005,6 @@ class MakeAutomatedReport(object):
 
         object_settings = self.Tables.replaceComparisonSettings(object_settings, self.iscomp)
 
-        ################ convert yflags ################
-        if object_settings['usedepth'].lower() == 'false':
-            wse_data = self.Data.getProfileWSE(object_settings, onflag='datapaths')
-            data, object_settings = self.Profiles.convertDepthsToElevations(data, object_settings, wse_data=wse_data)
-        elif object_settings['usedepth'].lower() == 'true':
-            wse_data = self.Data.getProfileWSE(object_settings, onflag='datapaths')
-            data, object_settings = self.Profiles.convertElevationsToDepths(data, object_settings, wse_data=wse_data)
-
-        # object_settings= self.configureSettingsForID('base', object_settings) #will turn on for comparison plot later
         ################# Get plot units #################
         data, line_settings = self.Profiles.convertProfileDataUnits(object_settings, data, line_settings)
         object_settings['units_list'] = WF.getUnitsList(line_settings)
@@ -2027,6 +2013,10 @@ class MakeAutomatedReport(object):
         object_settings = WF.updateFlaggedValues(object_settings, '%%units%%', WF.formatUnitsStrings(object_settings['plot_units'], format='external'))
 
         self.Data.commitProfileDataToMemory(data, line_settings, object_settings)
+
+        object_settings['usedepth'] = self.Profiles.confirmValidDepths(data)
+        if object_settings['usedepth']:
+            data = self.Profiles.snapTo0Depth(data, line_settings)
 
         data, object_settings = self.Profiles.filterProfileData(data, line_settings, object_settings)
 

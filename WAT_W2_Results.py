@@ -310,8 +310,8 @@ class W2_Results(object):
                         select_times.append(time)
                         continue
 
-                    select_elevations.append(elevations[timestep][:] * 3.28)
-                    select_depths.append(depths[timestep][:] * 3.28)
+                    select_elevations.append(elevations[timestep][:] * 3.28084)
+                    select_depths.append(depths[timestep][:] * 3.28084)
                     select_values.append(values[timestep][:])
                     select_times.append(time)
 
@@ -386,7 +386,7 @@ class W2_Results(object):
                         continue
                     WSE = WSE[np.where(~np.isnan(WSE))][0] #otherwise find valid
                     WSE_array = np.full((self.layers.shape), WSE)
-                    e = (WSE_array - self.layers) * 3.28
+                    e = (WSE_array - self.layers) * 3.28084
 
                     select_wt.append(wt[timestep][:]) #find WTs
 
@@ -396,13 +396,13 @@ class W2_Results(object):
                     depths.append(np.array([]))
                     times.append(time)
                 elevations.append(np.asarray(e)) #then append for timestep
-                depths.append(self.layers * 3.28) #append dpeths
+                depths.append(self.layers * 3.28084) #append dpeths
                 times.append(time) #get time
             select_wt, elevations, depths = self.matchProfileLengths(select_wt, elevations, depths)
 
             return select_wt, elevations, depths, np.asarray(times)
         else:
-            elevations = (WS_Elev - self.layers) * 3.28
+            elevations = (WS_Elev - self.layers) * 3.28084
             return wt, elevations, [], self.dt_dates
 
     def readProfileTopwater(self, seg, timesteps):
@@ -464,7 +464,7 @@ class W2_Results(object):
 
             return WSE_out
         else:
-            return WS_Elev[:,0] * 3.28
+            return WS_Elev[:,0] * 3.28084
 
     def readStructuredTimeSeries(self, output_file_name, structure_nums, skiprows=2):
         """
