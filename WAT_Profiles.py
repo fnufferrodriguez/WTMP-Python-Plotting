@@ -373,8 +373,18 @@ class Profiles(object):
                 master_filter = reduce(np.intersect1d, (xmax_filt, xmin_filt, ymax_filt, ymin_filt, omitvals_filt)).astype(int)
 
                 data[lineflag]['values'][pi] = profile[master_filter]
+                try:
+                    if len(cur_data[other_yflag][pi]) == len(cur_data[yflag][pi]):
+                        #if there isnt enough data, dont filter it the same. They need to be the same.
+                        data[lineflag][other_yflag][pi] = cur_data[other_yflag][pi][master_filter]
+                except IndexError:
+                    if len(cur_data[other_yflag]) != len(cur_data[yflag]):
+                        WF.print2stdout(f'Cannot filter {other_yflag} due to no values', debug=self.Report.debug)
+                    else:
+                        WF.print2stdout(f'Cannot filter {other_yflag} due to different number of values compared to '
+                                        f'{yflag}. {len(cur_data[other_yflag][pi])}: {len(cur_data[yflag][pi])}',
+                                        debug=self.Report.debug)
                 data[lineflag][yflag][pi] = ydata[master_filter]
-                data[lineflag][other_yflag][pi] = cur_data[other_yflag][pi][master_filter]
 
         return data, object_settings
 
