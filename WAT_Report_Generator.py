@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '5.3.24'
+VERSIONNUMBER = '5.3.25'
 
 import os
 import sys
@@ -40,6 +40,7 @@ import WAT_Plots as WPlot
 import WAT_Gates as WGates
 
 import warnings
+# warnings.simplefilter('error') #turn on for debugging warnings
 warnings.filterwarnings("always")
 
 mpl.rcParams['axes.autolimit_mode'] = 'round_numbers'
