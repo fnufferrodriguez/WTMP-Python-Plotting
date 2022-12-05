@@ -912,6 +912,13 @@ class Tables(object):
                     out_data[flag]['elevations'] = []
                     continue
 
+            if not np.all(data_dict[flag][y_flag][index][:-1] != data_dict[flag][y_flag][index][1:]): #check for duplicate yvals
+                WF.print2stdout(f'Found duplicate values in {y_flag} for {flag} at index {index}', debug=self.Report.debug)
+                duplicatemask = data_dict[flag][y_flag][index][:-1] != data_dict[flag][y_flag][index][1:]
+                duplicatemask = np.insert(duplicatemask, 0, True)
+                data_dict[flag][y_flag][index] = data_dict[flag][y_flag][index][duplicatemask]
+                data_dict[flag]['values'][index] = data_dict[flag]['values'][index][duplicatemask]
+
             if useflagforinterp:
                 if flag == interpolation:
                     out_data[flag][y_flag] = data_dict[flag][y_flag][index]
@@ -922,9 +929,10 @@ class Tables(object):
                     out_data[flag][y_flag] = data_dict[interpolation][y_flag][index]
                     out_data[flag]['values'] = f_interp(data_dict[interpolation][y_flag][index])
             else:
+
                 f_interp = interpolate.interp1d(data_dict[flag][y_flag][index], data_dict[flag]['values'][index], fill_value='extrapolate')
-                out_data[flag][y_flag] = output_interp_yvalues
                 out_data[flag]['values'] = f_interp(output_interp_yvalues)
+                out_data[flag][y_flag] = output_interp_yvalues
 
         return out_data
 

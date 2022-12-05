@@ -1629,7 +1629,7 @@ def formatNumbers(number, numberformatsettings):
             decplaces = int(numberformat['decimalplaces'])
             if 'max' in numberformat.keys() and 'min' in numberformat.keys():
                 if float(numberformat['min']) < abs(number) <= float(numberformat['max']):
-                    print(f'Number {number} with settings {numberformat}')
+                    # print2stdout(f'Number {number} with settings {numberformat}')
                     return '{num:,.{digits}f}'.format(num=number, digits=decplaces)
 
             elif 'max' in numberformat.keys() and 'min' not in numberformat.keys():

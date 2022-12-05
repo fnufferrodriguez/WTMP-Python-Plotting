@@ -488,77 +488,80 @@ class Profiles(object):
             yvalues = data[d][yflag]
 
             for yvsi, yvalset in enumerate(yvalues):
-                yearflag = data[d]['times'][yvsi].year
-                if yearflag not in object_settings['warnings'][d].keys():
-                    object_settings['warnings'][d][yearflag] = []
-                datarange = max(yvalset) - min(yvalset)
-                number_of_points = len(yvalset)
-                monotonic = []
-                has_duplicates = False
-                has_negative = False
-                enough_points = True
+                if len(yvalset) > 0:
+                    yearflag = data[d]['times'][yvsi].year
+                    if yearflag not in object_settings['warnings'][d].keys():
+                        object_settings['warnings'][d][yearflag] = []
+                    datarange = max(yvalset) - min(yvalset)
+                    number_of_points = len(yvalset)
+                    monotonic = []
+                    has_duplicates = False
+                    has_negative = False
+                    enough_points = True
 
-                if yvalset[0] > yvalset[-1]:
-                    increasing = False
-                else:
-                    increasing = True
-
-                if len(yvalset) > len(list(set(yvalset))):
-                    has_duplicates = True
-
-                if len(yvalset) < minimum_number_values:
-                    enough_points = False
-
-                for yvi, yval in enumerate(yvalset):
-                    if yvi == 0:
-                        continue
+                    if yvalset[0] > yvalset[-1]:
+                        increasing = False
                     else:
-                        if yval < 0:
-                            has_negative = True
-                        if increasing:
-                            if yval >= yvalset[yvi-1]:
-                                monotonic.append(True)
-                            else:
-                                monotonic.append(False)
+                        increasing = True
+
+                    if len(yvalset) > len(list(set(yvalset))):
+                        has_duplicates = True
+
+                    if len(yvalset) < minimum_number_values:
+                        enough_points = False
+
+                    for yvi, yval in enumerate(yvalset):
+                        if yvi == 0:
+                            continue
                         else:
-                            if yval <= yvalset[yvi-1]:
-                                monotonic.append(True)
+                            if yval < 0:
+                                has_negative = True
+                            if increasing:
+                                if yval >= yvalset[yvi-1]:
+                                    monotonic.append(True)
+                                else:
+                                    monotonic.append(False)
                             else:
-                                monotonic.append(False)
+                                if yval <= yvalset[yvi-1]:
+                                    monotonic.append(True)
+                                else:
+                                    monotonic.append(False)
 
-                if usedepth: #clustering when close to 0
-                    top_yval = min(yvalset)
-                    #add the percent threshold for depth, 0 and going downwards by increasing values
-                    threshold_datarange = top_yval + (datarange * (range_percent_threshold / 100))
-                    threshold_number_vals = len(np.where(yvalset < threshold_datarange)[0])
-                else: #clustering when close to the max
-                    top_yval = max(yvalset)
-                    #subtract the percent threshold for depth, 0 and going downwards by decreasing values
-                    threshold_datarange = top_yval - (datarange * (range_percent_threshold / 100))
-                    threshold_number_vals = len(np.where(yvalset > threshold_datarange)[0])
+                    if usedepth: #clustering when close to 0
+                        top_yval = min(yvalset)
+                        #add the percent threshold for depth, 0 and going downwards by increasing values
+                        threshold_datarange = top_yval + (datarange * (range_percent_threshold / 100))
+                        threshold_number_vals = len(np.where(yvalset < threshold_datarange)[0])
+                    else: #clustering when close to the max
+                        top_yval = max(yvalset)
+                        #subtract the percent threshold for depth, 0 and going downwards by decreasing values
+                        threshold_datarange = top_yval - (datarange * (range_percent_threshold / 100))
+                        threshold_number_vals = len(np.where(yvalset > threshold_datarange)[0])
 
-                WF.print2stdout(f"\nProfile Date: {data[d]['times'][yvsi]}", debug=self.Report.debug)
-                WF.print2stdout(f'Number under {range_percent_threshold}% ({round(threshold_datarange, 2)}): {threshold_number_vals}/{number_of_points} '
-                                f'({round((threshold_number_vals / number_of_points) * 100, 2)}%)', debug=self.Report.debug)
+                    WF.print2stdout(f"\nProfile Date: {data[d]['times'][yvsi]}", debug=self.Report.debug)
+                    WF.print2stdout(f'Number under {range_percent_threshold}% ({round(threshold_datarange, 2)}): {threshold_number_vals}/{number_of_points} '
+                                    f'({round((threshold_number_vals / number_of_points) * 100, 2)}%)', debug=self.Report.debug)
 
-                if not np.all(monotonic):
-                    WF.print2stdout(f'Profile non-monotonic.', debug=self.Report.debug)
-                    object_settings['warnings'][d][yearflag].append('non-monotonic values')
-                if has_negative:
-                    WF.print2stdout(f'Profile contains negative {yflag}', debug=self.Report.debug)
-                    object_settings['warnings'][d][yearflag].append('negative values')
-                if has_duplicates:
-                    WF.print2stdout(f'Profile contains duplicate {yflag}', debug=self.Report.debug)
-                    object_settings['warnings'][d][yearflag].append('duplicate values')
-                if not enough_points:
-                    WF.print2stdout(f'Profile contains insufficient {yflag} points', debug=self.Report.debug)
-                    object_settings['warnings'][d][yearflag].append('insufficient values')
+                    if not np.all(monotonic):
+                        WF.print2stdout(f'Profile non-monotonic.', debug=self.Report.debug)
+                        object_settings['warnings'][d][yearflag].append('non-monotonic values')
+                    if has_negative:
+                        WF.print2stdout(f'Profile contains negative {yflag}', debug=self.Report.debug)
+                        object_settings['warnings'][d][yearflag].append('negative values')
+                    if has_duplicates:
+                        WF.print2stdout(f'Profile contains duplicate {yflag}', debug=self.Report.debug)
+                        object_settings['warnings'][d][yearflag].append('duplicate values')
+                    if not enough_points:
+                        WF.print2stdout(f'Profile contains insufficient {yflag} points', debug=self.Report.debug)
+                        object_settings['warnings'][d][yearflag].append('insufficient values')
+                    else:
+
+                        if (threshold_number_vals / number_of_points) * 100 > percent_vals_under_threshold:
+                            WF.print2stdout(f'Profile may contain top clustering.', debug=self.Report.debug)
+                            object_settings['warnings'][d][yearflag].append('clustering')
                 else:
-
-                    if (threshold_number_vals / number_of_points) * 100 > percent_vals_under_threshold:
-                        WF.print2stdout(f'Profile may contain top clustering.', debug=self.Report.debug)
-                        object_settings['warnings'][d][yearflag].append('clustering')
-
+                    WF.print2stdout(f'No values for {d} for {data[d]["times"][yvsi]}', debug=self.Report.debug)
+                    continue
             if combineyears or includeallyears:
                 allwarnings = []
                 for yearflag in object_settings['warnings'][d].keys():
