@@ -248,7 +248,7 @@ def makeRegularTimesteps(starttime, endtime, debug, days=15):
     while cur_date < endtime:
         timesteps.append(cur_date)
         cur_date += dt.timedelta(days=days)
-    return np.asarray(timesteps)
+    return np.asarray(timesteps[1:]) #remove first timestep, may be invalid
 
 def datetime2Ordinal(indate):
     '''

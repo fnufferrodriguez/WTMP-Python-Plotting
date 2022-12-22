@@ -876,14 +876,17 @@ class Tables(object):
                             if bottom_elev > bottom:
                                 bottom = bottom_elev
 
-            if bottom != None and top != None:
+            if bottom == None and top == None:
+                output_interp_yvalues = []
+            elif bottom == top:
+                output_interp_yvalues = []
+            else:
                 if usedepth.lower() == 'true':
                     #build elev profiles
                     output_interp_yvalues = np.arange(top, bottom, (bottom-top) / float(interpolation))
                 else:
                     output_interp_yvalues = np.arange(bottom, top, (top-bottom) / float(interpolation))
-            else:
-                output_interp_yvalues = []
+
 
         for flag in flags:
             out_data[flag] = {}
