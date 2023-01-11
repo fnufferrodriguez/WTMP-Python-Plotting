@@ -501,12 +501,12 @@ class Plots(object):
                     if object_settings['usedepth'].lower() == 'true':
                         if hline_settings['parameter'].lower() == 'elevation':
                             valueconv, _ = self.Report.Profiles.convertElevationsToDepths({'hline': {'depths': [],
-                                                                                      'elevations': [value]}})
-                            value = valueconv['hline']['depth'][0]
+                                                                                      'elevations': [value]}}, object_settings)
+                            value = valueconv['hline']['depths'][0]
                     elif object_settings['usedepth'].lower() == 'false':
                         if hline_settings['parameter'].lower() == 'depth':
                             valueconv, _ = self.Report.Profiles.convertDepthsToElevations({'hline': {'depths': [value],
-                                                                                      'elevations': []}})
+                                                                                      'elevations': []}}, object_settings)
                             value = valueconv['hline']['elevations'][0]
 
                 #currently cant convert these units..
