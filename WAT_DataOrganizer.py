@@ -22,6 +22,7 @@ import WAT_Functions as WF
 import WAT_Reader as WDR
 import WAT_Time as WT
 import WAT_Reader as WR
+import WAT_ResSim_Results as WRSS
 
 class DataOrganizer(object):
 
@@ -394,7 +395,7 @@ class DataOrganizer(object):
                 if not os.path.exists(filename):
                     WF.print2stdout('ERROR: H5 file does not exist:', filename, debug=self.Report.debug)
                     return [], [], None
-                externalResSim = WDR.ResSim_Results('', '', '', '', self.Report, external=True)
+                externalResSim = WRSS.ResSim_Results('', '', '', '', self.Report, external=True)
                 externalResSim.openH5File(filename)
                 externalResSim.load_time() #load time vars from h5
                 externalResSim.loadSubdomains()
@@ -621,7 +622,7 @@ class DataOrganizer(object):
             if not os.path.exists(filename):
                 WF.print2stdout('ERROR: H5 file does not exist:', filename, debug=self.Report.debug)
                 return [], [], [], [], Profile_info['flag']
-            externalResSim = WDR.ResSim_Results('', '', '', '', self.Report, external=True)
+            externalResSim = WRSS.ResSim_Results('', '', '', '', self.Report, external=True)
             externalResSim.openH5File(filename)
             externalResSim.load_time() #load time vars from h5
             externalResSim.loadSubdomains()
@@ -769,7 +770,7 @@ class DataOrganizer(object):
             if not os.path.exists(filename):
                 WF.print2stdout('ERROR: H5 file does not exist:', filename, debug=self.Report.debug)
                 return []
-            externalResSim = WDR.ResSim_Results('', '', '', '', self.Report, external=True)
+            externalResSim = WRSS.ResSim_Results('', '', '', '', self.Report, external=True)
             externalResSim.openH5File(filename)
             externalResSim.load_time() #load time vars from h5
             externalResSim.loadSubdomains()
