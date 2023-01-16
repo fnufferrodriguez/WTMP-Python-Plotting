@@ -502,12 +502,20 @@ class Plots(object):
                         if hline_settings['parameter'].lower() == 'elevation':
                             valueconv, _ = self.Report.Profiles.convertElevationsToDepths({'hline': {'depths': [],
                                                                                       'elevations': [value]}}, object_settings)
-                            value = valueconv['hline']['depths'][0]
+                            if len(valueconv['hline']['depths']) == 0:
+                                WF.print2stdout('Unable to convert horizontal line elevations to depths.', debug=self.Report.debug)
+                                value = np.nan
+                            else:
+                                value = valueconv['hline']['depths'][0]
                     elif object_settings['usedepth'].lower() == 'false':
                         if hline_settings['parameter'].lower() == 'depth':
                             valueconv, _ = self.Report.Profiles.convertDepthsToElevations({'hline': {'depths': [value],
                                                                                       'elevations': []}}, object_settings)
-                            value = valueconv['hline']['elevations'][0]
+                            if len(valueconv['hline']['depths']) == 0:
+                                WF.print2stdout('Unable to convert horizontal line depths to elevations.', debug=self.Report.debug)
+                                value = np.nan
+                            else:
+                                value = valueconv['hline']['elevations'][0]
 
                 #currently cant convert these units..
                 if units != None:
