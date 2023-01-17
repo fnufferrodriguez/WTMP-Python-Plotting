@@ -479,7 +479,7 @@ class ResSim_Results(object):
         '''
 
         nearest_dist = 1e6
-        data_index = 0
+        data_index = 0 #TODO: also exclude reservoirs
         data_subdomain = None
         for subdomain, sd_data in self.subdomains.items():
             x = sd_data['x']
@@ -487,7 +487,7 @@ class ResSim_Results(object):
             dist = np.sqrt((x - easting) * (x - easting) + (y - northing) * (y - northing))
             min_dist = np.min(dist)
             if min_dist < nearest_dist:
-                min_cell = np.argmin(dist)
+                min_cell = np.argmin(dist) #pulls the index, not the min. duh
                 data_index = min_cell
                 data_subdomain = subdomain
                 nearest_dist = min_dist
