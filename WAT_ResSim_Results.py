@@ -110,7 +110,8 @@ class ResSim_Results(object):
             ncells = (np.shape(dataset))[0]
             x = np.array([dataset[i][0] for i in range(ncells)])
             y = np.array([dataset[i][1] for i in range(ncells)])
-            self.subdomains[subdomain] = {'x': x, 'y': y}
+            z = np.array([dataset[i][2] for i in range(ncells)])
+            self.subdomains[subdomain] = {'x': x, 'y': y, 'z': z}
 
     def readProfileData(self, resname, metric, timestamps):
         '''
@@ -256,6 +257,15 @@ class ResSim_Results(object):
             self.loadElevation(alt_subdomain_name=this_subdomain)
             vals = self.elev_ts
 
+        elif metrc.lower() == 'outflow':
+            metric_name = 'Total boundary outflow'
+            try:
+                vals = self.h['Results/Subdomains/' + this_subdomain + '/' + metric_name]
+            except KeyError:
+                # raise KeyError('WQ Simulation does not have results for metric: {0}'.format(metric_name))
+                WF.print2stdout(f'\nWARNING: WQ Simulation does not have results for metric: {metric_name}')
+                vals = []
+
         if t_in != 'all':
             timestep = WT.getIdxForTimestamp(self.jd_dates, t_in, self.t_offset) #get timestep index for current date
             if timestep == -1:
@@ -265,7 +275,7 @@ class ResSim_Results(object):
         else:
             self.vals = vals
 
-    def readTimeSeries(self, metric, x, y):
+    def readTimeSeries(self, metric, x, y, subdomain=None):
         '''
         Gets Time series values from Ressim H5 files.
         :param metric: metric of data
@@ -276,7 +286,7 @@ class ResSim_Results(object):
         :return: times and values arrays for selected metric and time window
         '''
 
-        i, subdomain_name = self.findComputedStationCell(x, y)
+        i, subdomain_name = self.findComputedStationCell(x, y, subdomain=subdomain)
         if subdomain_name == None:
             WF.print2stdout(f'XY coords ({x}, {y}) not found', debug=self.Report.debug)
             return [], []
@@ -470,7 +480,7 @@ class ResSim_Results(object):
 
         return distance
 
-    def findComputedStationCell(self, easting, northing):
+    def findComputedStationCell(self, easting, northing, subdomain=None):
         '''
         finds subdomains that are closest to observed station coordinates
         TODO: add some kind of tolerance or max distance?
@@ -478,10 +488,18 @@ class ResSim_Results(object):
         :return: cell index and subdomain information closest to observed data
         '''
 
-        nearest_dist = 1e6
+        nearest_dist = 1e20
         data_index = 0 #TODO: also exclude reservoirs
         data_subdomain = None
-        for subdomain, sd_data in self.subdomains.items():
+        if subdomain == None:
+            subdomains = self.subdomains.items()
+        else:
+            subdomains = [(subdomain, self.subdomains[subdomain])]
+        for subdomain, sd_data in subdomains:
+            isRes = self.checkForReservoir(subdomain, sd_data)
+            if isRes:
+                WF.print2stdout(f'{subdomain} found to be reservoir for {easting}, {northing}. Skipping.', debug=self.Report.debug)
+                continue
             x = sd_data['x']
             y = sd_data['y']
             dist = np.sqrt((x - easting) * (x - easting) + (y - northing) * (y - northing))
@@ -491,7 +509,11 @@ class ResSim_Results(object):
                 data_index = min_cell
                 data_subdomain = subdomain
                 nearest_dist = min_dist
-
+                cell_x = x[data_index]
+                cell_y = y[data_index]
+        WF.print2stdout(f'Using {data_subdomain} for {easting}, {northing}.', debug=self.Report.debug)
+        WF.print2stdout(f'Distance: {nearest_dist}.', debug=self.Report.debug)
+        WF.print2stdout(f'XY: {cell_x},{cell_y}.', debug=self.Report.debug)
         return data_index, data_subdomain
 
     def loadComputedTime(self):
@@ -588,4 +610,49 @@ class ResSim_Results(object):
                     break
 
         return self.t_computed[::interval], output_val_at_target
+
+    def checkForReservoir(self, subdomain, sd_data):
+        attrs = self.h['Geometry/Subdomains'][subdomain].attrs
+        if 'Subdomain Type' in attrs.keys():
+            subdomaintype = attrs.get('Subdomain Type')[0].decode()
+            if subdomaintype == 'Reach_1D':
+                return True
+        x = sd_data['x']
+        y = sd_data['y']
+        z = sd_data['z']
+        num_x_is1 = len(x) == 1
+        unique_num_x_is1 = len(list(set(x))) == 1
+        unique_num_y_is1 = len(list(set(y))) == 1
+        unique_num_z_is1 = len(list(set(z))) == 1
+        if not num_x_is1: #only 1 value.. shouldnt happen by ressim rules but lets be sure.
+            if not unique_num_z_is1 and unique_num_x_is1 and unique_num_y_is1: #res have same x and y but differnt y
+                return True
+            else:
+                return False
+        else:
+            return True #channels must have 2 cells so this is our best guess
+
+    def checkForOutflow(self, resname):
+        if 'Total boundary outflow' in self.h['Results/Subdomains/' + resname].keys():
+            return True
+        else:
+            return False
+
+    def getFWAReservoirOutputTimeseries(self, resname, parameter):
+        hasOutflow = self.checkForOutflow(resname)
+        if not hasOutflow:
+            WF.print2stdout(f'Total Boundary Outflow not found in results file for {resname}', debug=self.Report.debug)
+            WF.print2stdout('To turn on, check "Cell Flow" in the Output variables tab, under Water Quality tab in the'
+                            'ResSim Alternative Editor', debug=self.Report.debug)
+        self.loadResults('all', parameter.lower(), alt_subdomain_name=resname)
+        param_vals = self.vals[:]
+        self.loadResults('all', 'outflow', alt_subdomain_name=resname)
+        outflow_vals = self.vals[:]
+        outflow_sums = outflow_vals.sum(axis=1)
+        param_times_flow = param_vals * outflow_vals
+        param_times_flow_sum = param_times_flow.sum(axis=1)
+        FWA_values = param_times_flow_sum / outflow_sums
+        return self.t_computed, FWA_values
+
+
 

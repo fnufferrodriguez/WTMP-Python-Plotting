@@ -380,9 +380,12 @@ class DataOrganizer(object):
                                                  'values': pickle.loads(pickle.dumps(values, -1)),
                                                  'units': pickle.loads(pickle.dumps(units, -1))}
 
-        elif 'h5file' in Line_info.keys():
+        elif 'h5file' in Line_info.keys() and 'easting' in Line_info.keys() and 'northing' in Line_info.keys():
             datamem_key = self.buildMemoryKey(Line_info)
-
+            if 'subdomain' in Line_info.keys():
+                subdomain = Line_info['subdomain']
+            else:
+                subdomain = None
             if datamem_key in self.Memory.keys():
                 WF.print2stdout('READING {0} FROM MEMORY'.format(datamem_key), debug=self.Report.debug)
                 datamementry = pickle.loads(pickle.dumps(self.Memory[datamem_key], -1))
@@ -401,7 +404,8 @@ class DataOrganizer(object):
                 externalResSim.loadSubdomains()
                 times, values = externalResSim.readTimeSeries(Line_info['parameter'],
                                                               float(Line_info['easting']),
-                                                              float(Line_info['northing']))
+                                                              float(Line_info['northing']),
+                                                              subdomain=subdomain)
                 if 'units' in Line_info.keys():
                     units = Line_info['units']
                 else:
@@ -413,6 +417,10 @@ class DataOrganizer(object):
 
         elif 'easting' in Line_info.keys() and 'northing' in Line_info.keys():
             datamem_key = self.buildMemoryKey(Line_info)
+            if 'subdomain' in Line_info.keys():
+                subdomain = Line_info['subdomain']
+            else:
+                subdomain = None
             if datamem_key in self.Memory.keys():
                 WF.print2stdout('READING {0} FROM MEMORY'.format(datamem_key), debug=self.Report.debug)
                 datamementry = pickle.loads(pickle.dumps(self.Memory[datamem_key], -1))
@@ -422,8 +430,9 @@ class DataOrganizer(object):
 
             else:
                 times, values = self.Report.ModelAlt.readTimeSeries(Line_info['parameter'],
-                                                             float(Line_info['easting']),
-                                                             float(Line_info['northing']))
+                                                                    float(Line_info['easting']),
+                                                                    float(Line_info['northing']),
+                                                                    subdomain=subdomain)
                 if 'units' in Line_info.keys():
                     units = Line_info['units']
                 else:
@@ -443,21 +452,38 @@ class DataOrganizer(object):
                 units = datamementry['units']
 
             else:
+                times = []
+                values = []
                 if self.Report.plugin.lower() != 'ressim':
                     WF.print2stdout('Incorrect model type for line using ResSimResName', debug=self.Report.debug)
                     return [], [], None
-                if 'target' not in Line_info.keys():
-                    WF.print2stdout('No target data for profile target timeseries.', debug=self.Report.debug)
-                    WF.print2stdout('Please enter target data including value and parameter.', debug=self.Report.debug)
-                    return [], [], None
-                if 'parameter' not in Line_info.keys():
-                    WF.print2stdout('No parameter for profile target timeseries.', debug=self.Report.debug)
-                    WF.print2stdout('Assuming output is elevation.', debug=self.Report.debug)
-                    Line_info['parameter'] = 'elevation'
+                # if 'target' not in Line_info.keys():
+                #     WF.print2stdout('No target data for profile target timeseries.', debug=self.Report.debug)
+                #     WF.print2stdout('Please enter target data including value and parameter.', debug=self.Report.debug)
+                #     return [], [], None
+                # if 'parameter' not in Line_info.keys():
+                #     WF.print2stdout('No parameter for profile target timeseries.', debug=self.Report.debug)
+                #     WF.print2stdout('Assuming output is elevation.', debug=self.Report.debug)
+                #     Line_info['parameter'] = 'elevation'
+                if 'target' in Line_info.keys():
+                    if 'parameter' not in Line_info.keys():
+                        WF.print2stdout('No parameter for profile target timeseries.', debug=self.Report.debug)
+                        WF.print2stdout('Assuming output is elevation.', debug=self.Report.debug)
+                        Line_info['parameter'] = 'elevation'
+                    times, values = self.Report.ModelAlt.getProfileTargetTimeseries(Line_info['ressimresname'],
+                                                                                    Line_info['parameter'],
+                                                                                    Line_info['target'])
+                elif 'fwa' in Line_info.keys():
+                    if Line_info['fwa'].lower() == 'true': #not sure what to do otherwise..
+                        if 'parameter' not in Line_info.keys():
+                            WF.print2stdout('No parameter for FWA reservoir timeseries.', debug=self.Report.debug)
+                            WF.print2stdout('Assuming output is temperature.', debug=self.Report.debug)
+                            Line_info['parameter'] = 'temperature'
+                        times, values = self.Report.ModelAlt.getFWAReservoirOutputTimeseries(Line_info['ressimresname'],
+                                                                                             Line_info['parameter'])
 
-                times, values = self.Report.ModelAlt.getProfileTargetTimeseries(Line_info['ressimresname'],
-                                                                                                  Line_info['parameter'],
-                                                                                                  Line_info['target'])
+
+
                 if 'units' in Line_info.keys():
                     units = Line_info['units']
                 else:
