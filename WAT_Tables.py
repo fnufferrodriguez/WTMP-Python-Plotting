@@ -80,7 +80,8 @@ class Tables(object):
                     if '%%{0}%%'.format(dk_flag) in curheader:
                         #like %%Computed%%%%SimulationName%%, %%Observed%%, etc..
                         if 'label' in dk_keys: #if theres a label, just use that, easy
-                            curheader = curheader.replace('%%{0}%%'.format(dk_flag), ds['label'])
+                            # curheader = curheader.replace('%%{0}%%'.format(dk_flag), ds['label'])
+                            curheader = ds['label']
                         elif 'ID' in dk_keys: #otherwise we will go find the settings and search for flags that are model spec
                             ID = ds['ID']
                             curheader = self.Report.configureSettingsForID(ID, curheader)
