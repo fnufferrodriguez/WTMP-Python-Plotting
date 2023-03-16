@@ -84,7 +84,9 @@ class Tables(object):
                             curheader = ds['label']
                         elif 'ID' in dk_keys: #otherwise we will go find the settings and search for flags that are model spec
                             ID = ds['ID']
-                            curheader = self.Report.configureSettingsForID(ID, curheader)
+                            # curheader = self.Report.configureSettingsForID(ID, curheader)
+                            self.Report.loadCurrentID(ID)
+                            curheader = self.Report.SimulationName
                         else: #if there are none, just remove the flag and we will add the flag based off of the flag :thumbsup:
                             #example "%%Computed%% Computed"
                             #this is less than ideal for comparison plots and I hope doesnt really happen, but I have to catch it
@@ -147,7 +149,9 @@ class Tables(object):
                                     curheader = assigned_header.replace(f'%%{dk_flag}%%', '')
                                     if 'ID' in dk_keys:
                                         ID = ds['ID']
-                                        curheader = self.Report.configureSettingsForID(ID, curheader)
+                                        # curheader = self.Report.configureSettingsForID(ID, curheader)
+                                        self.Report.loadCurrentID(ID)
+                                        curheader = self.Report.SimulationName
                                     if curheader not in headers:
                                         headers.append(curheader)
                                     isused = True
@@ -204,7 +208,9 @@ class Tables(object):
                         if '%%{0}%%'.format(data[datakey]['flag']) in curheader:
                             if 'ID' in data[datakey].keys():
                                 ID = data[datakey]['ID']
-                                tmpheader = self.Report.configureSettingsForID(ID, curheader)
+                                # tmpheader = self.Report.configureSettingsForID(ID, curheader)
+                                self.Report.loadCurrentID(ID)
+                                tmpheader = self.Report.SimulationName
                             else:
                                 tmpheader = pickle.loads(pickle.dumps(curheader, -1))
                             tmpheader = tmpheader.replace('%%{0}%%'.format(data[datakey]['flag']), '')
