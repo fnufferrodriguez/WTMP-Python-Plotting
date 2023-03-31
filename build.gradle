@@ -1,0 +1,38 @@
+plugins {
+    id "base"
+    id "maven-publish"
+}
+
+task zipPython(type: Zip) {
+    onlyIf { project.hasProperty("publishUSBRPython") && publishUSBRPython }
+
+    from 'dist/WAT_Report_Generator'
+    include '**.*'
+    archiveBaseName = 'usbr-actionpanel-python'
+    includeEmptyDirs = false
+    destinationDirectory = file("$projectDir/build")
+
+    eachFile { fileCopyDetails ->
+        fileCopyDetails.setRelativePath(fileCopyDetails.getRelativePath().prepend("HEC-WAT/AutomatedReport"))
+    }
+}
+if (project.hasProperty("publishUSBRPython") && publishUSBRPython) {
+    build.dependsOn(zipPython)
+    assemble.dependsOn(zipPython)
+
+    artifacts {
+        'default' zipPython
+        archives zipPython
+    }
+}
+
+publishing {
+    publications {
+        if (project.hasProperty("publishUSBRPython") && publishUSBRPython) {
+            maven(MavenPublication) {
+                artifactId = "usbr-actionpanel-python"
+                artifact source: zipPython, extension: 'zip'
+            }
+        }
+    }
+}
