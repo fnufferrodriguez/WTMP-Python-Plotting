@@ -15,6 +15,7 @@ Created on 7/15/2021
 import os, sys
 import numpy as np
 import datetime as dt
+import pandas as pd
 from scipy.interpolate import interp1d
 from pydsstools.heclib.dss import HecDss
 from collections import Counter
@@ -343,6 +344,16 @@ def readW2ResultsFile(output_file_name, jd_dates, run_path, targetfieldidx=1):
             continue
 
     return out_vals
+
+def readFormattedTable_Pandas(filename):
+    if os.path.exists(filename):
+        ext = filename.split('.')[-1]
+        if ext.lower() == 'csv':
+            df = pd.read_csv(filename)
+        return df
+    else:
+        WF.print2stdout(f'{filename} not found.')
+        return pd.DataFrame()
 
 def readTextProfile(observed_data_filename, timestamps, starttime=None, endtime=None):
     '''

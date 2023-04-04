@@ -286,6 +286,19 @@ class Tables(object):
 
         return headers, rows
 
+    def buildFormattedTable(self, data):
+        headers = data.columns #ez
+        rows = []
+        for i, row in data.iterrows():
+            built_row = ''
+            for rowval in row.values:
+                if built_row == '':
+                    built_row = str(rowval)
+                else:
+                    built_row += f'|{rowval}'
+            rows.append(built_row)
+        return headers, rows
+
 
     def buildProfileStatsTable(self, object_settings, timestamp, data):
         '''

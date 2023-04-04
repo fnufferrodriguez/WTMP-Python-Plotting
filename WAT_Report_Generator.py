@@ -2933,6 +2933,63 @@ class MakeAutomatedReport(object):
 
         WF.print2stdout(f'Text box took {time.time() - objectstarttime} seconds.')
 
+    def makeTableFromFile(self, object_settings):
+        '''
+        Makes a table from a formatted CSV file
+        :param object_settings:
+        :return: 
+        '''
+
+        WF.print2stdout('\n################################')
+        WF.print2stdout('Now making Table From File.')
+        WF.print2stdout('################################\n')
+
+        objectstarttime = time.time()
+
+        self.Tables = WTable.Tables(self)
+
+        default_settings = self.loadDefaultPlotObject('tablefromfile')
+        object_settings = WF.replaceDefaults(self, default_settings, object_settings)
+
+        if 'template' in object_settings.keys():
+            template_settings = WR.readTemplate(self, object_settings['template'])
+            if object_settings['type'].lower() in template_settings.keys():
+                object_settings = WF.replaceDefaults(self, template_settings[object_settings['type'].lower()], object_settings)
+
+        data, data_settings = self.Data.getTableDataDictionary(object_settings, type='formatted')
+        object_settings['primarykey'] = self.Data.getPrimaryTableKey(data, object_settings)
+        data, data_settings = self.Data.mergeFormattedTables(data, data_settings, object_settings)
+        data = self.Data.filterFormattedTable(data, object_settings)
+        headings, rows = self.Tables.buildFormattedTable(data)
+        print('stop')
+
+        if 'description' in object_settings.keys():
+            desc = object_settings['description']
+        else:
+            desc = ''
+
+        # ID#|value|value..etc
+        table_constructor = {}
+        threshold_colors = np.full(len(rows), None)
+        for hi, header in enumerate(headings):
+            if header == object_settings['primarykey']:
+                continue
+            tcnum = len(table_constructor.keys())
+            formatted_rows = []
+            for ri, row in enumerate(rows):
+                srow = row.split('|')
+                rowfrmt = f'{srow[0]}|{srow[hi]}'
+                formatted_rows.append(rowfrmt)
+            table_constructor[tcnum] = {}
+            table_constructor[tcnum]['rows'] = formatted_rows
+            table_constructor[tcnum]['thresholdcolors'] = threshold_colors
+            table_constructor[tcnum]['header'] = header
+
+
+        self.XML.writeTableStart(desc, object_settings['primarykey'])
+        self.Tables.writeTable(table_constructor)
+        WF.print2stdout(f'Table from file took {time.time() - objectstarttime} seconds.')
+
     def setSimulationCSVVars(self, simlist):
         '''
         set variables pertaining to a specified simulation
@@ -3162,6 +3219,8 @@ class MakeAutomatedReport(object):
                 self.makeSingleStatisticProfileTable(object)
             elif objtype == 'textbox':
                 self.makeTextBox(object)
+            elif objtype == 'tablefromfile':
+                self.makeTableFromFile(object)
             else:
                 WF.print2stdout('Section Type {0} not identified.'.format(objtype))
                 WF.print2stdout('Skipping Section..')

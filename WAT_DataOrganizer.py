@@ -17,6 +17,8 @@ import numpy as np
 import pandas as pd
 import traceback
 import pickle
+import itertools
+from collections import Counter
 
 import WAT_Functions as WF
 import WAT_Reader as WDR
@@ -909,45 +911,152 @@ class DataOrganizer(object):
     #Table Functions
     #################################################################
 
-    def getTableDataDictionary(self, object_settings):
+    def getTableDataDictionary(self, object_settings, type='timeseries'):
         '''
         Grabs data from time series data to be used in tables
         :param object_settings: currently selected object settings dictionary
         :return: dictionary object containing info from each data source and list of units
+        :type: determines the type of data we are grabbing.
+            Timeseries: date/time values that will be organzied into data
+            Formatted: existing tables to be read in as is
         '''
 
         data = {}
         line_settings = {}
+        temp_flag_number = 1
         for dp in object_settings['datapaths']:
             numtimesused = 0
             if 'flag' not in dp.keys():
                 WF.print2stdout('Flag not set for line (Computed/Observed/etc)', debug=self.Report.debug)
-                WF.print2stdout('Not using Line:', dp, debug=self.Report.debug)
-                continue
-            elif dp['flag'].lower() == 'computed':
-                for ID in self.Report.accepted_IDs:
-                    cur_dp = pickle.loads(pickle.dumps(dp, -1))
-                    cur_dp = self.Report.configureSettingsForID(ID, cur_dp)
-                    cur_dp['numtimesused'] = numtimesused
-                    cur_dp['ID'] = ID
-                    if not self.Report.checkModelType(cur_dp):
+                temp_flag = f'Flag{str(temp_flag_number).zfill(6)}'
+                WF.print2stdout(f'Using Temporary flag {temp_flag}, but table may not work as intended', debug=self.Report.debug)
+                dp['flag'] = temp_flag
+                temp_flag_number += 1
+                # WF.print2stdout('Not using Line:', dp, debug=self.Report.debug)
+                # continue
+            if type.lower() == 'timeseries':
+                if dp['flag'].lower() == 'computed':
+                    for ID in self.Report.accepted_IDs:
+                        cur_dp = pickle.loads(pickle.dumps(dp, -1))
+                        cur_dp = self.Report.configureSettingsForID(ID, cur_dp)
+                        cur_dp['numtimesused'] = numtimesused
+                        cur_dp['ID'] = ID
+                        if not self.Report.checkModelType(cur_dp):
+                            continue
+                        data, line_settings, success = self.updateTimeSeriesDataDictionary(data, line_settings, cur_dp)
+                        if success:
+                            numtimesused += 1
+                else:
+                    if self.Report.currentlyloadedID != self.Report.base_id:
+                        dp = self.Report.configureSettingsForID(self.Report.base_id, dp)
+                    else:
+                        dp = WF.replaceflaggedValues(self.Report, dp, 'modelspecific')
+                    dp['numtimesused'] = numtimesused
+                    if not self.Report.checkModelType(dp):
                         continue
-                    data, line_settings, success = self.updateTimeSeriesDataDictionary(data, line_settings, cur_dp)
+                    data, line_settings, success = self.updateTimeSeriesDataDictionary(data, line_settings, dp)
                     if success:
                         numtimesused += 1
-            else:
-                if self.Report.currentlyloadedID != self.Report.base_id:
-                    dp = self.Report.configureSettingsForID(self.Report.base_id, dp)
-                else:
-                    dp = WF.replaceflaggedValues(self.Report, dp, 'modelspecific')
-                dp['numtimesused'] = numtimesused
-                if not self.Report.checkModelType(dp):
-                    continue
-                data, line_settings, success = self.updateTimeSeriesDataDictionary(data, line_settings, dp)
-                if success:
-                    numtimesused += 1
+
+            elif type.lower() == 'formatted':
+                #TODO: update to handle different sheets?
+                #TODO: handle many tables? just select the first?
+                if 'filename' in dp.keys():
+                    data[dp['flag']] = WR.readFormattedTable_Pandas(dp['filename'])
+                line_settings[dp['flag']] = {}
+                datamem_key = self.buildMemoryKey(dp)
+                line_settings[dp['flag']]['logoutputfilename'] = datamem_key
+                line_settings[dp['flag']].update(dp)
 
         return data, line_settings
+
+    def filterFormattedTable(self, data, object_settings):
+        if 'headers' in object_settings.keys():
+            selected_headers = object_settings['headers']
+            if 'primarykey' in object_settings:
+                primarykey = object_settings['primarykey']
+            elif 'merge_on' in object_settings.keys():
+                primarykey = object_settings['merge_on']
+                if primarykey not in object_settings['headers']: #make sure primarykey doesnt get sniped
+                    selected_headers.append(primarykey)
+            columns = data.columns
+            for column in columns:
+                if column not in selected_headers:
+                    data.drop(column, axis=1, inplace=True)
+
+        if 'rows' in object_settings.keys():
+            selected_rows = object_settings['rows']
+            if 'primarykey' in object_settings:
+                primarykey = object_settings['primarykey']
+            elif 'merge_on' in object_settings.keys():
+                primarykey = object_settings['merge_on']
+            else:
+                primarykey = None
+                for col in data.columns:
+                    if np.all([n in data[col] for n in selected_rows]):
+                        primarykey = col
+                if primarykey == None:
+                    primarykey = list(data.columns)[0]
+                    WF.print2stdout('Unable to establish table primary key based on input.', debug=self.Report.debug)
+                    WF.print2stdout('To fix, specify a "primarykey" flag in the input file.', debug=self.Report.debug)
+                    WF.print2stdout(f'Using first column, {primarykey}.', debug=self.Report.debug)
+            new_data_df = pd.DataFrame(columns=data.columns)
+            for index, row in data.iterrows():
+                if row[primarykey] in selected_rows:
+                    new_data_df.append(row, ignore_index=True)
+
+            return new_data_df
+
+        return data #if we dont do rows
+
+    def mergeFormattedTables(self, data, data_settings, object_settings):
+        table_keys = list(data.keys())
+
+        if len(table_keys) < 2: #todo: can this be zero?
+            main_table = data[table_keys[0]]
+            main_data_settings = data_settings[table_keys[0]]
+
+        else:
+            if 'merge_on' in object_settings.keys():
+                merge_on = object_settings['merge_on']
+            else:
+                common_keys = [list(data[n].columns) for n in table_keys]
+                common_keys = list(itertools.chain(*common_keys))
+                common_keys_count = Counter(common_keys)
+                merge_on = None
+                for ckc in common_keys_count.keys(): #TODO: come back and improve this logic
+                    if common_keys_count[ckc] == len(table_keys):
+                        merge_on = ckc
+            if merge_on != None:
+                main_table = data[table_keys[0]]
+                main_data_settings = data_settings[table_keys[0]]
+                for tk in table_keys[1:]:
+                    main_table = pd.merge(main_table, data[tk], on=merge_on)
+                    main_data_settings.update(data_settings[tk])
+                #Todo: does the flag matter?
+
+            else:
+                WF.print2stdout('Unable to find common key in tables.', debug=self.Report.debug)
+                main_table = data[table_keys[0]]
+                main_data_settings = data_settings[table_keys[0]]
+
+        return main_table, main_data_settings
+
+    def getPrimaryTableKey(self, data, object_settings):
+        if 'primarykey' in object_settings:
+            primarykey = object_settings['primarykey']
+        elif 'merge_on' in object_settings.keys():
+            primarykey = object_settings['merge_on']
+        else:
+            if isinstance(data, dict):
+                firstkey = list(data.keys())[0]
+                primarykey = list(data[firstkey].columns)[0]
+            elif isinstance(data, pd.DataFrame):
+                primarykey = list(data.columns)[0]
+            WF.print2stdout('Unable to establish table primary key based on input.', debug=self.Report.debug)
+            WF.print2stdout('To fix, specify a "primarykey" flag in the input file.', debug=self.Report.debug)
+            WF.print2stdout(f'Using first column, {primarykey}.', debug=self.Report.debug)
+        return primarykey
 
     #################################################################
     #Contour Functions
