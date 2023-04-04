@@ -386,21 +386,40 @@ class MakeAutomatedReport(object):
                             values = values/RelativeMasterSet
 
                     if curline_settings['collection']:
-                        modifiedalpha = False
-                        if line_draw_settings['alpha'] == 1.:
-                            modifiedalpha = True
-                            line_draw_settings['alpha'] = 0.1 #for collection plots, set to low opac for a jillion lines
-                        for vsi, valueset in enumerate(values):
-                            if vsi > 0:
-                                line_draw_settings['label'] = ''
-                            if line_draw_settings['drawline'].lower() == 'true' and line_draw_settings['drawpoints'].lower() == 'true':
-                                self.Plots.plotLinesAndPoints(dates, valueset, curax, line_draw_settings)
-                            elif line_draw_settings['drawline'].lower() == 'true':
-                                self.Plots.plotLines(dates, valueset, curax, line_draw_settings)
-                            elif line_draw_settings['drawpoints'].lower() == 'true':
-                                self.Plots.plotPoints(dates, valueset, curax, line_draw_settings)
-                        if modifiedalpha:
-                            line_draw_settings['alpha'] = 1.
+                        coloreach = False
+                        if 'coloreach' in curline_settings.keys():
+                            if curline_settings['coloreach'].lower() == 'true':
+                                coloreach = True
+                        if not coloreach:
+                            modifiedalpha = False
+                            if line_draw_settings['alpha'] == 1.:
+                                modifiedalpha = True
+                                line_draw_settings['alpha'] = 0.25 #for collection plots, set to low opac for a jillion lines
+                            for vsi, valueset in enumerate(values):
+                                if vsi > 0:
+                                    line_draw_settings['label'] = ''
+                                if line_draw_settings['drawline'].lower() == 'true' and line_draw_settings['drawpoints'].lower() == 'true':
+                                    self.Plots.plotLinesAndPoints(dates, valueset, curax, line_draw_settings)
+                                elif line_draw_settings['drawline'].lower() == 'true':
+                                    self.Plots.plotLines(dates, valueset, curax, line_draw_settings)
+                                elif line_draw_settings['drawpoints'].lower() == 'true':
+                                    self.Plots.plotPoints(dates, valueset, curax, line_draw_settings)
+                            if modifiedalpha:
+                                line_draw_settings['alpha'] = 1.
+                        else:
+                            single_coll_line_settings = self.Plots.seperateCollectionLines(line_draw_settings)
+                            for cIDi, cID in enumerate(curline_settings['collectionIDs']):
+                                valueset = values[cIDi]
+                                coll_line_settings = single_coll_line_settings[cID]
+                                if coll_line_settings['drawline'].lower() == 'true' and coll_line_settings['drawpoints'].lower() == 'true':
+                                    self.Plots.plotLinesAndPoints(dates, valueset, curax, coll_line_settings)
+                                elif coll_line_settings['drawline'].lower() == 'true':
+                                    self.Plots.plotLines(dates, valueset, curax, coll_line_settings)
+                                elif coll_line_settings['drawpoints'].lower() == 'true':
+                                    self.Plots.plotPoints(dates, valueset, curax, coll_line_settings)
+
+
+
                         self.Plots.plotCollectionEnvelopes(dates, values, curax, line_draw_settings)
 
                     elif curline_settings['stack']:

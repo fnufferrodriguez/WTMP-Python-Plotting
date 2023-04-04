@@ -362,10 +362,11 @@ class DataOrganizer(object):
                             collectionIDs = self.Report.accepted_IDs
                         else:
                             collectionIDs = 'all'
-                        times, values, units = WDR.readCollectionsDSSData(Line_info['dss_filename'], Line_info['dss_path'],
-                                                                          collectionIDs, self.Report.StartTime,
-                                                                          self.Report.EndTime, self.Report.debug)
+                        times, values, units, collectionIDs = WDR.readCollectionsDSSData(Line_info['dss_filename'], Line_info['dss_path'],
+                                                                                         collectionIDs, self.Report.StartTime,
+                                                                                         self.Report.EndTime, self.Report.debug)
                         metadata['collection'] = True
+                        metadata['collectionIDs'] = collectionIDs
                     else:
                         times, values, units = WDR.readDSSData(Line_info['dss_filename'], Line_info['dss_path'],
                                                                self.Report.StartTime, self.Report.EndTime,

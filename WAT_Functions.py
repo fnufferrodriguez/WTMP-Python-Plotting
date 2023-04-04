@@ -1218,7 +1218,7 @@ def fixDuplicateColors(line_settings):
     '''
 
     lineusedcount = line_settings['numtimesused']
-    if lineusedcount > len(constants.def_colors):
+    if lineusedcount >= len(constants.def_colors):
         defcol_idx = lineusedcount%len(constants.def_colors)
     else:
         defcol_idx = lineusedcount
@@ -1232,10 +1232,13 @@ def fixDuplicateColors(line_settings):
                 line_settings['linecolor'] = line_settings['linecolors'][lc_idx]
             else:
                 line_settings['linecolor'] = constants.def_colors[defcol_idx]
+
         else: #case where first line, but linecolor isnt defined, but linecolorS is
             #so it used default color INSTEAD of the desired colro...
             if 'linecolors' in line_settings.keys():
                 line_settings['linecolor'] = line_settings['linecolors'][0]
+            elif 'linecolor' not in line_settings.keys():
+                line_settings['linecolor'] = constants.def_colors[0]
 
     if line_settings['drawpoints'].lower() == 'true':
         if lineusedcount > 0: #if more than one, the color specified is already used. Use a new color..

@@ -200,37 +200,51 @@ def readChapterDefFile(CD_file):
 
 def readCollectionsDSSData(dss_file, pathname, collectionIDs, startdate, enddate, debug):
     try:
-        fid = HecDss.Open(dss_file)
-        collection_pn = fid.getPathnameList(pathname)
-        collection_pn = list(set(['/'.join(WF.ReplaceListAtIdx(n.split('/'), 4, '*')) for n in collection_pn]))
-        WF.print2stdout(f'Found {len(collection_pn)} records in collection for {pathname}', debug=debug)
-        if len(collection_pn) == 0:
-            WF.print2stdout(f'No records in collection for {pathname}', debug=debug)
+        if os.path.exists(dss_file):
+            fid = HecDss.Open(dss_file)
+            if pathname.split('/')[4] != '*': #make sure date field is blank
+                pns = pathname.split('/')
+                pns[4] = '*'
+                pathname = '/'.join(pns)
+            collection_pn = fid.getPathnameList(pathname)
+            collection_pn = list(set(['/'.join(WF.ReplaceListAtIdx(n.split('/'), 4, '*')) for n in collection_pn]))
+            WF.print2stdout(f'Found {len(collection_pn)} records in collection for {pathname}', debug=debug)
+            if len(collection_pn) == 0:
+                WF.print2stdout(f'No records in collection for {pathname}', debug=debug)
+                fid.close()
+                return [], [], None, []
+            if collectionIDs == 'all':
+                collectionIDs = [int(n.split('/')[6].split('|')[0].replace('C:', '')) for n in collection_pn]
+            else:
+                collectionIDs = [int(n) for n in collectionIDs]
+
+            collectionIDs.sort()
+
+            for i, ID in enumerate(collectionIDs):
+                if len(str(ID)) != 6:
+                    ID = str(ID).zfill(6) #DSS conventions want 6 spaces
+                CID_pathname_fpart = pathname.split('/')[6].replace('*|', f'C:{ID}|')
+                CID_pathname_split = pathname.split('/')
+                CID_pathname_split[6] = CID_pathname_fpart
+                CID_pathname = '/'.join(CID_pathname_split)
+                WF.print2stdout(f'Currently working on {ID}', debug=debug)
+                ts = fid.read_ts(CID_pathname, window=(startdate, enddate), regular=True, trim_missing=True)
+                values = np.asarray(ts.values)
+                if i == 0: #set vars like times and units that are always the same for all collection
+                    times = np.array(ts.pytimes)
+                    units = ts.units
+                    collection_values = []
+                    collection_values = np.full((len(collection_pn), len(times)), np.nan) #initialize array
+                # collection_values[int(ID)-1] = values #Todo: shelf for now
+                collection_values[i] = values
             fid.close()
-            return [], [], None
-        if collectionIDs == 'all':
-            collectionIDs = [n.split('/')[6].split('|')[0].replace('C:', '') for n in collection_pn]
-        for i, ID in enumerate(collectionIDs):
-            if len(ID) != 6:
-                ID = ID.zfill(6) #DSS conventions want 6 spaces
-            CID_pathname_fpart = pathname.split('/')[6].replace('*|', f'C:{ID}|')
-            CID_pathname_split = pathname.split('/')
-            CID_pathname_split[6] = CID_pathname_fpart
-            CID_pathname = '/'.join(CID_pathname_split)
-            WF.print2stdout(f'Currently working on {ID}', debug=debug)
-            ts = fid.read_ts(CID_pathname, window=(startdate, enddate), regular=True, trim_missing=True)
-            values = np.asarray(ts.values)
-            if i == 0: #set vars like times and units that are always the same for all collection
-                times = np.array(ts.pytimes)
-                units = ts.units
-                collection_values = np.full((len(collection_pn), len(times)), np.nan) #initialize array
-            collection_values[int(ID)] = values
-        fid.close()
-        return times, collection_values, units
+            return times, collection_values, units, collectionIDs
+        else:
+            WF.print2stdout(f'DSS file {dss_file} not found.', debug=True)
     except:
         WF.print2stdout(f'Unable to open {dss_file}')
         WF.print2stdout(traceback.format_exc(), debug=debug)
-        return [], [], None
+        return [], [], None, []
 
 def readDSSData(dss_file, pathname, startdate, enddate, debug):
     '''

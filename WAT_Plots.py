@@ -43,6 +43,25 @@ class Plots(object):
             object_settings['axs'] = [{}] #empty axis object
         return object_settings
 
+    def seperateCollectionLines(self, line_draw_settings):
+        if 'collectionIDs' in line_draw_settings:
+            collection_draw_settings = {}
+            collectionIDs = line_draw_settings['collectionIDs']
+            for idi, ID in enumerate(collectionIDs):
+                collection_draw_settings[ID] = {}
+                collection_draw_settings[ID].update(line_draw_settings)
+                collection_draw_settings[ID]['numtimesused'] = idi
+                if '%%ID%%' not in collection_draw_settings[ID]['label']:
+                    collection_draw_settings[ID]['label'] = f"{collection_draw_settings[ID]['label']}: {ID}"
+                else:
+                    collection_draw_settings[ID]['label'] = collection_draw_settings[ID]['label'].replace('%%ID%%', ID)
+                collection_draw_settings[ID] = WF.fixDuplicateColors(collection_draw_settings[ID])
+            return collection_draw_settings
+
+        else:
+            WF.print2stdout('Cannot seperate collection lines.', debug=self.Report.debug)
+            return line_draw_settings
+
     def setTimeSeriesXlims(self, cur_obj_settings, yearstr, years):
         '''
         gets the xlimits for time series. This can be dependent on year, so needs to be looped over.
