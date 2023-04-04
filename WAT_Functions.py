@@ -601,7 +601,8 @@ def replaceFlaggedValue(Report, value, itemset):
                           '%%baseSimulationName%%': Report.baseSimulationName,
                           '%%starttime%%': Report.StartTimeStr,
                           '%%endtime%%': Report.EndTimeStr,
-                          '%%LastComputed%%': Report.LastComputed
+                          '%%LastComputed%%': Report.LastComputed,
+                          '%%id%%': Report.currentlyloadedID
                           }
 
     for fv in flagged_values.keys():
@@ -1471,17 +1472,24 @@ def getListItems(listvals):
     '''
 
     if isinstance(listvals, (list, np.ndarray)):
-        outvalues = []
+        outvalues = np.array([])
         for item in listvals:
             if isinstance(item, (list, np.ndarray)):
                 vals = getListItems(item)
                 for v in vals:
-                    outvalues.append(v)
+                    outvalues = np.append(outvalues, v)
+                    # outvalues.append(v)
             else:
                 return listvals #we just have a list of values, so we're good! return list
     elif isinstance(listvals, dict):
         outvalues = getListItemsFromDict(listvals)
     return outvalues
+
+def cleanFileName(csvname):
+    pattern = r'[^\w\-_\. ]'
+    # replace invalid characters with underscores
+    sanitized_file_name = re.sub(pattern, '_', csvname)
+    return sanitized_file_name
 
 def getListItemsFromDict(indict):
     '''
@@ -1739,3 +1747,7 @@ def calculateStorageFromElevation(values, curline):
     elev_stor_area = np.loadtxt(elevation_storage_area_file, delimiter=',')
     elevstorcurve = interpolate.interp1d(elev_stor_area[:, 0], elev_stor_area[:, 1], bounds_error=False, fill_value=np.nan)
     return elevstorcurve(values)
+
+def ReplaceListAtIdx(list, idx, replacevalue):
+    list[idx] = replacevalue
+    return list

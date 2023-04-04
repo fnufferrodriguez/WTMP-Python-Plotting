@@ -56,6 +56,13 @@ def changeTimeSeriesInterval(times, values, Line_info, t_offset, startYear):
         new_values = {}
         for key in values:
             new_times, new_values[key] = changeTimeSeriesInterval(times, values[key], Line_info, t_offset, startYear)
+    elif len(values.shape) == 2:
+        for vi, valueset in enumerate(values):
+            new_times, changed_vals = changeTimeSeriesInterval(times, valueset, Line_info, t_offset, startYear)
+            if vi == 0:
+                new_values = np.empty([values.shape[0], changed_vals.shape[0]])
+            new_values[vi] = changed_vals
+
     else:
         if 'interval' in Line_info:
             interval = Line_info['interval'].upper()

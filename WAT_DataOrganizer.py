@@ -42,64 +42,64 @@ class DataOrganizer(object):
 
         self.Memory = {}
 
-    def buildMemoryKey(self, Data_info):
+    def buildMemoryKey(self, data_info):
         '''
         creates uniform name for csv log output for data
         determines how to build the file name from the input type
-        :param Data_info: information about line
+        :param data_info: information about line
         :return: name for memory key, or null if can't be determined
         '''
 
         # very_special_flags = f'{self.Report.SimulationName.replace(" ", "").replace(":", "")}_{self.Report.baseSimulationName.replace(" ", "").replace(":", "")}'
         very_special_flags = WF.sanitizeText(self.Report.SimulationName)
 
-        if 'dss_path' in Data_info.keys(): #Get data from DSS record
-            if 'dss_filename' in Data_info.keys():
-                outname = WF.sanitizeText(os.path.basename(Data_info['dss_filename'])[:-4])
-                dssnamesplit = Data_info['dss_path'].split('/')
+        if 'dss_path' in data_info.keys(): #Get data from DSS record
+            if 'dss_filename' in data_info.keys():
+                outname = WF.sanitizeText(os.path.basename(data_info['dss_filename'])[:-4])
+                dssnamesplit = data_info['dss_path'].split('/')
                 dssname_pick = WF.sanitizeText(f"{dssnamesplit[1]}_{dssnamesplit[2]}_{dssnamesplit[3]}_{dssnamesplit[5]}_{dssnamesplit[-2]}")
                 outname = very_special_flags + '_' + outname + '_' + dssname_pick
 
-        elif 'w2_file' in Data_info.keys():
-            if 'structurenumbers' in Data_info.keys():
-                outname = WF.sanitizeText(os.path.basename(Data_info['w2_file']).split('.')[0])
-                if isinstance(Data_info['structurenumbers'], dict):
-                    structure_nums = [Data_info['structurenumbers']['structurenumber']]
-                elif isinstance(Data_info['structurenumbers'], str):
-                    structure_nums = [Data_info['structurenumbers']]
-                elif isinstance(Data_info['structurenumbers'], (list, np.ndarray)):
-                    structure_nums = Data_info['structurenumbers']
+        elif 'w2_file' in data_info.keys():
+            if 'structurenumbers' in data_info.keys():
+                outname = WF.sanitizeText(os.path.basename(data_info['w2_file']).split('.')[0])
+                if isinstance(data_info['structurenumbers'], dict):
+                    structure_nums = [data_info['structurenumbers']['structurenumber']]
+                elif isinstance(data_info['structurenumbers'], str):
+                    structure_nums = [data_info['structurenumbers']]
+                elif isinstance(data_info['structurenumbers'], (list, np.ndarray)):
+                    structure_nums = data_info['structurenumbers']
                 outname += '_Struct_' + '_'.join(structure_nums) + f'_{very_special_flags}'
             else:
-                if 'column' in Data_info.keys():
-                    very_special_flags += f'_Colf{Data_info["column"].replace(" ","")}'
-                outname = f"{os.path.basename(Data_info['w2_file']).split('.')[0]}_{very_special_flags}"
+                if 'column' in data_info.keys():
+                    very_special_flags += f'_Colf{data_info["column"].replace(" ", "")}'
+                outname = f"{os.path.basename(data_info['w2_file']).split('.')[0]}_{very_special_flags}"
 
-        elif 'h5file' in Data_info.keys():
-            h5name = WF.sanitizeText(os.path.basename(Data_info['h5file']).split('.h5')[0] + 'h5')
-            if 'easting' in Data_info.keys() and 'northing' in Data_info.keys():
-                outname = 'externalh5_{0}_{1}_{2}_{3}_{4}'.format(h5name, WF.sanitizeText(Data_info['parameter']), Data_info['easting'], Data_info['northing'], very_special_flags)
-            elif 'ressimname' in Data_info.keys():
-                outname = 'externalh5_{0}_{1}_{2}_{3}'.format(h5name, WF.sanitizeText(Data_info['parameter']), WF.sanitizeText(Data_info['ressimresname']), very_special_flags)
+        elif 'h5file' in data_info.keys():
+            h5name = WF.sanitizeText(os.path.basename(data_info['h5file']).split('.h5')[0] + 'h5')
+            if 'easting' in data_info.keys() and 'northing' in data_info.keys():
+                outname = 'externalh5_{0}_{1}_{2}_{3}_{4}'.format(h5name, WF.sanitizeText(data_info['parameter']), data_info['easting'], data_info['northing'], very_special_flags)
+            elif 'ressimname' in data_info.keys():
+                outname = 'externalh5_{0}_{1}_{2}_{3}'.format(h5name, WF.sanitizeText(data_info['parameter']), WF.sanitizeText(data_info['ressimresname']), very_special_flags)
 
-        elif 'easting' in Data_info.keys() and 'northing' in Data_info.keys():
-            outname = '{0}_{1}_{2}_{3}'.format(WF.sanitizeText(Data_info['parameter']), Data_info['easting'], Data_info['northing'], very_special_flags)
+        elif 'easting' in data_info.keys() and 'northing' in data_info.keys():
+            outname = '{0}_{1}_{2}_{3}'.format(WF.sanitizeText(data_info['parameter']), data_info['easting'], data_info['northing'], very_special_flags)
 
-        elif 'filename' in Data_info.keys(): #Get data from Observed Profile
-            outname = WF.sanitizeText(os.path.basename(Data_info['filename']).split('.')[0].replace(' ', '_')) + f'_{very_special_flags}'
+        elif 'filename' in data_info.keys(): #Get data from Observed Profile
+            outname = WF.sanitizeText(os.path.basename(data_info['filename']).split('.')[0].replace(' ', '_')) + f'_{very_special_flags}'
 
-        elif 'w2_segment' in Data_info.keys():
-            outname = 'W2_{0}_{1}_profile'.format(self.Report.ModelAlt.output_file_name.split('.')[0], Data_info['w2_segment']) + f'_{very_special_flags}'
+        elif 'w2_segment' in data_info.keys():
+            outname = 'W2_{0}_{1}_profile'.format(self.Report.ModelAlt.output_file_name.split('.')[0], data_info['w2_segment']) + f'_{very_special_flags}'
 
-        elif 'ressimresname' in Data_info.keys():
+        elif 'ressimresname' in data_info.keys():
             outname = '{0}_{1}_{2}_{3}'.format(WF.sanitizeText(os.path.basename(self.Report.ModelAlt.h5fname).split('.')[0] +'_h5'),
-                                           WF.sanitizeText(Data_info['parameter']), WF.sanitizeText(Data_info['ressimresname']), very_special_flags)
-            if 'target' in Data_info.keys():
+                                               WF.sanitizeText(data_info['parameter']), WF.sanitizeText(data_info['ressimresname']), very_special_flags)
+            if 'target' in data_info.keys():
                 outname += '_trgt'
-                if 'parameter' in Data_info['target'].keys():
-                    outname += Data_info['target']['parameter'][:4]
-                if 'value' in Data_info['target'].keys():
-                    outname += Data_info['target']['value']
+                if 'parameter' in data_info['target'].keys():
+                    outname += data_info['target']['parameter'][:4]
+                if 'value' in data_info['target'].keys():
+                    outname += data_info['target']['value']
         else:
             outname = 'NULL'
 
@@ -118,7 +118,7 @@ class DataOrganizer(object):
         :return: updated data dictionary
         '''
 
-        dates, values, units = self.getTimeSeries(line, makecopy=False) #TODO: update
+        dates, values, metadata = self.getTimeSeries(line, makecopy=False) #TODO: update
         datacheck = False
         if WF.checkData(values):
             datacheck = True
@@ -133,17 +133,17 @@ class DataOrganizer(object):
                 flag = newflag
                 WF.print2stdout(f'The new flag is {newflag}', debug=self.Report.debug)
             datamem_key = self.buildMemoryKey(line)
-            if 'units' in line.keys() and units == None:
-                units = line['units']
-            line_settings[flag] = {'units': units,
-                                   'logoutputfilename': datamem_key}
+            if 'units' in line.keys() and metadata['units'] == None:
+                metadata['units'] = line['units']
+
+            line_settings[flag] = {'logoutputfilename': datamem_key}
 
             data[flag] = {'values': values,
                           'dates': dates}
 
-            for key in line.keys():
-                if key not in line_settings[flag].keys():
-                    line_settings[flag][key] = line[key]
+            #add flags and settings to linesettings..
+            line_settings[flag].update(metadata)
+            line_settings[flag].update(line)
 
         return data, line_settings, datacheck
 
@@ -159,13 +159,13 @@ class DataOrganizer(object):
         wse_data = {}
         for dataobject in settings[onflag]:
             if 'wse' in dataobject.keys():
-                dates, values, units = self.getTimeSeries(dataobject['wse'], makecopy=False)
+                dates, values, metadata = self.getTimeSeries(dataobject['wse'], makecopy=False)
                 datamem_key = self.buildMemoryKey(dataobject['wse'])
                 new_key = dataobject['flag'] + '_wse'
                 wse_data[new_key] = {'elevations': values,
                                       'dates': dates,
-                                      'units': units,
                                       'logoutputfilename': datamem_key}
+                wse_data[new_key].update(metadata)
 
         return wse_data
 
@@ -189,7 +189,7 @@ class DataOrganizer(object):
                     if 'elevation' in line_settings[d].keys():
                         if 'flag' not in line_settings[d]['elevation'].keys():
                             line_settings[d]['elevation']['flag'] = line_settings[d]['flag']+'_elev'
-                            elev_times, elev_values, elev_units = self.getTimeSeries(line_settings[d]['elevation'])
+                            elev_times, elev_values, elev_metadata = self.getTimeSeries(line_settings[d]['elevation'])
                             targelev_failed = np.where(elev_values != target_elevation)
                             if len(elev_times) == len(data[d]['values']):
                                 data[d]['values'][targelev_failed] = 0.
@@ -211,7 +211,7 @@ class DataOrganizer(object):
                     use_filter_ts = False
                     if np.any([n.lower() in ['w2_file', 'dss_path', 'easting', 'h5file', 'ressimresname'] for n in filter.keys()]):
                         use_filter_ts = True
-                        filter_times, filter_values, filter_units = self.getTimeSeries(filter)
+                        filter_times, filter_values, filter_metadata = self.getTimeSeries(filter)
                     if use_filter_ts:
                         data_to_filter = filter_values
                     else:
@@ -253,20 +253,30 @@ class DataOrganizer(object):
                     continue
 
                 elif line['flag'].lower() == 'computed':
-                    for ID in self.Report.accepted_IDs:
+                    if self.Report.reportType == 'forecast':
                         curline = pickle.loads(pickle.dumps(line, -1))
-                        curline = self.Report.configureSettingsForID(ID, curline)
-                        if not self.Report.checkModelType(curline):
-                            continue
                         curline['numtimesused'] = numtimesused
                         data, line_settings, success = self.updateTimeSeriesDataDictionary(data, line_settings, curline)
                         if success:
                             numtimesused += 1
-                else:
-                    if self.Report.currentlyloadedID != 'base':
-                        line = self.Report.configureSettingsForID('base', line)
                     else:
+                        for ID in self.Report.accepted_IDs:
+                            curline = pickle.loads(pickle.dumps(line, -1))
+                            curline = self.Report.configureSettingsForID(ID, curline)
+                            if not self.Report.checkModelType(curline):
+                                continue
+                            curline['numtimesused'] = numtimesused
+                            data, line_settings, success = self.updateTimeSeriesDataDictionary(data, line_settings, curline)
+                            if success:
+                                numtimesused += 1
+                else:
+                    if self.Report.reportType == 'forecast':
                         line = WF.replaceflaggedValues(self.Report, line, 'modelspecific')
+                    else:
+                        if self.Report.currentlyloadedID != self.Report.base_id: #for comparison plotting mostly
+                            line = self.Report.configureSettingsForID(self.Report.base_id, line)
+                        else:
+                            line = WF.replaceflaggedValues(self.Report, line, 'modelspecific')
                     line['numtimesused'] = numtimesused
                     if not self.Report.checkModelType(line):
                         continue
@@ -325,11 +335,11 @@ class DataOrganizer(object):
         :param makecopy: flag that determines if the data is grabbed or just copied
         :return: dates, values, units
         '''
-
+        metadata = {'collection': False}
         if 'dss_path' in Line_info.keys(): #Get data from DSS record
             if 'dss_filename' not in Line_info.keys():
                 WF.print2stdout('DSS_Filename not set for Line: {0}'.format(Line_info), debug=self.Report.debug)
-                return np.array([]), np.array([]), None
+                return np.array([]), np.array([]), metadata
             else:
                 datamem_key = self.buildMemoryKey(Line_info)
                 if datamem_key in self.Memory.keys():
@@ -340,19 +350,33 @@ class DataOrganizer(object):
                         datamementry = self.Memory[datamem_key]
                     times = datamementry['times']
                     values = datamementry['values']
-                    units = datamementry['units']
+                    metadata = datamementry['metadata']
                 else:
-                    times, values, units = WDR.readDSSData(Line_info['dss_filename'], Line_info['dss_path'],
-                                                           self.Report.StartTime, self.Report.EndTime, self.Report.debug)
-
+                    # if Line_info['flag'].lower() == 'computed' and (self.Report.isensemble or self.reportType == 'forecast'):
+                    if Line_info['dss_path'].split('/')[6].startswith('*|'):
+                        if 'collectionIDs' in Line_info.keys():
+                            collectionIDs = Line_info['collectionIDs']
+                        elif self.Report.reportType == 'forecast':
+                            collectionIDs = self.Report.accepted_IDs
+                        else:
+                            collectionIDs = 'all'
+                        times, values, units = WDR.readCollectionsDSSData(Line_info['dss_filename'], Line_info['dss_path'],
+                                                                          collectionIDs, self.Report.StartTime,
+                                                                          self.Report.EndTime, self.Report.debug)
+                        metadata['collection'] = True
+                    else:
+                        times, values, units = WDR.readDSSData(Line_info['dss_filename'], Line_info['dss_path'],
+                                                               self.Report.StartTime, self.Report.EndTime,
+                                                               self.Report.debug)
+                    metadata['units'] = units
                     self.Memory[datamem_key] = {'times': pickle.loads(pickle.dumps(times, -1)),
-                                                     'values': pickle.loads(pickle.dumps(values, -1)),
-                                                     'units': pickle.loads(pickle.dumps(units, -1))}
+                                                 'values': pickle.loads(pickle.dumps(values, -1)),
+                                                 'metadata': pickle.loads(pickle.dumps(metadata, -1))}
 
                 if np.any(values == None):
-                    return np.array([]), np.array([]), None
+                    return np.array([]), np.array([]), metadata
                 elif len(values) == 0:
-                    return np.array([]), np.array([]), None
+                    return np.array([]), np.array([]), metadata
 
         elif 'w2_file' in Line_info.keys():
             if self.Report.plugin.lower() != 'cequalw2':
@@ -363,7 +387,7 @@ class DataOrganizer(object):
                 datamementry = pickle.loads(pickle.dumps(self.Memory[datamem_key], -1))
                 times = datamementry['times']
                 values = datamementry['values']
-                units = datamementry['units']
+                metadata = datamementry['metadata']
 
             else:
                 if 'structurenumbers' in Line_info.keys():
@@ -372,13 +396,13 @@ class DataOrganizer(object):
                 else:
                     times, values = self.Report.ModelAlt.readTimeSeries(Line_info['w2_file'], **Line_info)
                 if 'units' in Line_info.keys():
-                    units = Line_info['units']
+                    metadata['units'] = Line_info['units']
                 else:
-                    units = None
+                    metadata['units'] = None
 
                 self.Memory[datamem_key] = {'times': pickle.loads(pickle.dumps(times, -1)),
-                                                 'values': pickle.loads(pickle.dumps(values, -1)),
-                                                 'units': pickle.loads(pickle.dumps(units, -1))}
+                                            'values': pickle.loads(pickle.dumps(values, -1)),
+                                            'metadata': pickle.loads(pickle.dumps(metadata, -1))}
 
         elif 'h5file' in Line_info.keys() and 'easting' in Line_info.keys() and 'northing' in Line_info.keys():
             datamem_key = self.buildMemoryKey(Line_info)
@@ -391,7 +415,7 @@ class DataOrganizer(object):
                 datamementry = pickle.loads(pickle.dumps(self.Memory[datamem_key], -1))
                 times = datamementry['times']
                 values = datamementry['values']
-                units = datamementry['units']
+                metadata = datamementry['metadata']
 
             else:
                 filename = Line_info['h5file']
@@ -407,13 +431,13 @@ class DataOrganizer(object):
                                                               float(Line_info['northing']),
                                                               subdomain=subdomain)
                 if 'units' in Line_info.keys():
-                    units = Line_info['units']
+                    metadata['units'] = Line_info['units']
                 else:
-                    units = None
+                    metadata['units'] = None
 
                 self.Memory[datamem_key] = {'times': pickle.loads(pickle.dumps(times, -1)),
-                                                 'values': pickle.loads(pickle.dumps(values, -1)),
-                                                 'units': pickle.loads(pickle.dumps(units, -1))}
+                                            'values': pickle.loads(pickle.dumps(values, -1)),
+                                            'metadata': pickle.loads(pickle.dumps(metadata, -1))}
 
         elif 'easting' in Line_info.keys() and 'northing' in Line_info.keys():
             datamem_key = self.buildMemoryKey(Line_info)
@@ -426,7 +450,7 @@ class DataOrganizer(object):
                 datamementry = pickle.loads(pickle.dumps(self.Memory[datamem_key], -1))
                 times = datamementry['times']
                 values = datamementry['values']
-                units = datamementry['units']
+                metadata = datamementry['metadata']
 
             else:
                 times, values = self.Report.ModelAlt.readTimeSeries(Line_info['parameter'],
@@ -434,13 +458,13 @@ class DataOrganizer(object):
                                                                     float(Line_info['northing']),
                                                                     subdomain=subdomain)
                 if 'units' in Line_info.keys():
-                    units = Line_info['units']
+                    metadata['units'] = Line_info['units']
                 else:
-                    units = None
+                    metadata['units'] = None
 
                 self.Memory[datamem_key] = {'times': pickle.loads(pickle.dumps(times, -1)),
                                              'values': pickle.loads(pickle.dumps(values, -1)),
-                                             'units': pickle.loads(pickle.dumps(units, -1))}
+                                             'metadata': pickle.loads(pickle.dumps(metadata, -1))}
 
         elif "ressimresname" in Line_info.keys():
             datamem_key = self.buildMemoryKey(Line_info)
@@ -449,14 +473,14 @@ class DataOrganizer(object):
                 datamementry = pickle.loads(pickle.dumps(self.Memory[datamem_key], -1))
                 times = datamementry['times']
                 values = datamementry['values']
-                units = datamementry['units']
+                metadata = datamementry['metadata']
 
             else:
                 times = []
                 values = []
                 if self.Report.plugin.lower() != 'ressim':
                     WF.print2stdout('Incorrect model type for line using ResSimResName', debug=self.Report.debug)
-                    return [], [], None
+                    return [], [], metadata
                 # if 'target' not in Line_info.keys():
                 #     WF.print2stdout('No target data for profile target timeseries.', debug=self.Report.debug)
                 #     WF.print2stdout('Please enter target data including value and parameter.', debug=self.Report.debug)
@@ -469,29 +493,33 @@ class DataOrganizer(object):
                     if 'parameter' not in Line_info.keys():
                         WF.print2stdout('No parameter for profile target timeseries.', debug=self.Report.debug)
                         WF.print2stdout('Assuming output is elevation.', debug=self.Report.debug)
-                        Line_info['parameter'] = 'elevation'
+                        metadata['parameter'] = 'elevation'
+                    else:
+                        metadata['parameter'] = Line_info['parameter']
                     times, values = self.Report.ModelAlt.getProfileTargetTimeseries(Line_info['ressimresname'],
                                                                                     Line_info['parameter'],
-                                                                                    Line_info['target'])
+                                                                                    metadata['target'])
+                    metadata['type'] = 'target'
+
                 elif 'fwa' in Line_info.keys():
                     if Line_info['fwa'].lower() == 'true': #not sure what to do otherwise..
                         if 'parameter' not in Line_info.keys():
                             WF.print2stdout('No parameter for FWA reservoir timeseries.', debug=self.Report.debug)
                             WF.print2stdout('Assuming output is temperature.', debug=self.Report.debug)
-                            Line_info['parameter'] = 'temperature'
+                            metadata['parameter'] = 'temperature'
+                        else:
+                            metadata['parameter'] = Line_info['parameter']
                         times, values = self.Report.ModelAlt.getFWAReservoirOutputTimeseries(Line_info['ressimresname'],
-                                                                                             Line_info['parameter'])
-
-
-
+                                                                                             metadata['parameter'])
+                        metadata['type'] = 'fwa'
                 if 'units' in Line_info.keys():
-                    units = Line_info['units']
+                    metadata['units'] = Line_info['units']
                 else:
-                    units = None
+                    metadata['units'] = None
 
         else:
             WF.print2stdout('No Data Defined for line', debug=self.Report.debug)
-            return np.array([]), np.array([]), None
+            return np.array([]), np.array([]), metadata
 
         if 'omitvalue' in Line_info.keys():
             omitval = float(Line_info['omitvalue'])
@@ -503,9 +531,36 @@ class DataOrganizer(object):
 
         if 'interval' in Line_info.keys():
             times, values = WT.changeTimeSeriesInterval(times, values, Line_info, self.Report.ModelAlt.t_offset, self.Report.startYear)
+            metadata['interval_mod'] = True
 
+        return times, values, metadata
 
-        return times, values, units
+    def computeCollectionEnvelopes(self, values, envelopes):
+        collected_envelopes = {}
+        for envelope in envelopes:
+            if 'percent' in envelope.keys():
+                envelope_tag = envelope['percent']
+                collected_envelopes[envelope_tag] = []
+        for vi in range(len(values[0])): #for each value in a single set of values
+            for envelope in collected_envelopes.keys():
+                try:
+                    quantile = float(envelope)
+                    quantile = quantile / 100 #envlopes come in as 0-100, but we need 0 - 1
+                    assert(0. <= quantile <= 1.)
+                    collected_envelopes[envelope].append(np.quantile(values[:, vi], quantile))
+                except AssertionError:
+                    if quantile < 0.:
+                        WF.print2stdout(f'Envelope {envelope} under 0. Envelopes must be between 0 and 1.', debug=self.Report.debug)
+                    elif quantile > 1.:
+                        WF.print2stdout(f'Envelope {envelope} over 1. Envelopes must be between 0 and 1.', debug=self.Report.debug)
+                    else:
+                        WF.print2stdout(f'Unknown Collection plot envelope {envelope}. Skipping.', debug=self.Report.debug)
+                    collected_envelopes.pop(envelope)
+                except:
+                    WF.print2stdout(f'Unknown Collection plot envelope {envelope}. Skipping.', debug=self.Report.debug)
+                    collected_envelopes.pop(envelope)
+
+        return collected_envelopes
 
     #################################################################
     #Profile Functions
@@ -540,8 +595,8 @@ class DataOrganizer(object):
                     if success:
                         numtimesused += 1
             else:
-                if self.Report.currentlyloadedID != 'base':
-                    line = self.Report.configureSettingsForID('base', line)
+                if self.Report.currentlyloadedID != self.Report.base_id:
+                    line = self.Report.configureSettingsForID(self.Report.base_id, line)
                 else:
                     line = WF.replaceflaggedValues(self.Report, line, 'modelspecific')
                 line['numtimesused'] = numtimesused
@@ -746,8 +801,8 @@ class DataOrganizer(object):
                         if key not in data_settings[flag].keys():
                             data_settings[flag][key] = datapath[key]
         #reset
-        self.Report.loadCurrentID('base')
-        self.Report.loadCurrentModelAltID('base')
+        self.Report.loadCurrentID(self.Report.base_id)
+        self.Report.loadCurrentModelAltID(self.Report.base_id)
         return data, data_settings
 
     def getProfileTopWater(self, profile, timesteps):
@@ -881,8 +936,8 @@ class DataOrganizer(object):
                     if success:
                         numtimesused += 1
             else:
-                if self.Report.currentlyloadedID != 'base':
-                    dp = self.Report.configureSettingsForID('base', dp)
+                if self.Report.currentlyloadedID != self.Report.base_id:
+                    dp = self.Report.configureSettingsForID(self.Report.base_id, dp)
                 else:
                     dp = WF.replaceflaggedValues(self.Report, dp, 'modelspecific')
                 dp['numtimesused'] = numtimesused
@@ -1006,8 +1061,8 @@ class DataOrganizer(object):
                         if key not in data_settings[flag].keys():
                             data_settings[flag][key] = reach[key]
         #reset
-        self.Report.loadCurrentID('base')
-        self.Report.loadCurrentModelAltID('base')
+        self.Report.loadCurrentID(self.Report.base_id)
+        self.Report.loadCurrentModelAltID(self.Report.base_id)
         return data, data_settings
 
     #################################################################
@@ -1093,7 +1148,8 @@ class DataOrganizer(object):
         '''
 
         for key in self.Memory.keys():
-            csv_name = os.path.join(self.Report.CSVPath, '{0}.csv'.format(key))
+            cleankey = WF.cleanFileName(key)
+            csv_name = os.path.join(self.Report.CSVPath, '{0}.csv'.format(cleankey))
             try:
                 if 'isprofile' in self.Memory[key].keys():
                     if self.Memory[key]['isprofile'] == True:
@@ -1104,7 +1160,8 @@ class DataOrganizer(object):
                         alldepths = self.Memory[key]['depths']
                         if len(allelevs) == 0: #elevations may not always fall out
                             allelevs = WF.matcharrays(allelevs, alldepths)
-                        units = self.Memory[key]['units']
+                        metatdata = self.Memory[key]['metadata']
+                        units = metatdata['units']
                         values = WF.getListItems(allvalues)
                         times = WF.getListItems(alltimes)
                         elevs = WF.getListItems(allelevs)
@@ -1135,18 +1192,38 @@ class DataOrganizer(object):
                     #     df = pd.DataFrame({'Dates': times, 'Values ({0})'.format(units): values, 'Distances': distances,
                     #                        })
                 else:
+
                     allvalues = self.Memory[key]['values']
                     alltimes = self.Memory[key]['times']
-                    units = self.Memory[key]['units']
-                    values = WF.getListItems(allvalues)
+                    metatdata = self.Memory[key]['metadata']
+                    units = metatdata['units']
                     times = WF.getListItems(alltimes)
-                    if isinstance(values, (list, np.ndarray)):
-                        df = pd.DataFrame({'Dates': times, 'Values ({0})'.format(units): values})
+                    if isinstance(allvalues, (list, np.ndarray)):
+                        multidimensional = False
+                        if isinstance(allvalues, list):
+                            if len(allvalues) > 0:
+                                if isinstance(allvalues[0], (list, np.ndarray)):
+                                    multidimensional = True
+                        else:
+                            if len(allvalues.shape) == 2:
+                                multidimensional = True
+                        if not multidimensional:
+                            values = WF.getListItems(allvalues)
+                            df = pd.DataFrame({'Dates': times, 'Values ({0})'.format(units): values})
+                        else:
+                            df_dict = {'Dates': times}
+                            for vi, v in enumerate(allvalues):
+                                values = WF.getListItems(v)
+                                df_dict[f'Values {vi} ({units})'] = values
+                            df = pd.DataFrame(df_dict)
                     elif isinstance(values, dict):
-                        colvals = {}
-                        colvals['Dates'] = times
+                        colvals = {'Dates', times}
+                        # values = WF.getListItems(allvalues)
                         for key in values:
-                            colvals[key] = values[key]
+                            if units != None:
+                                colvals[f'{key} ({units})'] = values[key]
+                            else:
+                                colvals[f'{key}'] = values[key]
                         df = pd.DataFrame(colvals)
 
                 df.to_csv(csv_name, index=False)
@@ -1168,7 +1245,7 @@ class DataOrganizer(object):
                 WF.print2stdout(f'Scalar table found for {d}', debug=self.Report.debug)
                 tablevalues = WDR.readScalarTable(line_settings[d]['scalartable'])
                 scalefromflag = line_settings[d]['flag']+'_scalefrom'
-                scalefrom_dates, scalefrom_values, scalefrom_units = self.getTimeSeries(line_settings[d]['scalefrom'])
+                scalefrom_dates, scalefrom_values, scalefrom_metadata = self.getTimeSeries(line_settings[d]['scalefrom'])
                 if len(scalefrom_values) != len(data[d]['values']):
                     WF.print2stdout(f'Values and Scaledby in different time intervals. Equalizing..', debug=self.Report.debug)
                     base_data, scaledFrom_data = WF.matchData({'dates': data[d]['dates'], 'values': data[d]['values']},
@@ -1177,7 +1254,7 @@ class DataOrganizer(object):
                     base_data = data[d]
                     scaledFrom_data = {'values': scalefrom_values,
                                        'dates': scalefrom_dates,
-                                       'units': scalefrom_units}
+                                       'metadata': scalefrom_metadata}
 
                 #MAKE SURE NPARRAY
                 for target in tablevalues.keys():

@@ -20,6 +20,7 @@ from pydsstools.heclib.dss import HecDss
 from collections import Counter
 import xml.etree.ElementTree as ET
 import pendulum
+import traceback
 
 import WAT_Functions as WF
 
@@ -98,6 +99,16 @@ def readDefaultLineStyle(linefile):
     lineTypes = iterateGraphicsDefaults(def_lineTypes, 'Name')
     return lineTypes
 
+def findTargetinChapterDefFile(flags, chapter, default=''):
+    targettext = default
+    grouptext_flags = flags
+    for flag in grouptext_flags:
+        findtext = chapter.find(flag)
+        if isinstance(findtext, ET.Element):
+            targettext = findtext.text
+            break
+    return targettext
+
 def readChapterDefFile(CD_file):
     '''
     reads chapter definitions file
@@ -109,63 +120,116 @@ def readChapterDefFile(CD_file):
     tree = ET.parse(CD_file)
     root = tree.getroot()
     for chapter in root:
-        check = definedVarCheck(chapter, ['Name', 'Region', 'Sections'])
-        if check:
-            ChapterDef = {}
-            chap_name = chapter.find('Name').text
-            chap_region = chapter.find('Region').text
-            ChapterDef['name'] = chap_name
-            ChapterDef['region'] = chap_region
-            ChapterDef['sections'] = []
-            grouptext = ''
-            grouptext_flags = ['text', 'Text', 'TEXT']
-            for flag in grouptext_flags:
-                findtext = chapter.find(flag)
-                if isinstance(findtext, ET.Element):
-                    grouptext = findtext.text
-                    break
-            ChapterDef['grouptext'] = grouptext
+        # check = definedVarCheck(chapter, ['Name', 'Region', 'Sections'])
+        # if check:
+        ChapterDef = {}
+        try: chap_name = chapter.find('Name').text
+        except: chap_name = ''
+        try: chap_region = chapter.find('Region').text
+        except: chap_region = ''
+        ChapterDef['name'] = chap_name
+        ChapterDef['region'] = chap_region
+        ChapterDef['sections'] = []
 
-            resolution = 'high'
-            resolution_flags = ['resolution', 'Resolution', 'RESOLUTION']
-            for flag in resolution_flags:
-                findtext = chapter.find(flag)
-                if isinstance(findtext, ET.Element):
-                    resolution = findtext.text
-                    break
-            ChapterDef['resolution'] = resolution
+        # grouptext = ''
+        # grouptext_flags = ['text', 'Text', 'TEXT']
+        # for flag in grouptext_flags:
+        #     findtext = chapter.find(flag)
+        #     if isinstance(findtext, ET.Element):
+        #         grouptext = findtext.text
+        #         break
+        # ChapterDef['grouptext'] = grouptext
+        grouptext_flags = ['text', 'Text', 'TEXT']
+        ChapterDef['grouptext'] = findTargetinChapterDefFile(grouptext_flags, chapter)
 
-            debug = 'false'
-            debug_flags = ['debug', 'Debug', 'DEBUG']
-            for flag in debug_flags:
-                findtext = chapter.find(flag)
-                if isinstance(findtext, ET.Element):
-                    debug = findtext.text
-                    break
-            ChapterDef['debug'] = debug
+        # resolution = 'high'
+        # resolution_flags = ['resolution', 'Resolution', 'RESOLUTION']
+        # for flag in resolution_flags:
+        #     findtext = chapter.find(flag)
+        #     if isinstance(findtext, ET.Element):
+        #         resolution = findtext.text
+        #         break
+        # ChapterDef['resolution'] = resolution
+        resolution_flags = ['resolution', 'Resolution', 'RESOLUTION']
+        ChapterDef['resolution'] = findTargetinChapterDefFile(resolution_flags, chapter, default='high')
 
-            cd_sections = chapter.findall('Sections/Section')
-            for section in cd_sections:
-                section_objects = {}
+        # debug = 'false'
+        # debug_flags = ['debug', 'Debug', 'DEBUG']
+        # for flag in debug_flags:
+        #     findtext = chapter.find(flag)
+        #     if isinstance(findtext, ET.Element):
+        #         debug = findtext.text
+        #         break
+        # ChapterDef['debug'] = debug
+        debug_flags = ['debug', 'Debug', 'DEBUG']
+        ChapterDef['debug'] = findTargetinChapterDefFile(debug_flags, chapter, default='false')
 
-                headertext = ''
-                headerflags = ['header', 'Header', 'HEADER']
-                for flag in headerflags:
-                    findtext = section.find(flag)
-                    if isinstance(findtext, ET.Element):
-                        headertext = findtext.text
-                        break
-                section_objects['header'] = headertext
+        collections_flags = ['isensemble', 'Isensemble', 'ISENSEMBLE'] #TODO: is this final flag??
+        ChapterDef['isensemble'] = findTargetinChapterDefFile(collections_flags, chapter, default='false')
 
-                section_objects['objects'] = []
-                sec_objects = section.findall('Object')
-                objects = iterateChapterDefintions(sec_objects)
-                section_objects['objects'] = (objects)
-                ChapterDef['sections'].append(section_objects)
+        forecastsummary_flags = ['forecastsummary', 'Forecastsummary', 'FORECASTSUMMARY'] #TODO: is this final flag??
+        ChapterDef['forecastsummary'] = findTargetinChapterDefFile(forecastsummary_flags, chapter, default='false')
+
+        cd_sections = chapter.findall('Sections/Section')
+        for section in cd_sections:
+            section_objects = {}
+
+            # headertext = ''
+            # headerflags = ['header', 'Header', 'HEADER']
+            # for flag in headerflags:
+            #     findtext = section.find(flag)
+            #     if isinstance(findtext, ET.Element):
+            #         headertext = findtext.text
+            #         break
+            # section_objects['header'] = headertext
+            headerflags = ['header', 'Header', 'HEADER']
+            section_objects['header'] = findTargetinChapterDefFile(headerflags, section)
+
+            # summaryflags = ['summary', 'Summary', 'SUMMARY']
+            # section_objects['summary'] = findTargetinChapterDefFile(summaryflags, section)
+
+            section_objects['objects'] = []
+            sec_objects = section.findall('Object')
+            section_objects['objects'] = iterateChapterDefintions(sec_objects)
+            ChapterDef['sections'].append(section_objects)
+
         Chapters.append(ChapterDef)
 
     return Chapters
 
+def readCollectionsDSSData(dss_file, pathname, collectionIDs, startdate, enddate, debug):
+    try:
+        fid = HecDss.Open(dss_file)
+        collection_pn = fid.getPathnameList(pathname)
+        collection_pn = list(set(['/'.join(WF.ReplaceListAtIdx(n.split('/'), 4, '*')) for n in collection_pn]))
+        WF.print2stdout(f'Found {len(collection_pn)} records in collection for {pathname}', debug=debug)
+        if len(collection_pn) == 0:
+            WF.print2stdout(f'No records in collection for {pathname}', debug=debug)
+            fid.close()
+            return [], [], None
+        if collectionIDs == 'all':
+            collectionIDs = [n.split('/')[6].split('|')[0].replace('C:', '') for n in collection_pn]
+        for i, ID in enumerate(collectionIDs):
+            if len(ID) != 6:
+                ID = ID.zfill(6) #DSS conventions want 6 spaces
+            CID_pathname_fpart = pathname.split('/')[6].replace('*|', f'C:{ID}|')
+            CID_pathname_split = pathname.split('/')
+            CID_pathname_split[6] = CID_pathname_fpart
+            CID_pathname = '/'.join(CID_pathname_split)
+            WF.print2stdout(f'Currently working on {ID}', debug=debug)
+            ts = fid.read_ts(CID_pathname, window=(startdate, enddate), regular=True, trim_missing=True)
+            values = np.asarray(ts.values)
+            if i == 0: #set vars like times and units that are always the same for all collection
+                times = np.array(ts.pytimes)
+                units = ts.units
+                collection_values = np.full((len(collection_pn), len(times)), np.nan) #initialize array
+            collection_values[int(ID)] = values
+        fid.close()
+        return times, collection_values, units
+    except:
+        WF.print2stdout(f'Unable to open {dss_file}')
+        WF.print2stdout(traceback.format_exc(), debug=debug)
+        return [], [], None
 
 def readDSSData(dss_file, pathname, startdate, enddate, debug):
     '''
@@ -561,7 +625,7 @@ def readSimulationInfo(Report, simulationInfoFile):
         try:
             simulationInfo['ID'] = simulation.find('ID').text
         except AttributeError:
-            simulationInfo['ID'] = 'base'
+            simulationInfo['ID'] = Report.base_id
 
 
         modelAlternatives = []
@@ -605,7 +669,7 @@ def readComparisonSimulationsCSV(Report):
     :return:
     '''
 
-    Report.SimulationCSV = readSimulationFile(Report.SimulationVariables['base']['baseSimulationName'],
+    Report.SimulationCSV = readSimulationFile(Report.SimulationVariables[Report.base_id]['baseSimulationName'],
                                               Report.studyDir, iscomp=Report.iscomp)
 
 

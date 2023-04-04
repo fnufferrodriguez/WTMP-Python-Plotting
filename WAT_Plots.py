@@ -16,6 +16,7 @@ import pickle
 import datetime as dt
 import numpy as np
 import matplotlib as mpl
+from collections import Counter
 
 import WAT_Functions as WF
 import WAT_Time as WT
@@ -169,6 +170,16 @@ class Plots(object):
                         edgecolor=settings['pointlinecolor'], s=float(settings['symbolsize']),
                         label=settings['label'], zorder=float(settings['zorder']),
                         alpha=float(settings['alpha']))
+
+    def plotCollectionEnvelopes(self, dates, values, curax, settings):
+        if 'envelopes' in settings.keys() and len(values) > 0:
+            collection_evelopes = self.Report.Data.computeCollectionEnvelopes(values, settings['envelopes'])
+            for envelope_settings in settings['envelopes']:
+                envelope = envelope_settings['percent']
+                envelope_settings = WF.replaceDefaults(self, settings, envelope_settings)
+                if envelope in collection_evelopes.keys():
+                    envelope_vals = collection_evelopes[envelope]
+                    self.plotLines(dates, envelope_vals, curax, envelope_settings)
 
     def formatDateXAxis(self, curax, object_settings, twin=False):
         '''

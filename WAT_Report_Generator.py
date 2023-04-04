@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '5.3.32'
+VERSIONNUMBER = '5.4.0'
 
 import os
 import sys
@@ -74,9 +74,10 @@ class MakeAutomatedReport(object):
         if self.reportType == 'single': #Eventually be able to do comparison reports, put that here
             for simulation in self.Simulations:
                 WF.print2stdout('Running Simulation:', simulation)
+                self.base_id = self.Simulations[0]['ID']
                 self.initSimulationDict()
                 self.setSimulationVariables(simulation)
-                self.loadCurrentID('base') #load the data for the current sim, we do 1 at a time here..
+                self.loadCurrentID(self.base_id) #load the data for the current sim, we do 1 at a time here..
                 WF.checkExists(self.SimulationDir)
                 WT.defineStartEndYears(self)
                 WR.readSimulationsCSV(self) #read to determine order/sims/regions in report
@@ -88,7 +89,7 @@ class MakeAutomatedReport(object):
                     WR.readDefinitionsFile(self, self.SimulationCSV[simorder])
                     self.loadModelAlts(self.SimulationCSV[simorder])
                     self.initializeDataOrganizer()
-                    self.loadCurrentModelAltID('base')
+                    self.loadCurrentModelAltID(self.base_id)
                     self.WAT_log.addSimLogEntry(self.accepted_IDs, self.SimulationVariables, self.observedDir)
                     self.writeChapter()
                     self.appendXMLModelIntroduction(simorder)
@@ -101,7 +102,8 @@ class MakeAutomatedReport(object):
             for simulation in self.Simulations:
                 self.setSimulationVariables(simulation)
                 WF.checkExists(simulation['directory'])
-            self.loadCurrentID('base') #load the data for the current sim, we do 1 at a time here..
+            self.base_id = self.Simulations[0]['ID']
+            self.loadCurrentID(self.base_id) #load the data for the current sim, we do 1 at a time here..
             WT.setMultiRunStartEndYears(self) #find the start and end time
             WT.defineStartEndYears(self) #format the years correctly after theyre set
             WR.readComparisonSimulationsCSV(self) #read to determine order/sims/regions in report
@@ -113,11 +115,37 @@ class MakeAutomatedReport(object):
                 WR.readDefinitionsFile(self, self.SimulationCSV[simorder])
                 self.loadModelAlts(self.SimulationCSV[simorder])
                 self.initializeDataOrganizer()
-                self.loadCurrentModelAltID('base')
+                self.loadCurrentModelAltID(self.base_id)
                 self.WAT_log.addSimLogEntry(self.accepted_IDs, self.SimulationVariables, self.observedDir)
                 self.writeChapter()
                 self.appendXMLModelIntroduction(simorder)
                 self.Data.writeDataFiles()
+            self.fixXMLModelIntroduction()
+            self.XML.writeReportEnd()
+            self.WAT_log.equalizeLog()
+        elif self.reportType == 'forecast':
+            self.initSimulationDict()
+            for simulation in self.Simulations:
+                self.setSimulationVariables(simulation)
+                WF.checkExists(simulation['directory'])
+            self.base_id = self.Simulations[0]['ID']
+            self.loadCurrentID(self.base_id) #load the first simulation
+            WT.setMultiRunStartEndYears(self) #find the start and end time
+            WT.defineStartEndYears(self) #format the years correctly after theyre set
+            WR.readSimulationsCSV(self) #read to determine order/sims/regions in report
+            self.cleanOutputDirs()
+            self.initializeXML()
+            self.writeXMLIntroduction()
+            for simorder in self.SimulationCSV.keys():
+                self.setSimulationCSVVars(self.SimulationCSV[simorder])
+                WR.readDefinitionsFile(self, self.SimulationCSV[simorder])
+                self.initializeDataOrganizer() #todo: make sure this doesnt get too big..
+                self.loadModelAlts(self.SimulationCSV[simorder])
+                self.loadCurrentModelAltID(self.base_id)
+                self.WAT_log.addSimLogEntry(self.accepted_IDs, self.SimulationVariables, self.observedDir)
+                self.writeChapter()
+                self.Data.writeDataFiles()
+            self.appendXMLModelIntroduction(simorder) #todo: modified version of this?
             self.fixXMLModelIntroduction()
             self.XML.writeReportEnd()
             self.WAT_log.equalizeLog()
@@ -251,7 +279,7 @@ class MakeAutomatedReport(object):
                 linedata = self.Data.filterTimeSeries(linedata, line_settings)
                 linedata = self.Data.scaleValuesByTable(linedata, line_settings)
                 linedata = WF.mergeLines(linedata, line_settings, ax_settings)
-                ax_settings = self.configureSettingsForID('base', ax_settings)
+                ax_settings = self.configureSettingsForID(self.base_id, ax_settings)
                 gatedata, gate_settings = self.Data.getGateDataDictionary(ax_settings, makecopy=False)
                 linedata = WF.filterDataByYear(linedata, year)
                 line_settings = WF.correctDuplicateLabels(line_settings)
@@ -278,9 +306,10 @@ class MakeAutomatedReport(object):
                     dates = curline['dates']
                     units = curline_settings['units']
 
-                    values = WF.ValueSum(dates, values) #check for dict values and add them all together
+                    if not curline_settings['collection']: #please dont do this for collection plots
+                        values = WF.ValueSum(dates, values) #check for dict values and add them all together
 
-                    isstack = False
+                    curline_settings['stack'] = False
                     if 'linetype' in curline_settings.keys():
                         if curline_settings['linetype'].lower() == 'stacked': #stacked plots need to be added at the end..
                             if _usetwinx:
@@ -289,7 +318,7 @@ class MakeAutomatedReport(object):
                             else:
                                 axis = 'left' #if not twinx, then only can use left
 
-                            isstack = True
+                            curline_settings['stack'] = True
 
                     if units == None:
                         if parameter != None:
@@ -356,7 +385,25 @@ class MakeAutomatedReport(object):
                                                                               self.startYear)
                             values = values/RelativeMasterSet
 
-                    if isstack:
+                    if curline_settings['collection']:
+                        modifiedalpha = False
+                        if line_draw_settings['alpha'] == 1.:
+                            modifiedalpha = True
+                            line_draw_settings['alpha'] = 0.1 #for collection plots, set to low opac for a jillion lines
+                        for vsi, valueset in enumerate(values):
+                            if vsi > 0:
+                                line_draw_settings['label'] = ''
+                            if line_draw_settings['drawline'].lower() == 'true' and line_draw_settings['drawpoints'].lower() == 'true':
+                                self.Plots.plotLinesAndPoints(dates, valueset, curax, line_draw_settings)
+                            elif line_draw_settings['drawline'].lower() == 'true':
+                                self.Plots.plotLines(dates, valueset, curax, line_draw_settings)
+                            elif line_draw_settings['drawpoints'].lower() == 'true':
+                                self.Plots.plotPoints(dates, valueset, curax, line_draw_settings)
+                        if modifiedalpha:
+                            line_draw_settings['alpha'] = 1.
+                        self.Plots.plotCollectionEnvelopes(dates, values, curax, line_draw_settings)
+
+                    elif curline_settings['stack']:
                         if axis not in stackplots.keys(): #left or right
                             stackplots[axis] = []
                         stackplots[axis].append({'values': values,
@@ -365,7 +412,6 @@ class MakeAutomatedReport(object):
                                                  'color': line_draw_settings['linecolor']})
 
                     else:
-
                         if line_draw_settings['drawline'].lower() == 'true' and line_draw_settings['drawpoints'].lower() == 'true':
                             self.Plots.plotLinesAndPoints(dates, values, curax, line_draw_settings)
 
@@ -807,7 +853,7 @@ class MakeAutomatedReport(object):
         line_settings = WF.correctDuplicateLabels(line_settings)
         table_blueprint = pickle.loads(pickle.dumps(object_settings, -1))
 
-        object_settings = self.configureSettingsForID('base', object_settings)
+        object_settings = self.configureSettingsForID(self.base_id, object_settings)
 
         ################# Get plot units #################
         data, line_settings = self.Profiles.convertProfileDataUnits(object_settings, data, line_settings)
@@ -1007,7 +1053,7 @@ class MakeAutomatedReport(object):
 
         line_settings = WF.correctDuplicateLabels(line_settings)
 
-        object_settings = self.configureSettingsForID('base', object_settings)
+        object_settings = self.configureSettingsForID(self.base_id, object_settings)
         gatedata, gate_settings = self.Data.getGateDataDictionary(object_settings, makecopy=False)
 
         ################# Get plot units #################
@@ -1463,7 +1509,7 @@ class MakeAutomatedReport(object):
 
         headings, rows = self.Tables.buildErrorStatsTable(object_settings, data_settings)
 
-        object_settings = self.configureSettingsForID('base', object_settings)
+        object_settings = self.configureSettingsForID(self.base_id, object_settings)
 
         object_settings['units_list'] = WF.getUnitsList(data_settings)
         object_settings['plot_units'] = WF.getPlotUnits(object_settings['units_list'], object_settings)
@@ -1640,7 +1686,7 @@ class MakeAutomatedReport(object):
 
         headings, rows = self.Tables.buildMonthlyStatsTable(object_settings, data_settings)
 
-        object_settings= self.configureSettingsForID('base', object_settings)
+        object_settings= self.configureSettingsForID(self.base_id, object_settings)
         object_settings['units_list'] = WF.getUnitsList(data_settings)
         object_settings['plot_units'] = WF.getPlotUnits(object_settings['units_list'], object_settings)
 
@@ -1825,7 +1871,7 @@ class MakeAutomatedReport(object):
         object_settings_blueprint = pickle.loads(pickle.dumps(object_settings, -1))
 
         headings, rows = self.Tables.buildSingleStatTable(object_settings_blueprint, data_settings)
-        object_settings = self.configureSettingsForID('base', object_settings)
+        object_settings = self.configureSettingsForID(self.base_id, object_settings)
 
         if 'description' in object_settings.keys():
             desc = object_settings['description']
@@ -2028,7 +2074,7 @@ class MakeAutomatedReport(object):
         object_settings_blueprint = pickle.loads(pickle.dumps(object_settings, -1))
 
         headings, rows = self.Tables.buildSingleStatTable(object_settings_blueprint, line_settings)
-        object_settings = self.configureSettingsForID('base', object_settings)
+        object_settings = self.configureSettingsForID(self.base_id, object_settings)
 
         if 'description' in object_settings.keys():
             desc = object_settings['description']
@@ -2447,7 +2493,7 @@ class MakeAutomatedReport(object):
                 ax.invert_yaxis()
 
             # #stuff to call once per plot
-            self.configureSettingsForID('base', cur_obj_settings)
+            self.configureSettingsForID(self.base_id, cur_obj_settings)
             cur_obj_settings = WF.updateFlaggedValues(cur_obj_settings, '%%units%%', WF.formatUnitsStrings(units))
 
             if 'title' in cur_obj_settings.keys():
@@ -2782,7 +2828,7 @@ class MakeAutomatedReport(object):
                 self.Plots.formatYTicks(ax, contour_plot_settings)
 
             # #stuff to call once per plot
-            self.configureSettingsForID('base', cur_obj_settings)
+            self.configureSettingsForID(self.base_id, cur_obj_settings)
             cur_obj_settings = WF.updateFlaggedValues(cur_obj_settings, '%%units%%', WF.formatUnitsStrings(units))
 
             if 'title' in cur_obj_settings.keys():
@@ -3009,6 +3055,8 @@ class MakeAutomatedReport(object):
             self.ChapterText = Chapter['grouptext']
             self.ChapterResolution = Chapter['resolution']
             self.debug_boolean = Chapter['debug']
+            self.ensemble_boolean = Chapter['isensemble'] #TODO: is this what were doing?
+            self.forecastsummary_boolean = Chapter['forecastsummary'] #TODO: is this what were doing?
 
             self.debug = False
             if self.debug_boolean.lower() == 'true':
@@ -3025,41 +3073,99 @@ class MakeAutomatedReport(object):
                 self.highres = False
                 WF.print2stdout('Running Low Res Mode!')
 
+            self.isensemble = False
+            if self.ensemble_boolean.lower() == 'true':
+                self.isensemble = True
+                WF.print2stdout('Ensemble mode activated!')
+            else:
+                WF.print2stdout('Ensemble mode deactivated.', debug=self.debug)
+
+            self.forecastsummary = False
+            if self.forecastsummary_boolean.lower() == 'true':
+                self.forecastsummary = True
+                WF.print2stdout('forecast summary mode activated!')
+            else:
+                WF.print2stdout('forecastsummary mode deactivated.', debug=self.debug)
+
             self.WAT_log.addLogEntry({'region': self.ChapterRegion})
             self.XML.writeChapterStart(self.ChapterName, self.ChapterText)
-            for section in Chapter['sections']:
-                section_header = section['header']
-                self.XML.writeSectionHeader(section_header)
-                for object in section['objects']:
-                    objtype = object['type'].lower()
-                    if objtype == 'timeseriesplot':
-                        self.makeTimeSeriesPlot(object)
-                    elif objtype == 'profileplot':
-                        self.makeProfilePlot(object)
-                    elif objtype == 'errorstatisticstable':
-                        self.makeErrorStatisticsTable(object)
-                    elif objtype == 'monthlystatisticstable':
-                        self.makeMonthlyStatisticsTable(object)
-                    elif objtype == 'profilestatisticstable':
-                        self.makeProfileStatisticsTable(object)
-                    elif objtype == 'contourplot':
-                        self.makeContourPlot(object)
-                    elif objtype == 'reservoircontourplot':
-                        self.makeReservoirContourPlot(object)
-                    elif objtype == 'singlestatistictable':
-                        self.makeSingleStatisticTable(object)
-                    elif objtype == 'singlestatisticprofiletable':
-                        self.makeSingleStatisticProfileTable(object)
-                    elif objtype == 'textbox':
-                        self.makeTextBox(object)
-                    else:
-                        WF.print2stdout('Section Type {0} not identified.'.format(objtype))
-                        WF.print2stdout('Skipping Section..')
-                self.XML.writeSectionHeaderEnd()
+            self.writeSections(Chapter)
+
+            # for section in Chapter['sections']:
+            #     section_header = section['header']
+            #     self.XML.writeSectionHeader(section_header)
+            #     for object in section['objects']:
+            #         objtype = object['type'].lower()
+            #         if objtype == 'timeseriesplot':
+            #             self.makeTimeSeriesPlot(object)
+            #         elif objtype == 'profileplot':
+            #             self.makeProfilePlot(object)
+            #         elif objtype == 'errorstatisticstable':
+            #             self.makeErrorStatisticsTable(object)
+            #         elif objtype == 'monthlystatisticstable':
+            #             self.makeMonthlyStatisticsTable(object)
+            #         elif objtype == 'profilestatisticstable':
+            #             self.makeProfileStatisticsTable(object)
+            #         elif objtype == 'contourplot':
+            #             self.makeContourPlot(object)
+            #         elif objtype == 'reservoircontourplot':
+            #             self.makeReservoirContourPlot(object)
+            #         elif objtype == 'singlestatistictable':
+            #             self.makeSingleStatisticTable(object)
+            #         elif objtype == 'singlestatisticprofiletable':
+            #             self.makeSingleStatisticProfileTable(object)
+            #         elif objtype == 'textbox':
+            #             self.makeTextBox(object)
+            #         else:
+            #             WF.print2stdout('Section Type {0} not identified.'.format(objtype))
+            #             WF.print2stdout('Skipping Section..')
+            #     self.XML.writeSectionHeaderEnd()
             WF.print2stdout('\n################################')
             WF.print2stdout('Chapter Complete.')
             WF.print2stdout('################################\n')
             self.XML.writeChapterEnd()
+
+    def writeSections(self, Chapter):
+        for section in Chapter['sections']:
+            section_header = section['header']
+            self.XML.writeSectionHeader(section_header)
+            if (self.reportType == 'forecast' and not self.forecastsummary) or self.isensemble:
+                for simulation in self.Simulations:
+                    self.loadCurrentID(simulation['ID'])
+                    self.iterateSection(section)
+            else:
+                self.iterateSection(section)
+
+    def iterateSection(self, section):
+        # for section in Chapter['sections']:
+        #     section_header = section['header']
+        #     self.XML.writeSectionHeader(section_header)
+        for object in section['objects']:
+            objtype = object['type'].lower()
+            if objtype == 'timeseriesplot':
+                self.makeTimeSeriesPlot(object)
+            elif objtype == 'profileplot':
+                self.makeProfilePlot(object)
+            elif objtype == 'errorstatisticstable':
+                self.makeErrorStatisticsTable(object)
+            elif objtype == 'monthlystatisticstable':
+                self.makeMonthlyStatisticsTable(object)
+            elif objtype == 'profilestatisticstable':
+                self.makeProfileStatisticsTable(object)
+            elif objtype == 'contourplot':
+                self.makeContourPlot(object)
+            elif objtype == 'reservoircontourplot':
+                self.makeReservoirContourPlot(object)
+            elif objtype == 'singlestatistictable':
+                self.makeSingleStatisticTable(object)
+            elif objtype == 'singlestatisticprofiletable':
+                self.makeSingleStatisticProfileTable(object)
+            elif objtype == 'textbox':
+                self.makeTextBox(object)
+            else:
+                WF.print2stdout('Section Type {0} not identified.'.format(objtype))
+                WF.print2stdout('Skipping Section..')
+        self.XML.writeSectionHeaderEnd()
 
     def cleanOutputDirs(self):
         '''
