@@ -191,7 +191,7 @@ class Plots(object):
                         alpha=float(settings['alpha']))
 
     def plotCollectionEnvelopes(self, dates, values, curax, settings):
-        if 'envelopes' in settings.keys() and len(values) > 0:
+        if 'envelopes' in settings.keys() and len(values.keys()) > 0:
             collection_evelopes = self.Report.Data.computeCollectionEnvelopes(values, settings['envelopes'])
             for envelope_settings in settings['envelopes']:
                 envelope = envelope_settings['percent']

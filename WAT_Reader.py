@@ -229,14 +229,14 @@ def readCollectionsDSSData(dss_file, pathname, collectionIDs, startdate, enddate
                 CID_pathname = '/'.join(CID_pathname_split)
                 WF.print2stdout(f'Currently working on {ID}', debug=debug)
                 ts = fid.read_ts(CID_pathname, window=(startdate, enddate), regular=True, trim_missing=True)
-                values = np.asarray(ts.values)
+                values = np.asarray(ts.values, dtype=np.float64)
                 if i == 0: #set vars like times and units that are always the same for all collection
                     times = np.array(ts.pytimes)
                     units = ts.units
-                    collection_values = []
-                    collection_values = np.full((len(collection_pn), len(times)), np.nan) #initialize array
+                    collection_values = {}
+                    # collection_values = np.full((len(collection_pn), len(times)), np.nan) #initialize array
                 # collection_values[int(ID)-1] = values #Todo: shelf for now
-                collection_values[i] = values
+                collection_values[int(ID)] = values
             fid.close()
             return times, collection_values, units, collectionIDs
         else:

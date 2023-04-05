@@ -183,6 +183,13 @@ class DataOrganizer(object):
                     collectionIDs = np.intersect1d(data_settings[ds]['collectionIDs'], collectionIDs)
         return collectionIDs
 
+    def filterCollections(self, values, collectionIDs):
+        new_values = {}
+        for key, vs in values.items():
+            if key in collectionIDs:
+                new_values[key] = vs
+        return new_values
+
     def filterTimeSeries(self, data, line_settings):
         '''
         filters data read from W2 results files to a target elevation
@@ -556,13 +563,16 @@ class DataOrganizer(object):
             if 'percent' in envelope.keys():
                 envelope_tag = envelope['percent']
                 collected_envelopes[envelope_tag] = []
-        for vi in range(len(values[0])): #for each value in a single set of values
+        for vi in range(len(values[list(values.keys())[0]])): #for each value in a single set of values
             for envelope in collected_envelopes.keys():
                 try:
                     quantile = float(envelope)
                     quantile = quantile / 100 #envlopes come in as 0-100, but we need 0 - 1
                     assert(0. <= quantile <= 1.)
-                    collected_envelopes[envelope].append(np.quantile(values[:, vi], quantile))
+                    quantilevals = []
+                    for key, vs in values.items():
+                        quantilevals.append(vs[vi])
+                    collected_envelopes[envelope].append(np.quantile(quantilevals, quantile))
                 except AssertionError:
                     if quantile < 0.:
                         WF.print2stdout(f'Envelope {envelope} under 0. Envelopes must be between 0 and 1.', debug=self.Report.debug)
@@ -1338,10 +1348,10 @@ class DataOrganizer(object):
                                 values = WF.getListItems(v)
                                 df_dict[f'Values {vi} ({units})'] = values
                             df = pd.DataFrame(df_dict)
-                    elif isinstance(values, dict):
-                        colvals = {'Dates', times}
+                    elif isinstance(allvalues, dict):
+                        colvals = {'Dates': times}
                         # values = WF.getListItems(allvalues)
-                        for key in values:
+                        for key, values in allvalues.items():
                             if units != None:
                                 colvals[f'{key} ({units})'] = values[key]
                             else:

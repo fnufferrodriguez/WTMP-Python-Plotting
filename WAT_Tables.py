@@ -373,6 +373,7 @@ class Tables(object):
                 ymin = float(object_settings['ylims']['min'])
 
         # Find Index of ALL acceptable values.
+        #TODO: make this iterative so its less ugly for dicts
         for lineflag in data.keys():
             line = data[lineflag]
             values = line['values']
@@ -394,38 +395,97 @@ class Tables(object):
             else:
                 omitvalues = None
 
+            ### FALSE WHEN OUT OF BOUNDS, TRUE WHEN KEEP
+
             if xmax != None and filtbylims:
-                xmax_filt = np.where(dates <= xmax)
+                # xmax_filt = np.where(dates <= xmax)
+                xmax_filt = (dates <= xmax)
             else:
-                xmax_filt = np.arange(len(dates))
+                # xmax_filt = np.arange(len(dates))
+                xmax_filt = np.full(dates.shape, True)
 
             if xmin != None and filtbylims:
-                xmin_filt = np.where(dates >= xmin)
+                # xmin_filt = np.where(dates >= xmin)
+                xmin_filt = (dates >= xmin)
             else:
-                xmin_filt = np.arange(len(dates))
+                # xmin_filt = np.arange(len(dates))
+                xmin_filt = np.full(dates.shape, True)
 
             if ymax != None and filtbylims:
-                ymax_filt = np.where(dates <= ymax)
+                # ymax_filt = np.where(dates <= ymax)
+                if isinstance(values, dict):
+                    ymax_filt = {}
+                    for key, vs in values.items():
+                        ymax_filt[key] = (vs <= ymax)
+                else:
+                    ymax_filt = (values <= ymax)
+
             else:
-                ymax_filt = np.arange(len(dates))
+                if isinstance(values, dict):
+                    ymax_filt = {}
+                    for key, vs in values.items():
+                        ymax_filt[key] = np.full(vs.shape, True)
+                else:
+                    ymax_filt = np.full(values.shape, True)
 
             if ymin != None and filtbylims:
-                ymin_filt = np.where(dates >= ymin)
+                if isinstance(values, dict):
+                    ymin_filt = {}
+                    for key, vs in values.items():
+                        ymin_filt[key] = (vs >= ymin)
+                else:
+                    ymin_filt = (values >= ymin)
+
             else:
-                ymin_filt = np.arange(len(dates))
+                if isinstance(values, dict):
+                    ymin_filt = {}
+                    for key, vs in values.items():
+                        ymin_filt[key] = np.full(vs.shape, True)
+                else:
+                    ymin_filt = np.full(values.shape, True)
+
+
+            # if ymin != None and filtbylims:
+            #     ymin_filt = np.where(dates >= ymin)
+            # else:
+            #     ymin_filt = np.arange(len(dates))
 
             if omitvalues != None:
-                omitvals_filt = []
-                for omitval in omitvalues:
-                    omitval_filt = np.where(values != omitval)
-                    omitvals_filt = np.append(omitvals_filt, omitval_filt)
+                if isinstance(values, dict):
+                    omit_filt = {}
+                else:
+                    omitvals_filt = []
+                if isinstance(values, dict):
+                    for key, vs in values.items():
+                        omit_filt[key] = []
+                        for omitval in omitvalues:
+                            omitval_filt = (vs != omitval)
+                            omit_filt[key] = np.append(omitvals_filt, omitval_filt)
+                else:
+                    for omitval in omitvalues:
+                        omitval_filt = (values != omitval)
+                        omitvals_filt = np.append(omitvals_filt, omitval_filt)
             else:
-                omitvals_filt = np.arange(len(values))
+                if isinstance(values, dict):
+                    omitvals_filt = {}
+                    for key, vs in values.items():
+                        omitvals_filt[key] = np.full(vs.shape, True)
+                else:
+                    omitvals_filt = np.full(values.shape, True)
 
-            master_filter = reduce(np.intersect1d, (xmax_filt, xmin_filt, ymax_filt, ymin_filt, omitvals_filt)).astype(int)
-
-            data[lineflag]['values'] = values[master_filter]
-            data[lineflag]['dates'] = dates[master_filter]
+            if isinstance(values, dict):
+                new_values = {}
+                for key, vs in values.items():
+                    # master_filter = reduce(np.intersect1d, (xmax_filt, xmin_filt, ymax_filt[key], ymin_filt[key], omitvals_filt[key])).astype(int)
+                    master_filter = xmax_filt & xmin_filt & ymax_filt[key] & ymin_filt[key] & omitvals_filt[key]
+                    vs[~master_filter] = np.nan
+                    new_values[key] = vs
+                data[lineflag]['values'] = new_values
+            else:
+                master_filter = xmax_filt & xmin_filt & ymax_filt & ymin_filt & omitvals_filt
+                values[~master_filter] = np.nan
+                data[lineflag]['values'] = values
+                # data[lineflag]['dates'] = dates[master_filter]
 
         return data
 
@@ -448,7 +508,7 @@ class Tables(object):
 
         return data, units
 
-    def getStatsLineData(self, row, data_dict, year='ALLYEARS', data_index=-1):
+    def getStatsLineData(self, row, data_dict, year='ALLYEARS', data_key=None):
         '''
         takes rows for tables and replaces flags with the correct data, computing stat analysis if needed
         :param row: row section string
@@ -466,12 +526,12 @@ class Tables(object):
         for sr in s_row:
             if sr in data_dict.keys():
                 curflag = sr
-                curvalues = np.array(data_dict[sr]['values'])
+                curvalues = data_dict[sr]['values']
                 curdates = np.array(data_dict[sr]['dates'])
-                if data_index != -1:
-                    data[curflag] = {'values': curvalues[data_index], 'dates': curdates}
+                if data_key != None:
+                    data[curflag] = {'values': curvalues[data_key], 'dates': curdates}
                 else:
-                    data[curflag] = {'values': curvalues, 'dates': curdates}
+                    data[curflag] = {'values': np.asarray(curvalues), 'dates': curdates}
             else:
                 if '=' in sr:
                     sr_spl = sr.split('=')

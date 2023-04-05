@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '5.4.1'
+VERSIONNUMBER = '5.4.2'
 
 import os
 import sys
@@ -286,6 +286,11 @@ class MakeAutomatedReport(object):
                 line_settings = WF.correctDuplicateLabels(line_settings)
                 straightlines = self.Data.getStraightLineValue(ax_settings)
 
+                isCollection = WF.checkForCollections(line_settings)
+                if isCollection:
+                    collectionIDs = self.Data.getCollectionIDs(object_settings, line_settings)
+                    object_settings['collectionIDs'] = collectionIDs
+
                 for gateop in gatedata.keys():
                     gatedata[gateop]['gates'] = WF.filterDataByYear(gatedata[gateop]['gates'], year)
 
@@ -386,8 +391,9 @@ class MakeAutomatedReport(object):
                                                                               self.startYear)
                             values = values/RelativeMasterSet
 
-                    if curline_settings['collection']:
+                    if isCollection:
                         coloreach = False
+                        filtvalues = self.Data.filterCollections(values, object_settings['collectionIDs'])
                         if 'coloreach' in curline_settings.keys():
                             if curline_settings['coloreach'].lower() == 'true':
                                 coloreach = True
@@ -396,8 +402,10 @@ class MakeAutomatedReport(object):
                             if line_draw_settings['alpha'] == 1.:
                                 modifiedalpha = True
                                 line_draw_settings['alpha'] = 0.25 #for collection plots, set to low opac for a jillion lines
-                            for vsi, valueset in enumerate(values):
-                                if vsi > 0:
+
+                            for cIDi, cID in enumerate(object_settings['collectionIDs']):
+                                valueset = filtvalues[cID]
+                                if cIDi > 0:
                                     line_draw_settings['label'] = ''
                                 if line_draw_settings['drawline'].lower() == 'true' and line_draw_settings['drawpoints'].lower() == 'true':
                                     self.Plots.plotLinesAndPoints(dates, valueset, curax, line_draw_settings)
@@ -405,12 +413,13 @@ class MakeAutomatedReport(object):
                                     self.Plots.plotLines(dates, valueset, curax, line_draw_settings)
                                 elif line_draw_settings['drawpoints'].lower() == 'true':
                                     self.Plots.plotPoints(dates, valueset, curax, line_draw_settings)
+
                             if modifiedalpha:
                                 line_draw_settings['alpha'] = 1.
                         else:
                             single_coll_line_settings = self.Plots.seperateCollectionLines(line_draw_settings)
-                            for cIDi, cID in enumerate(curline_settings['collectionIDs']):
-                                valueset = values[cIDi]
+                            for cID in curline_settings['collectionIDs']:
+                                valueset = filtvalues[cID]
                                 coll_line_settings = single_coll_line_settings[cID]
                                 if coll_line_settings['drawline'].lower() == 'true' and coll_line_settings['drawpoints'].lower() == 'true':
                                     self.Plots.plotLinesAndPoints(dates, valueset, curax, coll_line_settings)
@@ -419,9 +428,7 @@ class MakeAutomatedReport(object):
                                 elif coll_line_settings['drawpoints'].lower() == 'true':
                                     self.Plots.plotPoints(dates, valueset, curax, coll_line_settings)
 
-
-
-                        self.Plots.plotCollectionEnvelopes(dates, values, curax, line_draw_settings)
+                        self.Plots.plotCollectionEnvelopes(dates, filtvalues, curax, line_draw_settings)
 
                     elif curline_settings['stack']:
                         if axis not in stackplots.keys(): #left or right
@@ -1579,16 +1586,17 @@ class MakeAutomatedReport(object):
                     row_val = s_row[hi+1]
                     stat = None
                     addasterisk = False
-                    data_index = -1
+                    data_key = None
                     if '%%' in rowname:
                         if isCollection:
                             collection_number = int(rowname.split('%%ID.')[1].split('%%')[0])
-                            data_index = np.where(np.asarray(object_settings['collectionIDs']) == collection_number)[0] #TODO: make into dict...
+                            data_key = collection_number
+                            # data_index = np.where(np.asarray(object_settings['collectionIDs']) == collection_number)[0] #TODO: make into dict...
                             # rowname = re.sub(r"%%ID\.(\d+)%%", r"\1", rowname, flags=re.IGNORECASE) #re.sub magic, counts \1 as two chars
                             rowname = re.sub(r"%%ID\.(\d+)%%", WF.formatCollectionIDs, rowname, flags=re.IGNORECASE) #re.sub magic, counts \1 as two chars
 
                     if '%%' in row_val:
-                        rowdata, sr_month = self.Tables.getStatsLineData(row_val, data, year=year, data_index=data_index)
+                        rowdata, sr_month = self.Tables.getStatsLineData(row_val, data, year=year, data_key=collection_number)
                         if len(rowdata) == 0:
                             row_val = None
                             stat = None

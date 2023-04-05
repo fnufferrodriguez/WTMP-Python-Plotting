@@ -983,13 +983,29 @@ def convertUnitSystem(values, units, target_unitsystem, debug=False):
         return values, units
 
     if units.lower() in ['c', 'f']:
-        new_values = convertTempUnits(values, units)
+        if isinstance(values, (list, np.ndarray)):
+            new_values = convertTempUnits(values, units)
+        elif isinstance(values, dict):
+            new_values = {}
+            for key, vs in values.items():
+                new_values[key] = convertTempUnits(vs, units)
+
     elif units.lower() in constants.conversion.keys():
         conversion_factor = constants.conversion[units.lower()]
-        new_values = values * conversion_factor
+        if isinstance(values, (list, np.ndarray)):
+            new_values = values * conversion_factor
+        elif isinstance(values, dict):
+            new_values = {}
+            for key, vs in values.items():
+                new_values[key] = vs * conversion_factor
     elif new_units.lower() in constants.conversion.keys():
         conversion_factor = 1/constants.conversion[units.lower()]
-        new_values = values * conversion_factor
+        if isinstance(values, (list, np.ndarray)):
+            new_values = values * conversion_factor
+        elif isinstance(values, dict):
+            new_values = {}
+            for key, vs in values.items():
+                new_values[key] = vs * conversion_factor
     else:
         print2stdout('Undefined Units conversion for units {0}.'.format(units), debug=debug)
         print2stdout('No Conversions taking place.', debug=debug)
