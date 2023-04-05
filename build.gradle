@@ -7,7 +7,7 @@ task zipPython(type: Zip) {
     onlyIf { project.hasProperty("publishUSBRPython") && publishUSBRPython }
 
     from 'dist/WAT_Report_Generator'
-    include '**.*'
+    include '**/**'
     archiveBaseName = 'usbr-actionpanel-python'
     includeEmptyDirs = false
     destinationDirectory = file("$projectDir/build")
