@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '5.4.0'
+VERSIONNUMBER = '5.4.1'
 
 import os
 import sys
@@ -23,6 +23,7 @@ import pickle
 import itertools
 import traceback
 import time
+import re
 
 import WAT_Reader as WR
 import WAT_Functions as WF
@@ -1533,19 +1534,30 @@ class MakeAutomatedReport(object):
         object_settings['units_list'] = WF.getUnitsList(data_settings)
         object_settings['plot_units'] = WF.getPlotUnits(object_settings['units_list'], object_settings)
 
+        data = self.Tables.filterTableData(data, object_settings)
+        data, object_settings['plot_units'] = self.Tables.correctTableUnits(data, data_settings, object_settings)
+
         object_settings = WF.updateFlaggedValues(object_settings, '%%units%%', WF.formatUnitsStrings(object_settings['plot_units'], format='external'))
         rows = WF.updateFlaggedValues(rows, '%%units%%', WF.formatUnitsStrings(object_settings['plot_units'], format='external'))
         headings = WF.updateFlaggedValues(headings, '%%units%%', WF.formatUnitsStrings(object_settings['plot_units'], format='external'))
-
-        data = self.Tables.filterTableData(data, object_settings)
-        data = self.Tables.correctTableUnits(data, data_settings, object_settings)
 
         if 'description' in object_settings.keys():
             desc = object_settings['description']
         else:
             desc = ''
 
+        if 'primarykeyheader' in object_settings.keys():
+            primarykeyheader = object_settings['primarykeyheader']
+        else:
+            primarykeyheader = 'Year'
+
         desc = WF.updateFlaggedValues(desc, '%%year%%', object_settings['yearstr'])
+
+        isCollection = WF.checkForCollections(data_settings)
+        if isCollection:
+            collectionIDs = self.Data.getCollectionIDs(object_settings, data_settings)
+            object_settings['collectionIDs'] = collectionIDs
+            rows = self.Tables.configureRowsForCollection(rows, data_settings, object_settings)
 
         table_constructor = {}
 
@@ -1567,8 +1579,16 @@ class MakeAutomatedReport(object):
                     row_val = s_row[hi+1]
                     stat = None
                     addasterisk = False
+                    data_index = -1
+                    if '%%' in rowname:
+                        if isCollection:
+                            collection_number = int(rowname.split('%%ID.')[1].split('%%')[0])
+                            data_index = np.where(np.asarray(object_settings['collectionIDs']) == collection_number)[0] #TODO: make into dict...
+                            # rowname = re.sub(r"%%ID\.(\d+)%%", r"\1", rowname, flags=re.IGNORECASE) #re.sub magic, counts \1 as two chars
+                            rowname = re.sub(r"%%ID\.(\d+)%%", WF.formatCollectionIDs, rowname, flags=re.IGNORECASE) #re.sub magic, counts \1 as two chars
+
                     if '%%' in row_val:
-                        rowdata, sr_month = self.Tables.getStatsLineData(row_val, data, year=year)
+                        rowdata, sr_month = self.Tables.getStatsLineData(row_val, data, year=year, data_index=data_index)
                         if len(rowdata) == 0:
                             row_val = None
                             stat = None
@@ -1657,9 +1677,9 @@ class MakeAutomatedReport(object):
 
             #THEN write table
             if self.iscomp:
-                self.XML.writeDateControlledTableStart(desc, 'Year')
+                self.XML.writeDateControlledTableStart(desc, primarykeyheader)
             else:
-                self.XML.writeTableStart(desc, 'Year')
+                self.XML.writeTableStart(desc, primarykeyheader)
 
             self.Tables.writeTable(new_table_constructor)
             if not keepall:
@@ -1709,10 +1729,10 @@ class MakeAutomatedReport(object):
         object_settings['units_list'] = WF.getUnitsList(data_settings)
         object_settings['plot_units'] = WF.getPlotUnits(object_settings['units_list'], object_settings)
 
-        object_settings = WF.updateFlaggedValues(object_settings, '%%units%%', WF.formatUnitsStrings(object_settings['plot_units'], format='external'))
 
         data = self.Tables.filterTableData(data, object_settings)
-        data = self.Tables.correctTableUnits(data, data_settings, object_settings)
+        data, object_settings['plot_units'] = self.Tables.correctTableUnits(data, data_settings, object_settings)
+        object_settings = WF.updateFlaggedValues(object_settings, '%%units%%', WF.formatUnitsStrings(object_settings['plot_units'], format='external'))
 
         thresholds = self.Tables.formatThreshold(object_settings)
 
@@ -1878,10 +1898,9 @@ class MakeAutomatedReport(object):
         object_settings['units_list'] = WF.getUnitsList(data_settings)
         object_settings['plot_units'] = WF.getPlotUnits(object_settings['units_list'], object_settings)
 
-        object_settings = WF.updateFlaggedValues(object_settings, '%%units%%', WF.formatUnitsStrings(object_settings['plot_units'], format='external'))
-
         data = self.Tables.filterTableData(data, object_settings)
-        data = self.Tables.correctTableUnits(data, data_settings, object_settings)
+        data, object_settings['plot_units'] = self.Tables.correctTableUnits(data, data_settings, object_settings)
+        object_settings = WF.updateFlaggedValues(object_settings, '%%units%%', WF.formatUnitsStrings(object_settings['plot_units'], format='external'))
 
         object_settings = self.Tables.replaceComparisonSettings(object_settings, self.iscomp)
 
@@ -2977,10 +2996,11 @@ class MakeAutomatedReport(object):
 
         data, data_settings = self.Data.getTableDataDictionary(object_settings, type='formatted')
         object_settings['primarykey'] = self.Data.getPrimaryTableKey(data, object_settings)
+        data = self.Tables.formatPrimaryKey(data, object_settings)
         data, data_settings = self.Data.mergeFormattedTables(data, data_settings, object_settings)
         data = self.Data.filterFormattedTable(data, object_settings)
         headings, rows = self.Tables.buildFormattedTable(data)
-        print('stop')
+
 
         if 'description' in object_settings.keys():
             desc = object_settings['description']

@@ -444,11 +444,11 @@ class Tables(object):
             if 'parameter' in data_settings[datapath].keys():
                 units = WF.configureUnits(object_settings, data_settings[datapath]['parameter'], units)
             if 'unitsystem' in object_settings.keys():
-                data[datapath]['values'], data_settings[datapath]['units'] = WF.convertUnitSystem(values, units, object_settings['unitsystem'], debug=self.Report.debug)
+                data[datapath]['values'], units = WF.convertUnitSystem(values, units, object_settings['unitsystem'], debug=self.Report.debug)
 
-        return data
+        return data, units
 
-    def getStatsLineData(self, row, data_dict, year='ALLYEARS'):
+    def getStatsLineData(self, row, data_dict, year='ALLYEARS', data_index=-1):
         '''
         takes rows for tables and replaces flags with the correct data, computing stat analysis if needed
         :param row: row section string
@@ -468,7 +468,10 @@ class Tables(object):
                 curflag = sr
                 curvalues = np.array(data_dict[sr]['values'])
                 curdates = np.array(data_dict[sr]['dates'])
-                data[curflag] = {'values': curvalues, 'dates': curdates}
+                if data_index != -1:
+                    data[curflag] = {'values': curvalues[data_index], 'dates': curdates}
+                else:
+                    data[curflag] = {'values': curvalues, 'dates': curdates}
             else:
                 if '=' in sr:
                     sr_spl = sr.split('=')
@@ -606,6 +609,14 @@ class Tables(object):
             if len(flags) == 1:
                 out_stat = WF.calcMean(data[flag1])
             stat = 'mean'
+        elif row.lower().startswith('%%maximum'):
+            if len(flags) == 1:
+                out_stat = WF.calcMax(data[flag1])
+            stat = 'maximum'
+        elif row.lower().startswith('%%minimum'):
+            if len(flags) == 1:
+                out_stat = WF.calcMin(data[flag1])
+            stat = 'minimum'
         else:
             if '%%' in row:
                 WF.print2stdout('Unable to convert flag in row', row, debug=self.Report.debug)
@@ -817,6 +828,17 @@ class Tables(object):
 
         return new_headers
 
+    def formatPrimaryKey(self, data, object_settings):
+       if 'formatprimaryasid' in object_settings.keys():
+           if object_settings['formatprimaryasid'].lower() == 'true':
+               primarykey = object_settings['primarykey']
+               for datakey in data.keys():
+                   df = data[datakey]
+                   for i, row in df.iterrows():
+                       df.loc[i, primarykey] = WF.formatCollectionIDs(int(row[primarykey]))
+                   data[datakey] = df
+       return data
+
     def formatStatsProfileLineData(self, row, data_dict, interpolation, usedepth, index):
         '''
         formats Profile line statistics for table using user inputs
@@ -996,6 +1018,25 @@ class Tables(object):
                 if str(h[0]) == str(hgroup):
                     headings_i[hgi].append(hi)
         return headings_i
+
+    def configureRowsForCollection(self, rows, data_settings, object_settings):
+        formatted_rows = []
+        #figure out IDs first
+        if 'collectionIDs' in object_settings.keys():
+            collectionIDs = object_settings['collectionIDs']
+        else:
+            collectionIDs = WF.getCollectionIDs(data_settings, object_settings)
+        for row in rows:
+            if '%%ID%%' in row:
+                for ID in collectionIDs:
+                    srow = row.split('|')
+                    frow = []
+                    for sr in srow:
+                        if '%%ID%%' in sr:
+                            sr = sr.replace('%%ID%%', f'%%ID.{ID}%%')
+                        frow.append(sr)
+                    formatted_rows.append('|'.join(frow))
+        return formatted_rows
 
     def writeTable(self, table_constructor):
         lastdatecol = ''

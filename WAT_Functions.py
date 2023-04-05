@@ -506,6 +506,34 @@ def calcMean(data1):
     data1['values'][data1_msk] = np.nan
     return(np.nanmean(data1['values']))
 
+def calcMax(data1):
+    '''
+    calculates the maximum of datasets
+    :param data1: dataset, list array or dict
+    :return: mean value
+    '''
+
+    dcheck1 = checkData(data1, flag='values')
+    if not dcheck1:
+        return np.nan
+    data1_msk = np.where(np.isinf(data1['values']))
+    data1['values'][data1_msk] = np.nan
+    return(np.nanmax(data1['values']))
+
+def calcMin(data1):
+    '''
+    calculates the maximum of datasets
+    :param data1: dataset, list array or dict
+    :return: mean value
+    '''
+
+    dcheck1 = checkData(data1, flag='values')
+    if not dcheck1:
+        return np.nan
+    data1_msk = np.where(np.isinf(data1['values']))
+    data1['values'][data1_msk] = np.nan
+    return(np.nanmin(data1['values']))
+
 def convertTempUnits(values, units):
     '''
     convert temperature units between c and f
@@ -1620,6 +1648,12 @@ def formatUnitsStrings(units, format='internal'):
         output = units
     return output
 
+def formatCollectionIDs(ID):
+    if isinstance(ID, re.Match):
+        return ID.group(1).zfill(6)
+    else:
+        return str(ID).zfill(6)
+
 def formatNumbers(number, numberformatsettings):
     '''
     formats numbers to use the correct amount of decimal places
@@ -1694,6 +1728,14 @@ def checkJasperFiles(study_dir, install_dir):
                 print2stdout(f'\nNewer JRXML file detected for {jrxml_file}')
                 print2stdout(f'Deleting {jasper_file}')
                 os.remove(jasper_file)
+
+def checkForCollections(data_settings):
+    contain_collection = False
+    for ds in data_settings.keys():
+        if 'collection' in data_settings[ds].keys():
+            if data_settings[ds]['collection']:
+                contain_collection = True
+    return contain_collection
 
 def organizePlotYears(object_settings):
     '''

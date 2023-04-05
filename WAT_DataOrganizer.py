@@ -171,6 +171,18 @@ class DataOrganizer(object):
 
         return wse_data
 
+    def getCollectionIDs(self, object_settings, data_settings):
+        if 'IDs' in object_settings.keys(): #if a subset of IDs is selected..
+            collectionIDs = object_settings['ids']
+        else:
+            collectionIDs = []
+            for i, ds in enumerate(data_settings.keys()):
+                if i == 0:
+                    collectionIDs = data_settings[ds]['collectionIDs']
+                else:
+                    collectionIDs = np.intersect1d(data_settings[ds]['collectionIDs'], collectionIDs)
+        return collectionIDs
+
     def filterTimeSeries(self, data, line_settings):
         '''
         filters data read from W2 results files to a target elevation

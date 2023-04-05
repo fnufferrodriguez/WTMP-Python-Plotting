@@ -364,6 +364,7 @@ def readFormattedTable_Pandas(filename):
         ext = filename.split('.')[-1]
         if ext.lower() == 'csv':
             df = pd.read_csv(filename)
+        df.dropna(inplace=True) #sometimes theres extra rows..
         return df
     else:
         WF.print2stdout(f'{filename} not found.')
