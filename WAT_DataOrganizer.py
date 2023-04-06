@@ -1354,9 +1354,9 @@ class DataOrganizer(object):
                         # values = WF.getListItems(allvalues)
                         for key, values in allvalues.items():
                             if units != None:
-                                colvals[f'{key} ({units})'] = values[key]
+                                colvals[f'{key} ({units})'] = values
                             else:
-                                colvals[f'{key}'] = values[key]
+                                colvals[f'{key}'] = values
                         df = pd.DataFrame(colvals)
 
                 df.to_csv(csv_name, index=False)
