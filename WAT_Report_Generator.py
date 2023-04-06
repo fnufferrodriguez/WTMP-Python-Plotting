@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '5.4.3'
+VERSIONNUMBER = '5.4.4'
 
 import os
 import sys
@@ -1586,7 +1586,7 @@ class MakeAutomatedReport(object):
                     row_val = s_row[hi+1]
                     stat = None
                     addasterisk = False
-                    data_key = None
+                    collection_number = None
                     if '%%' in rowname:
                         if isCollection:
                             collection_number = int(rowname.split('%%ID.')[1].split('%%')[0])
