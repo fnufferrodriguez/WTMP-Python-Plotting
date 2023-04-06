@@ -254,6 +254,10 @@ class DataOrganizer(object):
                         WF.print2stdout('Filter and Data Index not equal. Not Filtering data.', debug=self.Report.debug)
                         WF.print2stdout('Confirm that Data and Filter are on the same timeseries interval', debug=self.Report.debug)
 
+            if 'xlims' in line_settings[d].keys():
+                xlims = line_settings[d]['xlims']
+                data[d]['dates'], data[d]['values'] = WF.applyXLimits(self.Report, data[d]['dates'], data[d]['values'], xlims)
+
         return data
 
     def getTimeSeriesDataDictionary(self, settings):

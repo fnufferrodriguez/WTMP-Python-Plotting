@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '5.4.5'
+VERSIONNUMBER = '5.4.6'
 
 import os
 import sys
@@ -1526,6 +1526,7 @@ class MakeAutomatedReport(object):
                 object_settings = WF.replaceDefaults(self, template_settings[object_settings['type'].lower()], object_settings)
 
         object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = WF.getObjectYears(self, object_settings)
+        object_settings['allyearsstr'] = WF.getObjectAllYears(object_settings['years'])
 
         data, data_settings = self.Data.getTableDataDictionary(object_settings)
         data = WF.mergeLines(data, data_settings, object_settings)
@@ -1541,7 +1542,7 @@ class MakeAutomatedReport(object):
         object_settings['units_list'] = WF.getUnitsList(data_settings)
         object_settings['plot_units'] = WF.getPlotUnits(object_settings['units_list'], object_settings)
 
-        data = self.Tables.filterTableData(data, object_settings)
+        # data = self.Tables.filterTableData(data, object_settings)
         data, object_settings['plot_units'] = self.Tables.correctTableUnits(data, data_settings, object_settings)
 
         object_settings = WF.updateFlaggedValues(object_settings, '%%units%%', WF.formatUnitsStrings(object_settings['plot_units'], format='external'))
@@ -1558,7 +1559,7 @@ class MakeAutomatedReport(object):
         else:
             primarykeyheader = 'Year'
 
-        desc = WF.updateFlaggedValues(desc, '%%year%%', object_settings['yearstr'])
+        desc = WF.updateFlaggedValues(desc, '%%year%%', object_settings['allyearsstr'])
 
         isCollection = WF.checkForCollections(data_settings)
         if isCollection:
@@ -1569,7 +1570,7 @@ class MakeAutomatedReport(object):
         table_constructor = {}
 
         for yi, year in enumerate(object_settings['years']): #iterate years. If comp, thats the date header.
-
+            yearlydata = self.Tables.filterTableData(data, object_settings)
             yearheader = object_settings['yearstr'][yi]
             for hi, header in enumerate(headings):
                 tcnum = len(table_constructor.keys())
@@ -1596,7 +1597,7 @@ class MakeAutomatedReport(object):
                             rowname = re.sub(r"%%ID\.(\d+)%%", WF.formatCollectionIDs, rowname, flags=re.IGNORECASE) #re.sub magic, counts \1 as two chars
 
                     if '%%' in row_val:
-                        rowdata, sr_month = self.Tables.getStatsLineData(row_val, data, year=year, data_key=collection_number)
+                        rowdata, sr_month = self.Tables.getStatsLineData(row_val, yearlydata, year=year, data_key=collection_number)
                         if len(rowdata) == 0:
                             row_val = None
                             stat = None

@@ -808,6 +808,13 @@ def getYearlyFilterIdx(dates, year):
     else:
         return 0, -1
 
+def getObjectAllYears(years_list):
+    if len(years_list) == 1:
+        outputstring = str(years_list[0])
+    else:
+        outputstring = f'{years_list[0]}-{years_list[1]}'
+    return outputstring
+
 def getMonthlyFilterIdx(dates, month):
     '''
     finds start and end index for a given month for a list of dates
@@ -1342,18 +1349,26 @@ def applyXLimits(Report, dates, values, xlims):
     elif isinstance(dates[0], dt.datetime):
         wantedformat = 'datetime'
     if 'min' in xlims.keys():
-        min = WT.translateDateFormat(xlims['min'], wantedformat, Report.StartTime, Report.StartTime, Report.EndTime,
+        datemin = WT.translateDateFormat(xlims['min'], wantedformat, Report.StartTime, Report.StartTime, Report.EndTime,
                                      Report.ModelAlt.t_offset)
         for i, d in enumerate(dates):
-            if min > d:
-                values[i] = np.nan #exclude
+            if datemin > d:
+                if isinstance(values, (int, np.ndarray)):
+                    values[i] = np.nan #exclude
+                elif isinstance(values, dict):
+                    for key in values.keys():
+                        values[key][i] = np.nan
     if 'max' in xlims.keys():
-        max = WT.translateDateFormat(xlims['max'], wantedformat, Report.EndTime,
+        datemax = WT.translateDateFormat(xlims['max'], wantedformat, Report.EndTime,
                                      Report.StartTime, Report.EndTime,
                                      Report.ModelAlt.t_offset)
         for i, d in enumerate(dates):
-            if max < d:
-                values[i] = np.nan #exclude
+            if datemax < d:
+                if isinstance(values, (int, np.ndarray)):
+                    values[i] = np.nan #exclude
+                elif isinstance(values, dict):
+                    for key in values.keys():
+                        values[key][i] = np.nan
 
     return dates, values
 
