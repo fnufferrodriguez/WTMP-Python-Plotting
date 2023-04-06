@@ -984,6 +984,7 @@ class DataOrganizer(object):
             elif type.lower() == 'formatted':
                 #TODO: update to handle different sheets?
                 #TODO: handle many tables? just select the first?
+                dp = self.Report.configureSettingsForID(self.Report.base_id, dp)
                 if 'filename' in dp.keys():
                     data[dp['flag']] = WR.readFormattedTable_Pandas(dp['filename'])
                 line_settings[dp['flag']] = {}
