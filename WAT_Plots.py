@@ -51,10 +51,10 @@ class Plots(object):
                 collection_draw_settings[ID] = {}
                 collection_draw_settings[ID].update(line_draw_settings)
                 collection_draw_settings[ID]['numtimesused'] = idi
-                if '%%ID%%' not in collection_draw_settings[ID]['label']:
+                if '%%collectionid%%' not in collection_draw_settings[ID]['label']:
                     collection_draw_settings[ID]['label'] = f"{collection_draw_settings[ID]['label']}: {ID}"
                 else:
-                    collection_draw_settings[ID]['label'] = collection_draw_settings[ID]['label'].replace('%%ID%%', ID)
+                    collection_draw_settings[ID]['label'] = collection_draw_settings[ID]['label'].replace('%%collectionid%%', str(WF.formatCollectionIDs(ID)))
                 collection_draw_settings[ID] = WF.fixDuplicateColors(collection_draw_settings[ID])
             return collection_draw_settings
 

@@ -110,6 +110,11 @@ def findTargetinChapterDefFile(flags, chapter, default=''):
             break
     return targettext
 
+def readBCPathsMap(bcpathsmapfile):
+    bcpathsmap = readFormattedTable_Pandas(bcpathsmapfile)
+    return bcpathsmap
+
+
 def readChapterDefFile(CD_file):
     '''
     reads chapter definitions file
