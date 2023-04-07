@@ -360,13 +360,26 @@ class DataOrganizer(object):
         :param makecopy: flag that determines if the data is grabbed or just copied
         :return: dates, values, units
         '''
-        metadata = {'collection': False}
+        metadata = {'collection': False,
+                    'frommemory': False}
+
         if 'dss_path' in Line_info.keys(): #Get data from DSS record
             if 'dss_filename' not in Line_info.keys():
                 WF.print2stdout('DSS_Filename not set for Line: {0}'.format(Line_info), debug=self.Report.debug)
                 return np.array([]), np.array([]), metadata
             else:
                 datamem_key = self.buildMemoryKey(Line_info)
+
+                if Line_info['dss_path'].split('/')[6].startswith('*|'):
+                    metadata['collection'] = True
+                if metadata['collection']:
+                    if 'collectionids' in Line_info.keys():
+                        collectionIDs = Line_info['collectionids']
+                    elif self.Report.reportType == 'forecast':
+                        collectionIDs = self.Report.accepted_IDs
+                    else:
+                        collectionIDs = 'all'
+
                 if datamem_key in self.Memory.keys():
                     WF.print2stdout('Reading {0} from memory'.format(datamem_key), debug=self.Report.debug) #noisy
                     if makecopy:
@@ -376,19 +389,20 @@ class DataOrganizer(object):
                     times = datamementry['times']
                     values = datamementry['values']
                     metadata = datamementry['metadata']
-                else:
+
+                    metadata['frommemory'] = True
+                    if metadata['collection']:
+                        if metadata['collectionIDs'] != collectionIDs:
+                            metadata['frommemory'] = False #if not the same list, grab again
+                            WF.print2stdout('Collections do not allign with last read. Re-reading', debug=self.Report.debug)
+
+                if not metadata['frommemory']:
                     # if Line_info['flag'].lower() == 'computed' and (self.Report.isensemble or self.reportType == 'forecast'):
                     if Line_info['dss_path'].split('/')[6].startswith('*|'):
-                        if 'collectionIDs' in Line_info.keys():
-                            collectionIDs = Line_info['collectionIDs']
-                        elif self.Report.reportType == 'forecast':
-                            collectionIDs = self.Report.accepted_IDs
-                        else:
-                            collectionIDs = 'all'
+
                         times, values, units, collectionIDs = WDR.readCollectionsDSSData(Line_info['dss_filename'], Line_info['dss_path'],
                                                                                          collectionIDs, self.Report.StartTime,
                                                                                          self.Report.EndTime, self.Report.debug)
-                        metadata['collection'] = True
                         metadata['collectionIDs'] = collectionIDs
                     else:
                         times, values, units = WDR.readDSSData(Line_info['dss_filename'], Line_info['dss_path'],

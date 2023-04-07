@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '5.4.6'
+VERSIONNUMBER = '5.4.7'
 
 import os
 import sys
@@ -1536,6 +1536,8 @@ class MakeAutomatedReport(object):
         object_settings = self.Tables.replaceComparisonSettings(object_settings, self.iscomp)
 
         headings, rows = self.Tables.buildErrorStatsTable(object_settings, data_settings)
+        headings = self.Tables.replaceIllegalJasperCharactersHeadings(headings)
+        rows =self.Tables.replaceIllegalJasperCharactersRows(rows)
 
         object_settings = self.configureSettingsForID(self.base_id, object_settings)
 
@@ -3009,7 +3011,8 @@ class MakeAutomatedReport(object):
         data, data_settings = self.Data.mergeFormattedTables(data, data_settings, object_settings)
         data = self.Data.filterFormattedTable(data, object_settings)
         headings, rows = self.Tables.buildFormattedTable(data)
-
+        headings = self.Tables.replaceIllegalJasperCharactersHeadings(headings)
+        rows =self.Tables.replaceIllegalJasperCharactersRows(rows)
 
         if 'description' in object_settings.keys():
             desc = object_settings['description']

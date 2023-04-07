@@ -1061,6 +1061,29 @@ class Tables(object):
 
         return object_settings
 
+    def replaceIllegalJasperCharacters(self, tablelist):
+        illegal_chars = {"<": "&#60;",
+                         ">": "&#62;"}
+        newtablelist = []
+        for tl in tablelist:
+            replaced = False
+            for key, char in illegal_chars.items():
+                if key in tl:
+                    newtablelist.append(tl.replace(key, char))
+                    replaced = True
+            if not replaced:
+                newtablelist.append(tl)
+        return newtablelist
+
+    def replaceIllegalJasperCharactersHeadings(self, headers):
+        return self.replaceIllegalJasperCharacters(headers)
+
+    def replaceIllegalJasperCharactersRows(self, rows):
+        new_rows = []
+        for row in rows:
+            new_rows.append('|'.join(self.replaceIllegalJasperCharacters(row.split('|'))))
+        return new_rows
+
     def configureHeadingsGroups(self, headings):
         '''
         finds indicies of groupings for headers
