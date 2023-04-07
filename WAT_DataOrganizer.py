@@ -1026,8 +1026,8 @@ class DataOrganizer(object):
                 if column not in selected_headers:
                     data.drop(column, axis=1, inplace=True)
 
-        if 'rows' in object_settings.keys():
-            selected_rows = object_settings['rows']
+        if 'selectbyfirstcell' in object_settings.keys():
+            selected_rows = object_settings['selectbyfirstcell']
             if 'primarykey' in object_settings:
                 primarykey = object_settings['primarykey']
             elif 'merge_on' in object_settings.keys():
@@ -1042,12 +1042,16 @@ class DataOrganizer(object):
                     WF.print2stdout('Unable to establish table primary key based on input.', debug=self.Report.debug)
                     WF.print2stdout('To fix, specify a "primarykey" flag in the input file.', debug=self.Report.debug)
                     WF.print2stdout(f'Using first column, {primarykey}.', debug=self.Report.debug)
+
+            if 'formatprimaryascollection' in object_settings.keys():
+                if object_settings['formatprimaryascollection'].lower() == 'true':
+                    selected_rows = [WF.formatCollectionIDs(n) for n in selected_rows] #match the table if theyve been converted
+
             new_data_df = pd.DataFrame(columns=data.columns)
             for index, row in data.iterrows():
-                if row[primarykey] in selected_rows:
-                    new_data_df.append(row, ignore_index=True)
-
-            return new_data_df
+                if row[primarykey] not in selected_rows:
+                    # new_data_df.append(row, ignore_index=True)
+                    data.drop(index=index, inplace=True)
 
         return data #if we dont do rows
 

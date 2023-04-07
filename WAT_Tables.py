@@ -889,13 +889,13 @@ class Tables(object):
         return new_headers
 
     def formatPrimaryKey(self, data, object_settings):
-       if 'formatprimaryasid' in object_settings.keys():
-           if object_settings['formatprimaryasid'].lower() == 'true':
+       if 'formatprimaryascollection' in object_settings.keys():
+           if object_settings['formatprimaryascollection'].lower() == 'true':
                primarykey = object_settings['primarykey']
                for datakey in data.keys():
                    df = data[datakey]
                    for i, row in df.iterrows():
-                       df.loc[i, primarykey] = WF.formatCollectionIDs(int(row[primarykey]))
+                       df.loc[i, primarykey] = WF.formatCollectionIDs(row[primarykey])
                    data[datakey] = df
        return data
 

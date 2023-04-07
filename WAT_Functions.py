@@ -1680,9 +1680,15 @@ def formatUnitsStrings(units, format='internal'):
     return output
 
 def formatCollectionIDs(ID):
+
     if isinstance(ID, re.Match):
         return ID.group(1).zfill(6)
     else:
+        try:
+            ID = int(ID) #needs to be a string but lets remove any leading zeros just in case..
+        except ValueError:
+            print2stdout(f'Unable to convert item {ID} to collection format (ex. 000001)')
+            return ID
         return str(ID).zfill(6)
 
 def formatNumbers(number, numberformatsettings):
