@@ -428,8 +428,9 @@ class DataOrganizer(object):
                 times = datamementry['times']
                 values = datamementry['values']
                 metadata = datamementry['metadata']
+                metadata['frommemory'] = True
 
-            else:
+            if not metadata['frommemory']:
                 if 'structurenumbers' in Line_info.keys():
                     # Ryan Miles: yeah looks like it's str_brX.npt, and X is 1-# of branches (which is defined in the control file)
                     times, values = self.Report.ModelAlt.readStructuredTimeSeries(Line_info['w2_file'], Line_info['structurenumbers'])
@@ -456,8 +457,9 @@ class DataOrganizer(object):
                 times = datamementry['times']
                 values = datamementry['values']
                 metadata = datamementry['metadata']
+                metadata['frommemory'] = True
 
-            else:
+            if not metadata['frommemory']:
                 filename = Line_info['h5file']
                 if not os.path.exists(filename):
                     WF.print2stdout('ERROR: H5 file does not exist:', filename, debug=self.Report.debug)
@@ -491,8 +493,9 @@ class DataOrganizer(object):
                 times = datamementry['times']
                 values = datamementry['values']
                 metadata = datamementry['metadata']
+                metadata['frommemory'] = True
 
-            else:
+            if not metadata['frommemory']:
                 times, values = self.Report.ModelAlt.readTimeSeries(Line_info['parameter'],
                                                                     float(Line_info['easting']),
                                                                     float(Line_info['northing']),
@@ -514,8 +517,9 @@ class DataOrganizer(object):
                 times = datamementry['times']
                 values = datamementry['values']
                 metadata = datamementry['metadata']
+                metadata['frommemory'] = True
 
-            else:
+            if not metadata['frommemory']:
                 times = []
                 values = []
                 if self.Report.plugin.lower() != 'ressim':
