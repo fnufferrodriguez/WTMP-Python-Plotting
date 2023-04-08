@@ -246,6 +246,7 @@ def readCollectionsDSSData(dss_file, pathname, collectionIDs, startdate, enddate
             return times, collection_values, units, collectionIDs
         else:
             WF.print2stdout(f'DSS file {dss_file} not found.', debug=True)
+            return [], [], None, []
     except:
         WF.print2stdout(f'Unable to open {dss_file}')
         WF.print2stdout(traceback.format_exc(), debug=debug)
