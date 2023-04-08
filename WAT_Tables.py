@@ -564,8 +564,10 @@ class Tables(object):
                             for yearloop in year_loops:
                                 s_idx, e_idx = WF.getYearlyFilterIdx(curdates, yearloop)
                                 if None not in [s_idx, e_idx]:
-                                    yearvals = curvalues[s_idx:e_idx+1]
-                                    yeardates = curdates[s_idx:e_idx+1]
+                                    # yearvals = curvalues[s_idx:e_idx+1]
+                                    # yeardates = curdates[s_idx:e_idx+1]
+                                    yearvals = data[curflag]['values'][s_idx:e_idx+1]
+                                    yeardates = data[curflag]['dates'][s_idx:e_idx+1]
                                 else:
                                     yearvals = []
                                     yeardates = []
@@ -585,7 +587,10 @@ class Tables(object):
                     continue
                 s_idx, e_idx = WF.getYearlyFilterIdx(data[flag]['dates'], year)
                 if None not in [s_idx, e_idx]:
-                    data[flag]['values'] = data[flag]['values'][s_idx:e_idx+1]
+                    try:
+                        data[flag]['values'] = data[flag]['values'][s_idx:e_idx+1]
+                    except:
+                        print('stop')
                     data[flag]['dates'] = data[flag]['dates'][s_idx:e_idx+1]
                 else:
                     data[flag]['values'] = []
@@ -1121,6 +1126,8 @@ class Tables(object):
                             sr = sr.replace('%%ID%%', f'%%ID.{ID}%%')
                         frow.append(sr)
                     formatted_rows.append('|'.join(frow))
+            else:
+                formatted_rows.append(row)
         return formatted_rows
 
     def writeTable(self, table_constructor):

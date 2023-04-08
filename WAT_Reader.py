@@ -170,11 +170,11 @@ def readChapterDefFile(CD_file):
         debug_flags = ['debug', 'Debug', 'DEBUG']
         ChapterDef['debug'] = findTargetinChapterDefFile(debug_flags, chapter, default='false')
 
-        collections_flags = ['isensemble', 'Isensemble', 'ISENSEMBLE'] #TODO: is this final flag??
-        ChapterDef['isensemble'] = findTargetinChapterDefFile(collections_flags, chapter, default='false')
+        # collections_flags = ['isensemble', 'Isensemble', 'ISENSEMBLE'] #TODO: is this final flag??
+        # ChapterDef['isensemble'] = findTargetinChapterDefFile(collections_flags, chapter, default='false')
 
-        forecastsummary_flags = ['forecastsummary', 'Forecastsummary', 'FORECASTSUMMARY'] #TODO: is this final flag??
-        ChapterDef['forecastsummary'] = findTargetinChapterDefFile(forecastsummary_flags, chapter, default='false')
+        forecastiteration_flags = ['forecastiteration', 'Forecastiteration', 'ForecastIteration', 'FORECASTITERATION'] #TODO: is this final flag??
+        ChapterDef['forecastiteration'] = findTargetinChapterDefFile(forecastiteration_flags, chapter, default='false')
 
         cd_sections = chapter.findall('Sections/Section')
         for section in cd_sections:
@@ -248,7 +248,7 @@ def readCollectionsDSSData(dss_file, pathname, collectionIDs, startdate, enddate
             WF.print2stdout(f'DSS file {dss_file} not found.', debug=True)
             return [], [], None, []
     except:
-        WF.print2stdout(f'Unable to open {dss_file}')
+        WF.print2stdout(f'Unable to get data from {dss_file} {pathname}')
         WF.print2stdout(traceback.format_exc(), debug=debug)
         return [], [], None, []
 
@@ -638,10 +638,12 @@ def readSimulationInfo(Report, simulationInfoFile):
     Report.installDir = root.find('Study/InstallDirectory').text #TODO: update
     Report.outputDir = root.find('Study/WriteDirectory').text #TODO: update
 
+    Report.iscomp = False
+    Report.isforecast = False
     if Report.reportType == 'alternativecomparison':
         Report.iscomp = True
-    else:
-        Report.iscomp = False
+    elif Report.reportType == 'forecast':
+        Report.isforecast = True
 
     SimRoot = root.find('Simulations')
     for simulation in SimRoot:
@@ -653,6 +655,10 @@ def readSimulationInfo(Report, simulationInfoFile):
                           'endtime': simulation.find('EndTime').text,
                           'lastcomputed': simulation.find('LastComputed').text
                           }
+
+        if Report.isforecast:
+            iterations = getchildren(simulation.find('iterations'), returnkeyless=True)
+            simulationInfo['iterations'] = iterations
 
         try:
             simulationInfo['ID'] = simulation.find('ID').text

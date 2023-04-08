@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '5.4.14'
+VERSIONNUMBER = '5.4.15'
 
 import os
 import sys
@@ -127,29 +127,30 @@ class MakeAutomatedReport(object):
         elif self.reportType == 'forecast':
             self.initSimulationDict()
             for simulation in self.Simulations:
-                self.setSimulationVariables(simulation)
                 WF.checkExists(simulation['directory'])
-            self.base_id = self.Simulations[0]['ID']
-            self.loadCurrentID(self.base_id) #load the first simulation
-            WT.setMultiRunStartEndYears(self) #find the start and end time
-            WT.defineStartEndYears(self) #format the years correctly after theyre set
-            WR.readSimulationsCSV(self) #read to determine order/sims/regions in report
-            self.cleanOutputDirs()
-            self.initializeXML()
-            self.writeXMLIntroduction()
-            for simorder in self.SimulationCSV.keys():
-                self.setSimulationCSVVars(self.SimulationCSV[simorder])
-                WR.readDefinitionsFile(self, self.SimulationCSV[simorder])
-                self.initializeDataOrganizer() #todo: make sure this doesnt get too big..
-                self.loadModelAlts(self.SimulationCSV[simorder])
-                self.loadCurrentModelAltID(self.base_id)
-                self.WAT_log.addSimLogEntry(self.accepted_IDs, self.SimulationVariables, self.observedDir)
-                self.writeChapter()
-                self.Data.writeDataFiles()
-            self.appendXMLModelIntroduction(simorder) #todo: modified version of this?
-            self.fixXMLModelIntroduction()
-            self.XML.writeReportEnd()
-            self.WAT_log.equalizeLog()
+                self.setSimulationVariables(simulation)
+                self.base_id = self.Simulations[0]['ID']
+                self.loadCurrentID(self.base_id) #load the first simulation
+                WT.setMultiRunStartEndYears(self) #find the start and end time
+                WT.defineStartEndYears(self) #format the years correctly after theyre set
+                WR.readForecastSimulationsCSV(self) #read to determine order/sims/regions in report
+                self.cleanOutputDirs()
+                self.initializeXML()
+                self.writeXMLIntroduction()
+
+                for simorder in self.SimulationCSV.keys():
+                    self.setSimulationCSVVars(self.SimulationCSV[simorder])
+                    WR.readDefinitionsFile(self, self.SimulationCSV[simorder])
+                    self.initializeDataOrganizer() #todo: make sure this doesnt get too big..
+                    self.loadModelAlts(self.SimulationCSV[simorder])
+                    self.loadCurrentModelAltID(self.base_id)
+                    self.WAT_log.addSimLogEntry(self.accepted_IDs, self.SimulationVariables, self.observedDir)
+                    self.writeChapter()
+                    self.Data.writeDataFiles()
+                self.appendXMLModelIntroduction(simorder) #todo: modified version of this?
+                self.fixXMLModelIntroduction()
+                self.XML.writeReportEnd()
+                self.WAT_log.equalizeLog()
         else:
             WF.print2stderr('UNKNOWN REPORT TYPE:', self.reportType)
             sys.exit(1)
@@ -219,6 +220,8 @@ class MakeAutomatedReport(object):
             yearstr = object_settings['yearstr'][yi]
 
             cur_obj_settings = WF.updateFlaggedValues(cur_obj_settings, '%%year%%', yearstr)
+            if self.forecastiteration:
+                cur_obj_settings = WF.updateFlaggedValues(cur_obj_settings, '%%iteration%%', WF.formatCollectionIDs(self.Iteration))
 
             if len(cur_obj_settings['axs']) == 1:
                 figsize=(12, 6)
@@ -287,9 +290,6 @@ class MakeAutomatedReport(object):
                 straightlines = self.Data.getStraightLineValue(ax_settings)
 
                 isCollection = WF.checkForCollections(line_settings)
-                if isCollection:
-                    collectionIDs = self.Data.getCollectionIDs(object_settings, line_settings)
-                    object_settings['collectionIDs'] = collectionIDs
 
                 for gateop in gatedata.keys():
                     gatedata[gateop]['gates'] = WF.filterDataByYear(gatedata[gateop]['gates'], year)
@@ -393,33 +393,41 @@ class MakeAutomatedReport(object):
 
                     if isCollection:
                         coloreach = False
-                        filtvalues = self.Data.filterCollections(values, object_settings['collectionIDs'])
+                        # filtvalues = self.Data.filterCollections(values, object_settings['collectionIDs'])
                         if 'coloreach' in curline_settings.keys():
                             if curline_settings['coloreach'].lower() == 'true':
                                 coloreach = True
                         if not coloreach:
-                            modifiedalpha = False
-                            if line_draw_settings['alpha'] == 1.:
-                                modifiedalpha = True
-                                line_draw_settings['alpha'] = 0.25 #for collection plots, set to low opac for a jillion lines
+                            if not self.forecastiteration:
+                                modifiedalpha = False
+                                if line_draw_settings['alpha'] == 1.:
+                                    modifiedalpha = True
+                                    line_draw_settings['alpha'] = 0.25 #for collection plots, set to low opac for a jillion lines
 
-                            for cIDi, cID in enumerate(object_settings['collectionIDs']):
-                                valueset = filtvalues[cID]
-                                if cIDi > 0:
-                                    line_draw_settings['label'] = ''
+                                for cIDi, cID in enumerate(curline_settings['collectionIDs']):
+                                    valueset = values[cID]
+                                    if cIDi > 0:
+                                        line_draw_settings['label'] = ''
+                                    if line_draw_settings['drawline'].lower() == 'true' and line_draw_settings['drawpoints'].lower() == 'true':
+                                        self.Plots.plotLinesAndPoints(dates, valueset, curax, line_draw_settings)
+                                    elif line_draw_settings['drawline'].lower() == 'true':
+                                        self.Plots.plotLines(dates, valueset, curax, line_draw_settings)
+                                    elif line_draw_settings['drawpoints'].lower() == 'true':
+                                        self.Plots.plotPoints(dates, valueset, curax, line_draw_settings)
+                                if modifiedalpha:
+                                    line_draw_settings['alpha'] = 1.
+                            else:
+                                valueset = values[self.Iteration]
                                 if line_draw_settings['drawline'].lower() == 'true' and line_draw_settings['drawpoints'].lower() == 'true':
                                     self.Plots.plotLinesAndPoints(dates, valueset, curax, line_draw_settings)
                                 elif line_draw_settings['drawline'].lower() == 'true':
                                     self.Plots.plotLines(dates, valueset, curax, line_draw_settings)
                                 elif line_draw_settings['drawpoints'].lower() == 'true':
                                     self.Plots.plotPoints(dates, valueset, curax, line_draw_settings)
-
-                            if modifiedalpha:
-                                line_draw_settings['alpha'] = 1.
                         else:
                             single_coll_line_settings = self.Plots.seperateCollectionLines(line_draw_settings)
                             for cID in curline_settings['collectionIDs']:
-                                valueset = filtvalues[cID]
+                                valueset = values[cID]
                                 coll_line_settings = single_coll_line_settings[cID]
                                 if coll_line_settings['drawline'].lower() == 'true' and coll_line_settings['drawpoints'].lower() == 'true':
                                     self.Plots.plotLinesAndPoints(dates, valueset, curax, coll_line_settings)
@@ -428,7 +436,7 @@ class MakeAutomatedReport(object):
                                 elif coll_line_settings['drawpoints'].lower() == 'true':
                                     self.Plots.plotPoints(dates, valueset, curax, coll_line_settings)
 
-                        self.Plots.plotCollectionEnvelopes(dates, filtvalues, curax, line_draw_settings)
+                        self.Plots.plotCollectionEnvelopes(dates, values, curax, line_draw_settings)
 
                     elif curline_settings['stack']:
                         if axis not in stackplots.keys(): #left or right
@@ -1551,23 +1559,24 @@ class MakeAutomatedReport(object):
         rows = WF.updateFlaggedValues(rows, '%%units%%', WF.formatUnitsStrings(object_settings['plot_units'], format='external'))
         headings = WF.updateFlaggedValues(headings, '%%units%%', WF.formatUnitsStrings(object_settings['plot_units'], format='external'))
 
-        if 'description' in object_settings.keys():
-            desc = object_settings['description']
-        else:
-            desc = ''
-
         if 'primarykeyheader' in object_settings.keys():
             primarykeyheader = object_settings['primarykeyheader']
         else:
             primarykeyheader = 'Year'
 
-        desc = WF.updateFlaggedValues(desc, '%%year%%', object_settings['allyearsstr'])
-
         isCollection = WF.checkForCollections(data_settings)
         if isCollection:
             collectionIDs = self.Data.getCollectionIDs(object_settings, data_settings)
             object_settings['collectionIDs'] = collectionIDs
+            if self.forecastiteration:
+                object_settings = WF.updateFlaggedValues(object_settings, '%%iteration%%', WF.formatCollectionIDs(self.Iteration))
             rows = self.Tables.configureRowsForCollection(rows, data_settings, object_settings)
+
+        if 'description' in object_settings.keys():
+            desc = object_settings['description']
+        else:
+            desc = ''
+        desc = WF.updateFlaggedValues(desc, '%%year%%', object_settings['allyearsstr'])
 
         table_constructor = {}
 
@@ -1589,11 +1598,13 @@ class MakeAutomatedReport(object):
                     row_val = s_row[hi+1]
                     stat = None
                     addasterisk = False
-                    collection_number = None
+                    if self.forecastiteration:
+                        collection_number = self.Iteration
+                    else:
+                        collection_number = None
                     if '%%' in rowname:
-                        if isCollection:
+                        if isCollection and '%%ID' in rowname:
                             collection_number = int(rowname.split('%%ID.')[1].split('%%')[0])
-                            data_key = collection_number
                             # data_index = np.where(np.asarray(object_settings['collectionIDs']) == collection_number)[0] #TODO: make into dict...
                             # rowname = re.sub(r"%%ID\.(\d+)%%", r"\1", rowname, flags=re.IGNORECASE) #re.sub magic, counts \1 as two chars
                             rowname = re.sub(r"%%ID\.(\d+)%%", WF.formatCollectionIDs, rowname, flags=re.IGNORECASE) #re.sub magic, counts \1 as two chars
@@ -3083,6 +3094,11 @@ class MakeAutomatedReport(object):
         self.SimulationVariables[ID]['EndTimeStr'] = simulation['endtime']
         self.SimulationVariables[ID]['LastComputed'] = simulation['lastcomputed']
         self.SimulationVariables[ID]['ModelAlternatives'] = simulation['modelalternatives']
+        if self.reportType == 'forecast':
+            self.SimulationVariables[ID]['iterations'] = simulation['iterations']
+        else:
+            self.SimulationVariables[ID]['iterations'] = []
+
         WT.setSimulationDateTimes(self, ID)
 
     def getLineSettings(self, LineSettings, Flag):
@@ -3163,8 +3179,8 @@ class MakeAutomatedReport(object):
             self.ChapterText = Chapter['grouptext']
             self.ChapterResolution = Chapter['resolution']
             self.debug_boolean = Chapter['debug']
-            self.ensemble_boolean = Chapter['isensemble'] #TODO: is this what were doing?
-            self.forecastsummary_boolean = Chapter['forecastsummary'] #TODO: is this what were doing?
+            # self.ensemble_boolean = Chapter['isensemble'] #TODO: is this what were doing?
+            self.forecastiteration_boolean = Chapter['forecastiteration'] #TODO: is this what were doing?
 
             self.debug = False
             if self.debug_boolean.lower() == 'true':
@@ -3181,19 +3197,19 @@ class MakeAutomatedReport(object):
                 self.highres = False
                 WF.print2stdout('Running Low Res Mode!')
 
-            self.isensemble = False
-            if self.ensemble_boolean.lower() == 'true':
-                self.isensemble = True
-                WF.print2stdout('Ensemble mode activated!')
-            else:
-                WF.print2stdout('Ensemble mode deactivated.', debug=self.debug)
+            # self.isensemble = False
+            # if self.ensemble_boolean.lower() == 'true':
+            #     self.isensemble = True
+            #     WF.print2stdout('Ensemble mode activated!')
+            # else:
+            #     WF.print2stdout('Ensemble mode deactivated.', debug=self.debug)
 
-            self.forecastsummary = False
-            if self.forecastsummary_boolean.lower() == 'true':
-                self.forecastsummary = True
-                WF.print2stdout('forecast summary mode activated!')
+            self.forecastiteration = False
+            if self.forecastiteration_boolean.lower() == 'true':
+                self.forecastiteration = True
+                WF.print2stdout('forecast iteration mode activated!')
             else:
-                WF.print2stdout('forecastsummary mode deactivated.', debug=self.debug)
+                WF.print2stdout('forecast iteration mode deactivated.', debug=self.debug)
 
             self.WAT_log.addLogEntry({'region': self.ChapterRegion})
             self.XML.writeChapterStart(self.ChapterName, self.ChapterText)
@@ -3236,12 +3252,15 @@ class MakeAutomatedReport(object):
     def writeSections(self, Chapter):
         for section in Chapter['sections']:
             section_header = section['header']
-            self.XML.writeSectionHeader(section_header)
-            if (self.reportType == 'forecast' and not self.forecastsummary) or self.isensemble:
-                for simulation in self.Simulations:
-                    self.loadCurrentID(simulation['ID'])
+            # self.XML.writeSectionHeader(section_header)
+            if self.forecastiteration:
+                for iteration in self.Iterations:
+                    new_section_header = WF.updateFlaggedValues(section_header, '%%iteration%%', WF.formatCollectionIDs(iteration))
+                    self.XML.writeSectionHeader(new_section_header)
+                    self.Iteration = int(iteration)
                     self.iterateSection(section)
             else:
+                self.XML.writeSectionHeader(section_header)
                 self.iterateSection(section)
 
     def iterateSection(self, section):
@@ -3359,6 +3378,7 @@ class MakeAutomatedReport(object):
         self.ModelAlternatives = self.SimulationVariables[ID]['ModelAlternatives']
         self.StartTime = self.SimulationVariables[ID]['StartTime']
         self.EndTime = self.SimulationVariables[ID]['EndTime']
+        self.Iterations = self.SimulationVariables[ID]['iterations']
 
     def loadCurrentModelAltID(self, ID):
         '''

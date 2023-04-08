@@ -172,8 +172,10 @@ class DataOrganizer(object):
         return wse_data
 
     def getCollectionIDs(self, object_settings, data_settings):
-        if 'IDs' in object_settings.keys(): #if a subset of IDs is selected..
-            collectionIDs = object_settings['ids']
+        if self.Report.forecastiteration:
+            collectionIDs = [self.Report.Iteration]
+        if 'collectionids' in object_settings.keys(): #if a subset of IDs is selected..
+            collectionIDs = object_settings['collectionids']
         else:
             collectionIDs = []
             for i, ds in enumerate(data_settings.keys()):
@@ -278,22 +280,23 @@ class DataOrganizer(object):
                     continue
 
                 elif line['flag'].lower() == 'computed':
-                    if self.Report.reportType == 'forecast':
+                    # if self.Report.reportType == 'forecast':
+                    #     curline = pickle.loads(pickle.dumps(line, -1))
+                    #     curline = self.Report.configureSettingsForID(ID, curline)
+                    #     curline['numtimesused'] = numtimesused
+                    #     data, line_settings, success = self.updateTimeSeriesDataDictionary(data, line_settings, curline)
+                    #     if success:
+                    #         numtimesused += 1
+                    # else:
+                    for ID in self.Report.accepted_IDs:
                         curline = pickle.loads(pickle.dumps(line, -1))
+                        curline = self.Report.configureSettingsForID(ID, curline)
+                        if not self.Report.checkModelType(curline):
+                            continue
                         curline['numtimesused'] = numtimesused
                         data, line_settings, success = self.updateTimeSeriesDataDictionary(data, line_settings, curline)
                         if success:
                             numtimesused += 1
-                    else:
-                        for ID in self.Report.accepted_IDs:
-                            curline = pickle.loads(pickle.dumps(line, -1))
-                            curline = self.Report.configureSettingsForID(ID, curline)
-                            if not self.Report.checkModelType(curline):
-                                continue
-                            curline['numtimesused'] = numtimesused
-                            data, line_settings, success = self.updateTimeSeriesDataDictionary(data, line_settings, curline)
-                            if success:
-                                numtimesused += 1
                 else:
                     if self.Report.reportType == 'forecast':
                         line = WF.replaceflaggedValues(self.Report, line, 'modelspecific')
@@ -376,7 +379,10 @@ class DataOrganizer(object):
                     if 'collectionids' in Line_info.keys():
                         collectionIDs = Line_info['collectionids']
                     elif self.Report.reportType == 'forecast':
-                        collectionIDs = self.Report.accepted_IDs
+                        if self.Report.forecastiteration:
+                            collectionIDs = [self.Report.Iteration]
+                        else:
+                            collectionIDs = self.Report.Iterations
                     else:
                         collectionIDs = 'all'
                     metadata['original_collectionIDs'] = collectionIDs #keep track of the original series, as this can change
