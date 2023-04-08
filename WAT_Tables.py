@@ -353,14 +353,14 @@ class Tables(object):
         if 'xlims' in object_settings.keys():
             if 'max' in object_settings['xlims'].keys():
                 # xmax = float(object_settings['xlims']['max'])
-                xmax = WF.updateFlaggedValues(object_settings['xlims']['max'],'%%year%%', str(self.Report.years[0]))
+                xmax = WF.updateFlaggedValues(object_settings['xlims']['max'],'%%year%%', str(max(self.Report.years)))
                 xmax = WT.translateDateFormat(xmax, 'datetime', self.Report.EndTime, self.Report.StartTime,
                                               self.Report.EndTime, self.Report.ModelAlt.t_offset,
                                               debug=self.Report.debug)
 
             if 'min' in object_settings['xlims'].keys():
                 # xmin = float(object_settings['xlims']['min'])
-                xmin = WF.updateFlaggedValues(object_settings['xlims']['min'],'%%year%%', str(self.Report.years[0]))
+                xmin = WF.updateFlaggedValues(object_settings['xlims']['min'],'%%year%%', str(min(self.Report.years)))
 
                 xmin = WT.translateDateFormat(xmin, 'datetime', self.Report.StartTime, self.Report.StartTime,
                                               self.Report.EndTime, self.Report.ModelAlt.t_offset,
@@ -800,12 +800,14 @@ class Tables(object):
         xmax = 'NONE'
         if 'xlims' in object_settings.keys():
             if 'min' in object_settings['xlims'].keys():
-                xmin = WT.translateDateFormat(object_settings['xlims']['min'], 'datetime', self.Report.StartTime,
+                xmin = WF.updateFlaggedValues(object_settings['xlims']['min'],'%%year%%', str(min(self.Report.years)))
+                xmin = WT.translateDateFormat(xmin, 'datetime', self.Report.StartTime,
                                               self.Report.StartTime, self.Report.EndTime,
                                               self.Report.ModelAlt.t_offset, debug=self.Report.debug)
                 xmin = xmin.strftime('%d %b %Y')
             if 'max' in object_settings['xlims'].keys():
-                xmax = WT.translateDateFormat(object_settings['xlims']['max'], 'datetime', self.Report.EndTime,
+                xmax = WF.updateFlaggedValues(object_settings['xlims']['max'],'%%year%%', str(max(self.Report.years)))
+                xmax = WT.translateDateFormat(xmax, 'datetime', self.Report.EndTime,
                                               self.Report.StartTime, self.Report.EndTime,
                                               self.Report.ModelAlt.t_offset, debug=self.Report.debug)
                 xmax = xmax.strftime('%d %b %Y')
