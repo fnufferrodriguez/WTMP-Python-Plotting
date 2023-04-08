@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '5.4.15'
+VERSIONNUMBER = '5.4.16'
 
 import os
 import sys
@@ -393,12 +393,16 @@ class MakeAutomatedReport(object):
 
                     if isCollection:
                         coloreach = False
+                        plotalliterations = False
                         # filtvalues = self.Data.filterCollections(values, object_settings['collectionIDs'])
                         if 'coloreach' in curline_settings.keys():
                             if curline_settings['coloreach'].lower() == 'true':
                                 coloreach = True
+                        if 'plotalliterations' in curline_settings.keys():
+                            if curline_settings['plotalliterations'].lower() == 'true':
+                                plotalliterations = True
                         if not coloreach:
-                            if not self.forecastiteration:
+                            if not self.forecastiteration or plotalliterations:
                                 modifiedalpha = False
                                 if line_draw_settings['alpha'] == 1.:
                                     modifiedalpha = True

@@ -379,10 +379,10 @@ class DataOrganizer(object):
                     if 'collectionids' in Line_info.keys():
                         collectionIDs = Line_info['collectionids']
                     elif self.Report.reportType == 'forecast':
-                        if self.Report.forecastiteration:
-                            collectionIDs = [self.Report.Iteration]
-                        else:
-                            collectionIDs = self.Report.Iterations
+                        # if self.Report.forecastiteration:
+                        #     collectionIDs = [self.Report.Iteration]
+                        # else:
+                        collectionIDs = self.Report.Iterations
                     else:
                         collectionIDs = 'all'
                     metadata['original_collectionIDs'] = collectionIDs #keep track of the original series, as this can change
