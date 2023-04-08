@@ -504,9 +504,9 @@ class Tables(object):
             if 'parameter' in data_settings[datapath].keys():
                 units = WF.configureUnits(object_settings, data_settings[datapath]['parameter'], units)
             if 'unitsystem' in object_settings.keys():
-                data[datapath]['values'], units = WF.convertUnitSystem(values, units, object_settings['unitsystem'], debug=self.Report.debug)
+                data[datapath]['values'], data_settings[datapath]['units'] = WF.convertUnitSystem(values, units, object_settings['unitsystem'], debug=self.Report.debug)
 
-        return data, units
+        return data, data_settings
 
     def getStatsLineData(self, row, data_dict, year='ALLYEARS', data_key=None):
         '''

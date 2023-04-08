@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '5.4.10'
+VERSIONNUMBER = '5.4.11'
 
 import os
 import sys
@@ -1541,11 +1541,11 @@ class MakeAutomatedReport(object):
 
         object_settings = self.configureSettingsForID(self.base_id, object_settings)
 
+        # data = self.Tables.filterTableData(data, object_settings)
+        data, data_settings = self.Tables.correctTableUnits(data, data_settings, object_settings)
+
         object_settings['units_list'] = WF.getUnitsList(data_settings)
         object_settings['plot_units'] = WF.getPlotUnits(object_settings['units_list'], object_settings)
-
-        # data = self.Tables.filterTableData(data, object_settings)
-        data, object_settings['plot_units'] = self.Tables.correctTableUnits(data, data_settings, object_settings)
 
         object_settings = WF.updateFlaggedValues(object_settings, '%%units%%', WF.formatUnitsStrings(object_settings['plot_units'], format='external'))
         rows = WF.updateFlaggedValues(rows, '%%units%%', WF.formatUnitsStrings(object_settings['plot_units'], format='external'))
@@ -1737,12 +1737,11 @@ class MakeAutomatedReport(object):
         headings, rows = self.Tables.buildMonthlyStatsTable(object_settings, data_settings)
 
         object_settings= self.configureSettingsForID(self.base_id, object_settings)
-        object_settings['units_list'] = WF.getUnitsList(data_settings)
-        object_settings['plot_units'] = WF.getPlotUnits(object_settings['units_list'], object_settings)
-
 
         data = self.Tables.filterTableData(data, object_settings)
-        data, object_settings['plot_units'] = self.Tables.correctTableUnits(data, data_settings, object_settings)
+        data, data_settings = self.Tables.correctTableUnits(data, data_settings, object_settings)
+        object_settings['units_list'] = WF.getUnitsList(data_settings)
+        object_settings['plot_units'] = WF.getPlotUnits(object_settings['units_list'], object_settings)
         object_settings = WF.updateFlaggedValues(object_settings, '%%units%%', WF.formatUnitsStrings(object_settings['plot_units'], format='external'))
 
         thresholds = self.Tables.formatThreshold(object_settings)
@@ -1906,11 +1905,12 @@ class MakeAutomatedReport(object):
 
         data = self.Data.filterTimeSeries(data, data_settings)
 
-        object_settings['units_list'] = WF.getUnitsList(data_settings)
-        object_settings['plot_units'] = WF.getPlotUnits(object_settings['units_list'], object_settings)
+
 
         data = self.Tables.filterTableData(data, object_settings)
-        data, object_settings['plot_units'] = self.Tables.correctTableUnits(data, data_settings, object_settings)
+        data, data_settings = self.Tables.correctTableUnits(data, data_settings, object_settings)
+        object_settings['units_list'] = WF.getUnitsList(data_settings)
+        object_settings['plot_units'] = WF.getPlotUnits(object_settings['units_list'], object_settings)
         object_settings = WF.updateFlaggedValues(object_settings, '%%units%%', WF.formatUnitsStrings(object_settings['plot_units'], format='external'))
 
         object_settings = self.Tables.replaceComparisonSettings(object_settings, self.iscomp)
