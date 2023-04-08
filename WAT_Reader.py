@@ -39,7 +39,7 @@ def definedVarCheck(Block, flags):
             return False
     return True
 
-def readSimulationFile(simulation_name, studyfolder, iscomp=False):
+def readSimulationFile(simulationfile):
     '''
     Read the right csv file, and determine what region you are working with.
     Simulation CSV files are named after the simulation, and consist of plugin, model alter name, and then region(s)
@@ -48,17 +48,17 @@ def readSimulationFile(simulation_name, studyfolder, iscomp=False):
     :returns: dictionary containing information from file
     '''
 
-    if iscomp:
-        simulation_file = os.path.join(studyfolder, 'reports', '{0}_comparison.csv'.format(simulation_name.replace(' ', '_')))
-    else:
-        simulation_file = os.path.join(studyfolder, 'reports', '{0}.csv'.format(simulation_name.replace(' ', '_')))
-    WF.print2stdout('Attempting to read {0}'.format(simulation_file))
-    if not os.path.exists(simulation_file):
-        WF.print2stderr('Could not find CSV file: {0}.csv '.format(simulation_name.replace(' ', '_')))
-        WF.print2stderr('Please create {0}.csv in the Reports Directory and run report again.'.format(simulation_name.replace(' ', '_')))
+    # if iscomp:
+    #     simulation_file = os.path.join(studyfolder, 'reports', '{0}_comparison.csv'.format(simulation_name.replace(' ', '_')))
+    # else:
+    #     simulation_file = os.path.join(studyfolder, 'reports', '{0}.csv'.format(simulation_name.replace(' ', '_')))
+    WF.print2stdout('Attempting to read {0}'.format(simulationfile))
+    if not os.path.exists(simulationfile):
+        WF.print2stderr(f'Could not find CSV file: {simulationfile}')
+        WF.print2stderr(f'Please create {simulationfile} in the Reports Directory and run report again.')
         sys.exit(1)
     sim_info = {}
-    with open(simulation_file, 'r') as sf:
+    with open(simulationfile, 'r') as sf:
         for i, line in enumerate(sf):
             if len(line.strip()) > 0:
                 sline = line.strip().split(',')
@@ -612,8 +612,8 @@ def readSimulationsCSV(Report):
     :return: class variable
                 self.SimulationCSV
     '''
-
-    Report.SimulationCSV = readSimulationFile(Report.baseSimulationName, Report.studyDir)
+    simulation_file = os.path.join(Report.studyDir, 'reports', '{0}.csv'.format(Report.SimulationVariables[Report.base_id]['baseSimulationName'].replace(' ', '_')))
+    Report.SimulationCSV = readSimulationFile(simulation_file)
 
 def readSimulationInfo(Report, simulationInfoFile):
     '''
@@ -700,10 +700,18 @@ def readComparisonSimulationsCSV(Report):
     but are built in general the same as regular Simulation CSV files.
     :return:
     '''
+    simulation_file = os.path.join(Report.studyDir, 'reports', '{0}_comparison.csv'.format(Report.SimulationVariables[Report.base_id]['baseSimulationName'].replace(' ', '_')))
+    Report.SimulationCSV = readSimulationFile(simulation_file)
 
-    Report.SimulationCSV = readSimulationFile(Report.SimulationVariables[Report.base_id]['baseSimulationName'],
-                                              Report.studyDir, iscomp=Report.iscomp)
+def readForecastSimulationsCSV(Report):
+    '''
+    Reads in the simulation CSV but for Forecast plots. Forecast plots have '_forecast' appended to the end of them,
+    but are built in general the same as regular Simulation CSV files.
+    :return:
+    '''
 
+    simulation_file = os.path.join(Report.studyDir, 'reports', '{0}_forecast.csv'.format(Report.SimulationVariables[Report.base_id]['baseSimulationName'].replace(' ', '_')))
+    Report.SimulationCSV = readSimulationFile(simulation_file)
 
 def readTemplate(Report, templatefilename):
     '''

@@ -379,6 +379,7 @@ class DataOrganizer(object):
                         collectionIDs = self.Report.accepted_IDs
                     else:
                         collectionIDs = 'all'
+                    metadata['original_collectionIDs'] = collectionIDs #keep track of the original series, as this can change
 
                 if datamem_key in self.Memory.keys():
                     WF.print2stdout('Reading {0} from memory'.format(datamem_key), debug=self.Report.debug) #noisy
@@ -392,7 +393,7 @@ class DataOrganizer(object):
 
                     metadata['frommemory'] = True
                     if metadata['collection']:
-                        if metadata['collectionIDs'] != collectionIDs:
+                        if metadata['original_collectionIDs'] != collectionIDs:
                             metadata['frommemory'] = False #if not the same list, grab again
                             WF.print2stdout('Collections do not allign with last read. Re-reading', debug=self.Report.debug)
 
