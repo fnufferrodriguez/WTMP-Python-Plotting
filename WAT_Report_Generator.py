@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '5.4.16'
+VERSIONNUMBER = '5.4.17'
 
 import os
 import sys
@@ -280,12 +280,12 @@ class MakeAutomatedReport(object):
                 unitslist2 = []
                 stackplots = {}
                 linedata, line_settings = self.Data.getTimeSeriesDataDictionary(ax_settings)
+                linedata = WF.filterDataByYear(linedata, year)
                 linedata = self.Data.filterTimeSeries(linedata, line_settings)
                 linedata = self.Data.scaleValuesByTable(linedata, line_settings)
                 linedata = WF.mergeLines(linedata, line_settings, ax_settings)
                 ax_settings = self.configureSettingsForID(self.base_id, ax_settings)
                 gatedata, gate_settings = self.Data.getGateDataDictionary(ax_settings, makecopy=False)
-                linedata = WF.filterDataByYear(linedata, year)
                 line_settings = WF.correctDuplicateLabels(line_settings)
                 straightlines = self.Data.getStraightLineValue(ax_settings)
 
