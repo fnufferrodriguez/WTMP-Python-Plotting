@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '5.4.17'
+VERSIONNUMBER = '5.4.18'
 
 import os
 import sys
@@ -3409,7 +3409,12 @@ class MakeAutomatedReport(object):
         print(f'Creating new XML at {new_xml}')
 
         self.XML = WXMLU.XMLReport(new_xml)
-        self.XML.writeCover('DRAFT Temperature Validation Summary Report')
+        if self.reportType == 'forecast':
+            self.XML.writeCover('DRAFT Temperature Forecast Summary Report')
+        elif self.reportType == 'alternativecomparison':
+            self.XML.writeCover('DRAFT Temperature Validation Comparison Report')
+        else:
+            self.XML.writeCover('DRAFT Temperature Validation Summary Report')
 
     def initializeDataOrganizer(self):
         '''
