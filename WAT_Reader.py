@@ -203,7 +203,7 @@ def readChapterDefFile(CD_file):
 
     return Chapters
 
-def readCollectionsDSSData(dss_file, pathname, collectionIDs, startdate, enddate, debug):
+def readCollectionsDSSData(dss_file, pathname, iterations, startdate, enddate, debug):
     try:
         if os.path.exists(dss_file):
             fid = HecDss.Open(dss_file)
@@ -218,32 +218,30 @@ def readCollectionsDSSData(dss_file, pathname, collectionIDs, startdate, enddate
                 WF.print2stdout(f'No records in collection for {pathname}', debug=debug)
                 fid.close()
                 return [], [], None, []
-            if collectionIDs == 'all':
-                collectionIDs = [int(n.split('/')[6].split('|')[0].replace('C:', '')) for n in collection_pn]
+            if iterations == 'all':
+                iterations = [int(n.split('/')[6].split('|')[0].replace('C:', '')) for n in collection_pn]
             else:
-                collectionIDs = [int(n) for n in collectionIDs]
+                iterations = [int(n) for n in iterations]
 
-            collectionIDs.sort()
+            iterations.sort()
 
-            for i, ID in enumerate(collectionIDs):
-                if len(str(ID)) != 6:
-                    ID = str(ID).zfill(6) #DSS conventions want 6 spaces
-                CID_pathname_fpart = pathname.split('/')[6].replace('*|', f'C:{ID}|')
+            for i, iteration in enumerate(iterations):
+                if len(str(iteration)) != 6:
+                    iteration = str(iteration).zfill(6) #DSS conventions want 6 spaces
+                CID_pathname_fpart = pathname.split('/')[6].replace('*|', f'C:{iteration}|')
                 CID_pathname_split = pathname.split('/')
                 CID_pathname_split[6] = CID_pathname_fpart
                 CID_pathname = '/'.join(CID_pathname_split)
-                WF.print2stdout(f'Currently working on {ID}', debug=debug)
+                WF.print2stdout(f'Currently working on {iteration}', debug=debug)
                 ts = fid.read_ts(CID_pathname, window=(startdate, enddate), regular=True, trim_missing=True)
                 values = np.asarray(ts.values, dtype=np.float64)
                 if i == 0: #set vars like times and units that are always the same for all collection
                     times = np.array(ts.pytimes)
                     units = ts.units
                     collection_values = {}
-                    # collection_values = np.full((len(collection_pn), len(times)), np.nan) #initialize array
-                # collection_values[int(ID)-1] = values #Todo: shelf for now
-                collection_values[int(ID)] = values
+                collection_values[int(iteration)] = values
             fid.close()
-            return times, collection_values, units, collectionIDs
+            return times, collection_values, units, iterations
         else:
             WF.print2stdout(f'DSS file {dss_file} not found.', debug=True)
             return [], [], None, []

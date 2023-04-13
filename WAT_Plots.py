@@ -44,22 +44,22 @@ class Plots(object):
         return object_settings
 
     def seperateCollectionLines(self, line_draw_settings):
-        if 'collectionIDs' in line_draw_settings:
+        if 'iterations' in line_draw_settings:
             collection_draw_settings = {}
-            collectionIDs = line_draw_settings['collectionIDs']
-            for idi, ID in enumerate(collectionIDs):
-                collection_draw_settings[ID] = {}
-                collection_draw_settings[ID].update(line_draw_settings)
-                collection_draw_settings[ID]['numtimesused'] = idi
-                if '%%collectionid%%' not in collection_draw_settings[ID]['label']:
-                    collection_draw_settings[ID]['label'] = f"{collection_draw_settings[ID]['label']}: {ID}"
+            iterations = line_draw_settings['iterations']
+            for iIT, iteration in enumerate(iterations):
+                collection_draw_settings[iteration] = {}
+                collection_draw_settings[iteration].update(line_draw_settings)
+                collection_draw_settings[iteration]['numtimesused'] = iIT
+                if '%%iteration%%' not in collection_draw_settings[iteration]['label']:
+                    collection_draw_settings[iteration]['label'] = f"{collection_draw_settings[iteration]['label']}: {iteration}"
                 else:
-                    collection_draw_settings[ID]['label'] = collection_draw_settings[ID]['label'].replace('%%collectionid%%', str(WF.formatCollectionIDs(ID)))
-                collection_draw_settings[ID] = WF.fixDuplicateColors(collection_draw_settings[ID])
+                    collection_draw_settings[iteration]['label'] = collection_draw_settings[iteration]['label'].replace('%%iteration%%', str(WF.formatIterations(iteration)))
+                collection_draw_settings[iteration] = WF.fixDuplicateColors(collection_draw_settings[iteration])
             return collection_draw_settings
 
         else:
-            WF.print2stdout('Cannot seperate collection lines.', debug=self.Report.debug)
+            WF.print2stdout('Unable to get iterations. Cannot seperate collection lines.', debug=self.Report.debug)
             return line_draw_settings
 
     def setTimeSeriesXlims(self, cur_obj_settings, yearstr, years):
@@ -144,6 +144,14 @@ class Plots(object):
         RelativeLineSettings['units'] = WF.getMostCommon(units)
 
         return RelativeMasterSet, RelativeLineSettings
+
+    def plot(self, dates, values, curax, line_draw_settings):
+        if line_draw_settings['drawline'].lower() == 'true' and line_draw_settings['drawpoints'].lower() == 'true':
+            self.plotLinesAndPoints(dates, line_draw_settings, curax, line_draw_settings)
+        elif line_draw_settings['drawline'].lower() == 'true':
+            self.plotLines(dates, values, curax, line_draw_settings)
+        elif line_draw_settings['drawpoints'].lower() == 'true':
+            self.plotPoints(dates, values, curax, line_draw_settings)
 
     def plotLinesAndPoints(self, x, y, curaxis, settings):
         '''

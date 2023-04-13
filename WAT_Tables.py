@@ -531,7 +531,11 @@ class Tables(object):
                 if data_key != None:
                     data[curflag] = {'values': curvalues[data_key], 'dates': curdates}
                 else:
-                    data[curflag] = {'values': np.asarray(curvalues), 'dates': curdates}
+                    if isinstance(curvalues, dict):
+                        WF.print2stdout('Unable to get data for row. Expected key but none found.', debug=self.Report.debug)
+                        return data, sr_month
+                    else:
+                        data[curflag] = {'values': np.asarray(curvalues), 'dates': curdates}
             else:
                 if '=' in sr:
                     sr_spl = sr.split('=')
@@ -587,10 +591,7 @@ class Tables(object):
                     continue
                 s_idx, e_idx = WF.getYearlyFilterIdx(data[flag]['dates'], year)
                 if None not in [s_idx, e_idx]:
-                    try:
-                        data[flag]['values'] = data[flag]['values'][s_idx:e_idx+1]
-                    except:
-                        print('stop')
+                    data[flag]['values'] = data[flag]['values'][s_idx:e_idx+1]
                     data[flag]['dates'] = data[flag]['dates'][s_idx:e_idx+1]
                 else:
                     data[flag]['values'] = []
@@ -902,7 +903,7 @@ class Tables(object):
                for datakey in data.keys():
                    df = data[datakey]
                    for i, row in df.iterrows():
-                       df.loc[i, primarykey] = WF.formatCollectionIDs(row[primarykey])
+                       df.loc[i, primarykey] = WF.formatIterations(row[primarykey])
                    data[datakey] = df
        return data
 
@@ -1112,18 +1113,18 @@ class Tables(object):
     def configureRowsForCollection(self, rows, data_settings, object_settings):
         formatted_rows = []
         #figure out IDs first
-        if 'collectionIDs' in object_settings.keys():
-            collectionIDs = object_settings['collectionIDs']
+        if 'iterations' in object_settings.keys():
+            iterations = object_settings['iterations']
         else:
-            collectionIDs = WF.getCollectionIDs(data_settings, object_settings)
+            iterations = WF.getCollectionIDs(data_settings, object_settings)
         for row in rows:
-            if '%%ID%%' in row:
-                for ID in collectionIDs:
+            if '%%iteration%%' in row:
+                for iteration in iterations:
                     srow = row.split('|')
                     frow = []
                     for sr in srow:
-                        if '%%ID%%' in sr:
-                            sr = sr.replace('%%ID%%', f'%%ID.{ID}%%')
+                        if '%%iteration%%' in sr:
+                            sr = sr.replace('%%iteration%%', f'%%iteration.{iteration}%%')
                         frow.append(sr)
                     formatted_rows.append('|'.join(frow))
             else:

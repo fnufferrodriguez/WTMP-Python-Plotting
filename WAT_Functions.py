@@ -721,6 +721,7 @@ def mergeLines(data, data_settings, plot_settings):
                 math = mergeline['math'].lower()
             else:
                 math = 'add'
+                print2stdout('no Mergeline math flag. Set to add by default.'.format(OF, data.keys()))
             baseunits = data_settings[controller]['units']
             for flag in otherflags:
                 if data_settings[flag]['units'] != baseunits:
@@ -1679,17 +1680,17 @@ def formatUnitsStrings(units, format='internal'):
         output = units
     return output
 
-def formatCollectionIDs(ID):
+def formatIterations(iteration):
 
-    if isinstance(ID, re.Match):
-        return ID.group(1).zfill(6)
+    if isinstance(iteration, re.Match):
+        return iteration.group(1).zfill(6)
     else:
         try:
-            ID = int(ID) #needs to be a string but lets remove any leading zeros just in case..
+            iteration = int(iteration) #needs to be a string but lets remove any leading zeros just in case..
         except ValueError:
-            print2stdout(f'Unable to convert item {ID} to collection format (ex. 000001)')
-            return ID
-        return str(ID).zfill(6)
+            print2stdout(f'Unable to convert item {iteration} to collection format (ex. 000001)')
+            return iteration
+        return str(iteration).zfill(6)
 
 def formatNumbers(number, numberformatsettings):
     '''

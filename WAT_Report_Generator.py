@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '5.4.18'
+VERSIONNUMBER = '5.4.19'
 
 import os
 import sys
@@ -221,7 +221,7 @@ class MakeAutomatedReport(object):
 
             cur_obj_settings = WF.updateFlaggedValues(cur_obj_settings, '%%year%%', yearstr)
             if self.forecastiteration:
-                cur_obj_settings = WF.updateFlaggedValues(cur_obj_settings, '%%iteration%%', WF.formatCollectionIDs(self.Iteration))
+                cur_obj_settings = WF.updateFlaggedValues(cur_obj_settings, '%%iteration%%', WF.formatIterations(self.Iteration))
 
             if len(cur_obj_settings['axs']) == 1:
                 figsize=(12, 6)
@@ -391,10 +391,9 @@ class MakeAutomatedReport(object):
                                                                               self.startYear)
                             values = values/RelativeMasterSet
 
-                    if isCollection:
+                    if isCollection: #if we have a collection for the datasource
                         coloreach = False
                         plotalliterations = False
-                        # filtvalues = self.Data.filterCollections(values, object_settings['collectionIDs'])
                         if 'coloreach' in curline_settings.keys():
                             if curline_settings['coloreach'].lower() == 'true':
                                 coloreach = True
@@ -408,37 +407,23 @@ class MakeAutomatedReport(object):
                                     modifiedalpha = True
                                     line_draw_settings['alpha'] = 0.25 #for collection plots, set to low opac for a jillion lines
 
-                                for cIDi, cID in enumerate(curline_settings['collectionIDs']):
-                                    valueset = values[cID]
-                                    if cIDi > 0:
+                                for cIT, iteration in enumerate(curline_settings['iterations']):
+                                    valueset = values[iteration]
+                                    if cIT > 0:
                                         line_draw_settings['label'] = ''
-                                    if line_draw_settings['drawline'].lower() == 'true' and line_draw_settings['drawpoints'].lower() == 'true':
-                                        self.Plots.plotLinesAndPoints(dates, valueset, curax, line_draw_settings)
-                                    elif line_draw_settings['drawline'].lower() == 'true':
-                                        self.Plots.plotLines(dates, valueset, curax, line_draw_settings)
-                                    elif line_draw_settings['drawpoints'].lower() == 'true':
-                                        self.Plots.plotPoints(dates, valueset, curax, line_draw_settings)
+                                    self.Plots.plot(dates, valueset, curax, line_draw_settings)
                                 if modifiedalpha:
                                     line_draw_settings['alpha'] = 1.
                             else:
                                 valueset = values[self.Iteration]
-                                if line_draw_settings['drawline'].lower() == 'true' and line_draw_settings['drawpoints'].lower() == 'true':
-                                    self.Plots.plotLinesAndPoints(dates, valueset, curax, line_draw_settings)
-                                elif line_draw_settings['drawline'].lower() == 'true':
-                                    self.Plots.plotLines(dates, valueset, curax, line_draw_settings)
-                                elif line_draw_settings['drawpoints'].lower() == 'true':
-                                    self.Plots.plotPoints(dates, valueset, curax, line_draw_settings)
+                                self.Plots.plot(dates, valueset, curax, line_draw_settings)
+
                         else:
                             single_coll_line_settings = self.Plots.seperateCollectionLines(line_draw_settings)
-                            for cID in curline_settings['collectionIDs']:
-                                valueset = values[cID]
-                                coll_line_settings = single_coll_line_settings[cID]
-                                if coll_line_settings['drawline'].lower() == 'true' and coll_line_settings['drawpoints'].lower() == 'true':
-                                    self.Plots.plotLinesAndPoints(dates, valueset, curax, coll_line_settings)
-                                elif coll_line_settings['drawline'].lower() == 'true':
-                                    self.Plots.plotLines(dates, valueset, curax, coll_line_settings)
-                                elif coll_line_settings['drawpoints'].lower() == 'true':
-                                    self.Plots.plotPoints(dates, valueset, curax, coll_line_settings)
+                            for iteration in curline_settings['iterations']:
+                                valueset = values[iteration]
+                                coll_line_settings = single_coll_line_settings[iteration]
+                                self.Plots.plot(dates, valueset, curax, coll_line_settings)
 
                         self.Plots.plotCollectionEnvelopes(dates, values, curax, line_draw_settings)
 
@@ -451,15 +436,7 @@ class MakeAutomatedReport(object):
                                                  'color': line_draw_settings['linecolor']})
 
                     else:
-                        if line_draw_settings['drawline'].lower() == 'true' and line_draw_settings['drawpoints'].lower() == 'true':
-                            self.Plots.plotLinesAndPoints(dates, values, curax, line_draw_settings)
-
-                        elif line_draw_settings['drawline'].lower() == 'true':
-                            self.Plots.plotLines(dates, values, curax, line_draw_settings)
-
-                        elif line_draw_settings['drawpoints'].lower() == 'true':
-                            self.Plots.plotPoints(dates, values, curax, line_draw_settings)
-
+                        self.Plots.plot(dates, values, curax, line_draw_settings)
 
                         self.WAT_log.addLogEntry({'type': line_draw_settings['label'] + '_TimeSeries' if line_draw_settings['label'] != '' else 'Timeseries',
                                                   'name': self.ChapterRegion+'_'+yearstr,
@@ -535,14 +512,7 @@ class MakeAutomatedReport(object):
                                         if 'xaxis'.lower() == 'right':
                                             curax = ax2
 
-                                if gate_line_settings['drawline'].lower() == 'true' and gate_line_settings['drawpoints'].lower() == 'true':
-                                    self.Plots.plotLinesAndPoints(dates, gatevalues, curax, gate_line_settings)
-
-                                elif gate_line_settings['drawline'].lower() == 'true':
-                                    self.Plots.plotLines(dates, gatevalues, curax, gate_line_settings)
-
-                                elif gate_line_settings['drawpoints'].lower() == 'true':
-                                    self.Plots.plotPoints(dates, gatevalues, curax, gate_line_settings)
+                                self.Plots.plot(dates, gatevalues, curax, gate_line_settings)
 
                                 gate_count += 1 #keep track of gate number in group
                                 gate_placement += 1 #keep track of gate palcement in space
@@ -1570,10 +1540,10 @@ class MakeAutomatedReport(object):
 
         isCollection = WF.checkForCollections(data_settings)
         if isCollection:
-            collectionIDs = self.Data.getCollectionIDs(object_settings, data_settings)
-            object_settings['collectionIDs'] = collectionIDs
+            iterations = self.Data.getIterations(object_settings, data_settings)
+            object_settings['iterations'] = iterations
             if self.forecastiteration:
-                object_settings = WF.updateFlaggedValues(object_settings, '%%iteration%%', WF.formatCollectionIDs(self.Iteration))
+                object_settings = WF.updateFlaggedValues(object_settings, '%%iteration%%', WF.formatIterations(self.Iteration))
             rows = self.Tables.configureRowsForCollection(rows, data_settings, object_settings)
 
         if 'description' in object_settings.keys():
@@ -1603,23 +1573,25 @@ class MakeAutomatedReport(object):
                     stat = None
                     addasterisk = False
                     if self.forecastiteration:
-                        collection_number = self.Iteration
+                        iteration = self.Iteration
                     else:
-                        collection_number = None
+                        iteration = None
                     if '%%' in rowname:
-                        if isCollection and '%%ID' in rowname:
-                            collection_number = int(rowname.split('%%ID.')[1].split('%%')[0])
-                            # data_index = np.where(np.asarray(object_settings['collectionIDs']) == collection_number)[0] #TODO: make into dict...
-                            # rowname = re.sub(r"%%ID\.(\d+)%%", r"\1", rowname, flags=re.IGNORECASE) #re.sub magic, counts \1 as two chars
-                            rowname = re.sub(r"%%ID\.(\d+)%%", WF.formatCollectionIDs, rowname, flags=re.IGNORECASE) #re.sub magic, counts \1 as two chars
+                        if isCollection and '%%iteration' in rowname:
+                            iteration = int(rowname.split('%%iteration.')[1].split('%%')[0])
+                            rowname = re.sub(r"%%iteration\.(\d+)%%", WF.formatIterations, rowname, flags=re.IGNORECASE) #re.sub magic, counts \1 as two chars
 
                     if '%%' in row_val:
-                        rowdata, sr_month = self.Tables.getStatsLineData(row_val, yearlydata, year=year, data_key=collection_number)
+                        rowdata, sr_month = self.Tables.getStatsLineData(row_val, yearlydata, year=year, data_key=iteration)
                         if len(rowdata) == 0:
                             row_val = None
                             stat = None
                         else:
                             row_val, stat = self.Tables.getStatsLine(row_val, rowdata)
+                            try:
+                                not np.isnan(row_val) and row_val != None
+                            except:
+                                print('stop')
                             if not np.isnan(row_val) and row_val != None:
                                 thresholdsettings = self.Tables.matchThresholdToStat(stat, object_settings)
                                 for thresh in thresholdsettings:
@@ -3024,10 +2996,10 @@ class MakeAutomatedReport(object):
         object_settings['primarykey'] = self.Data.getPrimaryTableKey(data, object_settings)
         data = self.Tables.formatPrimaryKey(data, object_settings)
         data, data_settings = self.Data.mergeFormattedTables(data, data_settings, object_settings)
-        data = self.Data.filterFormattedTable(data, object_settings)
+        data = self.Data.filterFormattedTable(data, object_settings, primarykey=object_settings['primarykey'])
         headings, rows = self.Tables.buildFormattedTable(data)
         headings = self.Tables.replaceIllegalJasperCharactersHeadings(headings)
-        rows =self.Tables.replaceIllegalJasperCharactersRows(rows)
+        rows = self.Tables.replaceIllegalJasperCharactersRows(rows)
 
         if 'description' in object_settings.keys():
             desc = object_settings['description']
@@ -3259,7 +3231,7 @@ class MakeAutomatedReport(object):
             # self.XML.writeSectionHeader(section_header)
             if self.forecastiteration:
                 for iteration in self.Iterations:
-                    new_section_header = WF.updateFlaggedValues(section_header, '%%iteration%%', WF.formatCollectionIDs(iteration))
+                    new_section_header = WF.updateFlaggedValues(section_header, '%%iteration%%', WF.formatIterations(iteration))
                     self.XML.writeSectionHeader(new_section_header)
                     self.Iteration = int(iteration)
                     self.iterateSection(section)

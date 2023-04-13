@@ -171,26 +171,21 @@ class DataOrganizer(object):
 
         return wse_data
 
-    def getCollectionIDs(self, object_settings, data_settings):
-        if self.Report.forecastiteration:
-            collectionIDs = [self.Report.Iteration]
-        if 'collectionids' in object_settings.keys(): #if a subset of IDs is selected..
-            collectionIDs = object_settings['collectionids']
-        else:
-            collectionIDs = []
+    def getIterations(self, object_settings, data_settings):
+        if self.Report.forecastiteration: #if its a forecast iteration, grab the current iteration
+            iterations = [self.Report.Iteration]
+        elif 'iterations' in object_settings.keys(): #if user defined, use the user defined ones
+            iterations = [WF.formatIterations(n) for n in object_settings['iterations']]
+        elif self.Report.reportType == 'forecast': #use the forecasts defined
+            iterations = self.Report.Iterations
+        else: #otherwise, we just use everything that we have (if multi datasets, get the overlapping
+            iterations = []
             for i, ds in enumerate(data_settings.keys()):
                 if i == 0:
-                    collectionIDs = data_settings[ds]['collectionIDs']
+                    iterations = data_settings[ds]['iterations']
                 else:
-                    collectionIDs = np.intersect1d(data_settings[ds]['collectionIDs'], collectionIDs)
-        return collectionIDs
-
-    def filterCollections(self, values, collectionIDs):
-        new_values = {}
-        for key, vs in values.items():
-            if key in collectionIDs:
-                new_values[key] = vs
-        return new_values
+                    iterations = np.intersect1d(data_settings[ds]['iterations'], iterations)
+        return iterations
 
     def filterTimeSeries(self, data, line_settings):
         '''
@@ -376,16 +371,13 @@ class DataOrganizer(object):
                 if Line_info['dss_path'].split('/')[6].startswith('*|'):
                     metadata['collection'] = True
                 if metadata['collection']:
-                    if 'collectionids' in Line_info.keys():
-                        collectionIDs = Line_info['collectionids']
+                    if 'iterations' in Line_info.keys():
+                        iterations = Line_info['iterations']
                     elif self.Report.reportType == 'forecast':
-                        # if self.Report.forecastiteration:
-                        #     collectionIDs = [self.Report.Iteration]
-                        # else:
-                        collectionIDs = self.Report.Iterations
+                        iterations = self.Report.Iterations
                     else:
-                        collectionIDs = 'all'
-                    metadata['original_collectionIDs'] = collectionIDs #keep track of the original series, as this can change
+                        iterations = 'all'
+                    metadata['original_iterations'] = iterations #keep track of the original series, as this can change
 
                 if datamem_key in self.Memory.keys():
                     WF.print2stdout('Reading {0} from memory'.format(datamem_key), debug=self.Report.debug) #noisy
@@ -399,18 +391,18 @@ class DataOrganizer(object):
 
                     metadata['frommemory'] = True
                     if metadata['collection']:
-                        if metadata['original_collectionIDs'] != collectionIDs:
+                        if metadata['original_iterations'] != iterations:
                             metadata['frommemory'] = False #if not the same list, grab again
-                            WF.print2stdout('Collections do not allign with last read. Re-reading', debug=self.Report.debug)
+                            WF.print2stdout('Iterations do not allign with last read. Re-reading', debug=self.Report.debug)
 
                 if not metadata['frommemory']:
                     # if Line_info['flag'].lower() == 'computed' and (self.Report.isensemble or self.reportType == 'forecast'):
                     if Line_info['dss_path'].split('/')[6].startswith('*|'):
 
-                        times, values, units, collectionIDs = WDR.readCollectionsDSSData(Line_info['dss_filename'], Line_info['dss_path'],
-                                                                                         collectionIDs, self.Report.StartTime,
+                        times, values, units, iterations = WDR.readCollectionsDSSData(Line_info['dss_filename'], Line_info['dss_path'],
+                                                                                         iterations, self.Report.StartTime,
                                                                                          self.Report.EndTime, self.Report.debug)
-                        metadata['collectionIDs'] = collectionIDs
+                        metadata['iterations'] = iterations
                     else:
                         times, values, units = WDR.readDSSData(Line_info['dss_filename'], Line_info['dss_path'],
                                                                self.Report.StartTime, self.Report.EndTime,
@@ -1023,15 +1015,12 @@ class DataOrganizer(object):
 
         return data, line_settings
 
-    def filterFormattedTable(self, data, object_settings):
+    def filterFormattedTable(self, data, object_settings, primarykey=None):
+        if primarykey == None:
+            primarykey = self.Data.getPrimaryTableKey(data, object_settings)
+
         if 'headers' in object_settings.keys():
             selected_headers = object_settings['headers']
-            if 'primarykey' in object_settings:
-                primarykey = object_settings['primarykey']
-            elif 'merge_on' in object_settings.keys():
-                primarykey = object_settings['merge_on']
-                if primarykey not in object_settings['headers']: #make sure primarykey doesnt get sniped
-                    selected_headers.append(primarykey)
             columns = data.columns
             for column in columns:
                 if column not in selected_headers:
@@ -1039,32 +1028,20 @@ class DataOrganizer(object):
 
         if 'selectbyfirstcell' in object_settings.keys():
             selected_rows = object_settings['selectbyfirstcell']
-            if 'primarykey' in object_settings:
-                primarykey = object_settings['primarykey']
-            elif 'merge_on' in object_settings.keys():
-                primarykey = object_settings['merge_on']
-            else:
-                primarykey = None
-                for col in data.columns:
-                    if np.all([n in data[col] for n in selected_rows]):
-                        primarykey = col
-                if primarykey == None:
-                    primarykey = list(data.columns)[0]
-                    WF.print2stdout('Unable to establish table primary key based on input.', debug=self.Report.debug)
-                    WF.print2stdout('To fix, specify a "primarykey" flag in the input file.', debug=self.Report.debug)
-                    WF.print2stdout(f'Using first column, {primarykey}.', debug=self.Report.debug)
-
             if 'formatprimaryascollection' in object_settings.keys():
                 if object_settings['formatprimaryascollection'].lower() == 'true':
-                    selected_rows = [WF.formatCollectionIDs(n) for n in selected_rows] #match the table if theyve been converted
+                    selected_rows = [WF.formatIterations(n) for n in selected_rows] #match the table if theyve been converted
 
-            new_data_df = pd.DataFrame(columns=data.columns)
             for index, row in data.iterrows():
                 if row[primarykey] not in selected_rows:
-                    # new_data_df.append(row, ignore_index=True)
                     data.drop(index=index, inplace=True)
 
-        return data #if we dont do rows
+        if self.Report.reportType == 'forecast':
+            for index, row in data.iterrows():
+                if row[primarykey] not in self.Report.Iterations:
+                    data.drop(index=index, inplace=True)
+
+        return data
 
     def mergeFormattedTables(self, data, data_settings, object_settings):
         table_keys = list(data.keys())
