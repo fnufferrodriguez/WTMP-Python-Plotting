@@ -328,6 +328,13 @@ class W2_Results(object):
 
 
     def readProfileData_NPT(self, seg, timesteps):
+        '''
+        Reads profile data from NPT file
+        :param seg: segment number
+        :param timesteps: timesteps to get data for
+        :return: profile data
+        '''
+
         self.get_tempprofile_layers() #get the output layers. out at 2m depths
 
         wt = np.full((len(self.layers), len(self.jd_dates)), np.nan)
@@ -619,8 +626,8 @@ class W2_Results(object):
     def readSegment(self, filename, parameter):
         '''
         Temporary until we figure out how to do W2 contours
-        :param filename:
-        :param parameter:
+        :param filename: file for output
+        :param parameter: parameter to get data for
         :return:
         '''
         read_param = self.getParameterFileStr(parameter)

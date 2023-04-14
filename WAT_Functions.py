@@ -469,6 +469,13 @@ def calcNSE(data1, data2):
     return nse_
 
 def getMultiDatasetCount(data1, data2):
+    '''
+    get the count of data for 2 datasets, usually when being compared. Nan if they cannot be made same length
+    :param data1: list of values
+    :param data2: list of values
+    :return: length of values to compare, or nan
+    '''
+
     data1, data2 = matchData(data1, data2)
     data1, data2 = removeNaNs(data1, data2, flag='values')
     data1, data2 = removeINFs(data1, data2, flag='values')
@@ -810,6 +817,12 @@ def getYearlyFilterIdx(dates, year):
         return 0, -1
 
 def getObjectAllYears(years_list):
+    '''
+    creates a formatted string for objects describing the years used. uses start and end year if mulit-year
+    :param years_list: list of years
+    :return: formatted string
+    '''
+
     if len(years_list) == 1:
         outputstring = str(years_list[0])
     else:
@@ -1549,6 +1562,12 @@ def getListItems(listvals):
     return outvalues
 
 def cleanFileName(csvname):
+    '''
+    removes and replaces invalid characters in filenames with underscores
+    :param csvname: potential name of file
+    :return: sanitized file name
+    '''
+
     pattern = r'[^\w\-_\. ]'
     # replace invalid characters with underscores
     sanitized_file_name = re.sub(pattern, '_', csvname)
@@ -1681,15 +1700,20 @@ def formatUnitsStrings(units, format='internal'):
     return output
 
 def formatIterations(iteration):
+    '''
+    format iterations to have DSS notation of 6 characters with leading 0's
+    :param iteration: single iteration or list of iterations, or regex match
+    :return: formatted iteration
+    '''
 
     if isinstance(iteration, re.Match):
         return iteration.group(1).zfill(6)
+    elif isinstance(iteration, (np.ndarray, list)):
+        frmted_iterations = []
+        for it in iteration:
+            frmted_iterations.append(str(it).zfill(6))
+        return frmted_iterations
     else:
-        try:
-            iteration = int(iteration) #needs to be a string but lets remove any leading zeros just in case..
-        except ValueError:
-            print2stdout(f'Unable to convert item {iteration} to collection format (ex. 000001)')
-            return iteration
         return str(iteration).zfill(6)
 
 def formatNumbers(number, numberformatsettings):
@@ -1768,12 +1792,17 @@ def checkJasperFiles(study_dir, install_dir):
                 os.remove(jasper_file)
 
 def checkForCollections(data_settings):
-    contain_collection = False
+    '''
+    checks the data_settings for the collection flag
+    :param data_settings: dictionary of settings for data
+    :return: boolean
+    '''
+
     for ds in data_settings.keys():
         if 'collection' in data_settings[ds].keys():
             if data_settings[ds]['collection']:
-                contain_collection = True
-    return contain_collection
+                return True
+    return False
 
 def organizePlotYears(object_settings):
     '''
@@ -1832,5 +1861,13 @@ def calculateStorageFromElevation(values, curline):
     return elevstorcurve(values)
 
 def ReplaceListAtIdx(list, idx, replacevalue):
+    '''
+    replaces value in a list at a specified index
+    :param list: list of values
+    :param idx: index to replace
+    :param replacevalue: value to replace with
+    :return: corrected list
+    '''
+
     list[idx] = replacevalue
     return list

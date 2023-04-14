@@ -697,6 +697,7 @@ class Tables(object):
         :param object_settings: dictionary containing object settings
         :return:
         '''
+
         thresholds = []
         if 'tablecolors' in object_settings.keys():
             for tablecolor in object_settings['tablecolors']:
@@ -1070,6 +1071,12 @@ class Tables(object):
         return object_settings
 
     def replaceIllegalJasperCharacters(self, tablelist):
+        '''
+        replaces characters that Jasper cant put in the report
+        :param tablelist: list of table values
+        :return: new formatted list
+        '''
+
         illegal_chars = {"<": "&#60;",
                          ">": "&#62;"}
         newtablelist = []
@@ -1084,9 +1091,21 @@ class Tables(object):
         return newtablelist
 
     def replaceIllegalJasperCharactersHeadings(self, headers):
+        '''
+        replaces illegal characters in headings
+        :param headers: list of headers
+        :return: formatted list
+        '''
+
         return self.replaceIllegalJasperCharacters(headers)
 
     def replaceIllegalJasperCharactersRows(self, rows):
+        '''
+        replaces illegal characters in rows
+        :param rows: string of rows separated with |
+        :return: formatted rows
+        '''
+
         new_rows = []
         for row in rows:
             new_rows.append('|'.join(self.replaceIllegalJasperCharacters(row.split('|'))))
@@ -1132,6 +1151,11 @@ class Tables(object):
         return formatted_rows
 
     def writeTable(self, table_constructor):
+        '''
+        writes table from table constructor
+        :param table_constructor: dictionary of values for table
+        '''
+
         lastdatecol = ''
         for i in range(max(table_constructor.keys())+1):
             if i not in table_constructor.keys():
@@ -1150,7 +1174,17 @@ class Tables(object):
         self.Report.XML.writeTableEnd()
 
     def writeMissingTableItemsWarning(self, description):
+        '''
+        writes warning into report that some table items cannot be written due to not having all data
+        :param description: description of table
+        '''
+
         self.Report.makeTextBox({'text': f'Some items in Table "{description}" omitted. Some data required is missing/unavailable.'})
 
     def writeMissingTableWarning(self, description):
+        '''
+        writes warning in table if table cannot be written due to missing data
+        :param description: description of table
+        '''
+
         self.Report.makeTextBox({'text': f'\nTable "{description}" omitted. Some data required is missing/unavailable.'})

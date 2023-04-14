@@ -362,6 +362,7 @@ class ResSim_Results(object):
         :param subdomain_name: name of subdomain to check
         :return:
         '''
+
         dataset = 'Results/Subdomains/{0}'.format(subdomain_name)
         if dataset not in self.h.keys():
             return False
@@ -489,7 +490,7 @@ class ResSim_Results(object):
         '''
 
         nearest_dist = 1e20
-        data_index = 0 #TODO: also exclude reservoirs
+        data_index = 0
         data_subdomain = None
         if subdomain == None:
             subdomains = self.subdomains.items()
@@ -612,6 +613,13 @@ class ResSim_Results(object):
         return self.t_computed[::interval], output_val_at_target
 
     def checkForReservoir(self, subdomain, sd_data):
+        '''
+        checks to see if given location is a reservoir
+        :param subdomain: name of ressim subdomain
+        :param sd_data: data about subdomain
+        :return: boolean if res or not
+        '''
+
         attrs = self.h['Geometry/Subdomains'][subdomain].attrs
         if 'Subdomain Type' in attrs.keys():
             subdomaintype = attrs.get('Subdomain Type')[0].decode()
@@ -632,14 +640,27 @@ class ResSim_Results(object):
         else:
             return True #channels must have 2 cells so this is our best guess
 
-    def checkForOutflow(self, resname):
-        if 'Total boundary outflow' in self.h['Results/Subdomains/' + resname].keys():
+    def checkForOutput(self, resname, output):
+        '''
+        Checks for Ressim output Total boundary outflow in HDF5 file for FWA outflow
+        :param resname: name of reservoir name
+        :return: boolean
+        '''
+
+        if output in self.h['Results/Subdomains/' + resname].keys():
             return True
         else:
             return False
 
     def getFWAReservoirOutputTimeseries(self, resname, parameter):
-        hasOutflow = self.checkForOutflow(resname)
+        '''
+        calculates flow weighted average reservoir outflow for a parameter
+        :param resname:
+        :param parameter:
+        :return: flow weighted time series
+        '''
+
+        hasOutflow = self.checkForOutput(resname, 'Total boundary outflow')
         if not hasOutflow:
             WF.print2stdout(f'Total Boundary Outflow not found in results file for {resname}', debug=self.Report.debug)
             WF.print2stdout('To turn on, check "Cell Flow" in the Output variables tab, under Water Quality tab in the'
@@ -653,6 +674,3 @@ class ResSim_Results(object):
         param_times_flow_sum = param_times_flow.sum(axis=1)
         FWA_values = param_times_flow_sum / outflow_sums
         return self.t_computed, FWA_values
-
-
-

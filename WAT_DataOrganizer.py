@@ -172,6 +172,13 @@ class DataOrganizer(object):
         return wse_data
 
     def getIterations(self, object_settings, data_settings):
+        '''
+        Gets iterations to use from settings
+        :param object_settings: dictionary of settings
+        :param data_settings: dictionary of settings describing the data
+        :return: list of iterations to use
+        '''
+
         if self.Report.forecastiteration: #if its a forecast iteration, grab the current iteration
             iterations = [self.Report.Iteration]
         elif 'iterations' in object_settings.keys(): #if user defined, use the user defined ones
@@ -359,7 +366,9 @@ class DataOrganizer(object):
         :return: dates, values, units
         '''
         metadata = {'collection': False,
-                    'frommemory': False}
+                    'frommemory': False,
+                    'partialmemory': False
+                    }
 
         if 'dss_path' in Line_info.keys(): #Get data from DSS record
             if 'dss_filename' not in Line_info.keys():
@@ -369,15 +378,18 @@ class DataOrganizer(object):
                 datamem_key = self.buildMemoryKey(Line_info)
 
                 if Line_info['dss_path'].split('/')[6].startswith('*|'):
+
                     metadata['collection'] = True
-                if metadata['collection']:
+                    metadata['allcollections'] = False
                     if 'iterations' in Line_info.keys():
                         iterations = Line_info['iterations']
                     elif self.Report.reportType == 'forecast':
                         iterations = self.Report.Iterations
                     else:
                         iterations = 'all'
-                    metadata['original_iterations'] = iterations #keep track of the original series, as this can change
+                        metadata['allcollections'] = True
+                    metadata['iterations'] = iterations #keep track of the original series, as this can change
+                    # iterations_to_grab = iterations
 
                 if datamem_key in self.Memory.keys():
                     WF.print2stdout('Reading {0} from memory'.format(datamem_key), debug=self.Report.debug) #noisy
@@ -389,19 +401,38 @@ class DataOrganizer(object):
                     values = datamementry['values']
                     metadata = datamementry['metadata']
 
-                    metadata['frommemory'] = True
+                    metadata['frommemory'] = True #did we get data from memory
+                    iterations_to_grab = [] #reset, but we still know our iterations
                     if metadata['collection']:
-                        if metadata['original_iterations'] != iterations:
-                            metadata['frommemory'] = False #if not the same list, grab again
-                            WF.print2stdout('Iterations do not allign with last read. Re-reading', debug=self.Report.debug)
+                        if not metadata['allcollections']: #check if we've ever grabbed them all. if we did, no need to go back
+                            for iteration in iterations:
+                                if iteration not in metadata['iterations']:
+                                    iterations_to_grab.append(iteration)
+                                    metadata['frommemory'] = False
+                                else:
+                                    metadata['partialmemory'] = True
+
+                        if len(iterations_to_grab) > 0:
+                            WF.print2stdout(f'Not all iterations in memory. Getting remaining: {iterations_to_grab}', debug=self.Report.debug)
+
+                        # if metadata['iterations'] != iterations:
+                        #     metadata['frommemory'] = False #if not the same list, grab again
+                        #     WF.print2stdout('Iterations do not allign with last read. Re-reading', debug=self.Report.debug)
 
                 if not metadata['frommemory']:
                     # if Line_info['flag'].lower() == 'computed' and (self.Report.isensemble or self.reportType == 'forecast'):
-                    if Line_info['dss_path'].split('/')[6].startswith('*|'):
-
-                        times, values, units, iterations = WDR.readCollectionsDSSData(Line_info['dss_filename'], Line_info['dss_path'],
-                                                                                         iterations, self.Report.StartTime,
-                                                                                         self.Report.EndTime, self.Report.debug)
+                    # if Line_info['dss_path'].split('/')[6].startswith('*|'):
+                    if metadata['collection']:
+                        if metadata['partialmemory']: #if we've only grabbed some of them...
+                            coll_times, coll_values, coll_units, coll_iterations = WDR.readCollectionsDSSData(Line_info['dss_filename'], Line_info['dss_path'],
+                                                                                                              iterations_to_grab, self.Report.StartTime,
+                                                                                                              self.Report.EndTime, self.Report.debug)
+                            values.update(coll_values)
+                            iterations = list(set(metadata['iterations'] + coll_iterations))
+                        else:
+                            times, values, units, iterations = WDR.readCollectionsDSSData(Line_info['dss_filename'], Line_info['dss_path'],
+                                                                                          metadata['iterations'], self.Report.StartTime,
+                                                                                          self.Report.EndTime, self.Report.debug)
                         metadata['iterations'] = iterations
                     else:
                         times, values, units = WDR.readDSSData(Line_info['dss_filename'], Line_info['dss_path'],
@@ -579,6 +610,13 @@ class DataOrganizer(object):
         return times, values, metadata
 
     def computeCollectionEnvelopes(self, values, envelopes):
+        '''
+        calculates and plots envelopes for collection data as specified
+        :param values: collection value dictionary
+        :param envelopes: settings for envelopes
+        :return: computed envelope value dictionaries
+        '''
+
         collected_envelopes = {}
         for envelope in envelopes:
             if 'percent' in envelope.keys():
@@ -1016,6 +1054,18 @@ class DataOrganizer(object):
         return data, line_settings
 
     def filterFormattedTable(self, data, object_settings, primarykey=None):
+        '''
+        Filters file based on user defined settings
+        flags to filter on:
+        headers - select what headers to be included in the table. All by default
+        selectbyfirstcell - select by a list given by user cooresponding with the first row
+        reportType: Forecast - checks for the iteration in the first row and filters on it
+        :param data: pandas dataframe of table
+        :param object_settings: dictionary of settings for table
+        :param primarykey: primary key of table if we've already figured it out
+        :return: formatted pandas DF with excluded data
+        '''
+
         if primarykey == None:
             primarykey = self.Data.getPrimaryTableKey(data, object_settings)
 
@@ -1044,6 +1094,14 @@ class DataOrganizer(object):
         return data
 
     def mergeFormattedTables(self, data, data_settings, object_settings):
+        '''
+        combines multiple formatted tables by a common key
+        :param data: dictionary containing pandas DFs
+        :param data_settings: settings dict about the data
+        :param object_settings: settings dict about the object
+        :return: main table object and settings
+        '''
+
         table_keys = list(data.keys())
 
         if len(table_keys) < 2: #todo: can this be zero?
@@ -1077,6 +1135,13 @@ class DataOrganizer(object):
         return main_table, main_data_settings
 
     def getPrimaryTableKey(self, data, object_settings):
+        '''
+        finds the primary key for a table
+        :param data: pandas DF containing formatted text table data
+        :param object_settings: dictionary containing settings for the object
+        :return: primary key
+        '''
+
         if 'primarykey' in object_settings:
             primarykey = object_settings['primarykey']
         elif 'merge_on' in object_settings.keys():

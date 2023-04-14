@@ -44,6 +44,12 @@ class Plots(object):
         return object_settings
 
     def seperateCollectionLines(self, line_draw_settings):
+        '''
+        takes a collection of lines and seperates them into their own instances to be plotted seperatly
+        :param line_draw_settings: settings for lines
+        :return: updated settings
+        '''
+
         if 'iterations' in line_draw_settings:
             collection_draw_settings = {}
             iterations = line_draw_settings['iterations']
@@ -146,6 +152,14 @@ class Plots(object):
         return RelativeMasterSet, RelativeLineSettings
 
     def plot(self, dates, values, curax, line_draw_settings):
+        '''
+        plots lines, taking into account markers and lines
+        :param dates: list of dates
+        :param values: list of values
+        :param curax: axis to plot on
+        :param line_draw_settings: settings that configure how line is drawn
+        '''
+
         if line_draw_settings['drawline'].lower() == 'true' and line_draw_settings['drawpoints'].lower() == 'true':
             self.plotLinesAndPoints(dates, line_draw_settings, curax, line_draw_settings)
         elif line_draw_settings['drawline'].lower() == 'true':
@@ -199,6 +213,14 @@ class Plots(object):
                         alpha=float(settings['alpha']))
 
     def plotCollectionEnvelopes(self, dates, values, curax, settings):
+        '''
+        iterates and plots envelopes
+        :param dates: list of dates
+        :param values: list of values containing envelopes
+        :param curax: current axis to plot on
+        :param settings: settings for object
+        '''
+
         if 'envelopes' in settings.keys() and len(values.keys()) > 0:
             collection_evelopes = self.Report.Data.computeCollectionEnvelopes(values, settings['envelopes'])
             for envelope_settings in settings['envelopes']:
@@ -410,6 +432,14 @@ class Plots(object):
                     curax.set_xticklabels(newxticklabels)
 
     def formatYTicks(self, ax, ax_settings, gatedata={}, gate_placement=10, axis='left'):
+        '''
+        formats yticks on an axis
+        :param ax: current axis
+        :param ax_settings: settings for axis
+        :param gatedata: data for gates
+        :param gate_placement: how far away by default to plot gates
+        :param axis: left or right
+        '''
 
         if axis == 'left':
             ylimflag = 'ylims'
@@ -479,6 +509,12 @@ class Plots(object):
         ax.set_ylim(top=ymax)
 
     def formatXTicks(self, ax, ax_settings, axis='bottom'):
+        '''
+        formats xticks for an axis
+        :param ax: current axis
+        :param ax_settings: settings for axis
+        :param axis: top or bottom
+        '''
 
         if axis == 'bottom':
             xlimflag = 'xlims'
@@ -669,6 +705,14 @@ class Plots(object):
         ax.set_xlim(left=xmin, right=xmax)
 
     def copyYTicks(self, ax, ax2, units, ax_settings):
+        '''
+        copies yticks from axis 1 to use for axis 2, if we want to use the same ticks, but in a different unitsystem
+        :param ax: axis 1 to get ticks from
+        :param ax2: axis 2 to duplicate ticks to
+        :param units: units of ticks from ax
+        :param ax_settings: settings for current axis
+        '''
+
         axylims = ax.get_ylim()
         axyticks = ax.get_yticks()
         axyticklabels = ax.get_yticklabels()

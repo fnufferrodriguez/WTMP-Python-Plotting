@@ -173,7 +173,7 @@ class Profiles(object):
     def convertElevationsToDepths(self, data, object_settings, wse_data={}):
         '''
         handles data to convert depths into elevations for observed data
-         :param data: dictionary containing values for lines
+        :param data: dictionary containing values for lines
         :param object_settings: dicitonary of user defined settings for current object
         :param wse_data: contains info about WSE for conversion
         :return: object settings dictionary with updated elevation data
@@ -450,6 +450,16 @@ class Profiles(object):
         return output
 
     def checkProfileValidity(self, data, object_settings, combineyears=False, includeallyears=False):
+        '''
+        checks profile data validity by checking for data outisde a wide margin, or min amount of points, or
+        surface grouping. prints large amounts of messages if invalid
+        :param data: dict containing data
+        :param object_settings: dict containing settings for object
+        :param combineyears: boolean
+        :param includeallyears: boolean
+        :return: warning info
+        '''
+
         if not self.Report.debug:
             return {}
         if 'warnings' not in object_settings.keys():
@@ -577,12 +587,25 @@ class Profiles(object):
         return object_settings['warnings']
 
     def writeWarnings(self, warnings, year):
+        '''
+        writes profile warning messages into report
+        :param warnings:
+        :param year:
+        :return:
+        '''
         for key in warnings.keys():
             if len(warnings[key][year]) > 0:
-                message = self.formatWarningMessage(warnings[key][year], key)
+                message = self.formatProfileWarningMessages(warnings[key][year], key)
                 self.Report.makeTextBox({'text': message})
 
-    def formatWarningMessage(self, warnings, key):
+    def formatProfileWarningMessages(self, warnings, key):
+        '''
+        formats warnings about profiles
+        :param warnings: list of issues with profiles
+        :param key: key for which profile to complain about
+        :return: formatted message
+        '''
+
         message = f'Some profiles in {key} may be invalid due to'
         if len(warnings) > 2:
             for wi, warn in enumerate(warnings):

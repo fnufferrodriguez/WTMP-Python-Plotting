@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '5.4.19'
+VERSIONNUMBER = '5.4.20'
 
 import os
 import sys
@@ -58,6 +58,7 @@ class MakeAutomatedReport(object):
         organizes input data and generates XML report
         :param simulationInfoFile: full path to simulation information XML file output from WAT.
         '''
+
         WF.printVersion(VERSIONNUMBER)
         self.simulationInfoFile = simulationInfoFile
         self.WriteLog = True #TODO we're testing this.
@@ -137,11 +138,11 @@ class MakeAutomatedReport(object):
                 self.cleanOutputDirs()
                 self.initializeXML()
                 self.writeXMLIntroduction()
-
+                self.initializeDataOrganizer() #Do this here because forecast runs are likely to overlap over chapters
                 for simorder in self.SimulationCSV.keys():
                     self.setSimulationCSVVars(self.SimulationCSV[simorder])
                     WR.readDefinitionsFile(self, self.SimulationCSV[simorder])
-                    self.initializeDataOrganizer() #todo: make sure this doesnt get too big..
+                    # self.initializeDataOrganizer() #todo: make sure this doesnt get too big..
                     self.loadModelAlts(self.SimulationCSV[simorder])
                     self.loadCurrentModelAltID(self.base_id)
                     self.WAT_log.addSimLogEntry(self.accepted_IDs, self.SimulationVariables, self.observedDir)
@@ -1578,7 +1579,7 @@ class MakeAutomatedReport(object):
                         iteration = None
                     if '%%' in rowname:
                         if isCollection and '%%iteration' in rowname:
-                            iteration = int(rowname.split('%%iteration.')[1].split('%%')[0])
+                            iteration = rowname.split('%%iteration.')[1].split('%%')[0]
                             rowname = re.sub(r"%%iteration\.(\d+)%%", WF.formatIterations, rowname, flags=re.IGNORECASE) #re.sub magic, counts \1 as two chars
 
                     if '%%' in row_val:
@@ -1588,10 +1589,6 @@ class MakeAutomatedReport(object):
                             stat = None
                         else:
                             row_val, stat = self.Tables.getStatsLine(row_val, rowdata)
-                            try:
-                                not np.isnan(row_val) and row_val != None
-                            except:
-                                print('stop')
                             if not np.isnan(row_val) and row_val != None:
                                 thresholdsettings = self.Tables.matchThresholdToStat(stat, object_settings)
                                 for thresh in thresholdsettings:
@@ -3226,23 +3223,30 @@ class MakeAutomatedReport(object):
             self.XML.writeChapterEnd()
 
     def writeSections(self, Chapter):
+        '''
+        sets up the sections to be written. Changes depending on if its a forecast iteration or not
+        :param Chapter: dictionary read from XMl file
+        '''
+
         for section in Chapter['sections']:
             section_header = section['header']
-            # self.XML.writeSectionHeader(section_header)
             if self.forecastiteration:
                 for iteration in self.Iterations:
                     new_section_header = WF.updateFlaggedValues(section_header, '%%iteration%%', WF.formatIterations(iteration))
                     self.XML.writeSectionHeader(new_section_header)
-                    self.Iteration = int(iteration)
+                    self.Iteration = iteration
                     self.iterateSection(section)
             else:
                 self.XML.writeSectionHeader(section_header)
                 self.iterateSection(section)
+            self.XML.writeSectionHeaderEnd()
 
     def iterateSection(self, section):
-        # for section in Chapter['sections']:
-        #     section_header = section['header']
-        #     self.XML.writeSectionHeader(section_header)
+        '''
+        iterates through objects in a section to build tables and plots
+        :param section: dictionary read from XML file
+        '''
+
         for object in section['objects']:
             objtype = object['type'].lower()
             if objtype == 'timeseriesplot':
@@ -3270,7 +3274,6 @@ class MakeAutomatedReport(object):
             else:
                 WF.print2stdout('Section Type {0} not identified.'.format(objtype))
                 WF.print2stdout('Skipping Section..')
-        self.XML.writeSectionHeaderEnd()
 
     def cleanOutputDirs(self):
         '''
@@ -3454,6 +3457,10 @@ class MakeAutomatedReport(object):
             lastline = tmpstr
 
     def fixXMLModelIntroduction(self):
+        '''
+        removes extra flag values from the report introduction
+        '''
+
         self.XML.removeLine('%%REPLACEINTRO_')
 
     def checkModelType(self, line_info):

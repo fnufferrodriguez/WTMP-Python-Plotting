@@ -48,10 +48,6 @@ def readSimulationFile(simulationfile):
     :returns: dictionary containing information from file
     '''
 
-    # if iscomp:
-    #     simulation_file = os.path.join(studyfolder, 'reports', '{0}_comparison.csv'.format(simulation_name.replace(' ', '_')))
-    # else:
-    #     simulation_file = os.path.join(studyfolder, 'reports', '{0}.csv'.format(simulation_name.replace(' ', '_')))
     WF.print2stdout('Attempting to read {0}'.format(simulationfile))
     if not os.path.exists(simulationfile):
         WF.print2stderr(f'Could not find CSV file: {simulationfile}')
@@ -101,6 +97,14 @@ def readDefaultLineStyle(linefile):
     return lineTypes
 
 def findTargetinChapterDefFile(flags, chapter, default=''):
+    '''
+    finds target header/flag in Chapter definition file. Uses default value if it can't find it
+    :param flags: flags to look for #TODO: make case insensitive
+    :param chapter: chapter object
+    :param default: value to use if flag isnt found
+    :return: value from Chapter value
+    '''
+
     targettext = default
     grouptext_flags = flags
     for flag in grouptext_flags:
@@ -111,9 +115,14 @@ def findTargetinChapterDefFile(flags, chapter, default=''):
     return targettext
 
 def readBCPathsMap(bcpathsmapfile):
+    '''
+    reads the boundary conditions file for a formatted table for collections plot
+    :param bcpathsmapfile: path to file
+    :return: Pandas DF
+    '''
+
     bcpathsmap = readFormattedTable_Pandas(bcpathsmapfile)
     return bcpathsmap
-
 
 def readChapterDefFile(CD_file):
     '''
@@ -204,6 +213,17 @@ def readChapterDefFile(CD_file):
     return Chapters
 
 def readCollectionsDSSData(dss_file, pathname, iterations, startdate, enddate, debug):
+    '''
+    reads collection dss datasets and returns a dictionary of values
+    :param dss_file: path to DSS file
+    :param pathname: dss path with * wildcard in the Fpart
+    :param iterations: list of iterations to collect, or 'all'
+    :param startdate: start date to get data for
+    :param enddate: end date to get data for
+    :param debug: debug settings to print message
+    :return: times, values, units, iterations grabbed
+    '''
+
     try:
         if os.path.exists(dss_file):
             fid = HecDss.Open(dss_file)
@@ -224,10 +244,8 @@ def readCollectionsDSSData(dss_file, pathname, iterations, startdate, enddate, d
                 iterations = [int(n) for n in iterations]
 
             iterations.sort()
-
+            iterations = WF.formatIterations(iterations)
             for i, iteration in enumerate(iterations):
-                if len(str(iteration)) != 6:
-                    iteration = str(iteration).zfill(6) #DSS conventions want 6 spaces
                 CID_pathname_fpart = pathname.split('/')[6].replace('*|', f'C:{iteration}|')
                 CID_pathname_split = pathname.split('/')
                 CID_pathname_split[6] = CID_pathname_fpart
@@ -239,7 +257,7 @@ def readCollectionsDSSData(dss_file, pathname, iterations, startdate, enddate, d
                     times = np.array(ts.pytimes)
                     units = ts.units
                     collection_values = {}
-                collection_values[int(iteration)] = values
+                collection_values[iteration] = values
             fid.close()
             return times, collection_values, units, iterations
         else:
@@ -364,6 +382,14 @@ def readW2ResultsFile(output_file_name, jd_dates, run_path, targetfieldidx=1):
     return out_vals
 
 def readFormattedTable_Pandas(filename):
+    '''
+    reads a specially formatted table. Tables must be regular with headers and a single page
+    removes empty rows
+    currently supports CSV files
+    :param filename: path to file name
+    :return: Pandas DF
+    '''
+
     if os.path.exists(filename):
         ext = filename.split('.')[-1]
         if ext.lower() == 'csv':
@@ -704,6 +730,7 @@ def readComparisonSimulationsCSV(Report):
     but are built in general the same as regular Simulation CSV files.
     :return:
     '''
+
     simulation_file = os.path.join(Report.studyDir, 'reports', '{0}_comparison.csv'.format(Report.SimulationVariables[Report.base_id]['baseSimulationName'].replace(' ', '_')))
     Report.SimulationCSV = readSimulationFile(simulation_file)
 
