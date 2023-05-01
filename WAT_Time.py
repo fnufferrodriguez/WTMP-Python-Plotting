@@ -57,11 +57,13 @@ def changeTimeSeriesInterval(times, values, Line_info, t_offset, startYear):
         for key in values:
             new_times, new_values[key] = changeTimeSeriesInterval(times, values[key], Line_info, t_offset, startYear)
     elif len(values.shape) == 2:
+        # t_vals = values.T
         for vi, valueset in enumerate(values):
             new_times, changed_vals = changeTimeSeriesInterval(times, valueset, Line_info, t_offset, startYear)
             if vi == 0:
                 new_values = np.empty([values.shape[0], changed_vals.shape[0]])
             new_values[vi] = changed_vals
+        # new_values = new_values.T
 
     else:
         if 'interval' in Line_info:
@@ -82,18 +84,18 @@ def changeTimeSeriesInterval(times, values, Line_info, t_offset, startYear):
                 new_values = df['values'].to_numpy()
                 new_times = df.index.to_pydatetime()
 
-            elif len(values.shape) == 2:
-                tvals = values.T #transpose so now were [distances, times]
-                new_values = []
-                for i in range(tvals.shape[0]):#for each depth profile..
-                    df = pd.DataFrame({'times': times, 'values': tvals[i]})
-                    df = df.set_index('times')
-                    if df.index.inferred_freq != pd_interval:
-                        # df = df.resample(pd_interval, origin='end_day').asfreq().fillna(method='bfill')
-                        df = df.resample(pd_interval, origin='end_day').asfreq()
-                    new_values.append(df['values'].to_numpy())
-                    new_times = df.index.to_pydatetime()
-                new_values = np.asarray(new_values).T #transpose back..
+            # elif len(values.shape) == 2:
+            #     tvals = values.T #transpose so now were [distances, times]
+            #     new_values = []
+            #     for i in range(tvals.shape[0]):#for each depth profile..
+            #         df = pd.DataFrame({'times': times, 'values': tvals[i]})
+            #         df = df.set_index('times')
+            #         if df.index.inferred_freq != pd_interval:
+            #             # df = df.resample(pd_interval, origin='end_day').asfreq().fillna(method='bfill')
+            #             df = df.resample(pd_interval, origin='end_day').asfreq()
+            #         new_values.append(df['values'].to_numpy())
+            #         new_times = df.index.to_pydatetime()
+            #     new_values = np.asarray(new_values).T #transpose back..
 
         elif avgtype == 'INST-CUM':
             if len(values.shape) == 1:
@@ -103,17 +105,17 @@ def changeTimeSeriesInterval(times, values, Line_info, t_offset, startYear):
                 df = df.cumsum(skipna=True).resample(pd_interval, origin='end_day').asfreq()
                 new_values = df['values'].to_numpy()
                 new_times = df.index.to_pydatetime()
-            elif len(values.shape) == 2:
-                tvals = values.T #transpose so now were [distances, times]
-                new_values = []
-                for i in range(tvals.shape[0]):#for each depth profile..
-                    df = pd.DataFrame({'times': times, 'values': tvals[i]})
-                    df = df.set_index('times')
-                    # df = df.cumsum(skipna=True).resample(pd_interval, origin='end_day').asfreq().fillna(method='bfill')
-                    df = df.cumsum(skipna=True).resample(pd_interval, origin='end_day').asfreq()
-                    new_values.append(df['values'].to_numpy())
-                    new_times = df.index.to_pydatetime()
-                new_values = np.asarray(new_values).T #transpose back..
+            # elif len(values.shape) == 2:
+            #     tvals = values.T #transpose so now were [distances, times]
+            #     new_values = []
+            #     for i in range(tvals.shape[0]):#for each depth profile..
+            #         df = pd.DataFrame({'times': times, 'values': tvals[i]})
+            #         df = df.set_index('times')
+            #         # df = df.cumsum(skipna=True).resample(pd_interval, origin='end_day').asfreq().fillna(method='bfill')
+            #         df = df.cumsum(skipna=True).resample(pd_interval, origin='end_day').asfreq()
+            #         new_values.append(df['values'].to_numpy())
+            #         new_times = df.index.to_pydatetime()
+            #     new_values = np.asarray(new_values).T #transpose back..
 
         elif avgtype == 'PER-AVER':
             #average over the period
@@ -125,18 +127,18 @@ def changeTimeSeriesInterval(times, values, Line_info, t_offset, startYear):
                     df = df.resample(pd_interval, origin='end_day').mean()
                 new_values = df['values'].to_numpy()
                 new_times = df.index.to_pydatetime()
-            elif len(values.shape) == 2:
-                tvals = values.T #transpose so now were [distances, times]
-                new_values = []
-                for i in range(tvals.shape[0]):#for each depth profile..
-                    df = pd.DataFrame({'times': times, 'values': tvals[i]})
-                    df = df.set_index('times')
-                    if df.index.inferred_freq != pd_interval:
-                        # df = df.resample(pd_interval, origin='end_day').mean().fillna(method='bfill')
-                        df = df.resample(pd_interval, origin='end_day').mean()
-                    new_values.append(df['values'].to_numpy())
-                    new_times = df.index.to_pydatetime()
-                new_values = np.asarray(new_values).T #transpose back..
+            # elif len(values.shape) == 2:
+            #     tvals = values.T #transpose so now were [distances, times]
+            #     new_values = []
+            #     for i in range(tvals.shape[0]):#for each depth profile..
+            #         df = pd.DataFrame({'times': times, 'values': tvals[i]})
+            #         df = df.set_index('times')
+            #         if df.index.inferred_freq != pd_interval:
+            #             # df = df.resample(pd_interval, origin='end_day').mean().fillna(method='bfill')
+            #             df = df.resample(pd_interval, origin='end_day').mean()
+            #         new_values.append(df['values'].to_numpy())
+            #         new_times = df.index.to_pydatetime()
+            #     new_values = np.asarray(new_values).T #transpose back..
 
         elif avgtype == 'PER-CUM':
             #cum over the period
@@ -148,18 +150,18 @@ def changeTimeSeriesInterval(times, values, Line_info, t_offset, startYear):
                     df = df.resample(pd_interval, origin='end_day').sum()
                 new_values = df['values'].to_numpy()
                 new_times = df.index.to_pydatetime()
-            elif len(values.shape) == 2:
-                tvals = values.T #transpose so now were [distances, times]
-                new_values = []
-                for i in range(tvals.shape[0]):#for each depth profile..
-                    df = pd.DataFrame({'times': times, 'values': tvals[i]})
-                    df = df.set_index('times')
-                    if df.index.inferred_freq != pd_interval:
-                        # df = df.resample(pd_interval, origin='end_day').sum().fillna(method='bfill')
-                        df = df.resample(pd_interval, origin='end_day').sum()
-                    new_values.append(df['values'].to_numpy())
-                    new_times = df.index.to_pydatetime()
-                new_values = np.asarray(new_values).T #transpose back..
+            # elif len(values.shape) == 2:
+            #     tvals = values.T #transpose so now were [distances, times]
+            #     new_values = []
+            #     for i in range(tvals.shape[0]):#for each depth profile..
+            #         df = pd.DataFrame({'times': times, 'values': tvals[i]})
+            #         df = df.set_index('times')
+            #         if df.index.inferred_freq != pd_interval:
+            #             # df = df.resample(pd_interval, origin='end_day').sum().fillna(method='bfill')
+            #             df = df.resample(pd_interval, origin='end_day').sum()
+            #         new_values.append(df['values'].to_numpy())
+            #         new_times = df.index.to_pydatetime()
+            #     new_values = np.asarray(new_values).T #transpose back..
 
         else:
             # WF.print2stdout('INVALID INPUT TYPE DETECTED', avgtype)

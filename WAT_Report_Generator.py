@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '5.4.20'
+VERSIONNUMBER = '5.4.21'
 
 import os
 import sys
@@ -46,7 +46,6 @@ warnings.filterwarnings("always")
 
 mpl.rcParams['axes.autolimit_mode'] = 'round_numbers'
 mpl.use("Agg")
-
 class MakeAutomatedReport(object):
     '''
     class to organize data and generate XML file for Jasper processing in conjunction with WAT. Takes in a simulation
@@ -2401,7 +2400,8 @@ class MakeAutomatedReport(object):
                 else:
                     vmax = np.nanmax(values)
 
-                contr = ax.contourf(dates, distance, values.T, cmap=contour_plot_settings['colorbar']['colormap'],
+                # contr = ax.contourf(dates, distance, values.T, cmap=contour_plot_settings['colorbar']['colormap'],
+                contr = ax.contourf(dates, distance, values, cmap=contour_plot_settings['colorbar']['colormap'],
                                     vmin=vmin, vmax=vmax,
                                     levels=np.linspace(vmin, vmax, int(contour_plot_settings['colorbar']['bins'])), #add one to get the desired number..
                                     extend='both') #the .T transposes the array so dates on bottom TODO:make extend variable

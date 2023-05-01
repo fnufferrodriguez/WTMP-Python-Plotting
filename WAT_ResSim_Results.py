@@ -421,7 +421,8 @@ class ResSim_Results(object):
             self.loadComputedTime()
         istart = 0
         iend = -1
-        return self.t_computed[istart:iend], v[istart:iend], distance
+        #transpose so it returns [time, values at each cell]
+        return self.t_computed[istart:iend], v[istart:iend].T, distance
 
     def readModelTimeseriesData(self, data, metric):
         '''

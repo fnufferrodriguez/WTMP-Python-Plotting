@@ -681,7 +681,8 @@ def stackContours(contours, contours_settings):
         if len(output_values) == 0:
             output_values = pickle.loads(pickle.dumps(contour['values'], -1))
         else:
-            output_values = np.append(output_values, contour['values'][:, 1:], axis=1)
+            # output_values = np.append(output_values, contour['values'][:, 1:], axis=1)
+            output_values = np.append(output_values, contour['values'][1:, :], axis=0)
         if len(output_dates) == 0:
             output_dates = contour['dates']
         if len(output_distance) == 0:
@@ -766,13 +767,19 @@ def filterDataByYear(data, year, extraflag=None):
             if len(data[flag]['dates']) > 0:
                 s_idx, e_idx = getYearlyFilterIdx(data[flag]['dates'], year)
                 if None not in [s_idx, e_idx]:
-                    data[flag]['values'] = data[flag]['values'][s_idx:e_idx+1]
+                    if len(data[flag]['values'].shape) == 1:
+                        data[flag]['values'] = data[flag]['values'][s_idx:e_idx+1]
+                    else:
+                        data[flag]['values'] = data[flag]['values'][:,s_idx:e_idx + 1]
                     data[flag]['dates'] = data[flag]['dates'][s_idx:e_idx+1]
                 else:
                     data[flag]['values'] = []
                     data[flag]['dates'] = []
                 if extraflag != None:
-                    data[flag][extraflag] = data[flag][extraflag][s_idx:e_idx+1]
+                    if len(data[flag][extraflag].shape) == 1:
+                        data[flag][extraflag] = data[flag][extraflag][s_idx:e_idx+1]
+                    else:
+                        data[flag][extraflag] = data[flag][extraflag][:, s_idx:e_idx + 1]
     return data
 
 def getYearlyFilterIdx(dates, year):

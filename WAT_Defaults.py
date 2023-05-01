@@ -194,7 +194,8 @@ def getDefaultContourSettings(object_settings, debug=False):
     :return: updated settings dictionary
     '''
 
-    defaultColormap = mpl.cm.get_cmap('jet')
+    # defaultColormap = mpl.cm.get_cmap('jet')
+    defaultColormap = mpl.colormaps['jet']
     default_colorbar_settings = {'colormap': defaultColormap,
                                  'bins': 10,
                                  'numticks': 5}
@@ -202,7 +203,8 @@ def getDefaultContourSettings(object_settings, debug=False):
     if 'colorbar' in object_settings.keys():
         if 'colormap' in object_settings['colorbar'].keys():
             try:
-                usercolormap = mpl.cm.get_cmap(object_settings['colorbar']['colormap'])
+                # usercolormap = mpl.cm.get_cmap(object_settings['colorbar']['colormap'])
+                usercolormap = mpl.colormaps[object_settings['colorbar']['colormap']]
                 object_settings['colormap'] = usercolormap
             except ValueError:
                 WF.print2stdout('User selected invalid colormap:', object_settings['colorbar']['colormap'], debug=debug)
