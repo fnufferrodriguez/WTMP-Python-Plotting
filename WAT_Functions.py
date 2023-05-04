@@ -1017,6 +1017,8 @@ def convertUnitSystem(values, units, target_unitsystem, debug=False):
             new_values = {}
             for key, vs in values.items():
                 new_values[key] = convertTempUnits(vs, units)
+        else:
+            new_values = convertTempUnits(float(values), units)
 
     elif units.lower() in constants.conversion.keys():
         conversion_factor = constants.conversion[units.lower()]
@@ -1026,6 +1028,8 @@ def convertUnitSystem(values, units, target_unitsystem, debug=False):
             new_values = {}
             for key, vs in values.items():
                 new_values[key] = vs * conversion_factor
+        else: #must be a single value???
+            new_values = float(values) * conversion_factor
     elif new_units.lower() in constants.conversion.keys():
         conversion_factor = 1/constants.conversion[units.lower()]
         if isinstance(values, (list, np.ndarray)):
@@ -1034,6 +1038,8 @@ def convertUnitSystem(values, units, target_unitsystem, debug=False):
             new_values = {}
             for key, vs in values.items():
                 new_values[key] = vs * conversion_factor
+        else: #must be a single value???
+            new_values = float(values) * conversion_factor
     else:
         print2stdout('Undefined Units conversion for units {0}.'.format(units), debug=debug)
         print2stdout('No Conversions taking place.', debug=debug)
