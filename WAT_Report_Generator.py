@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '5.4.22'
+VERSIONNUMBER = '5.4.23'
 
 import os
 import sys
@@ -605,7 +605,7 @@ class MakeAutomatedReport(object):
                             titlesize = float(ax_settings['fontsize'])
                         else:
                             titlesize = 15
-                        ax.set_title(ax_settings['title'], fontsize=titlesize)
+                        ax.set_title(ax_settings['title'], fontsize=titlesize, wrap=True)
 
                 if 'gridlines' in ax_settings.keys():
                     if ax_settings['gridlines'].lower() == 'true':
@@ -2536,7 +2536,7 @@ class MakeAutomatedReport(object):
                     titlesize = float(object_settings['fontsize'])
                 else:
                     titlesize = 15
-                axes[0].set_title(cur_obj_settings['title'], fontsize=titlesize)
+                axes[0].set_title(cur_obj_settings['title'], fontsize=titlesize, wrap=True)
 
             if 'xlabel' in cur_obj_settings.keys():
                 if 'xlabelsize' in cur_obj_settings.keys():
@@ -2871,7 +2871,7 @@ class MakeAutomatedReport(object):
                     titlesize = float(object_settings['fontsize'])
                 else:
                     titlesize = 15
-                axes[0].set_title(cur_obj_settings['title'], fontsize=titlesize)
+                axes[0].set_title(cur_obj_settings['title'], fontsize=titlesize, wrap=True)
 
             if 'xlabel' in cur_obj_settings.keys():
                 if 'xlabelsize' in cur_obj_settings.keys():
