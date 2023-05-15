@@ -364,7 +364,10 @@ class DataOrganizer(object):
         :param Line_info: dictionary of line setttings containing datasources
         :param makecopy: flag that determines if the data is grabbed or just copied
         :return: dates, values, units
+        #TODO: move memory grab outside of functions so only called once
+        #TODO: check intervals when grabbing from memory
         '''
+
         metadata = {'collection': False,
                     'frommemory': False,
                     'partialmemory': False
@@ -427,6 +430,7 @@ class DataOrganizer(object):
                             coll_times, coll_values, coll_units, coll_iterations = WDR.readCollectionsDSSData(Line_info['dss_filename'], Line_info['dss_path'],
                                                                                                               iterations_to_grab, self.Report.StartTime,
                                                                                                               self.Report.EndTime, self.Report.debug)
+
                             values.update(coll_values)
                             iterations = list(set(metadata['iterations'] + coll_iterations))
                         else:
@@ -702,14 +706,14 @@ class DataOrganizer(object):
         :return: updated data dictionary, updated line_settings dictionary
         '''
 
-        vals, elevations, depths, times, flag, units = self.getProfileValues(profile, timestamps) #Test this speed for grabbing all profiles and then choosing
+        vals, elevations, depths, times, metadata = self.getProfileValues(profile, timestamps) #Test this speed for grabbing all profiles and then choosing
         datacheck = False
         if len(vals) > 0:
             datacheck = True
             datamem_key = self.buildMemoryKey(profile)
-            if units == None:
-                if 'units' in profile.keys():
-                    units = profile['units']
+            # if metadata['units'] == None:
+            #     if 'units' in profile.keys():
+            #         units = profile['units']
             # else:
             #     units = None
 
@@ -718,15 +722,17 @@ class DataOrganizer(object):
             else:
                 datakey = profile['flag']
 
-            subset = True
-            if isinstance(timestamps, str):
-                subset = False
+            # subset = True
+            # if isinstance(timestamps, str):
+            #     subset = False
 
-            line_settings[datakey] = {'units': units,
-                                      'numtimesused': profile['numtimesused'],
-                                      'logoutputfilename': datamem_key,
-                                      'subset': subset
+            line_settings[datakey] = {'logoutputfilename': datamem_key,
+                                      # 'numtimesused': profile['numtimesused'],
+                                      # 'subset': subset,
+                                      # 'units': units,
                                       }
+            line_settings[datakey].update(metadata)
+            line_settings[datakey].update(profile)
 
             data[datakey] = {'values': vals,
                              'elevations': elevations,
@@ -749,78 +755,111 @@ class DataOrganizer(object):
         :return: values, elevations, depths, flag
         '''
 
+        metadata = {'frommemory': False,
+                    'subset': False,
+                    'flag': Profile_info['flag'],
+                    'units': None,
+                    'isprofile': True
+                    }
+
+        if 'units' in Profile_info.keys():
+            metadata['units'] = Profile_info['units']
+
         datamemkey = self.buildMemoryKey(Profile_info)
+        values, elevations, depths, times = [], [], [], []
+
+        if isinstance(timesteps, str):
+            metadata['subset'] = False
+        else:
+            metadata['subset'] = True
 
         if datamemkey in self.Memory.keys():
             dm = pickle.loads(pickle.dumps(self.Memory[datamemkey], -1))
-            WF.print2stdout(f'retrieving {datamemkey} profile from datamem', debug=self.Report.debug)
+            subset = dm['metadata']['subset'] #if when grabbed, all timesteps were grabbed, or specific ones
+            metadata['frommemory'] = True
+            WF.print2stdout(f'retrieving {datamemkey} profile from datamemory', debug=self.Report.debug)
             if isinstance(timesteps, str): #if looking for all
-                if dm['subset'] == 'false': #the last time data was grabbed, it was not a subset, aka all
-                    return dm['values'], dm['elevations'], dm['depths'], dm['times'], Profile_info['flag'], Profile_info['units']
+                if not subset: #the last time data was grabbed, it was not a subset, aka all
+                    metadata['units'] = dm['units']
+                    values, elevations, depths, times = dm['values'], dm['elevations'], dm['depths'], dm['times']
                 else:
                     WF.print2stdout('Incorrect Timesteps in data memory. Re-extracting data for', datamemkey, debug=self.Report.debug)
+                    metadata['frommemory'] = False
             elif np.array_equal(timesteps, dm['times']):
-                return dm['values'], dm['elevations'], dm['depths'], dm['times'], Profile_info['flag'], dm['units']
+                metadata['units'] = dm['metadata']['units']
+                values, elevations, depths, times = dm['values'], dm['elevations'], dm['depths'], dm['times']
             else:
                 WF.print2stdout('Incorrect Timesteps in data memory. Re-extracting data for', datamemkey, debug=self.Report.debug)
+                metadata['frommemory'] = False
 
-        if 'filename' in Profile_info.keys(): #Get data from Observed
-            filename = Profile_info['filename']
-            values, yvals, times = WDR.readTextProfile(filename, timesteps, self.Report.StartTime, self.Report.EndTime)
-            if 'y_convention' in Profile_info.keys():
-                if Profile_info['y_convention'].lower() == 'depth':
-                    return values, [], yvals, times, Profile_info['flag']
-                elif Profile_info['y_convention'].lower() == 'elevation':
-                    return values, yvals, [], times, Profile_info['flag']
+        #read from source..
+        if not metadata['frommemory']:
+            if 'filename' in Profile_info.keys(): #Get data from Observed
+                filename = Profile_info['filename']
+                metadata['source'] = filename
+                values, yvals, times = WDR.readTextProfile(filename, timesteps, self.Report.StartTime, self.Report.EndTime)
+                if 'y_convention' in Profile_info.keys():
+                    metadata['y_convention'] = Profile_info['y_convention']
+                    if Profile_info['y_convention'].lower() == 'depth':
+                         values, elevations, depths, times = values, [], yvals, times
+                    elif Profile_info['y_convention'].lower() == 'elevation':
+                        values, elevations, depths, times = values, yvals, [], times
+                    else:
+                        WF.print2stdout('Unknown value for flag y_convention: {0}'.format(Profile_info['y_convention']), debug=self.Report.debug)
+                        WF.print2stdout('Please use "depth" or "elevation"', debug=self.Report.debug)
+                        WF.print2stdout('Assuming depths...', debug=self.Report.debug)
+                        values, elevations, depths, times = values, [], yvals, times
                 else:
-                    WF.print2stdout('Unknown value for flag y_convention: {0}'.format(Profile_info['y_convention']), debug=self.Report.debug)
-                    WF.print2stdout('Please use "depth" or "elevation"', debug=self.Report.debug)
+                    WF.print2stdout('No value for flag y_convention', debug=self.Report.debug)
                     WF.print2stdout('Assuming depths...', debug=self.Report.debug)
-                    return values, [], yvals, times, Profile_info['flag'], None
-            else:
-                WF.print2stdout('No value for flag y_convention', debug=self.Report.debug)
-                WF.print2stdout('Assuming depths...', debug=self.Report.debug)
-                return values, [], yvals, times, Profile_info['flag'], None
+                    values, elevations, depths, times = values, [], yvals, times
 
-        elif 'h5file' in Profile_info.keys() and 'ressimresname' in Profile_info.keys():
-            filename = Profile_info['h5file']
-            if not os.path.exists(filename):
-                WF.print2stdout('ERROR: H5 file does not exist:', filename, debug=self.Report.debug)
-                return [], [], [], [], Profile_info['flag']
-            externalResSim = WRSS.ResSim_Results('', '', '', '', self.Report, external=True)
-            externalResSim.openH5File(filename)
-            externalResSim.load_time() #load time vars from h5
-            externalResSim.loadSubdomains()
-            vals, elevations, depths, times = externalResSim.readProfileData(Profile_info['ressimresname'],
-                                                                             Profile_info['parameter'], timesteps)
-            return vals, elevations, depths, times, Profile_info['flag'], None
+            elif 'h5file' in Profile_info.keys() and 'ressimresname' in Profile_info.keys():
+                filename = Profile_info['h5file']
+                metadata['source'] = filename
+                if not os.path.exists(filename):
+                    WF.print2stdout('ERROR: H5 file does not exist:', filename, debug=self.Report.debug)
+                externalResSim = WRSS.ResSim_Results('', '', '', '', self.Report, external=True)
+                externalResSim.openH5File(filename)
+                externalResSim.load_time() #load time vars from h5
+                externalResSim.loadSubdomains()
+                values, elevations, depths, times = externalResSim.readProfileData(Profile_info['ressimresname'],
+                                                                                 Profile_info['parameter'], timesteps)
 
-        elif 'w2_segment' in Profile_info.keys():
-            if self.Report.plugin.lower() != 'cequalw2':
-                return [], [], [], [], None
-            if 'w2_file' in Profile_info.keys():
-                resultsfile = Profile_info['w2_file']
-            else:
-                resultsfile = None
-            vals, elevations, depths, times = self.Report.ModelAlt.readProfileData(Profile_info['w2_segment'], timesteps,
-                                                                                   resultsfile=resultsfile)
-            times = WT.JDateToDatetime(times, self.Report.startYear)
-            # if isinstance(timesteps, str):
-            #     vals, elevations = self.Report.Profiles.normalize2DElevations(vals, elevations)
-            return vals, elevations, depths, times, Profile_info['flag'], None
+            elif 'w2_segment' in Profile_info.keys():
+                if self.Report.plugin.lower() == 'cequalw2':
+                    if 'w2_file' in Profile_info.keys():
+                        resultsfile = Profile_info['w2_file']
+                    else:
+                        resultsfile = None
+                    metadata['source'] = resultsfile
+                    values, elevations, depths, times = self.Report.ModelAlt.readProfileData(Profile_info['w2_segment'], timesteps,
+                                                                                           resultsfile=resultsfile)
+                    times = WT.JDateToDatetime(times, self.Report.startYear)
+                    # if isinstance(timesteps, str):
+                    #     vals, elevations = self.Report.Profiles.normalize2DElevations(vals, elevations)
+                    # return vals, elevations, depths, times, metadata
 
-        elif 'ressimresname' in Profile_info.keys():
-            if self.Report.plugin.lower() != 'ressim':
-                return [], [], [], [], None
+            elif 'ressimresname' in Profile_info.keys():
+                if self.Report.plugin.lower() == 'ressim':
+                    metadata['source'] = Profile_info['ressimresname']
+                    values, elevations, depths, times = self.Report.ModelAlt.readProfileData(Profile_info['ressimresname'],
+                                                                                           Profile_info['parameter'], timesteps,
+                                                                                           )
 
-            vals, elevations, depths, times = self.Report.ModelAlt.readProfileData(Profile_info['ressimresname'],
-                                                                                   Profile_info['parameter'], timesteps,
-                                                                                   )
-            return vals, elevations, depths, times, Profile_info['flag'], None
+        self.Memory[datamemkey] = {'times': pickle.loads(pickle.dumps(times, -1)),
+                                   'values': pickle.loads(pickle.dumps(values, -1)),
+                                   'elevations': pickle.loads(pickle.dumps(elevations, -1)),
+                                   'depths': pickle.loads(pickle.dumps(depths, -1)),
+                                   'metadata': pickle.loads(pickle.dumps(metadata, -1))}
 
-        WF.print2stdout('No Data Defined for Profile', debug=self.Report.debug)
-        WF.print2stdout('Profile:', Profile_info, debug=self.Report.debug)
-        return [], [], [], [], None, None
+
+        if len(values) == 0:
+            WF.print2stdout('No Data Defined for Profile', debug=self.Report.debug)
+            WF.print2stdout('Profile:', Profile_info, debug=self.Report.debug)
+
+        return values, elevations, depths, times, metadata
+        # return [], [], [], [], metadata
 
     def getReservoirContourDataDictionary(self, settings):
         '''
@@ -838,7 +877,7 @@ class DataOrganizer(object):
                 if not self.Report.checkModelType(curreach):
                     continue
                 # object_settings['timestamps'] = 'all'
-                values, elevations, depths, dates, flag, units = self.getProfileValues(curreach, 'all')
+                values, elevations, depths, dates, metadata = self.getProfileValues(curreach, 'all')
                 topwater = self.getProfileTopWater(curreach, 'all')
                 if 'interval' in curreach.keys():
                     dates_change, values = WT.changeTimeSeriesInterval(dates, values, curreach,
@@ -866,20 +905,24 @@ class DataOrganizer(object):
                         WF.print2stdout('The new flag is {0}'.format(newflag), debug=self.Report.debug)
                     datamem_key = self.buildMemoryKey(datapath)
 
-                    if 'units' in datapath.keys():
-                        units = datapath['units']
-                    else:
-                        units = None
+                    # if 'units' in datapath.keys():
+                    #     units = datapath['units']
+                    # else:
+                    #     units = None
 
-                    data_settings[flag] = {'units': units,
+                    data_settings[flag] = {'logoutputfilename': datamem_key,
+                                           # 'units': units,
                                            'ID': ID,
-                                           'logoutputfilename': datamem_key}
+                                           }
 
                     data[flag] = {'values': values,
                                   'dates': dates,
                                   'elevations': elevations,
                                   'topwater': topwater,
                                   'ID': ID}
+
+                    data_settings[flag].update(metadata)
+                    data_settings[flag].update(curreach)
 
                     for key in datapath.keys():
                         if key not in data_settings[flag].keys():
@@ -971,7 +1014,8 @@ class DataOrganizer(object):
             values = pickle.loads(pickle.dumps(data[line]['values'], -1))
             depths = pickle.loads(pickle.dumps(data[line]['depths'], -1))
             elevations = pickle.loads(pickle.dumps(data[line]['elevations'], -1))
-            subset = pickle.loads(pickle.dumps(line_settings[line]['subset'], -1))
+            metadata = pickle.loads(pickle.dumps(line_settings[line]['metadata'], -1))
+            metadata['isprofile'] = True
             datamem_key = line_settings[line]['logoutputfilename']
             if datamem_key not in self.Memory.keys():
                 write = True
@@ -981,13 +1025,11 @@ class DataOrganizer(object):
 
             if write:
                 self.Memory[datamem_key] = {'times': object_settings['timestamps'],
-                                             'values': values,
-                                             'elevations': elevations,
-                                             'depths': depths,
-                                             'units': object_settings['plot_units'],
-                                             'isprofile': True,
-                                             'subset': subset
-                                             }
+                                            'values': values,
+                                            'elevations': elevations,
+                                            'depths': depths,
+                                            'metadata': metadata
+                                            }
 
     #################################################################
     #Table Functions
@@ -1168,52 +1210,48 @@ class DataOrganizer(object):
         :return: times, values, units distance. All objects are 1D/2D arrays
         '''
 
-        if 'ressimresname' in settings.keys(): #Ressim subdomain
-            datamem_key = self.buildMemoryKey(settings)
-            if datamem_key in self.Memory.keys():
-                WF.print2stdout('READING {0} FROM MEMORY'.format(datamem_key), debug=self.Report.debug)
-                datamem_entry = pickle.loads(pickle.dumps(self.Memory[datamem_key], -1))
-                times = datamem_entry['dates']
-                values = datamem_entry['values']
-                units = datamem_entry['units']
-                distance = datamem_entry['distance']
+        metadata = {'iscontour': True,
+                    'units': None,
+                    'frommemory': False,
+                    'interval': None}
 
-            else:
+        datamem_key = self.buildMemoryKey(settings)
+        values, distance, times = [], [], []
+
+        if datamem_key in self.Memory.keys():
+            WF.print2stdout('READING {0} FROM MEMORY'.format(datamem_key), debug=self.Report.debug)
+            datamem_entry = pickle.loads(pickle.dumps(self.Memory[datamem_key], -1))
+            times = datamem_entry['dates']
+            values = datamem_entry['values']
+            metadata = datamem_entry['metadata']
+            distance = datamem_entry['distance']
+            if 'interval' in settings.keys():
+                if settings['interval'].lower() != metadata['interval']:
+                    WF.print2stdout('incorrect interval in memory. Re-extracting..', debug=self.Report.debug)
+                    metadata['frommemory'] = False
+
+
+        if not metadata['frommemory']:
+            if 'ressimresname' in settings.keys(): #Ressim subdomain
                 checkdomain = self.Report.ModelAlt.checkSubdomain(settings['ressimresname'])
                 if not checkdomain:
-                    return [], [], [], []
+                    return [], [], [], metadata
                 times, values, distance = self.Report.ModelAlt.readSubdomain(settings['parameter'],
-                                                                      settings['ressimresname'])
-
-                if 'units' in settings.keys():
-                    units = settings['units']
-                else:
-                    units = None
-
-                self.Memory[datamem_key] = {'dates': pickle.loads(pickle.dumps(times, -1)),
-                                                 'values': pickle.loads(pickle.dumps(values, -1)),
-                                                 'units': pickle.loads(pickle.dumps(units, -1)),
-                                                 'distance': pickle.loads(pickle.dumps(distance, -1)),
-                                                 'iscontour': True}
-
+                                                                             settings['ressimresname'])
         elif 'w2_file' in settings.keys():
-            datamem_key = self.buildMemoryKey(settings)
-            if datamem_key in self.Memory.keys():
-                WF.print2stdout('READING {0} FROM MEMORY'.format(datamem_key), debug=self.Report.debug)
-                datamementry = pickle.loads(pickle.dumps(self.Memory[datamem_key], -1))
-                times = datamementry['dates']
-                values = datamementry['values']
-                units = datamementry['units']
-                distance = datamementry['distance']
-            else:
-                times, values, distance = self.Report.ModelAlt.readSegment(settings['w2_file'],
-                                                                    settings['parameter'])
+            times, values, distance = self.Report.ModelAlt.readSegment(settings['w2_file'],
+                                                                       settings['parameter'])
 
         if 'interval' in settings.keys():
             times, values = WT.changeTimeSeriesInterval(times, values, settings, self.Report.ModelAlt.t_offset,
                                                          self.Report.startYear)
 
-        return times, values, units, distance
+        self.Memory[datamem_key] = {'dates': pickle.loads(pickle.dumps(times, -1)),
+                                    'values': pickle.loads(pickle.dumps(values, -1)),
+                                    'distance': pickle.loads(pickle.dumps(distance, -1)),
+                                    'metadata': pickle.loads(pickle.dumps(metadata, -1))}
+
+        return times, values, distance, metadata
 
     def getContourDataDictionary(self, settings):
         '''
@@ -1230,7 +1268,7 @@ class DataOrganizer(object):
                 curreach = self.Report.configureSettingsForID(ID, curreach)
                 if not self.Report.checkModelType(curreach):
                     continue
-                dates, values, units, distance = self.getContours(curreach)
+                dates, values, distance, metadata = self.getContours(curreach)
                 if WF.checkData(values):
                     if 'flag' in reach.keys():
                         flag = reach['flag']
@@ -1249,15 +1287,11 @@ class DataOrganizer(object):
                         WF.print2stdout('The new flag is {0}'.format(newflag), debug=self.Report.debug)
                     datamem_key = self.buildMemoryKey(reach)
 
-                    if 'units' in reach.keys() and units == None:
-                        units = reach['units']
-
                     if 'y_scalar' in settings.keys():
                         y_scalar = float(settings['y_scalar'])
                         distance *= y_scalar
 
-                    data_settings[flag] = {'units': units,
-                                           'distance': distance,
+                    data_settings[flag] = {'distance': distance,
                                            'ID': ID,
                                            'logoutputfilename': datamem_key}
 
@@ -1265,9 +1299,9 @@ class DataOrganizer(object):
                                   'dates': dates,
                                   'ID': ID}
 
-                    for key in reach.keys():
-                        if key not in data_settings[flag].keys():
-                            data_settings[flag][key] = reach[key]
+                    data_settings[flag].update(metadata)
+                    data_settings[flag].update(reach)
+
         #reset
         self.Report.loadCurrentID(self.Report.base_id)
         self.Report.loadCurrentModelAltID(self.Report.base_id)
@@ -1359,8 +1393,10 @@ class DataOrganizer(object):
             cleankey = WF.cleanFileName(key)
             csv_name = os.path.join(self.Report.CSVPath, '{0}.csv'.format(cleankey))
             try:
-                if 'isprofile' in self.Memory[key].keys():
-                    if self.Memory[key]['isprofile'] == True:
+                metadata = self.Memory[key]['metadata']
+                if 'isprofile' in metadata:
+                    # if self.Memory[key]['isprofile'] == True:
+                    if metadata['isprofile'] == True:
                         alltimes = self.Memory[key]['times']
                         allvalues = self.Memory[key]['values']
                         alltimes = WF.matcharrays(alltimes, allvalues)
@@ -1368,8 +1404,7 @@ class DataOrganizer(object):
                         alldepths = self.Memory[key]['depths']
                         if len(allelevs) == 0: #elevations may not always fall out
                             allelevs = WF.matcharrays(allelevs, alldepths)
-                        metatdata = self.Memory[key]['metadata']
-                        units = metatdata['units']
+                        units = metadata['units']
                         values = WF.getListItems(allvalues)
                         times = WF.getListItems(alltimes)
                         elevs = WF.getListItems(allelevs)
@@ -1385,7 +1420,7 @@ class DataOrganizer(object):
                                 colvals[key] = elevs[key]
                                 colvals[key] = depths[key]
                             df = pd.DataFrame(colvals)
-                elif 'iscontour' in self.Memory[key].keys():
+                elif 'iscontour' in metadata.keys():
                     continue #were not doing this for now, takes ~ 5 seconds per 3yr reach..
 
                     # if self.Data.Memory[key]['iscontour'] == True:
@@ -1403,8 +1438,8 @@ class DataOrganizer(object):
 
                     allvalues = self.Memory[key]['values']
                     alltimes = self.Memory[key]['times']
-                    metatdata = self.Memory[key]['metadata']
-                    units = metatdata['units']
+                    # metadata = self.Memory[key]['metadata']
+                    units = metadata['units']
                     times = WF.getListItems(alltimes)
                     if isinstance(allvalues, (list, np.ndarray)):
                         multidimensional = False

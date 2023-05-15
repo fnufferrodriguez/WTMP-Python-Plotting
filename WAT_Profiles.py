@@ -651,6 +651,8 @@ class Profiles(object):
             if 'snapto0depth' in line_settings[key].keys():
                 if line_settings[key]['snapto0depth'].lower() == 'true':
                     for dsi, depthset in enumerate(data[key]['depths']):
+                        if len(depthset) == 0:
+                            continue
                         if 0.0 not in depthset:
                             distance_from_wse = min(depthset)
                             min_depth_i = np.where(depthset == distance_from_wse)
