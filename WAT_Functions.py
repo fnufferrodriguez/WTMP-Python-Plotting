@@ -1712,6 +1712,15 @@ def formatUnitsStrings(units, format='internal'):
         output = units
     return output
 
+def formatTextFlags(text):
+    flags = {"\\n": "\n"
+             # "\\t": "\t", #replaces with square for laTex reasons
+             # "\\r": "\r", #replaces with square for laTex reasons
+             }
+    for key, fixed in flags.items():
+        text = text.replace(key, fixed)
+    return text
+
 def formatIterations(iteration):
     '''
     format iterations to have DSS notation of 6 characters with leading 0's

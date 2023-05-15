@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '5.4.23'
+VERSIONNUMBER = '5.4.24'
 
 import os
 import sys
@@ -368,6 +368,8 @@ class MakeAutomatedReport(object):
 
                     if 'label' not in line_draw_settings.keys():
                         line_draw_settings['label'] = ''
+                    else:
+                        line_draw_settings['label'] = WF.formatTextFlags(line_draw_settings['label'])
 
                     curax = ax
                     axis2 = False
@@ -476,9 +478,11 @@ class MakeAutomatedReport(object):
                         # gate_placement += ggi*gatespacing
                         gate_count = 0 #keep track of gate number in group
                         if 'label' in gate_settings[gateop]:
-                            gategroup_labels.append(gate_settings[gateop]['label'].replace('\\n', '\n'))
+                            gategroup_label = WF.formatTextFlags(gate_settings[gateop]['label'])
+                            gategroup_labels.append(gategroup_label)
                         elif 'flag' in gate_settings[gateop]:
-                            gategroup_labels.append(gate_settings[gateop]['flag'].replace('\\n', '\n'))
+                            gategroup_flag = WF.formatTextFlags(gate_settings[gateop]['flag'])
+                            gategroup_labels.append(gategroup_flag)
                         else:
                             gategroup_labels.append(gateop)
 
@@ -605,7 +609,8 @@ class MakeAutomatedReport(object):
                             titlesize = float(ax_settings['fontsize'])
                         else:
                             titlesize = 15
-                        ax.set_title(ax_settings['title'], fontsize=titlesize, wrap=True)
+                        title = WF.formatTextFlags(ax_settings['title'])
+                        ax.set_title(title, fontsize=titlesize, wrap=True)
 
                 if 'gridlines' in ax_settings.keys():
                     if ax_settings['gridlines'].lower() == 'true':
@@ -618,7 +623,8 @@ class MakeAutomatedReport(object):
                         ylabsize = float(ax_settings['fontsize'])
                     else:
                         ylabsize = 12
-                    ax.set_ylabel(ax_settings['ylabel'].replace("\\n", "\n"), fontsize=ylabsize)
+                    ylabel = WF.formatTextFlags(ax_settings['ylabel'])
+                    ax.set_ylabel(ylabel, fontsize=ylabsize)
 
                 if 'xlabel' in ax_settings.keys():
                     if 'xlabelsize' in ax_settings.keys():
@@ -627,7 +633,8 @@ class MakeAutomatedReport(object):
                         xlabsize = float(ax_settings['fontsize'])
                     else:
                         xlabsize = 12
-                    ax.set_xlabel(ax_settings['xlabel'].replace("\\n", "\n"), fontsize=xlabsize)
+                    xlabel = WF.formatTextFlags(ax_settings['xlabel'])
+                    ax.set_xlabel(xlabel, fontsize=xlabsize)
 
                 if 'legend' in ax_settings.keys():
                     if ax_settings['legend'].lower() == 'true':
@@ -745,7 +752,8 @@ class MakeAutomatedReport(object):
                             ylabsize2 = float(ax_settings['fontsize'])
                         else:
                             ylabsize2 = 12
-                        ax2.set_ylabel(ax_settings['ylabel2'].replace("\\n", "\n"), fontsize=ylabsize2)
+                        ylabel2 = WF.formatTextFlags(ax_settings['ylabel2'])
+                        ax2.set_ylabel(ylabel2, fontsize=ylabsize2)
 
                     copied_ticks = False
                     if 'sameyticks' in ax_settings:
@@ -1181,7 +1189,8 @@ class MakeAutomatedReport(object):
                                 ylabsize = float(object_settings['fontsize'])
                             else:
                                 ylabsize = 12
-                            ax.set_ylabel(cur_obj_settings['ylabel'], fontsize=ylabsize)
+                            ylabel = WF.formatTextFlags(cur_obj_settings['ylabel'])
+                            ax.set_ylabel(ylabel, fontsize=ylabsize)
 
                     if show_xlabel:
                         if 'xlabel' in cur_obj_settings.keys():
@@ -1195,7 +1204,8 @@ class MakeAutomatedReport(object):
                                 labelpad = 12
                             else:
                                 labelpad = 0
-                            ax.set_xlabel(cur_obj_settings['xlabel'], fontsize=xlabsize, labelpad=labelpad)
+                            xlabel = WF.formatTextFlags(cur_obj_settings['xlabel'])
+                            ax.set_xlabel(xlabel, fontsize=xlabsize, labelpad=labelpad)
 
                     show_xticks = True
                     if 'xlims' in object_settings.keys() and not show_xlabel:
@@ -2385,6 +2395,8 @@ class MakeAutomatedReport(object):
 
                 if 'label' not in contour_plot_settings.keys():
                     contour_plot_settings['label'] = ''
+                else:
+                    contour_plot_settings['label'] = WF.formatTextFlags(contour_plot_settings['label'])
 
                 if 'description' not in contour_plot_settings.keys():
                     contour_plot_settings['description'] = ''
@@ -2440,9 +2452,9 @@ class MakeAutomatedReport(object):
                         if 'show_in_legend' in contourline.keys():
                             if contourline['show_in_legend'].lower() == 'true':
                                 if 'label' in contourline.keys():
-                                    label = contourline['label']
+                                    label = WF.formatTextFlags(contourline['label'])
                                 else:
-                                    label = str(val)
+                                    label = WF.formatTextFlags(str(val))
                                 cl_leg = ax.plot([], [], c=contourline['linecolor'], ls=contourline['linestylepattern'],
                                                  alpha=float(contourline['alpha']), lw=float(contourline['linewidth']),
                                                  label=label)
@@ -2472,7 +2484,8 @@ class MakeAutomatedReport(object):
                         ylabsize = float(contour_plot_settings['fontsize'])
                     else:
                         ylabsize = 12
-                    ax.set_ylabel(contour_plot_settings['ylabel'], fontsize=ylabsize)
+                    ylabel = WF.formatTextFlags(contour_plot_settings['ylabel'])
+                    ax.set_ylabel(ylabel, fontsize=ylabsize)
 
 
                 xmin, xmax = ax.get_xlim()
@@ -2536,7 +2549,8 @@ class MakeAutomatedReport(object):
                     titlesize = float(object_settings['fontsize'])
                 else:
                     titlesize = 15
-                axes[0].set_title(cur_obj_settings['title'], fontsize=titlesize, wrap=True)
+                title = WF.formatTextFlags(cur_obj_settings['title'])
+                axes[0].set_title(title, fontsize=titlesize, wrap=True)
 
             if 'xlabel' in cur_obj_settings.keys():
                 if 'xlabelsize' in cur_obj_settings.keys():
@@ -2545,7 +2559,8 @@ class MakeAutomatedReport(object):
                     xlabsize = float(cur_obj_settings['fontsize'])
                 else:
                     xlabsize = 12
-                axes[-1].set_xlabel(cur_obj_settings['xlabel'], fontsize=xlabsize)
+                xlabel = WF.formatTextFlags(cur_obj_settings['xlabel'])
+                axes[-1].set_xlabel(xlabel, fontsize=xlabsize)
 
             useplot = self.Plots.formatDateXAxis(axes[-1], cur_obj_settings)
             if not useplot:
@@ -2580,7 +2595,8 @@ class MakeAutomatedReport(object):
                     labsize = float(cur_obj_settings['colorbar']['fontsize'])
                 else:
                     labsize = 12
-                cbar.set_label(contour_plot_settings['colorbar']['label'], fontsize=labsize)
+                cbar_label = WF.formatTextFlags(contour_plot_settings['colorbar']['label'])
+                cbar.set_label(cbar_label, fontsize=labsize)
 
             plt.tight_layout()
             plt.subplots_adjust(hspace=0.05)
@@ -2745,6 +2761,8 @@ class MakeAutomatedReport(object):
 
                 if 'label' not in contour_plot_settings.keys():
                     contour_plot_settings['label'] = ''
+                else:
+                    contour_plot_settings['label'] = WF.formatTextFlags(contour_plot_settings['label'])
 
                 if 'description' not in contour_plot_settings.keys():
                     contour_plot_settings['description'] = ''
@@ -2803,7 +2821,7 @@ class MakeAutomatedReport(object):
                                 if 'label' in contourline.keys():
                                     label = contourline['label']
                                 else:
-                                    label = str(val)
+                                    label = WF.formatTextFlags(str(val))
                                 cl_leg = ax.plot([], [], c=contourline['linecolor'], ls=contourline['linestylepattern'],
                                                  alpha=float(contourline['alpha']), lw=float(contourline['linewidth']),
                                                  label=label)
@@ -2834,7 +2852,8 @@ class MakeAutomatedReport(object):
                         ylabsize = float(contour_plot_settings['fontsize'])
                     else:
                         ylabsize = 12
-                    ax.set_ylabel(contour_plot_settings['ylabel'], fontsize=ylabsize)
+                    ylabel = WF.formatTextFlags(contour_plot_settings['ylabel'])
+                    ax.set_ylabel(ylabel, fontsize=ylabsize)
 
                 ############# xticks and lims #############
 
@@ -2871,7 +2890,8 @@ class MakeAutomatedReport(object):
                     titlesize = float(object_settings['fontsize'])
                 else:
                     titlesize = 15
-                axes[0].set_title(cur_obj_settings['title'], fontsize=titlesize, wrap=True)
+                title = WF.formatTextFlags(cur_obj_settings['title'])
+                axes[0].set_title(title, fontsize=titlesize, wrap=True)
 
             if 'xlabel' in cur_obj_settings.keys():
                 if 'xlabelsize' in cur_obj_settings.keys():
@@ -2880,7 +2900,8 @@ class MakeAutomatedReport(object):
                     xlabsize = float(cur_obj_settings['fontsize'])
                 else:
                     xlabsize = 12
-                axes[-1].set_xlabel(cur_obj_settings['xlabel'], fontsize=xlabsize)
+                xlabel = WF.formatTextFlags(cur_obj_settings['xlabel'])
+                axes[-1].set_xlabel(xlabel, fontsize=xlabsize)
 
             useplot = self.Plots.formatDateXAxis(axes[-1], cur_obj_settings)
             if not useplot:
@@ -2915,7 +2936,8 @@ class MakeAutomatedReport(object):
                     labsize = float(cur_obj_settings['colorbar']['fontsize'])
                 else:
                     labsize = 12
-                cbar.set_label(contour_plot_settings['colorbar']['label'], fontsize=labsize)
+                cbar_label = WF.formatTextFlags(contour_plot_settings['colorbar']['label'])
+                cbar.set_label(cbar_label, fontsize=labsize)
 
             plt.tight_layout()
             plt.subplots_adjust(hspace=0.05)
