@@ -322,7 +322,7 @@ class W2_Results(object):
                     select_times.append(time)
 
             select_values, select_elevations, select_depths = self.matchProfileLengths(select_values, select_elevations, select_depths)
-            return select_values, select_elevations, select_depths, unique_dates,
+            return select_values, select_elevations, select_depths, select_times,
         else:
             return values, elevations, depths, unique_dates
 

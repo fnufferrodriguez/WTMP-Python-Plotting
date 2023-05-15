@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '5.4.24'
+VERSIONNUMBER = '5.4.25'
 
 import os
 import sys
@@ -880,7 +880,7 @@ class MakeAutomatedReport(object):
 
         table_blueprint = WF.updateFlaggedValues(table_blueprint, '%%units%%', WF.formatUnitsStrings(object_settings['plot_units'], format='external'))
 
-        self.Data.commitProfileDataToMemory(data, line_settings, object_settings)
+        # self.Data.commitProfileDataToMemory(data, line_settings, object_settings)
 
         object_settings['usedepth'] = self.Profiles.confirmValidDepths(data)
         if object_settings['usedepth']:
@@ -1087,7 +1087,7 @@ class MakeAutomatedReport(object):
             wse_data = self.Data.getProfileWSE(object_settings)
             data, object_settings = self.Profiles.convertElevationsToDepths(data, object_settings, wse_data=wse_data)
 
-        self.Data.commitProfileDataToMemory(data, line_settings, object_settings)
+        # self.Data.commitProfileDataToMemory(data, line_settings, object_settings)
         linedata, object_settings = self.Profiles.filterProfileData(data, line_settings, object_settings)
 
         object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = WF.getObjectYears(self, object_settings, allowIncludeAllYears=False)
@@ -2101,7 +2101,7 @@ class MakeAutomatedReport(object):
 
         object_settings = WF.updateFlaggedValues(object_settings, '%%units%%', WF.formatUnitsStrings(object_settings['plot_units'], format='external'))
 
-        self.Data.commitProfileDataToMemory(data, line_settings, object_settings)
+        # self.Data.commitProfileDataToMemory(data, line_settings, object_settings)
 
         object_settings['usedepth'] = self.Profiles.confirmValidDepths(data)
         if object_settings['usedepth']:
