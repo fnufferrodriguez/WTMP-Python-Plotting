@@ -699,13 +699,30 @@ class Tables(object):
         '''
 
         thresholds = []
-        if 'tablecolors' in object_settings.keys():
-            for tablecolor in object_settings['tablecolors']:
-                if 'statistic' in tablecolor.keys():
-                    if stat.lower() == tablecolor['statistic'].lower():
-                        thresholds += self.formatThreshold(tablecolor)
-                else:
-                    thresholds += self.formatThreshold(tablecolor)
+        if 'tablecolors' in object_settings.keys() or 'thresholds' in object_settings.keys():
+            if 'tablecolors' in object_settings.keys():
+                WF.print2stdout('The flag "tablecolors" is deprecated as of 5.4.26. Please use "thresholds" instead, '
+                                'including the specified "statistic" flag within the <threshold> object.')
+                modflag = 'tablecolors'
+            else:
+                modflag = 'thresholds'
+            for threshold in object_settings[modflag]:
+                if 'statistic' in threshold.keys():
+                    if stat.lower() == threshold['statistic'].lower():
+                        if modflag == 'tablecolors':
+                            thresholds += self.formatThreshold_deprec(threshold)
+                        else:
+                            thf = self.formatThreshold(threshold)
+                            if len(thf.keys()) > 0:
+                                thresholds.append(thf)
+                else: #no stat specified, generic and applies to all
+                    if modflag == 'tablecolors':
+                        thresholds += self.formatThreshold_deprec(threshold)
+                    else:
+                        thf = self.formatThreshold(threshold)
+                        if len(thf.keys()) > 0:
+                            thresholds.append(thf)
+
         return thresholds
 
     def matchNumberFormatByStat(self, stat, settings):
@@ -736,44 +753,127 @@ class Tables(object):
         else:
             return numberFormats_default
 
-    def formatThreshold(self, object_settings):
+    def formatThreshold_deprec(self, object_settings):
         '''
+        DEPRECATED AS OF 5.4.26
         organizes settings for thresholds for stat tables. Fills in missing values with defaults
         :param object_settings: dictionary containing settings for thresholds
         :return: list of dictionary objects for each threshold
         '''
 
         default_color = '#a6a6a6' #default, grey
-        default_colorwhen = 'under' #default
+        default_when = 'under' #default
         accepted_threshold_conditions = ['under', 'over']
         thresholds = []
 
         if 'thresholds' in object_settings.keys():
             for threshold in object_settings['thresholds']:
+                threshold_settings = {}
 
                 if 'value' in threshold.keys():
-                    threshold_value = float(threshold['value'])
+                    threshold_settings['value'] = float(threshold['value'])
                 else:
                     continue #dont record this threshold
 
                 if 'color' in threshold.keys():
-                    threshold_color = self.formatThresholdColor(threshold['color'], default=default_color)
+                    threshold_settings['color'] = self.formatThresholdColor(threshold['color'], default=default_color)
                 else:
-                    threshold_color = default_color
+                    threshold_settings['color'] = default_color
 
                 if 'colorwhen' in threshold.keys():
                     if any([n.lower() == threshold['colorwhen'].lower() for n in accepted_threshold_conditions]):
-                        threshold_colorwhen = threshold['colorwhen'].lower()
+                        threshold_settings['colorwhen'] = threshold['colorwhen'].lower()
                     else:
                         WF.print2stdout(f"Invalid threshold setting {threshold['colorwhen']}", debug=self.Report.debug)
                         WF.print2stdout(f'Please select value in {accepted_threshold_conditions}', debug=self.Report.debug)
-                        threshold_colorwhen = default_colorwhen
+                        WF.print2stdout(f'Setting to default, {default_when}', debug=self.Report.debug)
+                        threshold_settings['colorwhen'] = default_when
                 else:
-                    threshold_colorwhen = default_colorwhen
+                    threshold_settings['colorwhen'] = default_when
 
-                thresholds.append({'value': threshold_value, 'color': threshold_color, 'colorwhen': threshold_colorwhen})
+                if 'when' in threshold.keys():
+                    if any([n.lower() == threshold['when'].lower() for n in accepted_threshold_conditions]):
+                        threshold_settings['when'] = threshold['when'].lower()
+                    else:
+                        WF.print2stdout(f"Invalid threshold setting {threshold['colorwhen']}", debug=self.Report.debug)
+                        WF.print2stdout(f'Please select value in {accepted_threshold_conditions}', debug=self.Report.debug)
+                        WF.print2stdout(f'Setting to default, {default_when}', debug=self.Report.debug)
+                        threshold_settings['when'] = default_when
+                else:
+                    threshold_settings['when'] = default_when
+
+                if 'replacement' in threshold.keys():
+                    threshold_settings['replacement'] = str(threshold['replacement'])
+
+                thresholds.append(threshold_settings)
 
         return thresholds
+
+    def getThresholdsfromSettings(self, object_settings):
+        '''
+        loops over thresholds from object settings and formats them
+        :param object_settings: dictionary of settings for object
+        :return: list of formatted thresholds
+        '''
+
+        thresholds = []
+        if 'thresholds' in object_settings.keys():
+            for threshold in object_settings['thresholds']:
+                thf = self.formatThreshold(threshold)
+                if len(thf.keys()) > 0:
+                    thresholds.append(thf)
+        return thresholds
+
+    def formatThreshold(self, threshold):
+        '''
+        organizes settings for threshold for stat tables. Fills in missing values with defaults
+        :param threshold: dictionary containing settings for potential threshold
+        :return: list of dictionary objects for each threshold
+        '''
+
+        default_color = '#a6a6a6' #default, grey
+        default_when = 'under' #default
+        accepted_threshold_conditions = ['under', 'over']
+        # thresholds = []
+
+        threshold_settings = {}
+
+        if 'value' in threshold.keys():
+            threshold_settings['value'] = float(threshold['value'])
+        else:
+            return {} #dont record this threshold
+
+        if 'color' in threshold.keys():
+            threshold_settings['color'] = self.formatThresholdColor(threshold['color'], default=default_color)
+        else:
+            threshold_settings['color'] = default_color
+
+        if 'colorwhen' in threshold.keys():
+            if any([n.lower() == threshold['colorwhen'].lower() for n in accepted_threshold_conditions]):
+                threshold_settings['colorwhen'] = threshold['colorwhen'].lower()
+            else:
+                WF.print2stdout(f"Invalid threshold setting {threshold['colorwhen']}", debug=self.Report.debug)
+                WF.print2stdout(f'Please select value in {accepted_threshold_conditions}', debug=self.Report.debug)
+                WF.print2stdout(f'Setting to default, {default_when}', debug=self.Report.debug)
+                threshold_settings['colorwhen'] = default_when
+        else:
+            threshold_settings['colorwhen'] = default_when
+
+        if 'when' in threshold.keys():
+            if any([n.lower() == threshold['when'].lower() for n in accepted_threshold_conditions]):
+                threshold_settings['when'] = threshold['when'].lower()
+            else:
+                WF.print2stdout(f"Invalid threshold setting {threshold['colorwhen']}", debug=self.Report.debug)
+                WF.print2stdout(f'Please select value in {accepted_threshold_conditions}', debug=self.Report.debug)
+                WF.print2stdout(f'Setting to default, {default_when}', debug=self.Report.debug)
+                threshold_settings['when'] = default_when
+        else:
+            threshold_settings['when'] = default_when
+
+        if 'replacement' in threshold.keys():
+            threshold_settings['replacement'] = str(threshold['replacement'])
+
+        return threshold_settings
 
     def formatThresholdColor(self, in_color, default='#a6a6a6'):
         '''

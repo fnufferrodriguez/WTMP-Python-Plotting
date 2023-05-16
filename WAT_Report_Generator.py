@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '5.4.25'
+VERSIONNUMBER = '5.4.26'
 
 import os
 import sys
@@ -932,18 +932,25 @@ class MakeAutomatedReport(object):
                                 thresholdsettings = self.Tables.matchThresholdToStat(stat, object_settings)
 
                                 for thresh in thresholdsettings:
-                                    if thresh['colorwhen'] == 'under':
-                                        if row_val < thresh['value']:
+                                    if row_val < thresh['value']:
+                                        if 'colorwhen' in thresh.keys():
+                                            if thresh['colorwhen'] == 'under':
+                                                threshold_colors[ri] = thresh['color']
+                                                if 'addasterisk' in object_settings.keys():
+                                                    if object_settings['addasterisk'].lower() == 'true':
+                                                        addasterisk = True
+                                            if thresh['when'] == 'under':
+                                                if 'replacement' in thresh.keys():
+                                                    row_val = thresh['replacement']
+                                    elif row_val > thresh['value']:
+                                        if thresh['colorwhen'] == 'over':
                                             threshold_colors[ri] = thresh['color']
                                             if 'addasterisk' in object_settings.keys():
                                                 if object_settings['addasterisk'].lower() == 'true':
                                                     addasterisk = True
-                                    elif thresh['colorwhen'] == 'over':
-                                        if row_val > thresh['value']:
-                                            threshold_colors[ri] = thresh['color']
-                                            if 'addasterisk' in object_settings.keys():
-                                                if object_settings['addasterisk'].lower() == 'true':
-                                                    addasterisk = True
+                                        if thresh['when'] == 'over':
+                                            if 'replacement' in thresh.keys():
+                                                row_val = thresh['replacement']
 
                             else:
                                 if np.isnan(row_val):
@@ -1601,18 +1608,25 @@ class MakeAutomatedReport(object):
                             if not np.isnan(row_val) and row_val != None:
                                 thresholdsettings = self.Tables.matchThresholdToStat(stat, object_settings)
                                 for thresh in thresholdsettings:
-                                    if thresh['colorwhen'] == 'under':
-                                        if row_val < thresh['value']:
+                                    if row_val < thresh['value']:
+                                        if 'colorwhen' in thresh.keys():
+                                            if thresh['colorwhen'] == 'under':
+                                                threshold_colors[ri] = thresh['color']
+                                                if 'addasterisk' in object_settings.keys():
+                                                    if object_settings['addasterisk'].lower() == 'true':
+                                                        addasterisk = True
+                                            if thresh['when'] == 'under':
+                                                if 'replacement' in thresh.keys():
+                                                    row_val = thresh['replacement']
+                                    elif row_val > thresh['value']:
+                                        if thresh['colorwhen'] == 'over':
                                             threshold_colors[ri] = thresh['color']
                                             if 'addasterisk' in object_settings.keys():
                                                 if object_settings['addasterisk'].lower() == 'true':
                                                     addasterisk = True
-                                    elif thresh['colorwhen'] == 'over':
-                                        if row_val > thresh['value']:
-                                            threshold_colors[ri] = thresh['color']
-                                            if 'addasterisk' in object_settings.keys():
-                                                if object_settings['addasterisk'].lower() == 'true':
-                                                    addasterisk = True
+                                        if thresh['when'] == 'over':
+                                            if 'replacement' in thresh.keys():
+                                                row_val = thresh['replacement']
 
                             else:
                                 if 'missingmarker' in object_settings.keys():
@@ -1737,7 +1751,7 @@ class MakeAutomatedReport(object):
         object_settings['plot_units'] = WF.getPlotUnits(object_settings['units_list'], object_settings)
         object_settings = WF.updateFlaggedValues(object_settings, '%%units%%', WF.formatUnitsStrings(object_settings['plot_units'], format='external'))
 
-        thresholds = self.Tables.formatThreshold(object_settings)
+        thresholds = self.Tables.getThresholdsfromSettings(object_settings)
 
         if 'description' in object_settings.keys():
             desc = object_settings['description']
@@ -1775,18 +1789,26 @@ class MakeAutomatedReport(object):
                             row_val, stat = self.Tables.getStatsLine(row_val, rowdata)
                             if not np.isnan(row_val) and row_val != None:
                                 for thresh in thresholds:
-                                    if thresh['colorwhen'] == 'under':
-                                        if row_val < thresh['value']:
+                                    if row_val < thresh['value']:
+                                        if 'colorwhen' in thresh.keys():
+                                            if thresh['colorwhen'] == 'under':
+                                                threshold_colors[ri] = thresh['color']
+                                                if 'addasterisk' in object_settings.keys():
+                                                    if object_settings['addasterisk'].lower() == 'true':
+                                                        addasterisk = True
+                                            if thresh['when'] == 'under':
+                                                if 'replacement' in thresh.keys():
+                                                    row_val = thresh['replacement']
+                                    elif row_val > thresh['value']:
+                                        if thresh['colorwhen'] == 'over':
                                             threshold_colors[ri] = thresh['color']
                                             if 'addasterisk' in object_settings.keys():
                                                 if object_settings['addasterisk'].lower() == 'true':
                                                     addasterisk = True
-                                    elif thresh['colorwhen'] == 'over':
-                                        if row_val > thresh['value']:
-                                            threshold_colors[ri] = thresh['color']
-                                            if 'addasterisk' in object_settings.keys():
-                                                if object_settings['addasterisk'].lower() == 'true':
-                                                    addasterisk = True
+                                        if thresh['when'] == 'over':
+                                            if 'replacement' in thresh.keys():
+                                                row_val = thresh['replacement']
+
                             else:
                                 if 'missingmarker' in object_settings.keys():
                                     row_val = object_settings['missingmarker']
@@ -1898,8 +1920,6 @@ class MakeAutomatedReport(object):
 
         data = self.Data.filterTimeSeries(data, data_settings)
 
-
-
         data = self.Tables.filterTableData(data, object_settings)
         data, data_settings = self.Tables.correctTableUnits(data, data_settings, object_settings)
         object_settings['units_list'] = WF.getUnitsList(data_settings)
@@ -1908,7 +1928,7 @@ class MakeAutomatedReport(object):
 
         object_settings = self.Tables.replaceComparisonSettings(object_settings, self.iscomp)
 
-        thresholds = self.Tables.formatThreshold(object_settings)
+        thresholds = self.Tables.getThresholdsfromSettings(object_settings)
 
         object_settings_blueprint = pickle.loads(pickle.dumps(object_settings, -1))
 
@@ -1962,18 +1982,25 @@ class MakeAutomatedReport(object):
                                     row_val = '-'
                             else:
                                 for thresh in thresholds:
-                                    if thresh['colorwhen'] == 'under':
-                                        if row_val < thresh['value']:
+                                    if row_val < thresh['value']:
+                                        if 'colorwhen' in thresh.keys():
+                                            if thresh['colorwhen'] == 'under':
+                                                threshold_colors[ri] = thresh['color']
+                                                if 'addasterisk' in object_settings.keys():
+                                                    if object_settings['addasterisk'].lower() == 'true':
+                                                        addasterisk = True
+                                            if thresh['when'] == 'under':
+                                                if 'replacement' in thresh.keys():
+                                                    row_val = thresh['replacement']
+                                    elif row_val > thresh['value']:
+                                        if thresh['colorwhen'] == 'over':
                                             threshold_colors[ri] = thresh['color']
                                             if 'addasterisk' in object_settings.keys():
                                                 if object_settings['addasterisk'].lower() == 'true':
                                                     addasterisk = True
-                                    elif thresh['colorwhen'] == 'over':
-                                        if row_val > thresh['value']:
-                                            threshold_colors[ri] = thresh['color']
-                                            if 'addasterisk' in object_settings.keys():
-                                                if object_settings['addasterisk'].lower() == 'true':
-                                                    addasterisk = True
+                                        if thresh['when'] == 'over':
+                                            if 'replacement' in thresh.keys():
+                                                row_val = thresh['replacement']
 
                             data_start_date, data_end_date = self.Tables.getTableDates(year, object_settings_blueprint, month=sr_month)
                             self.WAT_log.addLogEntry({'type': 'Statistic',
@@ -2111,7 +2138,7 @@ class MakeAutomatedReport(object):
 
         object_settings['resolution'] = self.Profiles.getProfileInterpResolution(object_settings)
 
-        thresholds = self.Tables.formatThreshold(object_settings)
+        thresholds = self.Tables.getThresholdsfromSettings(object_settings)
 
         object_settings_blueprint = pickle.loads(pickle.dumps(object_settings, -1))
 
@@ -2176,18 +2203,26 @@ class MakeAutomatedReport(object):
                                 row_val = '-'
                         else:
                             for thresh in thresholds:
-                                if thresh['colorwhen'] == 'under':
-                                    if row_val < thresh['value']:
+                                if row_val < thresh['value']:
+                                    if 'colorwhen' in thresh.keys():
+                                        if thresh['colorwhen'] == 'under':
+                                            threshold_colors[ri] = thresh['color']
+                                            if 'addasterisk' in object_settings.keys():
+                                                if object_settings['addasterisk'].lower() == 'true':
+                                                    addasterisk = True
+                                        if thresh['when'] == 'under':
+                                            if 'replacement' in thresh.keys():
+                                                row_val = thresh['replacement']
+                                elif row_val > thresh['value']:
+                                    if thresh['colorwhen'] == 'over':
                                         threshold_colors[ri] = thresh['color']
                                         if 'addasterisk' in object_settings.keys():
                                             if object_settings['addasterisk'].lower() == 'true':
                                                 addasterisk = True
-                                elif thresh['colorwhen'] == 'over':
-                                    if row_val > thresh['value']:
-                                        threshold_colors[ri] = thresh['color']
-                                        if 'addasterisk' in object_settings.keys():
-                                            if object_settings['addasterisk'].lower() == 'true':
-                                                addasterisk = True
+                                    if thresh['when'] == 'over':
+                                        if 'replacement' in thresh.keys():
+                                            row_val = thresh['replacement']
+
                         if self.iscomp:
                             data_start_date, data_end_date = self.Tables.getTableDates(year, object_settings_blueprint, month=month)
                         else:
