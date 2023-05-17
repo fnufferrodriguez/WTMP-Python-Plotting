@@ -146,36 +146,12 @@ def readChapterDefFile(CD_file):
         ChapterDef['region'] = chap_region
         ChapterDef['sections'] = []
 
-        # grouptext = ''
-        # grouptext_flags = ['text', 'Text', 'TEXT']
-        # for flag in grouptext_flags:
-        #     findtext = chapter.find(flag)
-        #     if isinstance(findtext, ET.Element):
-        #         grouptext = findtext.text
-        #         break
-        # ChapterDef['grouptext'] = grouptext
         grouptext_flags = ['text', 'Text', 'TEXT']
         ChapterDef['grouptext'] = findTargetinChapterDefFile(grouptext_flags, chapter)
 
-        # resolution = 'high'
-        # resolution_flags = ['resolution', 'Resolution', 'RESOLUTION']
-        # for flag in resolution_flags:
-        #     findtext = chapter.find(flag)
-        #     if isinstance(findtext, ET.Element):
-        #         resolution = findtext.text
-        #         break
-        # ChapterDef['resolution'] = resolution
         resolution_flags = ['resolution', 'Resolution', 'RESOLUTION']
         ChapterDef['resolution'] = findTargetinChapterDefFile(resolution_flags, chapter, default='high')
 
-        # debug = 'false'
-        # debug_flags = ['debug', 'Debug', 'DEBUG']
-        # for flag in debug_flags:
-        #     findtext = chapter.find(flag)
-        #     if isinstance(findtext, ET.Element):
-        #         debug = findtext.text
-        #         break
-        # ChapterDef['debug'] = debug
         debug_flags = ['debug', 'Debug', 'DEBUG']
         ChapterDef['debug'] = findTargetinChapterDefFile(debug_flags, chapter, default='false')
 
@@ -189,19 +165,8 @@ def readChapterDefFile(CD_file):
         for section in cd_sections:
             section_objects = {}
 
-            # headertext = ''
-            # headerflags = ['header', 'Header', 'HEADER']
-            # for flag in headerflags:
-            #     findtext = section.find(flag)
-            #     if isinstance(findtext, ET.Element):
-            #         headertext = findtext.text
-            #         break
-            # section_objects['header'] = headertext
             headerflags = ['header', 'Header', 'HEADER']
             section_objects['header'] = findTargetinChapterDefFile(headerflags, section)
-
-            # summaryflags = ['summary', 'Summary', 'SUMMARY']
-            # section_objects['summary'] = findTargetinChapterDefFile(summaryflags, section)
 
             section_objects['objects'] = []
             sec_objects = section.findall('Object')
