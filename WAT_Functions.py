@@ -574,7 +574,7 @@ def filterContourOverTopWater(values, elevations, topwater):
         values[twi][elevationtopwateridx+1:] = np.nan
     return values
 
-def replaceflaggedValues(Report, settings, itemset):
+def replaceflaggedValues(Report, settings, itemset, include=[], exclude=[], forjasper=False):
     '''
     recursive function to replace flagged values in settings
     :param settings: dict, list or string containing settings, potentially with flags
@@ -584,32 +584,44 @@ def replaceflaggedValues(Report, settings, itemset):
 
     if isinstance(settings, str):
         if '%%' in settings:
-            newval = replaceFlaggedValue(Report, settings, itemset)
+            newval = replaceFlaggedValue(Report, settings, itemset, forjasper=forjasper)
             settings = newval
     elif isinstance(settings, dict):
         for key in settings.keys():
+            if len(exclude) > 0:
+                if key in exclude:
+                    continue
+            if len(include) > 0:
+                if key not in include:
+                    continue
             if isinstance(settings[key], dict):
-                settings[key] = replaceflaggedValues(Report, settings[key], itemset)
+                settings[key] = replaceflaggedValues(Report, settings[key], itemset, include=include, exclude=exclude, forjasper=forjasper)
             elif isinstance(settings[key], list):
                 new_list = []
                 for item in settings[key]:
-                    new_list.append(replaceflaggedValues(Report, item, itemset))
+                    new_list.append(replaceflaggedValues(Report, item, itemset, include=include, exclude=exclude, forjasper=forjasper))
                 settings[key] = new_list
             else:
                 try:
                     if '%%' in settings[key]:
-                        newval = replaceFlaggedValue(Report, settings[key], itemset)
+                        newval = replaceFlaggedValue(Report, settings[key], itemset, forjasper=forjasper)
                         settings[key] = newval
                 except TypeError:
                     continue
     elif isinstance(settings, list):
         for i, item in enumerate(settings):
+            if len(exclude) > 0:
+                if item in exclude:
+                    continue
+            if len(include) > 0:
+                if item not in include:
+                    continue
             if '%%' in item:
-                settings[i] = replaceFlaggedValue(Report, item, itemset)
+                settings[i] = replaceFlaggedValue(Report, item, itemset, forjasper=forjasper)
 
     return settings
 
-def replaceFlaggedValue(Report, value, itemset):
+def replaceFlaggedValue(Report, value, itemset, forjasper=False):
     '''
     replaces strings with flagged values with known paths
     flags are now case insensitive with more intelligent matching. yay.
@@ -623,10 +635,11 @@ def replaceFlaggedValue(Report, value, itemset):
         flagged_values = {'%%region%%': Report.ChapterRegion,
                           '%%observedDir%%': Report.observedDir,
                           '%%startyear%%': str(Report.startYear),
-                          '%%endyear%%': str(Report.endYear)
+                          '%%endyear%%': str(Report.endYear),
+                          '%%studydir%%': str(Report.studyDir)
                           }
 
-    elif itemset == 'modelspecific':
+    if itemset == 'modelspecific':
         flagged_values = {'%%ModelDSS%%': Report.DSSFile,
                           '%%Fpart%%': Report.alternativeFpart,
                           '%%plugin%%': Report.plugin,
@@ -639,6 +652,31 @@ def replaceFlaggedValue(Report, value, itemset):
                           '%%LastComputed%%': Report.LastComputed,
                           '%%id%%': Report.currentlyloadedID
                           }
+
+    if itemset == 'fancytext':
+        if forjasper:
+            flagged_values = {'%%gt%%': '&gt;',
+                               '%%gte%%': '&ge;',
+                               '%%greaterthan%%': '&gt;',
+                               '%%greaterthanequalto%%': '&ge;',
+                               '%%lt%%': '&lt;',
+                               '%%lte%%': '&le;',
+                               '%%lessthan%%': '&lt;',
+                               '%%lessthanequalto%%': '&le;',
+                               '%%amp%%': '&amp;',
+                               '%%degrees%%': '&#176;'}
+
+        else:
+            flagged_values = {'%%gt%%': '>',
+                               '%%gte%%': u'\u2265',
+                               '%%greaterthan%%': '>',
+                               '%%greaterthanequalto%%': u'\u2265',
+                               '%%lt%%': '<',
+                               '%%lte%%': u'\u2264',
+                               '%%lessthan%%': '<',
+                               '%%lessthanequalto%%': u'\u2264',
+                               '%%amp%%': '&',
+                               '%%degrees%%': u'\u00b0'}
 
     for fv in flagged_values.keys():
         pattern = re.compile(re.escape(fv), re.IGNORECASE)

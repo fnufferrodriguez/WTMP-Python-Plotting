@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '5.4.25'
+VERSIONNUMBER = '5.4.29'
 
 import os
 import sys
@@ -208,6 +208,10 @@ class MakeAutomatedReport(object):
             template_settings = WR.readTemplate(self, object_settings['template'])
             if object_settings['type'].lower() in template_settings.keys():
                 object_settings = WF.replaceDefaults(self, template_settings[object_settings['type'].lower()], object_settings)
+
+        object_settings = WF.replaceflaggedValues(self, object_settings, 'fancytext', exclude=['description'])
+        object_settings = WF.replaceflaggedValues(self, object_settings, 'fancytext', include=['description'],
+                                                  forjasper=True)
 
         object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = WF.getObjectYears(self, object_settings)
 
@@ -854,6 +858,8 @@ class MakeAutomatedReport(object):
             if object_settings['type'].lower() in template_settings.keys():
                 object_settings = WF.replaceDefaults(self, template_settings[object_settings['type'].lower()], object_settings)
 
+        object_settings = WF.replaceflaggedValues(self, object_settings, 'fancytext', forjasper=True)
+
         object_settings['datakey'] = 'datapaths'
 
         ################# Get timestamps #################
@@ -932,18 +938,25 @@ class MakeAutomatedReport(object):
                                 thresholdsettings = self.Tables.matchThresholdToStat(stat, object_settings)
 
                                 for thresh in thresholdsettings:
-                                    if thresh['colorwhen'] == 'under':
-                                        if row_val < thresh['value']:
+                                    if row_val < thresh['value']:
+                                        if 'colorwhen' in thresh.keys():
+                                            if thresh['colorwhen'] == 'under':
+                                                threshold_colors[ri] = thresh['color']
+                                                if 'addasterisk' in object_settings.keys():
+                                                    if object_settings['addasterisk'].lower() == 'true':
+                                                        addasterisk = True
+                                            if thresh['when'] == 'under':
+                                                if 'replacement' in thresh.keys():
+                                                    row_val = thresh['replacement']
+                                    elif row_val > thresh['value']:
+                                        if thresh['colorwhen'] == 'over':
                                             threshold_colors[ri] = thresh['color']
                                             if 'addasterisk' in object_settings.keys():
                                                 if object_settings['addasterisk'].lower() == 'true':
                                                     addasterisk = True
-                                    elif thresh['colorwhen'] == 'over':
-                                        if row_val > thresh['value']:
-                                            threshold_colors[ri] = thresh['color']
-                                            if 'addasterisk' in object_settings.keys():
-                                                if object_settings['addasterisk'].lower() == 'true':
-                                                    addasterisk = True
+                                        if thresh['when'] == 'over':
+                                            if 'replacement' in thresh.keys():
+                                                row_val = thresh['replacement']
 
                             else:
                                 if np.isnan(row_val):
@@ -1052,6 +1065,9 @@ class MakeAutomatedReport(object):
                 object_settings = WF.replaceDefaults(self, template_settings[object_settings['type'].lower()], object_settings)
 
         object_settings['datakey'] = 'lines'
+
+        object_settings = WF.replaceflaggedValues(self, object_settings, 'fancytext', exclude=['description'])
+        object_settings = WF.replaceflaggedValues(self, object_settings, 'fancytext', include=['description'], forjasper=True)
 
         obj_desc = WF.updateFlaggedValues(object_settings['description'], '%%year%%', self.years_str)
         # self.XML.writeProfilePlotStart(obj_desc)
@@ -1517,6 +1533,10 @@ class MakeAutomatedReport(object):
             if object_settings['type'].lower() in template_settings.keys():
                 object_settings = WF.replaceDefaults(self, template_settings[object_settings['type'].lower()], object_settings)
 
+        object_settings = WF.replaceflaggedValues(self, object_settings, 'fancytext', exclude=['description'])
+        object_settings = WF.replaceflaggedValues(self, object_settings, 'fancytext', include=['description'],
+                                                  forjasper=True)
+
         object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = WF.getObjectYears(self, object_settings)
         object_settings['allyearsstr'] = WF.getObjectAllYears(object_settings['years'])
 
@@ -1601,18 +1621,25 @@ class MakeAutomatedReport(object):
                             if not np.isnan(row_val) and row_val != None:
                                 thresholdsettings = self.Tables.matchThresholdToStat(stat, object_settings)
                                 for thresh in thresholdsettings:
-                                    if thresh['colorwhen'] == 'under':
-                                        if row_val < thresh['value']:
+                                    if row_val < thresh['value']:
+                                        if 'colorwhen' in thresh.keys():
+                                            if thresh['colorwhen'] == 'under':
+                                                threshold_colors[ri] = thresh['color']
+                                                if 'addasterisk' in object_settings.keys():
+                                                    if object_settings['addasterisk'].lower() == 'true':
+                                                        addasterisk = True
+                                            if thresh['when'] == 'under':
+                                                if 'replacement' in thresh.keys():
+                                                    row_val = thresh['replacement']
+                                    elif row_val > thresh['value']:
+                                        if thresh['colorwhen'] == 'over':
                                             threshold_colors[ri] = thresh['color']
                                             if 'addasterisk' in object_settings.keys():
                                                 if object_settings['addasterisk'].lower() == 'true':
                                                     addasterisk = True
-                                    elif thresh['colorwhen'] == 'over':
-                                        if row_val > thresh['value']:
-                                            threshold_colors[ri] = thresh['color']
-                                            if 'addasterisk' in object_settings.keys():
-                                                if object_settings['addasterisk'].lower() == 'true':
-                                                    addasterisk = True
+                                        if thresh['when'] == 'over':
+                                            if 'replacement' in thresh.keys():
+                                                row_val = thresh['replacement']
 
                             else:
                                 if 'missingmarker' in object_settings.keys():
@@ -1718,6 +1745,8 @@ class MakeAutomatedReport(object):
             if object_settings['type'].lower() in template_settings.keys():
                 object_settings = WF.replaceDefaults(self, template_settings[object_settings['type'].lower()], object_settings)
 
+        object_settings = WF.replaceflaggedValues(self, object_settings, 'fancytext', forjasper=True)
+
         object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = WF.getObjectYears(self, object_settings)
 
         data, data_settings = self.Data.getTableDataDictionary(object_settings)
@@ -1737,7 +1766,7 @@ class MakeAutomatedReport(object):
         object_settings['plot_units'] = WF.getPlotUnits(object_settings['units_list'], object_settings)
         object_settings = WF.updateFlaggedValues(object_settings, '%%units%%', WF.formatUnitsStrings(object_settings['plot_units'], format='external'))
 
-        thresholds = self.Tables.formatThreshold(object_settings)
+        thresholds = self.Tables.getThresholdsfromSettings(object_settings)
 
         if 'description' in object_settings.keys():
             desc = object_settings['description']
@@ -1775,18 +1804,26 @@ class MakeAutomatedReport(object):
                             row_val, stat = self.Tables.getStatsLine(row_val, rowdata)
                             if not np.isnan(row_val) and row_val != None:
                                 for thresh in thresholds:
-                                    if thresh['colorwhen'] == 'under':
-                                        if row_val < thresh['value']:
+                                    if row_val < thresh['value']:
+                                        if 'colorwhen' in thresh.keys():
+                                            if thresh['colorwhen'] == 'under':
+                                                threshold_colors[ri] = thresh['color']
+                                                if 'addasterisk' in object_settings.keys():
+                                                    if object_settings['addasterisk'].lower() == 'true':
+                                                        addasterisk = True
+                                            if thresh['when'] == 'under':
+                                                if 'replacement' in thresh.keys():
+                                                    row_val = thresh['replacement']
+                                    elif row_val > thresh['value']:
+                                        if thresh['colorwhen'] == 'over':
                                             threshold_colors[ri] = thresh['color']
                                             if 'addasterisk' in object_settings.keys():
                                                 if object_settings['addasterisk'].lower() == 'true':
                                                     addasterisk = True
-                                    elif thresh['colorwhen'] == 'over':
-                                        if row_val > thresh['value']:
-                                            threshold_colors[ri] = thresh['color']
-                                            if 'addasterisk' in object_settings.keys():
-                                                if object_settings['addasterisk'].lower() == 'true':
-                                                    addasterisk = True
+                                        if thresh['when'] == 'over':
+                                            if 'replacement' in thresh.keys():
+                                                row_val = thresh['replacement']
+
                             else:
                                 if 'missingmarker' in object_settings.keys():
                                     row_val = object_settings['missingmarker']
@@ -1891,14 +1928,14 @@ class MakeAutomatedReport(object):
             if object_settings['type'].lower() in template_settings.keys():
                 object_settings = WF.replaceDefaults(self, template_settings[object_settings['type'].lower()], object_settings)
 
+        object_settings = WF.replaceflaggedValues(self, object_settings, 'fancytext', forjasper=True)
+
         object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = WF.getObjectYears(self, object_settings)
 
         data, data_settings = self.Data.getTableDataDictionary(object_settings)
         data = WF.mergeLines(data, data_settings, object_settings)
 
         data = self.Data.filterTimeSeries(data, data_settings)
-
-
 
         data = self.Tables.filterTableData(data, object_settings)
         data, data_settings = self.Tables.correctTableUnits(data, data_settings, object_settings)
@@ -1908,7 +1945,7 @@ class MakeAutomatedReport(object):
 
         object_settings = self.Tables.replaceComparisonSettings(object_settings, self.iscomp)
 
-        thresholds = self.Tables.formatThreshold(object_settings)
+        thresholds = self.Tables.getThresholdsfromSettings(object_settings)
 
         object_settings_blueprint = pickle.loads(pickle.dumps(object_settings, -1))
 
@@ -1962,18 +1999,25 @@ class MakeAutomatedReport(object):
                                     row_val = '-'
                             else:
                                 for thresh in thresholds:
-                                    if thresh['colorwhen'] == 'under':
-                                        if row_val < thresh['value']:
+                                    if row_val < thresh['value']:
+                                        if 'colorwhen' in thresh.keys():
+                                            if thresh['colorwhen'] == 'under':
+                                                threshold_colors[ri] = thresh['color']
+                                                if 'addasterisk' in object_settings.keys():
+                                                    if object_settings['addasterisk'].lower() == 'true':
+                                                        addasterisk = True
+                                            if thresh['when'] == 'under':
+                                                if 'replacement' in thresh.keys():
+                                                    row_val = thresh['replacement']
+                                    elif row_val > thresh['value']:
+                                        if thresh['colorwhen'] == 'over':
                                             threshold_colors[ri] = thresh['color']
                                             if 'addasterisk' in object_settings.keys():
                                                 if object_settings['addasterisk'].lower() == 'true':
                                                     addasterisk = True
-                                    elif thresh['colorwhen'] == 'over':
-                                        if row_val > thresh['value']:
-                                            threshold_colors[ri] = thresh['color']
-                                            if 'addasterisk' in object_settings.keys():
-                                                if object_settings['addasterisk'].lower() == 'true':
-                                                    addasterisk = True
+                                        if thresh['when'] == 'over':
+                                            if 'replacement' in thresh.keys():
+                                                row_val = thresh['replacement']
 
                             data_start_date, data_end_date = self.Tables.getTableDates(year, object_settings_blueprint, month=sr_month)
                             self.WAT_log.addLogEntry({'type': 'Statistic',
@@ -2079,6 +2123,8 @@ class MakeAutomatedReport(object):
             if object_settings['type'].lower() in template_settings.keys():
                 object_settings = WF.replaceDefaults(self, template_settings[object_settings['type'].lower()], object_settings)
 
+        object_settings = WF.replaceflaggedValues(self, object_settings, 'fancytext', forjasper=True)
+
         object_settings['datakey'] = 'datapaths'
 
         ################# Get timestamps #################
@@ -2111,7 +2157,7 @@ class MakeAutomatedReport(object):
 
         object_settings['resolution'] = self.Profiles.getProfileInterpResolution(object_settings)
 
-        thresholds = self.Tables.formatThreshold(object_settings)
+        thresholds = self.Tables.getThresholdsfromSettings(object_settings)
 
         object_settings_blueprint = pickle.loads(pickle.dumps(object_settings, -1))
 
@@ -2176,18 +2222,26 @@ class MakeAutomatedReport(object):
                                 row_val = '-'
                         else:
                             for thresh in thresholds:
-                                if thresh['colorwhen'] == 'under':
-                                    if row_val < thresh['value']:
+                                if row_val < thresh['value']:
+                                    if 'colorwhen' in thresh.keys():
+                                        if thresh['colorwhen'] == 'under':
+                                            threshold_colors[ri] = thresh['color']
+                                            if 'addasterisk' in object_settings.keys():
+                                                if object_settings['addasterisk'].lower() == 'true':
+                                                    addasterisk = True
+                                        if thresh['when'] == 'under':
+                                            if 'replacement' in thresh.keys():
+                                                row_val = thresh['replacement']
+                                elif row_val > thresh['value']:
+                                    if thresh['colorwhen'] == 'over':
                                         threshold_colors[ri] = thresh['color']
                                         if 'addasterisk' in object_settings.keys():
                                             if object_settings['addasterisk'].lower() == 'true':
                                                 addasterisk = True
-                                elif thresh['colorwhen'] == 'over':
-                                    if row_val > thresh['value']:
-                                        threshold_colors[ri] = thresh['color']
-                                        if 'addasterisk' in object_settings.keys():
-                                            if object_settings['addasterisk'].lower() == 'true':
-                                                addasterisk = True
+                                    if thresh['when'] == 'over':
+                                        if 'replacement' in thresh.keys():
+                                            row_val = thresh['replacement']
+
                         if self.iscomp:
                             data_start_date, data_end_date = self.Tables.getTableDates(year, object_settings_blueprint, month=month)
                         else:
@@ -2297,6 +2351,10 @@ class MakeAutomatedReport(object):
             template_settings = WR.readTemplate(self, object_settings['template'])
             if object_settings['type'].lower() in template_settings.keys():
                 object_settings = WF.replaceDefaults(self, template_settings[object_settings['type'].lower()], object_settings)
+
+        object_settings = WF.replaceflaggedValues(self, object_settings, 'fancytext', exclude=['description'])
+        object_settings = WF.replaceflaggedValues(self, object_settings, 'fancytext', include=['description'],
+                                                  forjasper=True)
 
         object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = WF.getObjectYears(self, object_settings)
 
@@ -2653,6 +2711,10 @@ class MakeAutomatedReport(object):
             if object_settings['type'].lower() in template_settings.keys():
                 object_settings = WF.replaceDefaults(self, template_settings[object_settings['type'].lower()], object_settings)
 
+        object_settings = WF.replaceflaggedValues(self, object_settings, 'fancytext', exclude=['description'])
+        object_settings = WF.replaceflaggedValues(self, object_settings, 'fancytext', include=['description'],
+                                                  forjasper=True)
+
         object_settings['datakey'] = 'datapaths'
 
         object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = WF.getObjectYears(self, object_settings)
@@ -2984,6 +3046,8 @@ class MakeAutomatedReport(object):
         if 'text' not in object_settings.keys():
             WF.print2stdout('Failed to input textbox contents using <text> flag.', debug=self.debug)
 
+        object_settings = WF.replaceflaggedValues(self, object_settings, 'fancytext', forjasper=True)
+
         self.XML.writeTextBox(object_settings['text'])
 
         WF.print2stdout(f'Text box took {time.time() - objectstarttime} seconds.')
@@ -3010,6 +3074,8 @@ class MakeAutomatedReport(object):
             template_settings = WR.readTemplate(self, object_settings['template'])
             if object_settings['type'].lower() in template_settings.keys():
                 object_settings = WF.replaceDefaults(self, template_settings[object_settings['type'].lower()], object_settings)
+
+        object_settings = WF.replaceflaggedValues(self, object_settings, 'fancytext', forjasper=True)
 
         data, data_settings = self.Data.getTableDataDictionary(object_settings, type='formatted')
         object_settings['primarykey'] = self.Data.getPrimaryTableKey(data, object_settings)
@@ -3207,38 +3273,10 @@ class MakeAutomatedReport(object):
                 WF.print2stdout('forecast iteration mode deactivated.', debug=self.debug)
 
             self.WAT_log.addLogEntry({'region': self.ChapterRegion})
-            self.XML.writeChapterStart(self.ChapterName, self.ChapterText)
+            self.XML.writeChapterStart(WF.replaceflaggedValues(self, self.ChapterName, 'fancytext', forjasper=True),
+                                       WF.replaceflaggedValues(self, self.ChapterText, 'fancytext', forjasper=True))
             self.writeSections(Chapter)
 
-            # for section in Chapter['sections']:
-            #     section_header = section['header']
-            #     self.XML.writeSectionHeader(section_header)
-            #     for object in section['objects']:
-            #         objtype = object['type'].lower()
-            #         if objtype == 'timeseriesplot':
-            #             self.makeTimeSeriesPlot(object)
-            #         elif objtype == 'profileplot':
-            #             self.makeProfilePlot(object)
-            #         elif objtype == 'errorstatisticstable':
-            #             self.makeErrorStatisticsTable(object)
-            #         elif objtype == 'monthlystatisticstable':
-            #             self.makeMonthlyStatisticsTable(object)
-            #         elif objtype == 'profilestatisticstable':
-            #             self.makeProfileStatisticsTable(object)
-            #         elif objtype == 'contourplot':
-            #             self.makeContourPlot(object)
-            #         elif objtype == 'reservoircontourplot':
-            #             self.makeReservoirContourPlot(object)
-            #         elif objtype == 'singlestatistictable':
-            #             self.makeSingleStatisticTable(object)
-            #         elif objtype == 'singlestatisticprofiletable':
-            #             self.makeSingleStatisticProfileTable(object)
-            #         elif objtype == 'textbox':
-            #             self.makeTextBox(object)
-            #         else:
-            #             WF.print2stdout('Section Type {0} not identified.'.format(objtype))
-            #             WF.print2stdout('Skipping Section..')
-            #     self.XML.writeSectionHeaderEnd()
             WF.print2stdout('\n################################')
             WF.print2stdout('Chapter Complete.')
             WF.print2stdout('################################\n')
@@ -3252,6 +3290,7 @@ class MakeAutomatedReport(object):
 
         for section in Chapter['sections']:
             section_header = section['header']
+            section_header = WF.replaceFlaggedValue(self, section_header, 'fancytext', forjasper=True)
             if self.forecastiteration:
                 for iteration in self.Iterations:
                     new_section_header = WF.updateFlaggedValues(section_header, '%%iteration%%', WF.formatIterations(iteration))
