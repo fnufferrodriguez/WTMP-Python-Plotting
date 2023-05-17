@@ -635,7 +635,8 @@ def replaceFlaggedValue(Report, value, itemset, forjasper=False):
         flagged_values = {'%%region%%': Report.ChapterRegion,
                           '%%observedDir%%': Report.observedDir,
                           '%%startyear%%': str(Report.startYear),
-                          '%%endyear%%': str(Report.endYear)
+                          '%%endyear%%': str(Report.endYear),
+                          '%%studydir%%': str(Report.studyDir)
                           }
 
     if itemset == 'modelspecific':

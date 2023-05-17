@@ -718,11 +718,15 @@ def readTemplate(Report, templatefilename):
     '''
 
     templatefile = os.path.join(Report.studyDir, 'reports', templatefilename)
-    tree = ET.parse(templatefile)
-    root = tree.getroot()
-    templateObjects = root.findall('Object')
-    reportObjects = iterateGraphicsDefaults(templateObjects, 'Type')
-    return reportObjects
+    if os.path.exists(templatefile):
+        tree = ET.parse(templatefile)
+        root = tree.getroot()
+        templateObjects = root.findall('Object')
+        reportObjects = iterateGraphicsDefaults(templateObjects, 'Type')
+        return reportObjects
+    else:
+        WF.print2stdout(f'Template file {templatefile} not found.')
+        return {}
 
 def readScalarTable(scalartablepath):
     '''
