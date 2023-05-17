@@ -165,10 +165,10 @@ class ResSim_Results(object):
                 depths = np.array([])
                 times = self.dt_dates
 
-            return vals, elevations, depths, np.asarray(times)
+            return vals, elevations, depths, np.asarray(times), self.units
 
         else:
-            return [], [], [], []
+            return [], [], [], [], None
 
     def getTopLayer(self, timestep_index):
         '''
@@ -225,9 +225,12 @@ class ResSim_Results(object):
         '''
 
         this_subdomain = self.subdomain_name if alt_subdomain_name is None else alt_subdomain_name
-
+        self.units = None
         if metrc.lower() == 'temperature':
             metric_name = 'Water Temperature'
+            attrs = self.h['Results/Subdomains/' + this_subdomain + '/' + metric_name].attrs
+            self.units = self.getUnitsFromAttrs(attrs)
+
             try:
                 vals = self.h['Results/Subdomains/' + this_subdomain + '/' + metric_name]
             except KeyError:
@@ -237,6 +240,8 @@ class ResSim_Results(object):
 
         elif metrc == 'diss_oxy' or metrc.lower() == 'do':
             metric_name = 'Dissolved Oxygen'
+            attrs = self.h['Results/Subdomains/' + this_subdomain + '/' + metric_name].attrs
+            self.units = self.getUnitsFromAttrs(attrs)
             try:
                 vals = self.h['Results/Subdomains/' + this_subdomain + '/' + metric_name]
             except KeyError:
@@ -248,22 +253,24 @@ class ResSim_Results(object):
             metric_name = 'Dissolved Oxygen'
             vdo = self.h['Results/Subdomains/' + this_subdomain + '/' + metric_name]
             vals = WF.calcComputedDOSat(vt, vdo, self.Report.Constants.satDO_interp)
+            self.units = '%'
 
-        elif metrc.lower() == 'elevation':
+        elif metrc.lower() in ['elevation', 'wse']:
             self.loadElevation(alt_subdomain_name=this_subdomain)
+            attrs = self.h['Results/Subdomains/' + this_subdomain + '/Water Surface Elevation'].attrs
+            self.units = self.getUnitsFromAttrs(attrs)
             vals = self.elev
-
-        elif metrc.lower() == 'wse':
-            self.loadElevation(alt_subdomain_name=this_subdomain)
-            vals = self.elev_ts
 
         elif metrc.lower() == 'outflow':
             metric_name = 'Total boundary outflow'
             try:
                 vals = self.h['Results/Subdomains/' + this_subdomain + '/' + metric_name]
+                attrs = self.h['Results/Subdomains/' + this_subdomain + '/' + metric_name].attrs
+                self.units = self.getUnitsFromAttrs(attrs)
             except KeyError:
                 # raise KeyError('WQ Simulation does not have results for metric: {0}'.format(metric_name))
                 WF.print2stdout(f'\nWARNING: WQ Simulation does not have results for metric: {metric_name}')
+                self.units = None
                 vals = []
 
         if t_in != 'all':
@@ -274,6 +281,28 @@ class ResSim_Results(object):
             self.vals = np.array([vals[timestep][i] for i in range(self.ncells)])
         else:
             self.vals = vals
+
+    def getUnitsFromAttrs(self, attrs):
+
+        units = None
+        if 'Units' in attrs.keys():
+            u = attrs['Units']
+        elif 'units' in attrs.keys():
+            u = attrs['units']
+
+        try:
+            u_i = u[0]
+        except IndexError:
+            return None
+
+        if isinstance(u_i, np.bytes_):
+            units = u_i.decode('utf-8')
+        else:
+            u_i = units
+
+        return units
+
+
 
     def readTimeSeries(self, metric, x, y, subdomain=None):
         '''
@@ -286,29 +315,38 @@ class ResSim_Results(object):
         :return: times and values arrays for selected metric and time window
         '''
 
+        units = None
         i, subdomain_name = self.findComputedStationCell(x, y, subdomain=subdomain)
         if subdomain_name == None:
             WF.print2stdout(f'XY coords ({x}, {y}) not found', debug=self.Report.debug)
-            return [], []
+            return [], [], units
 
         if metric.lower() == 'flow':
             dataset_name = 'Cell flow'
             dataset = self.h['Results/Subdomains/{0}/{1}'.format(subdomain_name, dataset_name)]
+            attrs = dataset.attrs
+            units = self.getUnitsFromAttrs(attrs)
             v = np.array(dataset[:, i])
             v = WF.cleanComputed(v)
         elif metric.lower() == 'elevation':
             dataset_name = 'Water Surface Elevation'
             dataset = self.h['Results/Subdomains/{0}/{1}'.format(subdomain_name, dataset_name)]
+            attrs = dataset.attrs
+            units = self.getUnitsFromAttrs(attrs)
             v = np.array(dataset[:])
             v = WF.cleanComputed(v)
         elif metric.lower() == 'temperature':
             dataset_name = 'Water Temperature'
             dataset = self.h['Results/Subdomains/{0}/{1}'.format(subdomain_name, dataset_name)]
+            attrs = dataset.attrs
+            units = self.getUnitsFromAttrs(attrs)
             v = np.array(dataset[:, i])
             v = WF.cleanComputed(v)
         elif metric.lower() == 'do':
             dataset_name = 'Dissolved Oxygen'
             dataset = self.h['Results/Subdomains/{0}/{1}'.format(subdomain_name, dataset_name)]
+            attrs = dataset.attrs
+            units = self.getUnitsFromAttrs(attrs)
             v = np.array(dataset[:, i])
             v = WF.cleanComputed(v)
         elif metric.lower() == 'do_sat':
@@ -317,16 +355,18 @@ class ResSim_Results(object):
             vt = np.array(dataset[:, i])
             dataset_name = 'Dissolved Oxygen'
             dataset = self.h['Results/Subdomains/{0}/{1}'.format(subdomain_name, dataset_name)]
+            units = '%'
             vdo = np.array(dataset[:, i])
             vt = WF.cleanComputed(vt)
             vdo = WF.cleanComputed(vdo)
             v = WF.calcComputedDOSat(vt, vdo, self.Report.Constants.satDO_interp)
 
+
         if not hasattr(self, 't_computed'):
             self.loadComputedTime()
         istart = 0
         iend = -1
-        return self.t_computed[istart:iend], v[istart:iend]
+        return self.t_computed[istart:iend], v[istart:iend], units
 
     def readProfileTopwater(self, resname, timestamps):
         '''
@@ -611,7 +651,7 @@ class ResSim_Results(object):
 
                     break
 
-        return self.t_computed[::interval], output_val_at_target
+        return self.t_computed[::interval], output_val_at_target, self.units
 
     def checkForReservoir(self, subdomain, sd_data):
         '''
@@ -674,4 +714,4 @@ class ResSim_Results(object):
         param_times_flow = param_vals * outflow_vals
         param_times_flow_sum = param_times_flow.sum(axis=1)
         FWA_values = param_times_flow_sum / outflow_sums
-        return self.t_computed, FWA_values
+        return self.t_computed, FWA_values, self.units

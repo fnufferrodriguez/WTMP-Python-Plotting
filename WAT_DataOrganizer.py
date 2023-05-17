@@ -25,6 +25,9 @@ import WAT_Reader as WDR
 import WAT_Time as WT
 import WAT_Reader as WR
 import WAT_ResSim_Results as WRSS
+import WAT_Constants as WC
+
+constants = WC.WAT_Constants()
 
 class DataOrganizer(object):
 
@@ -470,8 +473,12 @@ class DataOrganizer(object):
                     times, values = self.Report.ModelAlt.readStructuredTimeSeries(Line_info['w2_file'], Line_info['structurenumbers'])
                 else:
                     times, values = self.Report.ModelAlt.readTimeSeries(Line_info['w2_file'], **Line_info)
+
                 if 'units' in Line_info.keys():
                     metadata['units'] = Line_info['units']
+                elif 'parameter' in Line_info.keys():
+                    plotunits = constants.units[Line_info['parameter'].lower()]
+                    metadata['units'] = plotunits['metric']
                 else:
                     metadata['units'] = None
 
@@ -502,14 +509,14 @@ class DataOrganizer(object):
                 externalResSim.openH5File(filename)
                 externalResSim.load_time() #load time vars from h5
                 externalResSim.loadSubdomains()
-                times, values = externalResSim.readTimeSeries(Line_info['parameter'],
+                times, values, units = externalResSim.readTimeSeries(Line_info['parameter'],
                                                               float(Line_info['easting']),
                                                               float(Line_info['northing']),
                                                               subdomain=subdomain)
                 if 'units' in Line_info.keys():
                     metadata['units'] = Line_info['units']
                 else:
-                    metadata['units'] = None
+                    metadata['units'] = units
 
                 self.Memory[datamem_key] = {'times': pickle.loads(pickle.dumps(times, -1)),
                                             'values': pickle.loads(pickle.dumps(values, -1)),
@@ -530,14 +537,14 @@ class DataOrganizer(object):
                 metadata['frommemory'] = True
 
             if not metadata['frommemory']:
-                times, values = self.Report.ModelAlt.readTimeSeries(Line_info['parameter'],
+                times, values, units = self.Report.ModelAlt.readTimeSeries(Line_info['parameter'],
                                                                     float(Line_info['easting']),
                                                                     float(Line_info['northing']),
                                                                     subdomain=subdomain)
                 if 'units' in Line_info.keys():
                     metadata['units'] = Line_info['units']
                 else:
-                    metadata['units'] = None
+                    metadata['units'] = units
 
                 self.Memory[datamem_key] = {'times': pickle.loads(pickle.dumps(times, -1)),
                                              'values': pickle.loads(pickle.dumps(values, -1)),
@@ -574,10 +581,11 @@ class DataOrganizer(object):
                         metadata['parameter'] = 'elevation'
                     else:
                         metadata['parameter'] = Line_info['parameter']
-                    times, values = self.Report.ModelAlt.getProfileTargetTimeseries(Line_info['ressimresname'],
+                    times, values, units = self.Report.ModelAlt.getProfileTargetTimeseries(Line_info['ressimresname'],
                                                                                     Line_info['parameter'],
                                                                                     metadata['target'])
                     metadata['type'] = 'target'
+                    metadata['units'] = units
 
                 elif 'fwa' in Line_info.keys():
                     if Line_info['fwa'].lower() == 'true': #not sure what to do otherwise..
@@ -587,7 +595,7 @@ class DataOrganizer(object):
                             metadata['parameter'] = 'temperature'
                         else:
                             metadata['parameter'] = Line_info['parameter']
-                        times, values = self.Report.ModelAlt.getFWAReservoirOutputTimeseries(Line_info['ressimresname'],
+                        times, values, units = self.Report.ModelAlt.getFWAReservoirOutputTimeseries(Line_info['ressimresname'],
                                                                                              metadata['parameter'])
                         metadata['type'] = 'fwa'
                 if 'units' in Line_info.keys():
@@ -823,8 +831,9 @@ class DataOrganizer(object):
                 externalResSim.openH5File(filename)
                 externalResSim.load_time() #load time vars from h5
                 externalResSim.loadSubdomains()
-                values, elevations, depths, times = externalResSim.readProfileData(Profile_info['ressimresname'],
-                                                                                 Profile_info['parameter'], timesteps)
+                values, elevations, depths, times, units = externalResSim.readProfileData(Profile_info['ressimresname'],
+                                                                                          Profile_info['parameter'], timesteps)
+                metadata['units'] = units
 
             elif 'w2_segment' in Profile_info.keys():
                 if self.Report.plugin.lower() == 'cequalw2':
@@ -833,8 +842,10 @@ class DataOrganizer(object):
                     else:
                         resultsfile = None
                     metadata['source'] = resultsfile
-                    values, elevations, depths, times = self.Report.ModelAlt.readProfileData(Profile_info['w2_segment'], timesteps,
-                                                                                           resultsfile=resultsfile)
+                    values, elevations, depths, times = self.Report.ModelAlt.readProfileData(Profile_info['w2_segment'],
+                                                                                             timesteps,
+                                                                                             resultsfile=resultsfile)
+                    metadata['units'] = 'c' #W2 outputs in metric
                     times = WT.JDateToDatetime(times, self.Report.startYear)
                     # if isinstance(timesteps, str):
                     #     vals, elevations = self.Report.Profiles.normalize2DElevations(vals, elevations)
@@ -843,9 +854,10 @@ class DataOrganizer(object):
             elif 'ressimresname' in Profile_info.keys():
                 if self.Report.plugin.lower() == 'ressim':
                     metadata['source'] = Profile_info['ressimresname']
-                    values, elevations, depths, times = self.Report.ModelAlt.readProfileData(Profile_info['ressimresname'],
-                                                                                           Profile_info['parameter'], timesteps,
-                                                                                           )
+                    values, elevations, depths, times, units = self.Report.ModelAlt.readProfileData(Profile_info['ressimresname'],
+                                                                                                   Profile_info['parameter'], timesteps,
+                                                                                                   )
+                    metadata['units'] = units
 
         self.Memory[datamemkey] = {'times': pickle.loads(pickle.dumps(times, -1)),
                                    'values': pickle.loads(pickle.dumps(values, -1)),
