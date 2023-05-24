@@ -20,7 +20,7 @@ import pendulum
 import WAT_Functions as WF
 import WAT_Time as WT
 
-def changeTimeSeriesInterval(times, values, Line_info, t_offset, startYear):
+def changeTimeSeriesInterval(times, values, Line_info, startYear):
     '''
     changes time series of time series data. If type is defined, use that to average data. default is INST-VAL
     :param times: list of times
@@ -41,7 +41,7 @@ def changeTimeSeriesInterval(times, values, Line_info, t_offset, startYear):
     if 'type' in Line_info.keys() and 'interval' not in Line_info.keys():
         # WF.print2stdout('Defined Type but no interval..')
         if convert_to_jdate:
-            return DatetimeToJDate(times, t_offset), values
+            return DatetimeToJDate(times), values
         else:
             return times, values
 
@@ -55,11 +55,11 @@ def changeTimeSeriesInterval(times, values, Line_info, t_offset, startYear):
     if isinstance(values, dict):
         new_values = {}
         for key in values:
-            new_times, new_values[key] = changeTimeSeriesInterval(times, values[key], Line_info, t_offset, startYear)
+            new_times, new_values[key] = changeTimeSeriesInterval(times, values[key], Line_info, startYear)
     elif len(values.shape) == 2:
         # t_vals = values.T
         for vi, valueset in enumerate(values):
-            new_times, changed_vals = changeTimeSeriesInterval(times, valueset, Line_info, t_offset, startYear)
+            new_times, changed_vals = changeTimeSeriesInterval(times, valueset, Line_info, startYear)
             if vi == 0:
                 new_values = np.empty([values.shape[0], changed_vals.shape[0]])
             new_values[vi] = changed_vals
@@ -84,19 +84,6 @@ def changeTimeSeriesInterval(times, values, Line_info, t_offset, startYear):
                 new_values = df['values'].to_numpy()
                 new_times = df.index.to_pydatetime()
 
-            # elif len(values.shape) == 2:
-            #     tvals = values.T #transpose so now were [distances, times]
-            #     new_values = []
-            #     for i in range(tvals.shape[0]):#for each depth profile..
-            #         df = pd.DataFrame({'times': times, 'values': tvals[i]})
-            #         df = df.set_index('times')
-            #         if df.index.inferred_freq != pd_interval:
-            #             # df = df.resample(pd_interval, origin='end_day').asfreq().fillna(method='bfill')
-            #             df = df.resample(pd_interval, origin='end_day').asfreq()
-            #         new_values.append(df['values'].to_numpy())
-            #         new_times = df.index.to_pydatetime()
-            #     new_values = np.asarray(new_values).T #transpose back..
-
         elif avgtype == 'INST-CUM':
             if len(values.shape) == 1:
                 df = pd.DataFrame({'times': times, 'values': values})
@@ -105,17 +92,6 @@ def changeTimeSeriesInterval(times, values, Line_info, t_offset, startYear):
                 df = df.cumsum(skipna=True).resample(pd_interval, origin='end_day').asfreq()
                 new_values = df['values'].to_numpy()
                 new_times = df.index.to_pydatetime()
-            # elif len(values.shape) == 2:
-            #     tvals = values.T #transpose so now were [distances, times]
-            #     new_values = []
-            #     for i in range(tvals.shape[0]):#for each depth profile..
-            #         df = pd.DataFrame({'times': times, 'values': tvals[i]})
-            #         df = df.set_index('times')
-            #         # df = df.cumsum(skipna=True).resample(pd_interval, origin='end_day').asfreq().fillna(method='bfill')
-            #         df = df.cumsum(skipna=True).resample(pd_interval, origin='end_day').asfreq()
-            #         new_values.append(df['values'].to_numpy())
-            #         new_times = df.index.to_pydatetime()
-            #     new_values = np.asarray(new_values).T #transpose back..
 
         elif avgtype == 'PER-AVER':
             #average over the period
@@ -127,18 +103,6 @@ def changeTimeSeriesInterval(times, values, Line_info, t_offset, startYear):
                     df = df.resample(pd_interval, origin='end_day').mean()
                 new_values = df['values'].to_numpy()
                 new_times = df.index.to_pydatetime()
-            # elif len(values.shape) == 2:
-            #     tvals = values.T #transpose so now were [distances, times]
-            #     new_values = []
-            #     for i in range(tvals.shape[0]):#for each depth profile..
-            #         df = pd.DataFrame({'times': times, 'values': tvals[i]})
-            #         df = df.set_index('times')
-            #         if df.index.inferred_freq != pd_interval:
-            #             # df = df.resample(pd_interval, origin='end_day').mean().fillna(method='bfill')
-            #             df = df.resample(pd_interval, origin='end_day').mean()
-            #         new_values.append(df['values'].to_numpy())
-            #         new_times = df.index.to_pydatetime()
-            #     new_values = np.asarray(new_values).T #transpose back..
 
         elif avgtype == 'PER-CUM':
             #cum over the period
@@ -150,25 +114,13 @@ def changeTimeSeriesInterval(times, values, Line_info, t_offset, startYear):
                     df = df.resample(pd_interval, origin='end_day').sum()
                 new_values = df['values'].to_numpy()
                 new_times = df.index.to_pydatetime()
-            # elif len(values.shape) == 2:
-            #     tvals = values.T #transpose so now were [distances, times]
-            #     new_values = []
-            #     for i in range(tvals.shape[0]):#for each depth profile..
-            #         df = pd.DataFrame({'times': times, 'values': tvals[i]})
-            #         df = df.set_index('times')
-            #         if df.index.inferred_freq != pd_interval:
-            #             # df = df.resample(pd_interval, origin='end_day').sum().fillna(method='bfill')
-            #             df = df.resample(pd_interval, origin='end_day').sum()
-            #         new_values.append(df['values'].to_numpy())
-            #         new_times = df.index.to_pydatetime()
-            #     new_values = np.asarray(new_values).T #transpose back..
 
         else:
             # WF.print2stdout('INVALID INPUT TYPE DETECTED', avgtype)
             return times, values
 
     if convert_to_jdate:
-        return WT.DatetimeToJDate(new_times, t_offset), new_values
+        return WT.DatetimeToJDate(new_times), new_values
     else:
         return new_times, new_values
 
@@ -269,7 +221,7 @@ def datetime2Ordinal(indate):
     ord = indate.toordinal() + float(indate.hour) / 24. + float(indate.minute) / (24. * 60.)
     return ord
 
-def getIdxForTimestamp(time_Array, t_in, offset):
+def getIdxForTimestamp(time_Array, t_in):
     '''
     finds timestep for date
     :param time_Array: array of time values
@@ -278,14 +230,33 @@ def getIdxForTimestamp(time_Array, t_in, offset):
     :return: timestep index
     '''
 
-    ttmp = t_in.toordinal() + float(t_in.hour) / 24. + float(t_in.minute) / (24. * 60.) - offset + 1 #jdate offsets...
-    min_diff = np.min(np.abs(time_Array - ttmp))
-    tol = 1. / (24. * 60.)  # 1 minute tolerance
-    timestep = np.where((np.abs(time_Array - ttmp) - min_diff) < tol)[0][0]
-    if min_diff > 1.:
+    ords = np.asarray([n.toordinal() + float(n.hour) / 24. + float(n.minute) / (24. * 60.) for n in time_Array])
+    t_in_ord = t_in.toordinal() + float(t_in.hour) / 24. + float(t_in.minute) / (24. * 60.)
+    tol = 0.04166666662786156  # 1 hour tolerance
+    min_diff = np.min(np.abs(ords - t_in_ord))
+    if min_diff > tol:
         # WF.print2stdout('nearest time step > 1 day away')
         return -1
+    # timestep = np.where((np.abs(ords - t_in_ord) - min_diff) < tol)[0][0]
+    timestep = np.where(np.abs(ords - t_in_ord) == min_diff)[0][0]
     return timestep
+
+
+
+
+
+
+    # tol = 1. / (24. * 60.)  # 1 minute tolerance
+    # timestep = np.where(time_Array + dt.timedelta(minutes=1) > t_in and time_Array - dt.timedelta(minutes=1)  t_in)
+    #
+    # ttmp = t_in.toordinal() + float(t_in.hour) / 24. + float(t_in.minute) / (24. * 60.) - offset + 1 #jdate offsets...
+    # min_diff = np.min(np.abs(time_Array - ttmp))
+    # tol = 1. / (24. * 60.)  # 1 minute tolerance
+    # timestep = np.where((np.abs(time_Array - ttmp) - min_diff) < tol)[0][0]
+    # if min_diff > 1.:
+    #     # WF.print2stdout('nearest time step > 1 day away')
+    #     return -1
+    # return timestep
 
 def filterTimestepByYear(timestamps, year):
     '''
@@ -377,18 +348,19 @@ def JDateToDatetime(dates, startyear):
     # first_year_Date = dt.datetime(self.ModelAlt.dt_dates[0].year, 1, 1, 0, 0)
     first_year_Date = dt.datetime(startyear, 1, 1, 0, 0)
     #JDATES first day is at 1.0, so we need to subtract 1 or else we get an extra day..
-    if len(dates) == 0:
-        return dates
+    if isinstance(dates, (float, int)):
+        dtime = first_year_Date + dt.timedelta(days=dates-1)
+        return dtime
     elif isinstance(dates, dt.datetime):
         return dates
     elif isinstance(dates, (list, np.ndarray)):
-        if isinstance(dates[0], dt.datetime):
+        if len(dates) == 0:
+            return dates
+        elif isinstance(dates[0], dt.datetime):
             return dates
         dtimes = np.asarray([first_year_Date + dt.timedelta(days=n-1) for n in dates])
         return dtimes
-    elif isinstance(dates, (float, int)):
-        dtime = first_year_Date + dt.timedelta(days=dates-1)
-        return dtime
+
     else:
         return dates
 
@@ -411,7 +383,7 @@ def DatetimeToJDate(dates):
         if isinstance(dates[0], (float, int)):
             return dates
         # jdates = np.asarray([(datetime2Ordinal(n) - time_offset) + 1 for n in dates])
-        jdates = [((n.replace(tzinfo=None) - dt.datetime(n.year, 1, 1, 0, 0)).total_seconds() / (24*60*60)+1) for n in dates]
+        jdates = [((n.replace(tzinfo=None) - dt.datetime(dates[0].year, 1, 1, 0, 0)).total_seconds() / (24*60*60)+1) for n in dates]
         return jdates
     elif isinstance(dates, dt.datetime):
         jdate = (dates.replace(tzinfo=None) - dt.datetime(dates.year, 1, 1, 0, 0)).total_seconds() / (24*60*60) + 1
@@ -419,7 +391,7 @@ def DatetimeToJDate(dates):
     else:
         return dates
 
-def translateDateFormat(lim, dateformat, fallback, StartTime, EndTime, time_offset, debug=False):
+def translateDateFormat(lim, dateformat, fallback, StartTime, EndTime, debug=False):
     '''
     translates date formats between datetime and jdate, as desired
     :param lim: limit value, either int or datetime
@@ -479,14 +451,14 @@ def translateDateFormat(lim, dateformat, fallback, StartTime, EndTime, time_offs
                     else:
                         lim_frmt = lim
                     WF.print2stdout('converting to jdate..', debug=debug)
-                    lim_frmt = DatetimeToJDate(lim_frmt, time_offset)
+                    lim_frmt = DatetimeToJDate(lim_frmt)
                     WF.print2stdout('Converted to jdate!', lim_frmt, debug=debug)
                     return lim_frmt
                 except:
                     WF.print2stdout('Error Reading Limit: {0} as a dt.datetime object.'.format(lim), debug=debug)
                     WF.print2stdout('If this is wrong, try format: Apr 2014 1 12:00', debug=debug)
 
-                fallback = DatetimeToJDate(fallback, time_offset)
+                fallback = DatetimeToJDate(fallback)
 
                 if fallback != None and fallback != '':
                     WF.print2stdout('Setting to fallback {0}.'.format(fallback), debug=debug)

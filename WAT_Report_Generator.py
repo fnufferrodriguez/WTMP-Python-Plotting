@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '5.4.29'
+VERSIONNUMBER = '5.5.0'
 
 import os
 import sys
@@ -393,7 +393,6 @@ class MakeAutomatedReport(object):
                         if ax_settings['relative'].lower() == 'true':
                             if RelativeLineSettings['interval'] != None:
                                 dates, values = WT.changeTimeSeriesInterval(dates, values, RelativeLineSettings,
-                                                                              self.ModelAlt.t_offset,
                                                                               self.startYear)
                             values = values/RelativeMasterSet
 
@@ -450,10 +449,10 @@ class MakeAutomatedReport(object):
                                                   'units': units,
                                                   'value_start_date': WT.translateDateFormat(dates[0], 'datetime', '',
                                                                                              self.StartTime, self.EndTime,
-                                                                                             self.ModelAlt.t_offset, debug=self.debug).strftime('%d %b %Y'),
+                                                                                             debug=self.debug).strftime('%d %b %Y'),
                                                   'value_end_date': WT.translateDateFormat(dates[-1], 'datetime', '',
                                                                                            self.StartTime, self.EndTime,
-                                                                                           self.ModelAlt.t_offset, debug=self.debug).strftime('%d %b %Y'),
+                                                                                           debug=self.debug).strftime('%d %b %Y'),
                                                   'logoutputfilename': line_draw_settings['logoutputfilename']
                                                  },
                                                  isdata=True)
@@ -530,10 +529,10 @@ class MakeAutomatedReport(object):
                                                           'units': 'BINARY',
                                                           'value_start_date': WT.translateDateFormat(dates[0], 'datetime', '',
                                                                                                      self.StartTime, self.EndTime,
-                                                                                                     self.ModelAlt.t_offset, debug=self.debug).strftime('%d %b %Y'),
+                                                                                                     debug=self.debug).strftime('%d %b %Y'),
                                                           'value_end_date': WT.translateDateFormat(dates[-1], 'datetime', '',
                                                                                                    self.StartTime, self.EndTime,
-                                                                                                   self.ModelAlt.t_offset, debug=self.debug).strftime('%d %b %Y'),
+                                                                                                   debug=self.debug).strftime('%d %b %Y'),
                                                           'logoutputfilename': curgate_settings['logoutputfilename']
                                                           },
                                                          isdata=True)
@@ -554,7 +553,7 @@ class MakeAutomatedReport(object):
                         for operationTime in operationtimes:
                             operationTime = WT.translateDateFormat(operationTime, 'datetime', '',
                                                                        self.StartTime, self.EndTime,
-                                                                       self.ModelAlt.t_offset, debug=self.debug)
+                                                                       debug=self.debug)
 
                             if 'zorder' not in opline_settings.keys():
                                 opline_settings['zorder'] = 3
@@ -1332,10 +1331,10 @@ class MakeAutomatedReport(object):
                                                           'units': 'BINARY',
                                                           'value_start_date': WT.translateDateFormat(dates[0], 'datetime', '',
                                                                                                      self.StartTime, self.EndTime,
-                                                                                                     self.ModelAlt.t_offset, debug=self.debug).strftime('%d %b %Y'),
+                                                                                                     debug=self.debug).strftime('%d %b %Y'),
                                                           'value_end_date': WT.translateDateFormat(dates[-1], 'datetime', '',
                                                                                                    self.StartTime, self.EndTime,
-                                                                                                   self.ModelAlt.t_offset, debug=self.debug).strftime('%d %b %Y'),
+                                                                                                   debug=self.debug).strftime('%d %b %Y'),
                                                           'logoutputfilename': curgate_settings['logoutputfilename']
                                                           },
                                                          isdata=True)
@@ -1359,12 +1358,12 @@ class MakeAutomatedReport(object):
                         if object_settings['dateformat'].lower() == 'datetime':
                             cur_timestamp = WT.translateDateFormat(cur_timestamp, 'datetime', '',
                                                                    self.StartTime, self.EndTime,
-                                                                   self.ModelAlt.t_offset, debug=self.debug)
+                                                                   debug=self.debug)
                             ttl_str = cur_timestamp.strftime('%d %b %Y')
                         elif object_settings['dateformat'].lower() == 'jdate':
                             cur_timestamp = WT.translateDateFormat(cur_timestamp, 'jdate', '',
                                                                    self.StartTime, self.EndTime,
-                                                                   self.ModelAlt.t_offset, debug=self.debug)
+                                                                   debug=self.debug)
                             ttl_str = str(cur_timestamp)
                         else:
                             ttl_str = cur_timestamp
@@ -1489,11 +1488,11 @@ class MakeAutomatedReport(object):
                                           'value_start_date': WT.translateDateFormat(object_settings['timestamps'][pgi[0]],
                                                                                      'datetime', '',
                                                                                      self.StartTime, self.EndTime,
-                                                                                     self.ModelAlt.t_offset, debug=self.debug).strftime('%d %b %Y'),
+                                                                                     debug=self.debug).strftime('%d %b %Y'),
                                           'value_end_date': WT.translateDateFormat(object_settings['timestamps'][pgi[-1]],
                                                                                    'datetime', '',
                                                                                    self.StartTime, self.EndTime,
-                                                                                   self.ModelAlt.t_offset, debug=self.debug).strftime('%d %b %Y'),
+                                                                                   debug=self.debug).strftime('%d %b %Y'),
                                           'logoutputfilename': ', '.join([line_settings[flag]['logoutputfilename'] for flag in line_settings])
                                           },
                                          isdata=True)
@@ -1654,10 +1653,10 @@ class MakeAutomatedReport(object):
                                                       'units': object_settings['plot_units'],
                                                       'value_start_date': WT.translateDateFormat(data_start_date, 'datetime', '',
                                                                                                  self.StartTime, self.EndTime,
-                                                                                                 self.ModelAlt.t_offset, debug=self.debug),
+                                                                                                 debug=self.debug),
                                                       'value_end_date': WT.translateDateFormat(data_end_date, 'datetime', '',
                                                                                                self.StartTime, self.EndTime,
-                                                                                               self.ModelAlt.t_offset, debug=self.debug),
+                                                                                               debug=self.debug),
                                                       'logoutputfilename': ', '.join([data_settings[flag]['logoutputfilename'] for flag in data_settings])
                                                       },
                                                      isdata=True)
@@ -1838,10 +1837,10 @@ class MakeAutomatedReport(object):
                                                       'units': object_settings['plot_units'],
                                                       'value_start_date': WT.translateDateFormat(data_start_date, 'datetime', '',
                                                                                                  self.StartTime, self.EndTime,
-                                                                                                 self.ModelAlt.t_offset, debug=self.debug),
+                                                                                                 debug=self.debug),
                                                       'value_end_date': WT.translateDateFormat(data_end_date, 'datetime', '',
                                                                                                self.StartTime, self.EndTime,
-                                                                                               self.ModelAlt.t_offset, debug=self.debug),
+                                                                                              debug=self.debug),
                                                       'logoutputfilename': ', '.join([data_settings[flag]['logoutputfilename'] for flag in data_settings])
                                                       },
                                                      isdata=True)
@@ -2028,10 +2027,10 @@ class MakeAutomatedReport(object):
                                                       'function': stat,
                                                       'value_start_date': WT.translateDateFormat(data_start_date, 'datetime', '',
                                                                                                  self.StartTime, self.EndTime,
-                                                                                                 self.ModelAlt.t_offset, debug=self.debug),
+                                                                                                 debug=self.debug),
                                                       'value_end_date': WT.translateDateFormat(data_end_date, 'datetime', '',
                                                                                                self.StartTime, self.EndTime,
-                                                                                               self.ModelAlt.t_offset, debug=self.debug),
+                                                                                               debug=self.debug),
                                                       'logoutputfilename': ', '.join([data_settings[flag]['logoutputfilename'] for flag in data_settings])
                                                       },
                                                      isdata=True)
@@ -2483,10 +2482,10 @@ class MakeAutomatedReport(object):
                                           'units': units,
                                           'value_start_date': WT.translateDateFormat(dates[0], 'datetime', '',
                                                                                      self.StartTime, self.EndTime,
-                                                                                     self.ModelAlt.t_offset, debug=self.debug).strftime('%d %b %Y'),
+                                                                                     debug=self.debug).strftime('%d %b %Y'),
                                           'value_end_date': WT.translateDateFormat(dates[-1], 'datetime', '',
                                                                                    self.StartTime, self.EndTime,
-                                                                                   self.ModelAlt.t_offset, debug=self.debug).strftime('%d %b %Y'),
+                                                                                   ebug=self.debug).strftime('%d %b %Y'),
                                           'logoutputfilename': 'NA'
                                           },
                                          isdata=True)
@@ -2854,10 +2853,10 @@ class MakeAutomatedReport(object):
                                           'units': units,
                                           'value_start_date': WT.translateDateFormat(dates[0], 'datetime', '',
                                                                                      self.StartTime, self.EndTime,
-                                                                                     self.ModelAlt.t_offset, debug=self.debug).strftime('%d %b %Y'),
+                                                                                     debug=self.debug).strftime('%d %b %Y'),
                                           'value_end_date': WT.translateDateFormat(dates[-1], 'datetime', '',
                                                                                    self.StartTime, self.EndTime,
-                                                                                   self.ModelAlt.t_offset, debug=self.debug).strftime('%d %b %Y'),
+                                                                                   debug=self.debug).strftime('%d %b %Y'),
                                           'logoutputfilename': 'NA'
                                           },
                                          isdata=True)

@@ -27,7 +27,7 @@ import WAT_Time as WT
 
 class W2_Results(object):
 
-    def __init__(self, W2_path, alt_name, alt_Dir, starttime, endtime, Report, interval_min=60):
+    def __init__(self, W2_path, alt_name, alt_Dir, starttime, endtime, Report):
         '''
         Class Builder init.
         :param W2_path: path to W2 run
@@ -44,7 +44,7 @@ class W2_Results(object):
         self.starttime = starttime
         self.endtime = endtime
         self.Report = Report
-        self.interval_min = interval_min #output time series
+        # self.interval_min = interval_min #output time series
 
         control_file_csv = os.path.join(self.run_path, 'w2_con.csv') #this should always be the same, UNTIL IT WASNT
         control_file_npt = os.path.join(self.run_path, 'w2_con.npt') #this should always be the same, UNTIL IT WASNT
@@ -60,12 +60,29 @@ class W2_Results(object):
 
         self.readControlFile()
         # dates are output irregular, so we need to build a regular time series to interpolate to
-        self.jd_dates, self.dt_dates, self.t_offset = self.buildTimes(self.starttime, self.endtime, self.interval_min)
+        self.buildTimes()
         if self.control_file_type == 'npt': #turn off, make user input full W2 file instead of trying to build it?
             self.getOutputFileName_NPT() #get the W2 sanctioned output file name convention
         elif self.control_file_type == 'csv':
             self.getOutputFileName_CSV()
 
+
+    def buildTimes(self):
+        '''
+        builds two different timeseries to snap irregular data to, because W2 allows for two different output intervals.
+        WDO is for qwo and two files (flow and temp).
+        :return:
+        '''
+
+        self.getInterval()
+        self.wdo_jd_dates, self.wdo_dt_dates = self.buildTimesbyInterval(self.starttime,
+                                                                         self.endtime,
+                                                                         self.wdo_interval)
+
+        #Above case is ONLY for QWO files
+        self.jd_dates, self.dt_dates = self.buildTimesbyInterval(self.starttime,
+                                                                 self.endtime,
+                                                                 self.wdo_interval)
 
     def readControlFile(self):
         '''
@@ -83,6 +100,24 @@ class W2_Results(object):
             self.line_sections = self.formatCFLines(self.cf_lines)
             # self.line_sections = [] #csv file output contains depths and elevations in the output, which is nice.
             #csv?
+
+    def getInterval(self):
+        '''
+        gets the interval from the W2 control file. there are two intervals, one for irregular data and one for the rest.
+        irregular one is for qwo and two files (WDO).
+        :return: sets tsr interval and wdo interval
+        '''
+
+        if self.control_file_type == 'npt':
+            tsr_interval = self.getControlVariable(self.line_sections, 'TSR FREQ', pref_output_type=float)[0]
+            wdo_interval = self.getControlVariable(self.line_sections, 'WITH FRE', pref_output_type=float)[0]
+        else:
+            tsr = self.getControlVariable(self.line_sections, 'TSR')
+            tsr_interval = float(tsr[5])
+            wdo = self.getControlVariable(self.line_sections, 'WDO')
+            wdo_interval = float(wdo[5])
+        self.tsr_interval = tsr_interval
+        self.wdo_interval = wdo_interval
 
     def get_tempprofile_layers(self):
         '''
@@ -202,30 +237,23 @@ class W2_Results(object):
             return outputs[0]
         return outputs
 
-    def buildTimes(self, start_day, end_day, interval_min):
+    def buildTimesbyInterval(self, start_day, end_day, interval):
         '''
         Creates a regular time series. W2 time series are irregular, so we'll create a regular time series for output
         and then interpolate over it. Return a list of jdates (days past the jan 1, starting at 1) and a list of
         datetime values
         :param start_day: start day of the simulation (jdate)
         :param end_day: end day of the simulations (jdate)
-        :param interval_min: the desired output time series interval in minutes, aka 60=Hourly, 15=15MIN (4 per hour)
+        :param interval: the desired output time series interval in minutes, aka 60=Hourly, 15=15MIN (4 per hour)
         :return: list of dates in jdate format and datetime format
         '''
 
         # turns out jdates can be passed into timedelta (decimals) and it works correctly. Just subtract 1 becuase jdates
         # start at 1
+        dt_dates = pd.date_range(start_day,end_day,freq=dt.timedelta(interval)).to_pydatetime()
+        jd_dates = np.asarray(WT.DatetimeToJDate(dt_dates))
 
-        #Get the offset
-        year = start_day.year
-        t_offset = WT.datetime2Ordinal(dt.datetime(year, 1, 1, 0, 0))
-        interval_perc_day = interval_min / (60 * 24)
-        start_jdate = (WT.datetime2Ordinal(start_day) - t_offset) + 1
-        end_jdate = (WT.datetime2Ordinal(end_day) - t_offset) + 1
-        jd_dates = np.arange(start_jdate, end_jdate, interval_perc_day)
-        dt_dates = [start_day+dt.timedelta(days=n-1) for n in jd_dates]
-
-        return np.asarray(jd_dates), np.asarray(dt_dates), t_offset
+        return jd_dates, dt_dates
 
     def readProfileData(self, seg, timesteps, resultsfile=None):
         '''
@@ -273,22 +301,11 @@ class W2_Results(object):
         segment_elevation_header = output.columns[segment_index[0]-1]
         segment_value_header = output.columns[segment_index[0]] #stupid segment header can have a space at the end...
         all_jdates = output['Julian_day'].values #csv depths are always the same for all segments output
+        all_dtdates = WT.JDateToDatetime(all_jdates, self.starttime.year) #csv depths are always the same for all segments output
         all_depths = output['Depth'].values #csv jdates are always the same for all segments output
         all_values = output[segment_value_header].values
         all_elevations = output[segment_elevation_header].values
-        unique_dates = np.asarray(list(set(all_jdates)))
-        # number_layers = len(np.where(all_jdates == unique_dates[0])[0]) #get number of records for each timestamp.. hopefully these are always the same len?
-
-        values = np.full(len(unique_dates), None)
-        elevations = np.full(len(unique_dates), None)
-        depths = np.full(len(unique_dates), None)
-
-        for ln, unique_date in enumerate(unique_dates):
-            indicies = np.where(all_jdates == unique_date)
-            # print((len(indicies[0])))
-            values[ln] = all_values[indicies]
-            elevations[ln] = all_elevations[indicies]
-            depths[ln] = all_depths[indicies]
+        unique_dates = np.asarray(list(set(all_dtdates)))
 
         if len(unique_dates) == 0:
             WF.print2stdout('No values found in output.', debug=self.Report.debug)
@@ -300,19 +317,22 @@ class W2_Results(object):
             select_depths = []
             select_times = []
             for t, time in enumerate(timesteps):
-                timestep = WT.getIdxForTimestamp(unique_dates, time, self.t_offset)
+                timestep = WT.getIdxForTimestamp(unique_dates, time)
                 if timestep > -1:#timestep in model
-                    WSE = elevations[timestep] #Meters #get WSE
-                    if not WF.checkData(WSE): #if WSE is bad, skip usually first timestep...
+                    indicies = np.where(all_dtdates == unique_dates[timestep])
+                    values = all_values[indicies]
+                    elevations = all_elevations[indicies]
+                    depths = all_depths[indicies]
+                    # WSE = elevations[timestep] #Meters #get WSE
+                    if not WF.checkData(elevations): #if elevations is bad, skip usually first timestep...
                         select_elevations.append(np.array([]))
                         select_depths.append(np.array([]))
                         select_values.append(np.array([]))
                         select_times.append(time)
                         continue
-
-                    select_elevations.append(elevations[timestep][:] * 3.28084)
-                    select_depths.append(depths[timestep][:] * 3.28084)
-                    select_values.append(values[timestep][:])
+                    select_elevations.append(elevations[:] * 3.28084)
+                    select_depths.append(depths[:] * 3.28084)
+                    select_values.append(values[:])
                     select_times.append(time)
 
                 else: #if timestep NOT in model, add empties
@@ -324,7 +344,7 @@ class W2_Results(object):
             select_values, select_elevations, select_depths = self.matchProfileLengths(select_values, select_elevations, select_depths)
             return select_values, select_elevations, select_depths, select_times,
         else:
-            return values, elevations, depths, unique_dates
+            return [], [], [], sorted(unique_dates)
 
 
     def readProfileData_NPT(self, seg, timesteps):
@@ -337,8 +357,8 @@ class W2_Results(object):
 
         self.get_tempprofile_layers() #get the output layers. out at 2m depths
 
-        wt = np.full((len(self.layers), len(self.jd_dates)), np.nan)
-        WS_Elev = np.full((len(self.layers), len(self.jd_dates)), np.nan)
+        wt = []
+        WS_Elev = []
 
         for i in range(1,len(self.layers)+1):
             # WF.print2stdout('{0} of {1}'.format(i, len(self.layers)+1))
@@ -359,21 +379,20 @@ class W2_Results(object):
 
             op_file = pd.read_csv(ofn_path, header=headerline, skip_blank_lines=False)
             op_file.columns = op_file.columns.str.lower()
-            if len(op_file['jday']) > 1:
-                WT_interp = interp1d(op_file['jday'], op_file['t2(c)'])
-                Elev_interp = interp1d(op_file['jday'], op_file['elws(m)'])
-                jdate_minmask = np.where(min(op_file['jday']) <= self.jd_dates)
-                jdate_maxmask = np.where(max(op_file['jday']) >= self.jd_dates)
-                jdate_msk = np.intersect1d(jdate_maxmask, jdate_minmask)
-                wt_ts_Vals = np.full(len(self.jd_dates), np.nan)
-                wsElev_ts_Vals = np.full(len(self.jd_dates), np.nan)
-                wt_ts_Vals[jdate_msk] = WT_interp(self.jd_dates[jdate_msk])
-                wsElev_ts_Vals[jdate_msk] = Elev_interp(self.jd_dates[jdate_msk])
-                wt[i-1] = wt_ts_Vals
-                WS_Elev[i-1] = wsElev_ts_Vals
 
-        wt = np.asarray(wt).T
-        WS_Elev = np.asarray(WS_Elev).T
+            if len(op_file['jday']) > 1:
+                wt_vals = op_file['t2(c)']
+                elev_vals = op_file['elws(m)']
+                wt.append(wt_vals.values)
+                WS_Elev.append(elev_vals.values)
+                # wt[i-1] = wt_vals
+                # WS_Elev[i-1] = elev_vals
+
+        max_len = len(self.jd_dates)
+        wt = np.asarray([np.pad(array, (0, max_len - len(array)), mode='constant', constant_values=np.nan) for array in wt]).T
+        WS_Elev = np.asarray([np.pad(array, (0, max_len - len(array)), mode='constant', constant_values=np.nan) for array in WS_Elev]).T
+        # wt = np.asarray(wt).T
+        # WS_Elev = np.asarray(WS_Elev).T
 
         if isinstance(timesteps, (list, np.ndarray)):
             select_wt = []
@@ -382,7 +401,7 @@ class W2_Results(object):
             times = []
             for t, time in enumerate(timesteps):
                 e = []
-                timestep = WT.getIdxForTimestamp(self.jd_dates, time, self.t_offset)
+                timestep = WT.getIdxForTimestamp(self.dt_dates, time)
                 if timestep > -1:#timestep in model
                     WSE = WS_Elev[timestep] #Meters #get WSE
                     if not WF.checkData(WSE): #if WSE is bad, skip usually first timestep...
@@ -457,7 +476,7 @@ class W2_Results(object):
 
             WSE_out = []
             for t, time in enumerate(timesteps):
-                timestep = WT.getIdxForTimestamp(self.jd_dates, time, self.t_offset)
+                timestep = WT.getIdxForTimestamp(self.jd_dates, time)
                 if timestep > -1:#timestep in model
                     WSE = WS_Elev[timestep] #Meters #get WSE
                     if not WF.checkData(WSE): #if WSE is bad, skip usually first timestep...
@@ -569,7 +588,7 @@ class W2_Results(object):
         :return: np.array of dates, and the values
         '''
 
-        out_vals = np.full(len(self.jd_dates), np.nan)
+        # out_vals = np.full(len(self.jd_dates), np.nan)
 
         try:
             column = int(column)
@@ -587,6 +606,13 @@ class W2_Results(object):
         if not os.path.exists(ofn_path):
             WF.print2stdout('Data File not found!', ofn_path)
             return [], []
+
+        if output_file_name.lower().startswith(('qwo', 'two')):
+            jd_dates = self.wdo_jd_dates
+            dt_dates = self.wdo_dt_dates
+        else:
+            jd_dates = self.jd_dates
+            dt_dates = self.dt_dates
 
         if isinstance(column, str):
             header = linecache.getline(ofn_path, int(skiprows)).strip().replace(' ','').lower().split(',') #1 indexed, for some reason
@@ -613,15 +639,10 @@ class W2_Results(object):
                         # cidx = np.where(np.asarray(header) == column.lower())[0]
                         # values.append(float(sline[cidx].strip()))
 
-        if len(dates) > 1:
-            val_interp = interp1d(dates, values)
-            for j, jd in enumerate(self.jd_dates):
-                try:
-                    out_vals[j] = val_interp(jd)
-                except ValueError:
-                    continue
-
-        return self.dt_dates, out_vals
+        if len(dt_dates) != len(values):
+            dt_dates = dt_dates[:len(values)]
+        # print(len(dt_dates), len(values))
+        return dt_dates, np.asarray(values)
 
     def readSegment(self, filename, parameter):
         '''

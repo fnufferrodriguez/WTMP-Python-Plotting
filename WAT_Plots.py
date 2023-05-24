@@ -131,7 +131,6 @@ class Plots(object):
                 if biggest_interval != None:
                     _, RelativeMasterSet = WT.changeTimeSeriesInterval(curline['dates'], curline['values'],
                                                                                 RelativeLineSettings,
-                                                                                self.Report.ModelAlt.t_offset,
                                                                                 self.Report.startYear)
                 else:
                     RelativeMasterSet = curline['values']
@@ -141,7 +140,6 @@ class Plots(object):
                     curline['type'] = type
                     _, newvals = WT.changeTimeSeriesInterval(curline['dates'], curline['values'],
                                                               RelativeLineSettings,
-                                                              self.Report.ModelAlt.t_offset,
                                                               self.Report.startYear)
                     RelativeMasterSet += newvals
                 else:
@@ -283,7 +281,7 @@ class Plots(object):
                 endtime = self.Report.EndTime
             else:
                 endtime = current_xlims[1]
-            xmin = WT.translateDateFormat(xmin, 'datetime', starttime, starttime, endtime, self.Report.ModelAlt.t_offset, debug=self.Report.debug)
+            xmin = WT.translateDateFormat(xmin, 'datetime', starttime, starttime, endtime, debug=self.Report.debug)
 
             try:
                 xmax = float(xmax)
@@ -292,7 +290,7 @@ class Plots(object):
                     starttime = dt.datetime(tmp_starttime.year, 1, 1, 0, 0)
             except:
                 pass
-            xmax = WT.translateDateFormat(xmax, 'datetime', endtime, starttime, endtime, self.Report.ModelAlt.t_offset, debug=self.Report.debug)
+            xmax = WT.translateDateFormat(xmax, 'datetime', endtime, starttime, endtime, debug=self.Report.debug)
 
             if xmax > current_xlims[1]:
                 xmax = current_xlims[1]
@@ -638,7 +636,7 @@ class Plots(object):
                 if isdate:
                     value = WT.translateDateFormat(value, 'datetime', '',
                                                    self.Report.StartTime, self.Report.EndTime,
-                                                   self.Report.ModelAlt.t_offset, debug=self.Report.debug)
+                                                   debug=self.Report.debug)
 
                 if 'label' not in vline_settings.keys():
                     vline_settings['label'] = None

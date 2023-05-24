@@ -134,7 +134,7 @@ class ResSim_Results(object):
             if isinstance(timestamps, (list, np.ndarray)):
                 unique_times = [n for n in timestamps]
                 for j, time_in in enumerate(unique_times):
-                    timestep = WT.getIdxForTimestamp(self.jd_dates, time_in, self.t_offset)
+                    timestep = WT.getIdxForTimestamp(self.jd_dates, time_in)
                     if timestep == -1:
                         depths.append(np.asarray([]))
                         elevations.append(np.asarray([]))
@@ -274,7 +274,7 @@ class ResSim_Results(object):
                 vals = []
 
         if t_in != 'all':
-            timestep = WT.getIdxForTimestamp(self.jd_dates, t_in, self.t_offset) #get timestep index for current date
+            timestep = WT.getIdxForTimestamp(self.jd_dates, t_in) #get timestep index for current date
             if timestep == -1:
                 WF.print2stdout('should never be here..')
             self.t_data = t_in
@@ -384,7 +384,7 @@ class ResSim_Results(object):
                 topwater = []
                 unique_times = [n for n in timestamps]
                 for j, time_in in enumerate(unique_times):
-                    timestep = WT.getIdxForTimestamp(self.jd_dates, time_in, self.t_offset)
+                    timestep = WT.getIdxForTimestamp(self.jd_dates, time_in)
                     if timestep == -1:
                         topwater.append(np.nan)
                         # continue

@@ -1414,8 +1414,7 @@ def applyXLimits(Report, dates, values, xlims):
     elif isinstance(dates[0], dt.datetime):
         wantedformat = 'datetime'
     if 'min' in xlims.keys():
-        datemin = WT.translateDateFormat(xlims['min'], wantedformat, Report.StartTime, Report.StartTime, Report.EndTime,
-                                     Report.ModelAlt.t_offset)
+        datemin = WT.translateDateFormat(xlims['min'], wantedformat, Report.StartTime, Report.StartTime, Report.EndTime)
         for i, d in enumerate(dates):
             if datemin > d:
                 if isinstance(values, (int, np.ndarray)):
@@ -1425,8 +1424,7 @@ def applyXLimits(Report, dates, values, xlims):
                         values[key][i] = np.nan
     if 'max' in xlims.keys():
         datemax = WT.translateDateFormat(xlims['max'], wantedformat, Report.EndTime,
-                                     Report.StartTime, Report.EndTime,
-                                     Report.ModelAlt.t_offset)
+                                     Report.StartTime, Report.EndTime)
         for i, d in enumerate(dates):
             if datemax < d:
                 if isinstance(values, (int, np.ndarray)):

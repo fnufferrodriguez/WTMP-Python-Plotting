@@ -616,7 +616,7 @@ class DataOrganizer(object):
                 values = WF.NaNOmittedValues(values, omitval, debug=self.Report.debug)
 
         if 'interval' in Line_info.keys():
-            times, values = WT.changeTimeSeriesInterval(times, values, Line_info, self.Report.ModelAlt.t_offset, self.Report.startYear)
+            times, values = WT.changeTimeSeriesInterval(times, values, Line_info, self.Report.startYear)
             metadata['interval_mod'] = True
 
         return times, values, metadata
@@ -893,10 +893,8 @@ class DataOrganizer(object):
                 topwater = self.getProfileTopWater(curreach, 'all')
                 if 'interval' in curreach.keys():
                     dates_change, values = WT.changeTimeSeriesInterval(dates, values, curreach,
-                                                                       self.Report.ModelAlt.t_offset,
                                                                        self.Report.startYear)
                     dates_change, topwater = WT.changeTimeSeriesInterval(dates, topwater, curreach,
-                                                                         self.Report.ModelAlt.t_offset,
                                                                          self.Report.startYear)
                     dates = dates_change
                 if WF.checkData(values):
@@ -1255,8 +1253,7 @@ class DataOrganizer(object):
                                                                        settings['parameter'])
 
         if 'interval' in settings.keys():
-            times, values = WT.changeTimeSeriesInterval(times, values, settings, self.Report.ModelAlt.t_offset,
-                                                         self.Report.startYear)
+            times, values = WT.changeTimeSeriesInterval(times, values, settings, self.Report.startYear)
 
         self.Memory[datamem_key] = {'dates': pickle.loads(pickle.dumps(times, -1)),
                                     'values': pickle.loads(pickle.dumps(values, -1)),
