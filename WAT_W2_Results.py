@@ -476,7 +476,7 @@ class W2_Results(object):
 
             WSE_out = []
             for t, time in enumerate(timesteps):
-                timestep = WT.getIdxForTimestamp(self.jd_dates, time)
+                timestep = WT.getIdxForTimestamp(self.dt_dates, time)
                 if timestep > -1:#timestep in model
                     WSE = WS_Elev[timestep] #Meters #get WSE
                     if not WF.checkData(WSE): #if WSE is bad, skip usually first timestep...

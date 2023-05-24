@@ -384,7 +384,7 @@ class ResSim_Results(object):
                 topwater = []
                 unique_times = [n for n in timestamps]
                 for j, time_in in enumerate(unique_times):
-                    timestep = WT.getIdxForTimestamp(self.jd_dates, time_in)
+                    timestep = WT.getIdxForTimestamp(self.dt_dates, time_in)
                     if timestep == -1:
                         topwater.append(np.nan)
                         # continue
