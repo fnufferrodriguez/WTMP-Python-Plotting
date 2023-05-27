@@ -143,7 +143,8 @@ class ResSim_Results(object):
                         # continue
                     else:
                         # WF.print2stdout('finding time for', time_in)
-                        self.loadResults(time_in, metric.lower(), alt_subdomain_name=resname)
+                        time_to_grab = self.dt_dates[timestep]
+                        self.loadResults(time_to_grab, metric.lower(), alt_subdomain_name=resname)
                         ktop = self.getTopLayer(timestep) #get waterlevel top layer to know where to grab data from
                         v_el = self.vals[:ktop + 1]
                         el = self.elev[:ktop + 1]

@@ -69,7 +69,7 @@ class Profiles(object):
             if 'Observed' in keys:
                 return 'Observed'
             else:
-                WF.print2stdout('Resolution not defined. Setting to default value resolution: {default}', debug=self.Report.debug)
+                WF.print2stdout(f'Resolution not defined. Setting to default value resolution: {default}', debug=self.Report.debug)
                 resolution = default
                 return int(resolution)
 

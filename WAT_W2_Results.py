@@ -75,6 +75,7 @@ class W2_Results(object):
         '''
 
         self.getInterval()
+        self.getW2StartTime()
         self.wdo_jd_dates, self.wdo_dt_dates = self.buildTimesbyInterval(self.starttime,
                                                                          self.endtime,
                                                                          self.wdo_interval)
@@ -95,9 +96,9 @@ class W2_Results(object):
 
         self.cf_lines = self.getControlFileLines(self.control_file)
         if self.control_file_type == 'npt':
-            self.line_sections = self.formatCFLines(self.cf_lines)
+            self.line_sections = self.formatNPTCFLines(self.cf_lines)
         else:
-            self.line_sections = self.formatCFLines(self.cf_lines)
+            self.line_sections = self.formatCSVCFLines(self.cf_lines)
             # self.line_sections = [] #csv file output contains depths and elevations in the output, which is nice.
             #csv?
 
@@ -109,15 +110,25 @@ class W2_Results(object):
         '''
 
         if self.control_file_type == 'npt':
-            tsr_interval = self.getControlVariable(self.line_sections, 'TSR FREQ', pref_output_type=float)[0]
-            wdo_interval = self.getControlVariable(self.line_sections, 'WITH FRE', pref_output_type=float)[0]
+            tsr_interval = float(self.getNPTControlVariable(self.line_sections, 'TSR FREQ'))[0]
+            wdo_interval = float(self.getNPTControlVariable(self.line_sections, 'WITH FRE'))[0]
         else:
-            tsr = self.getControlVariable(self.line_sections, 'TSR')
+            tsr = self.getCSVControlVariable(self.line_sections, 'TSR')
             tsr_interval = float(tsr[5])
-            wdo = self.getControlVariable(self.line_sections, 'WDO')
+            wdo = self.getCSVControlVariable(self.line_sections, 'WDO')
             wdo_interval = float(wdo[5])
         self.tsr_interval = tsr_interval
         self.wdo_interval = wdo_interval
+
+    def getW2StartTime(self):
+        if self.control_file_type == 'npt':
+            tsr_interval = float(self.getNPTControlVariable(self.line_sections, 'TMSTRT'))[0]
+        else:
+            self.tmstrt = float(self.getCSVControlVariable(self.line_sections, 'TMSTRT'))
+            self.tmend = float(self.getCSVControlVariable(self.line_sections, 'TMEND'))
+            self.tmyear = float(self.getCSVControlVariable(self.line_sections, 'YEAR'))
+            print('stop')
+
 
     def get_tempprofile_layers(self):
         '''
@@ -125,8 +136,8 @@ class W2_Results(object):
         :return: set class variables:
                     self.layers
         '''
-
-        self.layers = self.getControlVariable(self.line_sections, 'TSR LAYE', pref_output_type=float)
+        # if self.
+        self.layers = float(self.getCSVControlVariable(self.line_sections, 'TSR LAYE'))
 
     def getOutputFileName_NPT(self):
         '''
@@ -135,7 +146,7 @@ class W2_Results(object):
         '''
 
         # self.output_file_name = self.getControlVariable(self.line_sections, 'TSR FILE')[0]
-        output_file_name = self.getControlVariable(self.line_sections, 'TSR FILE')
+        output_file_name = self.getCSVControlVariable(self.line_sections, 'TSR FILE')
         if len(output_file_name) > 0:
             self.output_file_name = output_file_name[0]
 
@@ -145,7 +156,7 @@ class W2_Results(object):
         :return:
         '''
 
-        output_file_name = self.getControlVariable(self.line_sections, 'TSR')
+        output_file_name = self.getCSVControlVariable(self.line_sections, 'TSR')
         if len(output_file_name) > 0:
             self.output_file_name = output_file_name[3]
 
@@ -161,16 +172,130 @@ class W2_Results(object):
         file_read.close()
         return np.asarray(file_lines)
 
-    def formatCFLines(self, cf_lines):
+    def formatNPTCFLines(self, cf_lines):
         '''
         seperates control file lines into sections, based off of spaces in the file. Control files are generally
         formatted like:
 
-        LAYE header1 header2
-                  2       5
+        CSV FORMAT:
 
-        TEMP header1 header2
-                  5       5
+        NWB	 NBR	 IMX	 KMX	 NPROC	 CLOSEC
+        1	  4	      83	 135	     1	     ON
+
+        OR
+
+        WD1
+        OFF
+        52
+        644.35
+        2
+        135
+
+        File then splits both of the sections above into two seperate sections into a list for easier parsing. Sections
+        are split based on the spaces between them.
+
+        :param cf_lines: control file lines from self.get_control_file_lines()
+        :return: a list of sections
+        '''
+
+        sections = {}
+        has_headers = False
+        for line in cf_lines[10:]: #skip the first ten lines, theyre garb.
+            # line = line.strip()
+            line = [line[i:i+8] for i in range(0, len(line), 8)] #npt files are spaced 8 chars wide
+            if line[-1] == '\n':
+                line = line[:-1]
+            line = [n.strip() for n in line]
+            if not has_headers:
+                #this is our header
+                main_flag = line[0]
+                other_headers = line[1:]
+                if len(line) > 1:
+                    other_headers = Counter[line[1:]]
+                    if max(other_headers.values()) == 1: #every other header is unique
+                        small_section = {n: [] for n in other_headers}
+                    else:
+                        small_section = []
+                else:
+                    sections[main_flag] = []
+                has_headers = True
+            else:
+                if line[0] != '':
+                    #we have a sub item, and not just a big list, or some features
+                    subitem_title = line[0]
+
+                    subsection = small_section
+                    if isinstance(subsection, dict):
+                        for i, header in enumerate(other_headers):
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            if self.control_file_type == 'csv':
+                line = line.strip().split(',')
+            else:
+                line = line.strip().split('   ')
+
+            if len(line) > 0:
+                if line[0] == '':
+                    line = []
+
+            line = [n.strip() for n in line if n != '']
+
+
+                # line = ''.join(list(filter((',').__ne__, list(line))))
+            if len(line) == 0 and len(small_section) == 0:
+                continue
+            if len(line) == 0 and len(small_section) != 0:
+                #check section here
+                if len(small_section) > 2:
+                    header = small_section[0]
+                    body = []
+                    for n in small_section[1:]:
+                        if len(n) > 1:
+                            body.append(n)
+                        else:
+
+                            body.append(n[0])
+                    small_section = [header, body]
+                if len(small_section) > 1:
+                    if len(small_section[0]) > len(small_section[1]):
+                        small_section[1] += [''] * (len(small_section[0]) - len(small_section[1]))
+                sections.append(small_section)
+                small_section = []
+            else:
+                small_section.append(line)
+
+        return sections
+
+    def formatCSVCFLines(self, cf_lines):
+        '''
+        seperates control file lines into sections, based off of spaces in the file. Control files are generally
+        formatted like:
+
+        CSV FORMAT:
+
+        NWB	 NBR	 IMX	 KMX	 NPROC	 CLOSEC
+        1	  4	      83	 135	     1	     ON
+
+        OR
+
+        WD1
+        OFF
+        52
+        644.35
+        2
+        135
 
         File then splits both of the sections above into two seperate sections into a list for easier parsing. Sections
         are split based on the spaces between them.
@@ -180,21 +305,46 @@ class W2_Results(object):
         '''
 
         sections = []
-        small_section = ''
+        small_section = []
         for line in cf_lines:
             if self.control_file_type == 'csv':
-                line = ''.join(list(filter((',').__ne__, list(line))))
-            if len(line.strip()) == 0 and len(small_section) == 0:
-                continue
-            if len(line.strip()) == 0 and len(small_section) != 0:
-                sections.append(small_section)
-                small_section = ''
+                line = line.strip().split(',')
             else:
-                small_section += line
+                line = line.strip().split('   ')
+
+            if len(line) > 0:
+                if line[0] == '':
+                    line = []
+
+            line = [n.strip() for n in line if n != '']
+
+
+                # line = ''.join(list(filter((',').__ne__, list(line))))
+            if len(line) == 0 and len(small_section) == 0:
+                continue
+            if len(line) == 0 and len(small_section) != 0:
+                #check section here
+                if len(small_section) > 2:
+                    header = small_section[0]
+                    body = []
+                    for n in small_section[1:]:
+                        if len(n) > 1:
+                            body.append(n)
+                        else:
+
+                            body.append(n[0])
+                    small_section = [header, body]
+                if len(small_section) > 1:
+                    if len(small_section[0]) > len(small_section[1]):
+                        small_section[1] += [''] * (len(small_section[0]) - len(small_section[1]))
+                sections.append(small_section)
+                small_section = []
+            else:
+                small_section.append(line)
 
         return sections
 
-    def getControlVariable(self, lines_sections, variable, pref_output_type=np.str_):
+    def getCSVControlVariable(self, lines_sections, variable):
         '''
         Parses the split control file sections from self.format_cf_lines() for a wanted card. Cards usually preface
         headers in the contro file, see docuemntation. For the give example below...
@@ -216,26 +366,80 @@ class W2_Results(object):
         :return: either list of np arrays for multi output, or a single np.array
         '''
 
-        variable_lines_idx = [i for i, line in enumerate(lines_sections) if variable in line]
+        variable_lines_idx = [i for i, line in enumerate(lines_sections) if variable in line[0]]
         outputs = []
         for var_line_idx in variable_lines_idx:
-            cur_otpt = []
-            for line in lines_sections[var_line_idx].split('\n')[1:]: #skip header
-                if line.strip() == '':
-                    break
-                sline = line.split()
-                for s in sline:
-                    cur_otpt.append(s)
-            try:
-                outputs.append(np.asarray(cur_otpt).astype(pref_output_type))
-            except ValueError:
-                WF.print2stdout('Array values not able to be converted to {0}'.format(pref_output_type), debug=self.Report.debug)
-                WF.print2stdout('Reverting to strings.', debug=self.Report.debug)
-                WF.print2stdout('Array:', cur_otpt, debug=self.Report.debug)
-                outputs.append(np.asarray(cur_otpt).astype(np.string))
-        if len(outputs) == 1:
-            return outputs[0]
-        return outputs
+            # for line in lines_sections[var_line_idx].split('\n')[1:]: #skip header
+            line = lines_sections[var_line_idx]
+            if len(line[0]) != len(line[1]): #for cases of vert stack in csv
+                cur_otpt = line[1]
+            else:
+                idx = np.where(np.asarray(line[0]) == variable)
+                cur_otpt = np.asarray(line[1])[idx]
+                if len(cur_otpt) > 1:
+                    for item in cur_otpt:
+                        if item != '':
+                            cur_otpt = np.asarray(line[1])[idx][0]
+            outputs.append(cur_otpt)
+
+        if len(outputs) > 1:
+            return outputs[0][0]
+        return outputs[0]
+
+    def getNPTControlVariable(self, lines_sections, variable):
+        '''
+        Parses the split control file sections from self.format_cf_lines() for a wanted card. Cards usually preface
+        headers in the contro file, see docuemntation. For the give example below...
+
+        DLT MAX   DLTMAX  DLTMAX  DLTMAX  DLTMAX  DLTMAX  DLTMAX  DLTMAX  DLTMAX  DLTMAX
+                  3600.00
+
+        DLT FRN     DLTF    DLTF    DLTF    DLTF    DLTF    DLTF    DLTF    DLTF    DLTF
+                   0.900
+
+        If the user wanted the DLT Max value, they would search 'DLT MAX'. If there is only one instance of the flag,
+        then return a single array. Else, output a list of arrays and let the user narrow it down from there.
+
+        :param lines_sections: formatted control line sections from self.format_cf_lines()
+        :param variable: intended variable card to find
+        :param pref_output_type: preferred variable type for output (i.e. np.float, np.str, etc). Converts all values
+                                 in output to intended type. If it fails (aka trying to convert a string value to a
+                                 float, return strings instead.
+        :return: either list of np arrays for multi output, or a single np.array
+        '''
+
+        variable_lines_idx = [i for i, line in enumerate(lines_sections) if variable in line[0]]
+        outputs = []
+        for var_line_idx in variable_lines_idx:
+            # for line in lines_sections[var_line_idx].split('\n')[1:]: #skip header
+            line = lines_sections[var_line_idx]
+            if len(line[0]) != len(line[1]): #for cases of vert stack in csv
+                cur_otpt = line[1]
+            else:
+                idx = np.where(np.asarray(line[0]) == variable)
+                cur_otpt = np.asarray(line[1])[idx]
+                if len(cur_otpt) > 1:
+                    for item in cur_otpt:
+                        if item != '':
+                            cur_otpt = np.asarray(line[1])[idx][0]
+            outputs.append(cur_otpt)
+            # if line.strip() == '':
+            #     break
+            # sline = line.split()
+            # for s in sline:
+            #     cur_otpt.append(s)
+            # try:
+            #     outputs.append(np.asarray(cur_otpt).astype(pref_output_type))
+            # except ValueError:
+            #     WF.print2stdout('Array values not able to be converted to {0}'.format(pref_output_type), debug=self.Report.debug)
+            #     WF.print2stdout('Reverting to strings.', debug=self.Report.debug)
+            #     WF.print2stdout('Array:', cur_otpt, debug=self.Report.debug)
+            #     outputs.append(np.asarray(cur_otpt).astype(np.string))
+        if len(outputs) > 1:
+            # WF.print2stdout(f"More than 1 entry in W2_Con file for {variable}.", debug=self.Report.debug)
+            # WF.print2stdout(f"Using the first.", debug=self.Report.debug)
+            return outputs[0][0]
+        return outputs[0]
 
     def buildTimesbyInterval(self, start_day, end_day, interval):
         '''
@@ -639,10 +843,18 @@ class W2_Results(object):
                         # cidx = np.where(np.asarray(header) == column.lower())[0]
                         # values.append(float(sline[cidx].strip()))
 
-        if len(dt_dates) != len(values):
+        if len(dt_dates) < len(values):
             dt_dates = dt_dates[:len(values)]
+        # if len(values) > len(dt_dates):
+        #     values, dt_dates = self.subsetValues(values, dt_dates, jd_dates, dates)
+
         # print(len(dt_dates), len(values))
         return dt_dates, np.asarray(values)
+
+    # def subsetValues(self, values, dt_dates, jd_dates, dates):
+    #     #find offset
+    #     #find closest start
+
 
     def readSegment(self, filename, parameter):
         '''
