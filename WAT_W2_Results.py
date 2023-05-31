@@ -76,14 +76,14 @@ class W2_Results(object):
 
         self.getInterval()
         self.getW2StartTime()
-        self.wdo_jd_dates, self.wdo_dt_dates = self.buildTimesbyInterval(self.starttime,
-                                                                         self.endtime,
+        self.wdo_jd_dates, self.wdo_dt_dates = self.buildTimesbyInterval(self.tmstrtJDate,
+                                                                         self.tmendJDate,
                                                                          self.wdo_interval)
 
         #Above case is ONLY for QWO files
-        self.jd_dates, self.dt_dates = self.buildTimesbyInterval(self.starttime,
-                                                                 self.endtime,
-                                                                 self.wdo_interval)
+        self.jd_dates, self.dt_dates = self.buildTimesbyInterval(self.tmstrtJDate,
+                                                                 self.tmendJDate,
+                                                                 self.tsr_interval)
 
     def readControlFile(self):
         '''
@@ -110,8 +110,8 @@ class W2_Results(object):
         '''
 
         if self.control_file_type == 'npt':
-            tsr_interval = float(self.getNPTControlVariable(self.line_sections, 'TSR FREQ'))[0]
-            wdo_interval = float(self.getNPTControlVariable(self.line_sections, 'WITH FRE'))[0]
+            tsr_interval = float(self.getNPTControlVariable(self.line_sections, 'TSR FREQ')[0])
+            wdo_interval = float(self.getNPTControlVariable(self.line_sections, 'WITH FRE')[0])
         else:
             tsr = self.getCSVControlVariable(self.line_sections, 'TSR')
             tsr_interval = float(tsr[5])
@@ -122,13 +122,20 @@ class W2_Results(object):
 
     def getW2StartTime(self):
         if self.control_file_type == 'npt':
-            tsr_interval = float(self.getNPTControlVariable(self.line_sections, 'TMSTRT'))[0]
+            timecon = self.getNPTControlVariable(self.line_sections, 'TIME CON')
+            self.tmstrt = float(timecon['TMSTRT'])
+            self.tmend = float(timecon['TMEND'])
+            self.tmyear = int(timecon['YEAR'])
+            startend = WT.JDateToDatetime([self.tmstrt, self.tmend], self.tmyear)
+            self.tmstrtJDate = startend[0]
+            self.tmendJDate = startend[1]
         else:
             self.tmstrt = float(self.getCSVControlVariable(self.line_sections, 'TMSTRT'))
             self.tmend = float(self.getCSVControlVariable(self.line_sections, 'TMEND'))
-            self.tmyear = float(self.getCSVControlVariable(self.line_sections, 'YEAR'))
-            print('stop')
-
+            self.tmyear = int(self.getCSVControlVariable(self.line_sections, 'YEAR'))
+            startend = WT.JDateToDatetime([self.tmstrt, self.tmend], self.tmyear)
+            self.tmstrtJDate = startend[0]
+            self.tmendJDate = startend[1]
 
     def get_tempprofile_layers(self):
         '''
@@ -136,8 +143,10 @@ class W2_Results(object):
         :return: set class variables:
                     self.layers
         '''
-        # if self.
-        self.layers = float(self.getCSVControlVariable(self.line_sections, 'TSR LAYE'))
+        if self.control_file_type == 'npt':
+            self.layers = np.asarray([float(n) for n in self.getNPTControlVariable(self.line_sections, 'TSR LAYE')])
+        else:
+            self.layers = float(self.getCSVControlVariable(self.line_sections, 'TSR LAYE'))
 
     def getOutputFileName_NPT(self):
         '''
@@ -146,7 +155,7 @@ class W2_Results(object):
         '''
 
         # self.output_file_name = self.getControlVariable(self.line_sections, 'TSR FILE')[0]
-        output_file_name = self.getCSVControlVariable(self.line_sections, 'TSR FILE')
+        output_file_name = self.getNPTControlVariable(self.line_sections, 'TSR FILE')
         if len(output_file_name) > 0:
             self.output_file_name = output_file_name[0]
 
@@ -196,85 +205,83 @@ class W2_Results(object):
 
         :param cf_lines: control file lines from self.get_control_file_lines()
         :return: a list of sections
+
+        #scenarios (all of this contained in dict by first header item (sections))
+            #1. subitems with all headers the same (minus first): dictionary of lists
+            #2. subitems with all headers different (minus first): dictionary of dictionaries
+            #3. no subitems with headers all the same: list
+            #4. no subitems with different headers: dict
         '''
 
         sections = {}
-        has_headers = False
+        got_headers = False
+        sections_contents_template = []
+        sections_contents = []
+        main_flag = None
+        other_headers = []
         for line in cf_lines[10:]: #skip the first ten lines, theyre garb.
             # line = line.strip()
             line = [line[i:i+8] for i in range(0, len(line), 8)] #npt files are spaced 8 chars wide
             if line[-1] == '\n':
                 line = line[:-1]
             line = [n.strip() for n in line]
-            if not has_headers:
-                #this is our header
-                main_flag = line[0]
-                other_headers = line[1:]
-                if len(line) > 1:
-                    other_headers = Counter[line[1:]]
-                    if max(other_headers.values()) == 1: #every other header is unique
-                        small_section = {n: [] for n in other_headers}
-                    else:
-                        small_section = []
+
+            if (len(line) == 1 and line[0] == '') or (len(line) == 0):
+                #store contents and reset
+                if main_flag != None:
+                    sections[main_flag] = sections_contents
                 else:
-                    sections[main_flag] = []
-                has_headers = True
+                    continue
+                    # print('Main flag none. Skip.')
+                got_headers = False
+                sections_contents_template = []
+                sections_contents = []
+                main_flag = None
+                other_headers = []
+
             else:
-                if line[0] != '':
-                    #we have a sub item, and not just a big list, or some features
-                    subitem_title = line[0]
 
-                    subsection = small_section
-                    if isinstance(subsection, dict):
-                        for i, header in enumerate(other_headers):
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-            if self.control_file_type == 'csv':
-                line = line.strip().split(',')
-            else:
-                line = line.strip().split('   ')
-
-            if len(line) > 0:
-                if line[0] == '':
-                    line = []
-
-            line = [n.strip() for n in line if n != '']
-
-
-                # line = ''.join(list(filter((',').__ne__, list(line))))
-            if len(line) == 0 and len(small_section) == 0:
-                continue
-            if len(line) == 0 and len(small_section) != 0:
-                #check section here
-                if len(small_section) > 2:
-                    header = small_section[0]
-                    body = []
-                    for n in small_section[1:]:
-                        if len(n) > 1:
-                            body.append(n)
+                if not got_headers:
+                    #this is our header
+                    main_flag = line[0]
+                    other_headers = line[1:]
+                    if len(line) > 1: #if there are more headers
+                        other_headers = Counter(line[1:])
+                        if max(other_headers.values()) == 1: #every other header is unique
+                            # sections_contents_template = {n: {} for n in other_headers}
+                            sections_contents_template = {}
                         else:
-
-                            body.append(n[0])
-                    small_section = [header, body]
-                if len(small_section) > 1:
-                    if len(small_section[0]) > len(small_section[1]):
-                        small_section[1] += [''] * (len(small_section[0]) - len(small_section[1]))
-                sections.append(small_section)
-                small_section = []
-            else:
-                small_section.append(line)
+                            sections_contents_template = []
+                    else:
+                        sections[main_flag] = []
+                    got_headers = True
+                else:
+                    if line[0] != '':
+                        #we have a sub item, and not just a big list, or some features
+                        subitem = line[0]
+                        subitem_contents = line[1:]
+                        sections_contents = sections_contents_template
+                        if isinstance(sections_contents, dict):
+                            subsections_contents = {n: {} for n in other_headers}
+                            for i, key in enumerate(other_headers):
+                                try:
+                                    subsections_contents[key] = subitem_contents[i]
+                                except IndexError:
+                                    subsections_contents[key] = ''
+                            sections_contents[subitem] = subsections_contents
+                        elif isinstance(sections_contents, list):
+                            sections_contents += subitem_contents
+                    else:
+                        subitem_contents = line[1:]
+                        sections_contents = sections_contents_template
+                        if isinstance(sections_contents, dict):
+                            for i, key in enumerate(other_headers):
+                                try:
+                                    sections_contents[key] = subitem_contents[i]
+                                except IndexError:
+                                    sections_contents[key] = ''
+                        elif isinstance(sections_contents, list):
+                            sections_contents += subitem_contents
 
         return sections
 
@@ -408,38 +415,11 @@ class W2_Results(object):
         :return: either list of np arrays for multi output, or a single np.array
         '''
 
-        variable_lines_idx = [i for i, line in enumerate(lines_sections) if variable in line[0]]
-        outputs = []
-        for var_line_idx in variable_lines_idx:
-            # for line in lines_sections[var_line_idx].split('\n')[1:]: #skip header
-            line = lines_sections[var_line_idx]
-            if len(line[0]) != len(line[1]): #for cases of vert stack in csv
-                cur_otpt = line[1]
-            else:
-                idx = np.where(np.asarray(line[0]) == variable)
-                cur_otpt = np.asarray(line[1])[idx]
-                if len(cur_otpt) > 1:
-                    for item in cur_otpt:
-                        if item != '':
-                            cur_otpt = np.asarray(line[1])[idx][0]
-            outputs.append(cur_otpt)
-            # if line.strip() == '':
-            #     break
-            # sline = line.split()
-            # for s in sline:
-            #     cur_otpt.append(s)
-            # try:
-            #     outputs.append(np.asarray(cur_otpt).astype(pref_output_type))
-            # except ValueError:
-            #     WF.print2stdout('Array values not able to be converted to {0}'.format(pref_output_type), debug=self.Report.debug)
-            #     WF.print2stdout('Reverting to strings.', debug=self.Report.debug)
-            #     WF.print2stdout('Array:', cur_otpt, debug=self.Report.debug)
-            #     outputs.append(np.asarray(cur_otpt).astype(np.string))
-        if len(outputs) > 1:
-            # WF.print2stdout(f"More than 1 entry in W2_Con file for {variable}.", debug=self.Report.debug)
-            # WF.print2stdout(f"Using the first.", debug=self.Report.debug)
-            return outputs[0][0]
-        return outputs[0]
+        if variable in lines_sections.keys():
+            return lines_sections[variable]
+        else:
+            return None
+
 
     def buildTimesbyInterval(self, start_day, end_day, interval):
         '''
@@ -843,10 +823,10 @@ class W2_Results(object):
                         # cidx = np.where(np.asarray(header) == column.lower())[0]
                         # values.append(float(sline[cidx].strip()))
 
-        if len(dt_dates) < len(values):
-            dt_dates = dt_dates[:len(values)]
-        # if len(values) > len(dt_dates):
-        #     values, dt_dates = self.subsetValues(values, dt_dates, jd_dates, dates)
+
+        if len(dt_dates) > len(values):
+            dt_dates = dt_dates[:len(values)] #if the interval is off and its shifted, you better believe theres a missing value here. for fun.
+
 
         # print(len(dt_dates), len(values))
         return dt_dates, np.asarray(values)
