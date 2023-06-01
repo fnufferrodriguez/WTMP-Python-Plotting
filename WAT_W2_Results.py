@@ -827,6 +827,8 @@ class W2_Results(object):
         if len(dt_dates) > len(values):
             dt_dates = dt_dates[:len(values)] #if the interval is off and its shifted, you better believe theres a missing value here. for fun.
 
+        if len(dt_dates) < len(values): #in the event data file has full year of output and the time window changes
+            values = values[:len(dt_dates)]
 
         # print(len(dt_dates), len(values))
         return dt_dates, np.asarray(values)

@@ -603,6 +603,7 @@ class DataOrganizer(object):
                 else:
                     metadata['units'] = None
 
+
         else:
             WF.print2stdout('No Data Defined for line', debug=self.Report.debug)
             return np.array([]), np.array([]), metadata
