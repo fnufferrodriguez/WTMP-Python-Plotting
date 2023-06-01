@@ -1488,9 +1488,12 @@ def matcharrays( array1, array2):
 
     if isinstance(array1, (list, np.ndarray)) and isinstance(array2, (list, np.ndarray)):
         if len(np.asarray(array1, dtype=object).shape) < len(np.asarray(array2, dtype=object).shape):
-            new_array1 = np.array([])
-            for i, ar2 in enumerate(array2):
-                new_array1 = np.append(new_array1, np.asarray([array1[i]] * len(ar2)))
+            if len(array1) == 0:
+                new_array1 = np.full_like(array2, fill_value=np.nan)
+            else:
+                new_array1 = np.array([])
+                for i, ar2 in enumerate(array2):
+                    new_array1 = np.append(new_array1, np.asarray([array1[i]] * len(ar2)))
             return new_array1
         #if both are lists..
         elif len(array1) < len(array2):
