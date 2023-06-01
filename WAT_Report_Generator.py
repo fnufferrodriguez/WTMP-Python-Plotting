@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '5.5.6'
+VERSIONNUMBER = '5.5.7'
 
 import os
 import sys
@@ -2485,7 +2485,7 @@ class MakeAutomatedReport(object):
                                                                                      debug=self.debug).strftime('%d %b %Y'),
                                           'value_end_date': WT.translateDateFormat(dates[-1], 'datetime', '',
                                                                                    self.StartTime, self.EndTime,
-                                                                                   ebug=self.debug).strftime('%d %b %Y'),
+                                                                                   debug=self.debug).strftime('%d %b %Y'),
                                           'logoutputfilename': 'NA'
                                           },
                                          isdata=True)
