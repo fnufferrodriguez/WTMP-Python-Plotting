@@ -121,6 +121,11 @@ class W2_Results(object):
         self.wdo_interval = wdo_interval
 
     def getW2StartTime(self):
+        '''
+        gets the time window from W2 con file
+        :return:
+        '''
+
         if self.control_file_type == 'npt':
             timecon = self.getNPTControlVariable(self.line_sections, 'TIME CON')
             self.tmstrt = float(timecon['TMSTRT'])
@@ -183,10 +188,10 @@ class W2_Results(object):
 
     def formatNPTCFLines(self, cf_lines):
         '''
-        seperates control file lines into sections, based off of spaces in the file. Control files are generally
+        seperates control file lines into sections, based off of spaces in the file. each section is 8 spaces. Control files are generally
         formatted like:
 
-        CSV FORMAT:
+        NPT FORMAT:
 
         NWB	 NBR	 IMX	 KMX	 NPROC	 CLOSEC
         1	  4	      83	 135	     1	     ON
@@ -845,6 +850,7 @@ class W2_Results(object):
         :param parameter: parameter to get data for
         :return:
         '''
+
         read_param = self.getParameterFileStr(parameter)
         if read_param == None:
             return [], [], []
