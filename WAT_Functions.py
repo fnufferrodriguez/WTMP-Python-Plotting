@@ -576,7 +576,8 @@ def filterContourOverTopWater(values, elevations, topwater):
 
 def replaceflaggedValues(Report, settings, itemset, include=[], exclude=[], forjasper=False):
     '''
-    recursive function to replace flagged values in settings
+    recursive function to replace flagged values in settings, include and exclude only work on first order flags, aka
+    the main flag in the dictionary, not anything nested inside of it
     :param settings: dict, list or string containing settings, potentially with flags
     :return:
         settings: dict, list or string with flags replaced
@@ -595,11 +596,13 @@ def replaceflaggedValues(Report, settings, itemset, include=[], exclude=[], forj
                 if key not in include:
                     continue
             if isinstance(settings[key], dict):
-                settings[key] = replaceflaggedValues(Report, settings[key], itemset, include=include, exclude=exclude, forjasper=forjasper)
+                # settings[key] = replaceflaggedValues(Report, settings[key], itemset, include=include, exclude=exclude, forjasper=forjasper)
+                settings[key] = replaceflaggedValues(Report, settings[key], itemset, forjasper=forjasper)
             elif isinstance(settings[key], list):
                 new_list = []
                 for item in settings[key]:
-                    new_list.append(replaceflaggedValues(Report, item, itemset, include=include, exclude=exclude, forjasper=forjasper))
+                    # new_list.append(replaceflaggedValues(Report, item, itemset, include=include, exclude=exclude, forjasper=forjasper))
+                    new_list.append(replaceflaggedValues(Report, item, itemset, forjasper=forjasper))
                 settings[key] = new_list
             else:
                 try:

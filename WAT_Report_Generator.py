@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '5.5.10'
+VERSIONNUMBER = '5.5.11'
 
 import os
 import sys
@@ -1532,8 +1532,8 @@ class MakeAutomatedReport(object):
             if object_settings['type'].lower() in template_settings.keys():
                 object_settings = WF.replaceDefaults(self, template_settings[object_settings['type'].lower()], object_settings)
 
-        object_settings = WF.replaceflaggedValues(self, object_settings, 'fancytext', exclude=['description'])
-        object_settings = WF.replaceflaggedValues(self, object_settings, 'fancytext', include=['description'],
+        object_settings = WF.replaceflaggedValues(self, object_settings, 'fancytext', exclude=['description', 'thresholds'])
+        object_settings = WF.replaceflaggedValues(self, object_settings, 'fancytext', include=['description', 'thresholds'],
                                                   forjasper=True)
 
         object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = WF.getObjectYears(self, object_settings)
