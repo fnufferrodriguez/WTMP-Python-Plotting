@@ -30,7 +30,7 @@ def getDefaultDefaultLineStyles(i):
     :return: dictionary with line settings
     '''
 
-    if i >= len(constants.def_colors):
+    while i >= len(constants.def_colors):
         i = i - len(constants.def_colors)
     return {'linewidth': 2, 'linecolor': constants.def_colors[i],
             'linestylepattern': 'solid', 'alpha': 1.0, 'zorder': 4}
@@ -43,7 +43,7 @@ def getDefaultDefaultPointStyles(i):
     :return: dictionary with point settings
     '''
 
-    if i >= len(constants.def_colors):
+    while i >= len(constants.def_colors):
         i = i - len(constants.def_colors)
     return {'pointfillcolor': constants.def_colors[i], 'pointlinecolor': constants.def_colors[i], 'symboltype': 1,
             'symbolsize': 5, 'numptsskip': 0, 'alpha': 1.0}
