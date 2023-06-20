@@ -153,7 +153,10 @@ class XMLReport(object):
 
         self.current_reportsubgroup_num = 0
         with open(self.XML_fn, 'a') as XML:
-            outputtext = f'<Report_Group ReportGroupOrder="{self.current_reportgroup_num}" ReportGroupName="{ChapterName}" GroupText="{ChapterText}">\n'.replace('\\n', '\n').replace('\\t', '\t')
+            if ChapterText != '':
+                outputtext = f'<Report_Group ReportGroupOrder="{self.current_reportgroup_num}" ReportGroupName="{ChapterName}" GroupText="{ChapterText}">\n'.replace('\\n', '\n').replace('\\t', '\t')
+            else:
+                outputtext = f'<Report_Group ReportGroupOrder="{self.current_reportgroup_num}" ReportGroupName="{ChapterName}">\n'.replace('\\n', '\n').replace('\\t', '\t')
             XML.write(outputtext)
         self.current_reportgroup_num += 1
 
@@ -180,7 +183,10 @@ class XMLReport(object):
         '''
 
         with open(self.XML_fn, 'a') as XML:
-            XML.write('<Report_Subgroup ReportSubgroupOrder="{0}" ReportSubgroupDescription="{1}">\n'.format(self.current_reportsubgroup_num, section_header))
+            if section_header != '':
+                XML.write('<Report_Subgroup ReportSubgroupOrder="{0}" ReportSubgroupDescription="{1}">\n'.format(self.current_reportsubgroup_num, section_header))
+            else:
+                XML.write('<Report_Subgroup ReportSubgroupOrder="{0}">\n'.format(self.current_reportsubgroup_num))
         self.current_reportsubgroup_num += 1
 
     def writeSectionHeaderEnd(self):

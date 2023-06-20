@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '5.5.12'
+VERSIONNUMBER = '5.5.13'
 
 import os
 import sys
@@ -3385,8 +3385,16 @@ class MakeAutomatedReport(object):
                 else:
                     self.SimulationVariables[ID]['ModelAlt'] == 'unknown'
                 self.accepted_IDs.append(ID)
+                self.modelIndependent = False
 
-        if len(self.accepted_IDs) == 0:
+        if len(simCSVAlt['plugins']) == 0:
+            #you can have chapters/sections in the report that are not tied to models, either of text of non model results
+            #such as boundary conditions or something
+            WF.print2stdout('Model independent plotting occurring. If this is a mistake, check the input CSV for None flags.')
+            self.modelIndependent = True
+
+        elif len(self.accepted_IDs) == 0:
+
             if self.iscomp:
                 csv_file_name = '{0}_comparison.csv'.format(self.baseSimulationName.replace(' ', '_'))
             else:
@@ -3423,13 +3431,19 @@ class MakeAutomatedReport(object):
         loads model alternative specific settings for a given ID
         :param ID: selected ID, such as 'base' or 'alt_1'
         '''
-
-        self.alternativeFpart = self.SimulationVariables[ID]['alternativeFpart']
-        self.alternativeDirectory = self.SimulationVariables[ID]['alternativeDirectory']
-        self.modelAltName = self.SimulationVariables[ID]['modelAltName']
-        self.plugin = self.SimulationVariables[ID]['plugin']
-        self.ModelAlt = self.SimulationVariables[ID]['ModelAlt']
-        # WF.print2stdout('Model {0} Loaded'.format(ID), debug=self.debug) #noisy
+        if not self.modelIndependent:
+            self.alternativeFpart = self.SimulationVariables[ID]['alternativeFpart']
+            self.alternativeDirectory = self.SimulationVariables[ID]['alternativeDirectory']
+            self.modelAltName = self.SimulationVariables[ID]['modelAltName']
+            self.plugin = self.SimulationVariables[ID]['plugin']
+            self.ModelAlt = self.SimulationVariables[ID]['ModelAlt']
+            # WF.print2stdout('Model {0} Loaded'.format(ID), debug=self.debug) #noisy
+        else:
+            self.alternativeFpart = 'none'
+            self.alternativeDirectory = 'none'
+            self.modelAltName = 'none'
+            self.plugin = 'none'
+            self.ModelAlt = 'none'
 
     def initializeXML(self):
         '''
@@ -3496,24 +3510,24 @@ class MakeAutomatedReport(object):
         :param simorder: number of simulation file
         :return:
         '''
+        if not self.modelIndependent:
+            modelstrs = []
+            for Chapter in self.ChapterDefinitions:
+                chapname = Chapter['name']
+                outstr = f'<Model ModelOrder="%%modelOrder%%" >{chapname}:'
+                for cnt, ID in enumerate(self.accepted_IDs):
+                    if cnt > 0:
+                        outstr += ','
+                    outstr += ' {0}'.format(self.SimulationVariables[ID]['plugin'])
+                outstr += '</Model>\n'
+                modelstrs.append(outstr)
 
-        modelstrs = []
-        for Chapter in self.ChapterDefinitions:
-            chapname = Chapter['name']
-            outstr = f'<Model ModelOrder="%%modelOrder%%" >{chapname}:'
-            for cnt, ID in enumerate(self.accepted_IDs):
-                if cnt > 0:
-                    outstr += ','
-                outstr += ' {0}'.format(self.SimulationVariables[ID]['plugin'])
-            outstr += '</Model>\n'
-            modelstrs.append(outstr)
-
-        lastline = '%%REPLACEINTRO_{0}%%'.format(simorder)
-        for i, ms in enumerate(modelstrs):
-            tmpstr = ms.replace('%%modelOrder%%', str(self.modelOrder))
-            self.XML.insertAfter(lastline, tmpstr)
-            self.modelOrder += 1
-            lastline = tmpstr
+            lastline = '%%REPLACEINTRO_{0}%%'.format(simorder)
+            for i, ms in enumerate(modelstrs):
+                tmpstr = ms.replace('%%modelOrder%%', str(self.modelOrder))
+                self.XML.insertAfter(lastline, tmpstr)
+                self.modelOrder += 1
+                lastline = tmpstr
 
     def fixXMLModelIntroduction(self):
         '''

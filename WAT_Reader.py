@@ -63,10 +63,11 @@ def readSimulationFile(simulationfile):
                 sim_info[i]['plugins'] = []
                 sim_info[i]['modelaltnames'] = []
                 for si, s in enumerate(sline):
-                    if si % 2 == 0: #even
-                        sim_info[i]['plugins'].append(s.strip())
-                    else: #odd
-                        sim_info[i]['modelaltnames'].append(s.strip())
+                    if len(s.strip()) > 1:
+                        if si % 2 == 0: #even
+                            sim_info[i]['plugins'].append(s.strip())
+                        else: #odd
+                            sim_info[i]['modelaltnames'].append(s.strip())
     return sim_info
 
 def readGraphicsDefaults(GD_file):
