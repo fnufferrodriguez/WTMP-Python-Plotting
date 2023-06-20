@@ -1277,7 +1277,7 @@ class Tables(object):
         :param description: description of table
         '''
 
-        self.Report.makeTextBox({'text': f'Some items in Table "{description}" omitted. Some data required is missing/unavailable.'})
+        self.Report.makeTextBox({'text': f'Some items in Table "{description}" not generated due to insufficient data.'})
 
     def writeMissingTableWarning(self, description):
         '''
@@ -1285,4 +1285,4 @@ class Tables(object):
         :param description: description of table
         '''
 
-        self.Report.makeTextBox({'text': f'\nTable "{description}" omitted. Some data required is missing/unavailable.'})
+        self.Report.makeTextBox({'text': f'\nTable "{description}" not generated due to insufficient data.'})
