@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '5.5.11'
+VERSIONNUMBER = '5.5.12'
 
 import os
 import sys
@@ -639,48 +639,6 @@ class MakeAutomatedReport(object):
                     xlabel = WF.formatTextFlags(ax_settings['xlabel'])
                     ax.set_xlabel(xlabel, fontsize=xlabsize)
 
-                if 'legend' in ax_settings.keys():
-                    if ax_settings['legend'].lower() == 'true':
-                        if 'legendsize' in ax_settings.keys():
-                            legsize = float(ax_settings['legendsize'])
-                        elif 'fontsize' in ax_settings.keys():
-                            legsize = float(ax_settings['fontsize'])
-                        else:
-                            legsize = 12
-
-                        handles, labels = ax.get_legend_handles_labels()
-
-                        plot_blank = False
-                        if _usetwinx:
-                            if len(handles) > 0:
-                                if 'useblanklegendentry' in ax_settings.keys():
-                                    if ax_settings['useblanklegendentry'].lower() == 'true':
-                                        plot_blank = True
-                                if plot_blank:
-                                    empty_handle, = ax.plot([],[],color="w", alpha=0.0)
-                                    handles.append(empty_handle)
-                                    labels.append('')
-                            ax2_handles, ax2_labels = ax2.get_legend_handles_labels()
-                            handles += ax2_handles
-                            labels += ax2_labels
-                            right_sided_axes.append(ax)
-                            right_offset = ax.get_window_extent().x0 / ax.get_window_extent().width
-
-                        if 'numlegendcolumns' in ax_settings:
-                            numcols = int(ax_settings['numlegendcolumns'])
-                        else:
-                            numcols = 1
-
-                        if ax_settings['legend_outside'].lower() == 'true': #TODO: calibrate the offset
-                            if _usetwinx:
-                                ax.legend(handles=handles, labels=labels, loc='center left', bbox_to_anchor=(1+right_offset/2, 0.5), ncol=numcols,fontsize=legsize)
-
-                            else:
-                                # right_sided_axes.append(ax)
-                                ax.legend(handles=handles, labels=labels, loc='center left', bbox_to_anchor=(1, 0.5), ncol=numcols,fontsize=legsize)
-                        else:
-                            ax.legend(handles=handles, labels=labels, fontsize=legsize, ncol=numcols)
-
                 ############# xticks and lims #############
 
                 useplot = self.Plots.formatDateXAxis(ax, ax_settings)
@@ -721,7 +679,8 @@ class MakeAutomatedReport(object):
                         if xtick_settings['copybottom'].lower() == 'true':
                             ax2y.set_xticks(ax.get_xticks())
 
-                    self.Plots.formatTimeSeriesXticks(ax2y, xtick_settings, ax_settings, dateformatflag='dateformat2')
+                    self.Plots.formatTimeSeriesXticks(ax2y, xtick_settings, ax_settings,
+                                                      dateformatflag='dateformat2')
 
                     ax2y.set_xlim(left=xmin)
                     ax2y.set_xlim(right=xmax)
@@ -745,7 +704,7 @@ class MakeAutomatedReport(object):
                 if len(gatelabels_positions) > 0:
                     ax.set_yticks(gatelabels_positions)
                     ax.set_yticklabels(gategroup_labels, rotation=90, va='center', ha='center')
-                    ax.tick_params(axis='both', which='both',color='w')
+                    ax.tick_params(axis='both', which='both', color='w')
 
                 if _usetwinx:
                     if 'ylabel2' in ax_settings.keys():
@@ -770,8 +729,64 @@ class MakeAutomatedReport(object):
                         ax2.grid(False)
                     else:
                         ax2.grid(True)
-                    ax.set_zorder(ax2.get_zorder()+1) #axis called second will always be on top unless this
+                    ax.set_zorder(ax2.get_zorder() + 1)  # axis called second will always be on top unless this
                     ax.patch.set_visible(False)
+
+                if 'legend' in ax_settings.keys():
+                    plt.gcf().canvas.draw()
+                    if ax_settings['legend'].lower() == 'true':
+                        if 'legendsize' in ax_settings.keys():
+                            legsize = float(ax_settings['legendsize'])
+                        elif 'fontsize' in ax_settings.keys():
+                            legsize = float(ax_settings['fontsize'])
+                        else:
+                            legsize = 12
+
+                        handles, labels = ax.get_legend_handles_labels()
+
+                        plot_blank = False
+                        if _usetwinx:
+                            if len(handles) > 0:
+                                if 'useblanklegendentry' in ax_settings.keys():
+                                    if ax_settings['useblanklegendentry'].lower() == 'true':
+                                        plot_blank = True
+                                if plot_blank:
+                                    empty_handle, = ax.plot([],[],color="w", alpha=0.0)
+                                    handles.append(empty_handle)
+                                    labels.append('')
+                            ax2_handles, ax2_labels = ax2.get_legend_handles_labels()
+                            handles += ax2_handles
+                            labels += ax2_labels
+                            # right_sided_axes.append(ax)
+                            right_sided_axes.append([ax, ax2])
+                            ax2ylabel = ax2.get_ylabel()
+                            if ax2ylabel != '':
+                                ax2setylabel = ax2.set_ylabel(ax2ylabel)
+                                ylabel_x1 = ax2setylabel.get_window_extent().x1
+                                # right_offset = ax.get_window_extent().x0 / ylabel_x1
+                                # right_offset = ylabel_x1 + ax.get_window_extent().x0 / ylabel_x1
+                                right_offset = ax.get_window_extent().x0 / (ax.get_window_extent().width - ax2setylabel.get_window_extent().width)
+                                right_offset *= 1.20
+                            else:
+                                right_offset = ax.get_window_extent().x0 / ax.get_window_extent().width
+
+                        if 'numlegendcolumns' in ax_settings:
+                            numcols = int(ax_settings['numlegendcolumns'])
+                        else:
+                            numcols = 1
+
+                        if ax_settings['legend_outside'].lower() == 'true': #TODO: calibrate the offset
+                            if _usetwinx:
+
+                                ax.legend(handles=handles, labels=labels, loc='center left', bbox_to_anchor=(1+right_offset/2, 0.5), ncol=numcols,fontsize=legsize)
+
+                            else:
+                                # right_sided_axes.append(ax)
+                                ax.legend(handles=handles, labels=labels, loc='center left', bbox_to_anchor=(1, 0.5), ncol=numcols,fontsize=legsize)
+                        else:
+                            ax.legend(handles=handles, labels=labels, fontsize=legsize, ncol=numcols)
+
+
 
             if not any(useAx):
                 print(f'Plot for {year} not included due to xlimits.')
@@ -779,22 +794,6 @@ class MakeAutomatedReport(object):
                 continue
 
             plt.gcf().canvas.draw() #refresh so we can get legend stuff
-            left_mod = 0
-            for lax in left_sided_axes:
-                lax_leg = lax.get_legend()
-                lax_leg.get_window_extent()
-                # lax_leg_width_ratio = lax_leg.get_window_extent().width / lax.get_window_extent().width
-                lax_leg_width_ratio = lax_leg.get_window_extent().x1 / lax.get_window_extent().width
-                if lax_leg_width_ratio > left_mod:
-                    left_mod = lax_leg_width_ratio
-
-            right_mod = 0
-            for rax in right_sided_axes:
-                rax_leg = rax.get_legend()
-                rax_leg.get_window_extent()
-                rax_leg_width_ratio = rax_leg.get_window_extent().width / rax.get_window_extent().width
-                if rax_leg_width_ratio > right_mod:
-                    right_mod = rax_leg_width_ratio
 
             plt.tight_layout()
 
