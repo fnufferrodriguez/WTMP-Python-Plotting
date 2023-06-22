@@ -354,10 +354,17 @@ class DataOrganizer(object):
                             dates = timeserieslines[timeserieslinekey]['dates']
                             if 'timestamps' in settings.keys():
                                 idx = WR.getClosestTime(settings['timestamps'], dates)
-                                if idx > len(values):
-                                    straightlines[tosl][timeserieslinekey] = {'values': np.nan}
-                                else:
-                                    straightlines[tosl][timeserieslinekey] = {'values': values[idx]}
+                                # if idx > len(values):
+                                #     straightlines[tosl][timeserieslinekey] = {'values': np.nan}
+                                # else:
+                                v_idx = []
+                                for id in idx:
+                                    if id > len(values):
+                                        v_idx.append(np.nan)
+                                    else:
+                                        v_idx.append(values[id])
+                                # straightlines[tosl][timeserieslinekey] = {'values': values[idx]}
+                                straightlines[tosl][timeserieslinekey] = {'values': v_idx}
                             for key in timeserieslinesettings[timeserieslinekey].keys():
                                 if key not in straightlines[tosl][timeserieslinekey].keys():
                                     straightlines[tosl][timeserieslinekey][key] = timeserieslinesettings[timeserieslinekey][key]
