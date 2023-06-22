@@ -174,28 +174,28 @@ class DataOrganizer(object):
 
         return wse_data
 
-    def getIterations(self, object_settings, data_settings):
+    def getMembers(self, object_settings, data_settings):
         '''
-        Gets iterations to use from settings
+        Gets members to use from settings
         :param object_settings: dictionary of settings
         :param data_settings: dictionary of settings describing the data
-        :return: list of iterations to use
+        :return: list of members to use
         '''
 
         if self.Report.forecastiteration: #if its a forecast iteration, grab the current iteration
-            iterations = [self.Report.Iteration]
-        elif 'iterations' in object_settings.keys(): #if user defined, use the user defined ones
-            iterations = [WF.formatMembers(n) for n in object_settings['iterations']]
+            members = [self.Report.member]
+        elif 'members' in object_settings.keys(): #if user defined, use the user defined ones
+            members = [WF.formatMembers(n) for n in object_settings['members']]
         elif self.Report.reportType == 'forecast': #use the forecasts defined
-            iterations = self.Report.Iterations
+            members = self.Report.allMembers
         else: #otherwise, we just use everything that we have (if multi datasets, get the overlapping
-            iterations = []
+            members = []
             for i, ds in enumerate(data_settings.keys()):
                 if i == 0:
-                    iterations = data_settings[ds]['iterations']
+                    members = data_settings[ds]['members']
                 else:
-                    iterations = np.intersect1d(data_settings[ds]['iterations'], iterations)
-        return iterations
+                    members = np.intersect1d(data_settings[ds]['members'], members)
+        return members
 
     def filterTimeSeries(self, data, line_settings):
         '''
@@ -409,7 +409,7 @@ class DataOrganizer(object):
                     metadata = datamementry['metadata']
 
                     metadata['frommemory'] = True #did we get data from memory
-                    members_to_grab = [] #reset, but we still know our iterations
+                    members_to_grab = [] #reset, but we still know our members
                     if metadata['collection']:
                         if not metadata['allmembers']: #check if we've ever grabbed them all. if we did, no need to go back
                             for member in members:

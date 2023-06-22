@@ -50,22 +50,22 @@ class Plots(object):
         :return: updated settings
         '''
 
-        if 'iterations' in line_draw_settings:
+        if 'members' in line_draw_settings:
             collection_draw_settings = {}
-            iterations = line_draw_settings['iterations']
-            for iIT, iteration in enumerate(iterations):
-                collection_draw_settings[iteration] = {}
-                collection_draw_settings[iteration].update(line_draw_settings)
-                collection_draw_settings[iteration]['numtimesused'] = iIT
-                if '%%iteration%%' not in collection_draw_settings[iteration]['label']:
-                    collection_draw_settings[iteration]['label'] = f"{collection_draw_settings[iteration]['label']}: {iteration}"
+            members = line_draw_settings['members']
+            for mi, member in enumerate(members):
+                collection_draw_settings[member] = {}
+                collection_draw_settings[member].update(line_draw_settings)
+                collection_draw_settings[member]['numtimesused'] = mi
+                if '%%member%%' not in collection_draw_settings[member]['label']:
+                    collection_draw_settings[member]['label'] = f"{collection_draw_settings[member]['label']}: {member}"
                 else:
-                    collection_draw_settings[iteration]['label'] = collection_draw_settings[iteration]['label'].replace('%%iteration%%', str(WF.formatMembers(iteration)))
-                collection_draw_settings[iteration] = WF.fixDuplicateColors(collection_draw_settings[iteration])
+                    collection_draw_settings[member]['label'] = collection_draw_settings[member]['label'].replace('%%member%%', str(WF.formatMembers(member)))
+                collection_draw_settings[member] = WF.fixDuplicateColors(collection_draw_settings[member])
             return collection_draw_settings
 
         else:
-            WF.print2stdout('Unable to get iterations. Cannot seperate collection lines.', debug=self.Report.debug)
+            WF.print2stdout('Unable to get members. Cannot seperate collection lines.', debug=self.Report.debug)
             return line_draw_settings
 
     def setTimeSeriesXlims(self, cur_obj_settings, yearstr, years):

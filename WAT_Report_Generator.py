@@ -421,7 +421,7 @@ class MakeAutomatedReport(object):
                                 if modifiedalpha:
                                     line_draw_settings['alpha'] = 1.
                             else:
-                                valueset = values[self.Iteration]
+                                valueset = values[self.member]
                                 self.Plots.plot(dates, valueset, curax, line_draw_settings)
 
                         else:
@@ -1569,11 +1569,11 @@ class MakeAutomatedReport(object):
 
         isCollection = WF.checkForCollections(data_settings)
         if isCollection:
-            iterations = self.Data.getIterations(object_settings, data_settings)
-            object_settings['iterations'] = iterations
+            members = self.Data.getMembers(object_settings, data_settings)
+            object_settings['members'] = members
             if self.forecastiteration:
-                object_settings = WF.updateFlaggedValues(object_settings, '%%iteration%%', WF.formatMembers(self.Iteration))
-            rows = self.Tables.configureRowsForCollection(rows, data_settings, object_settings)
+                object_settings = WF.updateFlaggedValues(object_settings, '%%member%%', WF.formatMembers(self.member))
+            rows = self.Tables.configureRowsForCollection(rows, object_settings)
 
         if 'description' in object_settings.keys():
             desc = object_settings['description']
@@ -1602,13 +1602,13 @@ class MakeAutomatedReport(object):
                     stat = None
                     addasterisk = False
                     if self.forecastiteration:
-                        iteration = self.Iteration
+                        member = self.member
                     else:
-                        iteration = None
+                        member = None
                     if '%%' in rowname:
-                        if isCollection and '%%iteration' in rowname:
-                            iteration = rowname.split('%%iteration.')[1].split('%%')[0]
-                            rowname = re.sub(r"%%iteration\.(\d+)%%", WF.formatMembers, rowname, flags=re.IGNORECASE) #re.sub magic, counts \1 as two chars
+                        if isCollection and '%%member' in rowname:
+                            member = rowname.split('%%member.')[1].split('%%')[0]
+                            rowname = re.sub(r"%%member\.(\d+)%%", WF.formatMembers, rowname, flags=re.IGNORECASE) #re.sub magic, counts \1 as two chars
 
                     if '%%' in row_val:
                         rowdata, sr_month = self.Tables.getStatsLineData(row_val, yearlydata, year=year, data_key=iteration)

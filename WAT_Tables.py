@@ -1229,21 +1229,21 @@ class Tables(object):
                     headings_i[hgi].append(hi)
         return headings_i
 
-    def configureRowsForCollection(self, rows, data_settings, object_settings):
+    def configureRowsForCollection(self, rows, object_settings):
         formatted_rows = []
-        #figure out IDs first
-        if 'iterations' in object_settings.keys():
-            iterations = object_settings['iterations']
-        else:
-            iterations = WF.getCollectionIDs(data_settings, object_settings)
+        #figure out members first
+        if 'members' in object_settings.keys(): #if a subset
+            members = object_settings['members']
+        else: #otherwise, get them all
+            members = self.Report.allMembers
         for row in rows:
-            if '%%iteration%%' in row:
-                for iteration in iterations:
+            if '%%member%%' in row:
+                for member in members:
                     srow = row.split('|')
                     frow = []
                     for sr in srow:
-                        if '%%iteration%%' in sr:
-                            sr = sr.replace('%%iteration%%', f'%%iteration.{iteration}%%')
+                        if '%%member%%' in sr:
+                            sr = sr.replace('%%member%%', f'%%member.{member}%%')
                         frow.append(sr)
                     formatted_rows.append('|'.join(frow))
             else:

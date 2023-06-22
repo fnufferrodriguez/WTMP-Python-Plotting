@@ -187,7 +187,7 @@ def readCollectionsDSSData(dss_file, pathname, members, startdate, enddate, debu
     :param startdate: start date to get data for
     :param enddate: end date to get data for
     :param debug: debug settings to print message
-    :return: times, values, units, iterations grabbed
+    :return: times, values, units, members grabbed
     '''
 
     try:
