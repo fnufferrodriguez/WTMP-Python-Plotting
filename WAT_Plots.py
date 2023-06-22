@@ -60,7 +60,7 @@ class Plots(object):
                 if '%%iteration%%' not in collection_draw_settings[iteration]['label']:
                     collection_draw_settings[iteration]['label'] = f"{collection_draw_settings[iteration]['label']}: {iteration}"
                 else:
-                    collection_draw_settings[iteration]['label'] = collection_draw_settings[iteration]['label'].replace('%%iteration%%', str(WF.formatIterations(iteration)))
+                    collection_draw_settings[iteration]['label'] = collection_draw_settings[iteration]['label'].replace('%%iteration%%', str(WF.formatMembers(iteration)))
                 collection_draw_settings[iteration] = WF.fixDuplicateColors(collection_draw_settings[iteration])
             return collection_draw_settings
 

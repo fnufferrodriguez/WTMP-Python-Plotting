@@ -1763,22 +1763,28 @@ def formatTextFlags(text):
         text = text.replace(key, fixed)
     return text
 
-def formatIterations(iteration):
+def formatMembers(member):
     '''
     format iterations to have DSS notation of 6 characters with leading 0's
     :param iteration: single iteration or list of iterations, or regex match
     :return: formatted iteration
     '''
 
-    if isinstance(iteration, re.Match):
-        return iteration.group(1).zfill(6)
-    elif isinstance(iteration, (np.ndarray, list)):
-        frmted_iterations = []
-        for it in iteration:
-            frmted_iterations.append(str(it).zfill(6))
-        return frmted_iterations
+    if isinstance(member, re.Match):
+        return member.group(1).zfill(6)
+    elif isinstance(member, (np.ndarray, list)):
+        frmted_members = []
+        for me in member:
+            frmted_members.append(str(me).zfill(6))
+        return frmted_members
     else:
-        return str(iteration).zfill(6)
+        return str(member).zfill(6)
+
+def matchMemberToEnsembleSet(ensemblesets, member):
+    for ensembleset in ensemblesets:
+        if member in ensembleset['members']:
+            return ensembleset
+    return {}
 
 def formatNumbers(number, numberformatsettings):
     '''

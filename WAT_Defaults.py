@@ -35,6 +35,9 @@ def getDefaultDefaultLineStyles(i):
     return {'linewidth': 2, 'linecolor': constants.def_colors[i],
             'linestylepattern': 'solid', 'alpha': 1.0, 'zorder': 4}
 
+def getDefaultDefaultForecastTableColumns():
+    return ['member', 'operationsname', 'metname', 'temptargetname']
+
 def getDefaultDefaultPointStyles(i):
     '''
     creates a default point style based off of the number points and default colors

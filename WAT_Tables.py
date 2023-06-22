@@ -30,6 +30,8 @@ class Tables(object):
         :param Report: self class from main Report Generator script
         '''
         self.Report = Report
+        if self.Report.reportType == 'forecast':
+            self.defineForecastTableColumns()
 
     def buildHeadersByTimestamps(self, timestamps, years):
         '''
@@ -1002,7 +1004,7 @@ class Tables(object):
                for datakey in data.keys():
                    df = data[datakey]
                    for i, row in df.iterrows():
-                       df.loc[i, primarykey] = WF.formatIterations(row[primarykey])
+                       df.loc[i, primarykey] = WF.formatMembers(row[primarykey])
                    data[datakey] = df
        return data
 
@@ -1286,3 +1288,32 @@ class Tables(object):
         '''
 
         self.Report.makeTextBox({'text': f'\nTable "{description}" not generated due to insufficient data.'})
+
+    def defineForecastTableColumns(self):
+        #{name from XML | display name}
+        self.forecastTableColumns = {'name': 'Name',
+                                     'operationsname': 'Operations',
+                                     'metname': 'Met',
+                                     'temptargetname': 'Temp Target',
+                                     'member': 'Member Number'
+                                     }
+
+    def confirmForecastTableColumns(self, columns):
+        rejected_columns = []
+        approved_columns = []
+        for column in columns:
+            if column.lower() not in self.forecastTableColumns.keys():
+                rejected_columns.append(column)
+            else:
+                approved_columns.append(column)
+        if len(rejected_columns) > 0:
+            WF.print2stdout(f'Invalid column(s) selected: {rejected_columns}')
+            WF.print2stdout(f'Approved column(s): {self.forecastTableColumns.keys()}')
+
+        return approved_columns
+
+    def formatForecastTableHeaders(self, columns):
+        formatted_headers = []
+        for column in columns:
+            formatted_headers.append(self.forecastTableColumns[column.lower()])
+        return formatted_headers
