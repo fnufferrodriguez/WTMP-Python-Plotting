@@ -159,8 +159,8 @@ def readChapterDefFile(CD_file):
         # collections_flags = ['isensemble', 'Isensemble', 'ISENSEMBLE'] #TODO: is this final flag??
         # ChapterDef['isensemble'] = findTargetinChapterDefFile(collections_flags, chapter, default='false')
 
-        forecastiteration_flags = ['forecastiteration', 'Forecastiteration', 'ForecastIteration', 'FORECASTITERATION'] #TODO: is this final flag??
-        ChapterDef['forecastiteration'] = findTargetinChapterDefFile(forecastiteration_flags, chapter, default='false')
+        memberiteration_flags = ['memberiteration', 'Memberiteration', 'MemberIteration', 'MEMBERITERATION', 'memberIteration'] #TODO: is this final flag??
+        ChapterDef['memberiteration'] = findTargetinChapterDefFile(memberiteration_flags, chapter, default='false')
 
         cd_sections = chapter.findall('Sections/Section')
         for section in cd_sections:
@@ -178,16 +178,16 @@ def readChapterDefFile(CD_file):
 
     return Chapters
 
-def readCollectionsDSSData(dss_file, pathname, iterations, startdate, enddate, debug):
+def readCollectionsDSSData(dss_file, pathname, members, startdate, enddate, debug):
     '''
     reads collection dss datasets and returns a dictionary of values
     :param dss_file: path to DSS file
     :param pathname: dss path with * wildcard in the Fpart
-    :param iterations: list of iterations to collect, or 'all'
+    :param members: list of members to collect, or 'all'
     :param startdate: start date to get data for
     :param enddate: end date to get data for
     :param debug: debug settings to print message
-    :return: times, values, units, iterations grabbed
+    :return: times, values, units, members grabbed
     '''
 
     try:
@@ -204,28 +204,28 @@ def readCollectionsDSSData(dss_file, pathname, iterations, startdate, enddate, d
                 WF.print2stdout(f'No records in collection for {pathname}', debug=debug)
                 fid.close()
                 return [], [], None, []
-            if iterations == 'all':
-                iterations = [int(n.split('/')[6].split('|')[0].replace('C:', '')) for n in collection_pn]
+            if members == 'all':
+                members = [int(n.split('/')[6].split('|')[0].replace('C:', '')) for n in collection_pn]
             else:
-                iterations = [int(n) for n in iterations]
+                members = [int(n) for n in members]
 
-            iterations.sort()
-            iterations = WF.formatIterations(iterations)
-            for i, iteration in enumerate(iterations):
-                CID_pathname_fpart = pathname.split('/')[6].replace('*|', f'C:{iteration}|')
+            members.sort()
+            members = WF.formatMembers(members)
+            for i, member in enumerate(members):
+                CID_pathname_fpart = pathname.split('/')[6].replace('*|', f'C:{member}|')
                 CID_pathname_split = pathname.split('/')
                 CID_pathname_split[6] = CID_pathname_fpart
                 CID_pathname = '/'.join(CID_pathname_split)
-                WF.print2stdout(f'Currently working on {iteration}', debug=debug)
+                WF.print2stdout(f'Currently working on {member}', debug=debug)
                 ts = fid.read_ts(CID_pathname, window=(startdate, enddate), regular=True, trim_missing=True)
                 values = np.asarray(ts.values, dtype=np.float64)
                 if i == 0: #set vars like times and units that are always the same for all collection
                     times = np.array(ts.pytimes)
                     units = ts.units
                     collection_values = {}
-                collection_values[iteration] = values
+                collection_values[member] = values
             fid.close()
-            return times, collection_values, units, iterations
+            return times, collection_values, units, members
         else:
             WF.print2stdout(f'DSS file {dss_file} not found.', debug=True)
             return [], [], None, []
@@ -526,7 +526,6 @@ def getchildren(root, returnkeyless=False):
     '''
 
     children = {}
-
     if len(root) == 0:
         try:
             if len(root.text.strip()) == 0:
@@ -647,8 +646,8 @@ def readSimulationInfo(Report, simulationInfoFile):
                           }
 
         if Report.isforecast:
-            iterations = getchildren(simulation.find('iterations'), returnkeyless=True)
-            simulationInfo['iterations'] = iterations
+            ensemblesets = getchildren(simulation.find('EnsembleSets'), returnkeyless=True)
+            simulationInfo['ensemblesets'] = ensemblesets
 
         try:
             simulationInfo['ID'] = simulation.find('ID').text
@@ -656,13 +655,13 @@ def readSimulationInfo(Report, simulationInfoFile):
             simulationInfo['ID'] = Report.base_id
 
 
-        modelAlternatives = []
-        for modelAlt in simulation.find('ModelAlternatives'):
-            modelAlternatives.append({'name': modelAlt.find('Name').text,
-                                      'program': modelAlt.find('Program').text,
-                                      'fpart': modelAlt.find('FPart').text,
-                                      'directory': modelAlt.find('Directory').text})
-
+        # modelAlternatives = []
+        # for modelAlt in simulation.find('ModelAlternatives'):
+        #     modelAlternatives.append({'name': modelAlt.find('Name').text,
+        #                               'program': modelAlt.find('Program').text,
+        #                               'fpart': modelAlt.find('FPart').text,
+        #                               'directory': modelAlt.find('Directory').text})
+        modelAlternatives = getchildren(simulation.find('ModelAlternatives'), returnkeyless=True)
         simulationInfo['modelalternatives'] = modelAlternatives
         Report.Simulations.append(simulationInfo)
 

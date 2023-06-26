@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '5.5.17'
+VERSIONNUMBER = '5.5.19'
 
 import os
 import sys
@@ -126,6 +126,7 @@ class MakeAutomatedReport(object):
             self.WAT_log.equalizeLog()
         elif self.reportType == 'forecast':
             self.initSimulationDict()
+            self.organizeMembers()
             for simulation in self.Simulations:
                 WF.checkExists(simulation['directory'])
                 self.setSimulationVariables(simulation)
@@ -219,13 +220,18 @@ class MakeAutomatedReport(object):
 
         object_settings['years'], object_settings['yearstr'] = WF.organizePlotYears(object_settings)
 
+        if 'description' not in object_settings.keys():
+            object_settings['description'] = ''
+        # else:
+        #     object_settings['description'] = WF.parseForTextFlags(object_settings['description'])
+
         for yi, year in enumerate(object_settings['years']):
             cur_obj_settings = pickle.loads(pickle.dumps(object_settings, -1))
             yearstr = object_settings['yearstr'][yi]
 
             cur_obj_settings = WF.updateFlaggedValues(cur_obj_settings, '%%year%%', yearstr)
-            if self.forecastiteration:
-                cur_obj_settings = WF.updateFlaggedValues(cur_obj_settings, '%%iteration%%', WF.formatIterations(self.Iteration))
+            if self.memberiteration:
+                cur_obj_settings = WF.updateFlaggedValues(cur_obj_settings, '%%member%%', WF.formatMembers(self.member))
 
             if len(cur_obj_settings['axs']) == 1:
                 figsize=(12, 6)
@@ -398,36 +404,36 @@ class MakeAutomatedReport(object):
 
                     if isCollection: #if we have a collection for the datasource
                         coloreach = False
-                        plotalliterations = False
+                        plotallmembers = False
                         if 'coloreach' in curline_settings.keys():
                             if curline_settings['coloreach'].lower() == 'true':
                                 coloreach = True
-                        if 'plotalliterations' in curline_settings.keys():
-                            if curline_settings['plotalliterations'].lower() == 'true':
-                                plotalliterations = True
+                        if 'plotallmembers' in curline_settings.keys():
+                            if curline_settings['plotallmembers'].lower() == 'true':
+                                plotallmembers = True
                         if not coloreach:
-                            if not self.forecastiteration or plotalliterations:
+                            if not self.memberiteration or plotallmembers:
                                 modifiedalpha = False
                                 if line_draw_settings['alpha'] == 1.:
                                     modifiedalpha = True
                                     line_draw_settings['alpha'] = 0.25 #for collection plots, set to low opac for a jillion lines
 
-                                for cIT, iteration in enumerate(curline_settings['iterations']):
-                                    valueset = values[iteration]
+                                for cIT, member in enumerate(curline_settings['members']):
+                                    valueset = values[member]
                                     if cIT > 0:
                                         line_draw_settings['label'] = ''
                                     self.Plots.plot(dates, valueset, curax, line_draw_settings)
                                 if modifiedalpha:
                                     line_draw_settings['alpha'] = 1.
                             else:
-                                valueset = values[self.Iteration]
+                                valueset = values[self.member]
                                 self.Plots.plot(dates, valueset, curax, line_draw_settings)
 
                         else:
                             single_coll_line_settings = self.Plots.seperateCollectionLines(line_draw_settings)
-                            for iteration in curline_settings['iterations']:
-                                valueset = values[iteration]
-                                coll_line_settings = single_coll_line_settings[iteration]
+                            for member in curline_settings['members']:
+                                valueset = values[member]
+                                coll_line_settings = single_coll_line_settings[member]
                                 self.Plots.plot(dates, valueset, curax, coll_line_settings)
 
                         self.Plots.plotCollectionEnvelopes(dates, values, curax, line_draw_settings)
@@ -899,6 +905,11 @@ class MakeAutomatedReport(object):
         yrheaders, yrheaders_i = self.Tables.buildHeadersByTimestamps(object_settings['timestamps'], self.years)
         yrheaders = self.Tables.convertHeaderFormats(yrheaders, object_settings)
 
+        if 'description' not in object_settings.keys():
+            object_settings['description'] = ''
+        # else:
+        #     object_settings['description'] = WF.parseForTextFlags(object_settings['description'])
+
         if not object_settings['split_by_year']: #if we dont want to split by year, just make a big ass list
             yrheaders = [list(itertools.chain.from_iterable(yrheaders))]
             yrheaders_i = [list(itertools.chain.from_iterable(yrheaders_i))]
@@ -1067,7 +1078,9 @@ class MakeAutomatedReport(object):
         object_settings = WF.replaceflaggedValues(self, object_settings, 'fancytext', exclude=['description'])
         object_settings = WF.replaceflaggedValues(self, object_settings, 'fancytext', include=['description'], forjasper=True)
 
+        # object_settings['description'] = WF.parseForTextFlags(object_settings['description'])
         obj_desc = WF.updateFlaggedValues(object_settings['description'], '%%year%%', self.years_str)
+
         # self.XML.writeProfilePlotStart(obj_desc)
 
         ################# Get timestamps #################
@@ -1568,17 +1581,18 @@ class MakeAutomatedReport(object):
 
         isCollection = WF.checkForCollections(data_settings)
         if isCollection:
-            iterations = self.Data.getIterations(object_settings, data_settings)
-            object_settings['iterations'] = iterations
-            if self.forecastiteration:
-                object_settings = WF.updateFlaggedValues(object_settings, '%%iteration%%', WF.formatIterations(self.Iteration))
-            rows = self.Tables.configureRowsForCollection(rows, data_settings, object_settings)
+            members = self.Data.getMembers(object_settings, data_settings)
+            object_settings['members'] = members
+            if self.memberiteration:
+                object_settings = WF.updateFlaggedValues(object_settings, '%%member%%', WF.formatMembers(self.member))
+            rows = self.Tables.configureRowsForCollection(rows, object_settings)
 
         if 'description' in object_settings.keys():
             desc = object_settings['description']
+            # desc = WF.parseForTextFlags(desc)
+            desc = WF.updateFlaggedValues(desc, '%%year%%', object_settings['allyearsstr'])
         else:
             desc = ''
-        desc = WF.updateFlaggedValues(desc, '%%year%%', object_settings['allyearsstr'])
 
         table_constructor = {}
 
@@ -1600,17 +1614,17 @@ class MakeAutomatedReport(object):
                     row_val = s_row[hi+1]
                     stat = None
                     addasterisk = False
-                    if self.forecastiteration:
-                        iteration = self.Iteration
+                    if self.memberiteration:
+                        member = self.member
                     else:
-                        iteration = None
+                        member = None
                     if '%%' in rowname:
-                        if isCollection and '%%iteration' in rowname:
-                            iteration = rowname.split('%%iteration.')[1].split('%%')[0]
-                            rowname = re.sub(r"%%iteration\.(\d+)%%", WF.formatIterations, rowname, flags=re.IGNORECASE) #re.sub magic, counts \1 as two chars
+                        if isCollection and '%%member' in rowname:
+                            member = rowname.split('%%member.')[1].split('%%')[0]
+                            rowname = re.sub(r"%%member\.(\d+)%%", WF.formatMembers, rowname, flags=re.IGNORECASE) #re.sub magic, counts \1 as two chars
 
                     if '%%' in row_val:
-                        rowdata, sr_month = self.Tables.getStatsLineData(row_val, yearlydata, year=year, data_key=iteration)
+                        rowdata, sr_month = self.Tables.getStatsLineData(row_val, yearlydata, year=year, data_key=member)
                         if len(rowdata) == 0:
                             row_val = None
                             stat = None
@@ -1768,9 +1782,10 @@ class MakeAutomatedReport(object):
 
         if 'description' in object_settings.keys():
             desc = object_settings['description']
+            # desc = WF.parseForTextFlags(desc)
+            desc = WF.updateFlaggedValues(desc, '%%year%%', object_settings['yearstr'])
         else:
             desc = ''
-        desc = WF.updateFlaggedValues(desc, '%%year%%', object_settings['yearstr'])
 
         table_constructor = {}
 
@@ -1952,10 +1967,11 @@ class MakeAutomatedReport(object):
 
         if 'description' in object_settings.keys():
             desc = object_settings['description']
+            # desc = WF.parseForTextFlags(desc)
+            desc = WF.updateFlaggedValues(desc, '%%year%%', object_settings['yearstr'])
         else:
             desc = ''
 
-        desc = WF.updateFlaggedValues(desc, '%%year%%', object_settings['yearstr'])
 
         table_constructor = {}
 
@@ -2164,10 +2180,11 @@ class MakeAutomatedReport(object):
 
         if 'description' in object_settings.keys():
             desc = object_settings['description']
+            # desc = WF.parseForTextFlags(desc)
+            desc = WF.updateFlaggedValues(desc, '%%year%%', object_settings['yearstr'])
         else:
             desc = ''
 
-        desc = WF.updateFlaggedValues(desc, '%%year%%', object_settings['yearstr'])
 
         table_constructor = {}
 
@@ -2358,6 +2375,11 @@ class MakeAutomatedReport(object):
 
         object_settings['years'], object_settings['yearstr'] = WF.organizePlotYears(object_settings)
 
+        if 'description' not in object_settings.keys():
+            object_settings['description'] = ''
+        # else:
+        #     object_settings['description'] = WF.parseForTextFlags(object_settings['description'])
+
         for yi, year in enumerate(object_settings['years']):
             useAx = []
             cur_obj_settings = pickle.loads(pickle.dumps(object_settings, -1))
@@ -2456,6 +2478,8 @@ class MakeAutomatedReport(object):
 
                 if 'description' not in contour_plot_settings.keys():
                     contour_plot_settings['description'] = ''
+                # else:
+                #     contour_plot_settings['description'] = WF.parseForTextFlags(contour_plot_settings['description'])
 
                 contour_plot_settings = WD.getDefaultContourSettings(contour_plot_settings, debug=self.debug)
 
@@ -2659,6 +2683,8 @@ class MakeAutomatedReport(object):
 
             if 'description' not in cur_obj_settings.keys():
                 cur_obj_settings['description'] = ''
+            # else:
+            #     cur_obj_settings['description'] = WF.parseForTextFlags(cur_obj_settings['description'])
 
             basefigname = os.path.join(self.images_path, 'ContourPlot' + '_' + self.ChapterRegion.replace(' ','_')
                                        + '_' + yearstr)
@@ -2718,6 +2744,11 @@ class MakeAutomatedReport(object):
         object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = WF.getObjectYears(self, object_settings)
 
         object_settings['years'], object_settings['yearstr'] = WF.organizePlotYears(object_settings)
+
+        if 'description' not in object_settings.keys():
+            object_settings['description'] = ''
+        # else:
+        #     object_settings['description'] = WF.parseForTextFlags(object_settings['description'])
 
         for yi, year in enumerate(object_settings['years']):
             useAx = []
@@ -2823,9 +2854,6 @@ class MakeAutomatedReport(object):
                     contour_plot_settings['label'] = ''
                 else:
                     contour_plot_settings['label'] = WF.formatTextFlags(contour_plot_settings['label'])
-
-                if 'description' not in contour_plot_settings.keys():
-                    contour_plot_settings['description'] = ''
 
                 contour_plot_settings = WD.getDefaultContourSettings(contour_plot_settings, debug=self.debug)
 
@@ -3002,8 +3030,8 @@ class MakeAutomatedReport(object):
             plt.tight_layout()
             plt.subplots_adjust(hspace=0.05)
 
-            if 'description' not in cur_obj_settings.keys():
-                cur_obj_settings['description'] = ''
+            # if 'description' not in cur_obj_settings.keys():
+            #     cur_obj_settings['description'] = ''
 
             basefigname = os.path.join(self.images_path, 'ContourPlot' + '_' + self.ChapterRegion.replace(' ','_')
                                        + '_' + yearstr)
@@ -3044,6 +3072,7 @@ class MakeAutomatedReport(object):
         if 'text' not in object_settings.keys():
             WF.print2stdout('Failed to input textbox contents using <text> flag.', debug=self.debug)
 
+        object_settings['text'] = WF.parseForTextFlags(object_settings['text'])
         object_settings = WF.replaceflaggedValues(self, object_settings, 'fancytext', forjasper=True)
 
         self.XML.writeTextBox(object_settings['text'])
@@ -3086,6 +3115,7 @@ class MakeAutomatedReport(object):
 
         if 'description' in object_settings.keys():
             desc = object_settings['description']
+            # desc = WF.parseForTextFlags(desc)
         else:
             desc = ''
 
@@ -3110,6 +3140,87 @@ class MakeAutomatedReport(object):
         self.XML.writeTableStart(desc, object_settings['primarykey'])
         self.Tables.writeTable(table_constructor)
         WF.print2stdout(f'Table from file took {time.time() - objectstarttime} seconds.')
+
+    def makeForecastTable(self, object):
+        '''
+        Makes a table for forecast runs
+        Can look 1 of two ways..
+        if member iteration is turned on, itll be for a single forecast member
+        member number | Operations Name | Met Name | TempTargetName
+        if its off, that line will be repeated for each available member (unless specified).
+        Order of rows and contents is also variable.
+        :param object_settings:
+        :return:
+        '''
+
+        if self.reportType != 'forecast':
+            WF.print2stdout('### WARNING ###')
+            WF.print2stdout('Forecast Table object only available for Iterative Forecast report.')
+            WF.print2stdout(f'Incompatible with selected report type: {self.reportType}')
+            WF.print2stdout('Continuing without table.')
+            return
+
+        WF.print2stdout('\n################################')
+        WF.print2stdout('Now making Forecast Table')
+        WF.print2stdout('################################\n')
+
+        objectstarttime = time.time()
+
+        self.Tables = WTable.Tables(self)
+
+        default_settings = self.loadDefaultPlotObject('forecasttable')
+        object_settings = WF.replaceDefaults(self, default_settings, object_settings)
+
+        if 'template' in object_settings.keys():
+            template_settings = WR.readTemplate(self, object_settings['template'])
+            if object_settings['type'].lower() in template_settings.keys():
+                object_settings = WF.replaceDefaults(self, template_settings[object_settings['type'].lower()],
+                                                     object_settings)
+
+        object_settings = WF.replaceflaggedValues(self, object_settings, 'fancytext', forjasper=True)
+
+        #Get members to plot
+        if 'members' in object_settings.keys():
+            members_to_plot = [int(n) for n in object_settings['members']]
+        else:
+            if self.memberiteration: #if we are looping through each member, we only want to table the one member, unless specified
+                members_to_plot = [self.member]
+            else:
+                members_to_plot = self.allMembers
+
+        #get columns/order, most likely using a default
+        if 'columns' in object_settings.keys():
+            columns = object_settings['columns']
+        else:
+            columns = WD.getDefaultDefaultForecastTableColumns()
+        columns = self.Tables.confirmForecastTableColumns(columns)
+
+        if 'description' in object_settings.keys():
+            desc = object_settings['description']
+            # desc = WF.parseForTextFlags(desc)
+        else:
+            desc = ''
+
+        formatted_headers = self.Tables.formatForecastTableHeaders(columns)
+
+        table_constructor = {}
+        for ci, column in enumerate(columns): #do each column first
+            row = ''
+            for mi, member in enumerate(members_to_plot):
+                ensembleset = WF.matchMemberToEnsembleSet(self.ensembleSets, member)
+                if len(ensembleset.keys()) == 0:  # if for some reason, we cant find the matching ensemble set? should never happen..
+                    continue
+                if mi != 0:
+                    row += '|'
+                row += ensembleset[column]
+            table_constructor[tcnum] = {}
+            table_constructor[ci]['rows'] = rows
+            table_constructor[ci]['thresholdcolors'] = np.full(len(columns), None) #not used but needed to build out the table
+            table_constructor[ci]['header'] = formatted_headers[ci]
+
+        self.XML.writeTableStart(desc, object_settings['primarykey'])
+        self.Tables.writeTable(table_constructor)
+        WF.print2stdout(f'Forecast Table from file took {time.time() - objectstarttime} seconds.')
 
     def setSimulationCSVVars(self, simlist):
         '''
@@ -3154,11 +3265,34 @@ class MakeAutomatedReport(object):
         self.SimulationVariables[ID]['LastComputed'] = simulation['lastcomputed']
         self.SimulationVariables[ID]['ModelAlternatives'] = simulation['modelalternatives']
         if self.reportType == 'forecast':
-            self.SimulationVariables[ID]['iterations'] = simulation['iterations']
+            self.SimulationVariables[ID]['ensemblesets'] = simulation['ensemblesets']
+            # self.SimulationVariables[ID]['ensemblesets'] = self.formatMembers(simulation['ensemblesets'])
         else:
-            self.SimulationVariables[ID]['iterations'] = []
+            self.SimulationVariables[ID]['ensemblesets'] = []
 
         WT.setSimulationDateTimes(self, ID)
+
+    def organizeMembers(self):
+        self.allMembers = []
+        for simulation in self.Simulations:
+            simulation['ensemblesets'] = self.formatMembers(simulation['ensemblesets'])
+            for ensembleset in simulation['ensemblesets']:
+                for member in ensembleset['members']:
+                    self.allMembers.append(member)
+        self.allMembers.sort()
+
+    def formatMembers(self, ensemblesets):
+        formatted_ensemblesets = []
+        for ensembleset in ensemblesets:
+            members = ensembleset['memberstoreport']
+            collectionstart = int(ensembleset['collectionsstart'])
+            members = [int(n.strip()) for n in members.split(',')]
+            members_formatted = []
+            for member in members:
+                members_formatted.append(member + collectionstart)
+            ensembleset['members'] = members_formatted
+            formatted_ensemblesets.append(ensembleset)
+        return formatted_ensemblesets
 
     def getLineSettings(self, LineSettings, Flag):
         '''
@@ -3238,8 +3372,7 @@ class MakeAutomatedReport(object):
             self.ChapterText = Chapter['grouptext']
             self.ChapterResolution = Chapter['resolution']
             self.debug_boolean = Chapter['debug']
-            # self.ensemble_boolean = Chapter['isensemble'] #TODO: is this what were doing?
-            self.forecastiteration_boolean = Chapter['forecastiteration'] #TODO: is this what were doing?
+            self.memberiteration_boolean = Chapter['memberiteration'] #TODO: is this what were doing?
 
             self.debug = False
             if self.debug_boolean.lower() == 'true':
@@ -3256,19 +3389,12 @@ class MakeAutomatedReport(object):
                 self.highres = False
                 WF.print2stdout('Running Low Res Mode!')
 
-            # self.isensemble = False
-            # if self.ensemble_boolean.lower() == 'true':
-            #     self.isensemble = True
-            #     WF.print2stdout('Ensemble mode activated!')
-            # else:
-            #     WF.print2stdout('Ensemble mode deactivated.', debug=self.debug)
-
-            self.forecastiteration = False
-            if self.forecastiteration_boolean.lower() == 'true':
-                self.forecastiteration = True
-                WF.print2stdout('forecast iteration mode activated!')
+            self.memberiteration = False
+            if self.memberiteration_boolean.lower() == 'true':
+                self.memberiteration = True
+                WF.print2stdout('member iteration mode activated!')
             else:
-                WF.print2stdout('forecast iteration mode deactivated.', debug=self.debug)
+                WF.print2stdout('member iteration mode deactivated.', debug=self.debug)
 
             self.WAT_log.addLogEntry({'region': self.ChapterRegion})
             self.XML.writeChapterStart(WF.replaceflaggedValues(self, self.ChapterName, 'fancytext', forjasper=True),
@@ -3282,19 +3408,21 @@ class MakeAutomatedReport(object):
 
     def writeSections(self, Chapter):
         '''
-        sets up the sections to be written. Changes depending on if its a forecast iteration or not
+        sets up the sections to be written. Changes depending on if its a member iteration or not
         :param Chapter: dictionary read from XMl file
         '''
 
         for section in Chapter['sections']:
             section_header = section['header']
             section_header = WF.replaceFlaggedValue(self, section_header, 'fancytext', forjasper=True)
-            if self.forecastiteration:
-                for iteration in self.Iterations:
-                    new_section_header = WF.updateFlaggedValues(section_header, '%%iteration%%', WF.formatIterations(iteration))
-                    self.XML.writeSectionHeader(new_section_header)
-                    self.Iteration = iteration
-                    self.iterateSection(section)
+            if self.memberiteration:
+                for ensemble in self.ensemblesets:
+                    for member in ensemble['members']:
+                        new_section_header = WF.updateFlaggedValues(section_header, '%%member%%', WF.formatMembers(member))
+                        self.XML.writeSectionHeader(new_section_header)
+                        self.member = member
+                        self.Ensemble = ensemble
+                        self.iterateSection(section)
             else:
                 self.XML.writeSectionHeader(section_header)
                 self.iterateSection(section)
@@ -3330,6 +3458,8 @@ class MakeAutomatedReport(object):
                 self.makeTextBox(object)
             elif objtype == 'tablefromfile':
                 self.makeTableFromFile(object)
+            elif objtype == 'forecasttable':
+                self.makeForecastTable(object)
             else:
                 WF.print2stdout('Section Type {0} not identified.'.format(objtype))
                 WF.print2stdout('Skipping Section..')
@@ -3424,7 +3554,7 @@ class MakeAutomatedReport(object):
         self.ModelAlternatives = self.SimulationVariables[ID]['ModelAlternatives']
         self.StartTime = self.SimulationVariables[ID]['StartTime']
         self.EndTime = self.SimulationVariables[ID]['EndTime']
-        self.Iterations = self.SimulationVariables[ID]['iterations']
+        self.ensemblesets = self.SimulationVariables[ID]['ensemblesets']
 
     def loadCurrentModelAltID(self, ID):
         '''
@@ -3437,6 +3567,7 @@ class MakeAutomatedReport(object):
             self.modelAltName = self.SimulationVariables[ID]['modelAltName']
             self.plugin = self.SimulationVariables[ID]['plugin']
             self.ModelAlt = self.SimulationVariables[ID]['ModelAlt']
+            self.ensembleSets = self.SimulationVariables[ID]['ensemblesets']
             # WF.print2stdout('Model {0} Loaded'.format(ID), debug=self.debug) #noisy
         else:
             self.alternativeFpart = 'none'
@@ -3486,7 +3617,11 @@ class MakeAutomatedReport(object):
             plot_info: dict of object settings
         '''
 
-        plot_info = pickle.loads(pickle.dumps(self.graphicsDefault[plotobject], -1))
+        if plotobject in self.graphicsDefault.keys():
+            plot_info = pickle.loads(pickle.dumps(self.graphicsDefault[plotobject], -1))
+        else:
+            WF.print2stdout(f'Plotting object {plotobject} not found in graphics default file.', debug=self.debug)
+            plot_info = {}
         return plot_info
 
     def getLineModelType(self, Line_info):

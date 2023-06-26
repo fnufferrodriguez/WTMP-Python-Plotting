@@ -23,6 +23,7 @@ import pickle
 import datetime as dt
 from collections import Counter
 from matplotlib.colors import is_color_like
+import itertools
 
 import WAT_Constants as WC
 import WAT_Time as WT
@@ -624,6 +625,57 @@ def replaceflaggedValues(Report, settings, itemset, include=[], exclude=[], forj
 
     return settings
 
+def parseForTextFlags(text):
+    '''
+    replaces text formatting flags with Jasper appropriate flags. Currently supports bold, italic and underline, in
+    any order.
+    examples: %%ui%%, %%i%%, %%bui%%
+    :param text: formatted text
+    :return:
+    '''
+
+    start_font_change_front = "&#60;style"
+    start_font_change_back = "&#62;"
+    end_font_change = "&#60;/style&#62;"
+    flag_defs = {'b': "isBold='true'",
+                 'u': "isUnderline='true'",
+                 'i': "isItalic='true'"}
+    flag_permutations = list(itertools.permutations(flag_defs.keys()))
+
+    start_flags = []
+    end_flags = []
+    for flag_permutation in flag_permutations:
+        for L in range(1, len(flag_permutation) + 1):
+            for subset in itertools.combinations(flag_permutation, L):
+                start_flag = f'%%{"".join(subset)}%%'
+                end_flag = f'%%/{"".join(subset)}%%'
+                if start_flag not in start_flags:
+                    start_flags.append(start_flag)
+                    end_flags.append(end_flag)
+
+    #find all idx of start flags
+    for flag in start_flags:
+        flag_idx = [m.start() for m in re.finditer(flag, text)]
+        if len(flag_idx) > 0:
+            output_from_flag = start_font_change_front
+            for flagitem in flag:
+                if flagitem != '%':
+                    output_from_flag += f' {flag_defs[flagitem]}'
+            output_from_flag += start_font_change_back
+            flag_idx.reverse()
+            for idx in flag_idx: #do it backwards so the flags don't interupt the idx of each other
+                text = text[:idx] + output_from_flag + text[idx + len(flag):]
+
+    # find all idx of end flags
+    for flag in end_flags:
+        flag_idx = [m.start() for m in re.finditer(flag, text)]
+        if len(flag_idx) > 0:
+            flag_idx.reverse()
+            for idx in flag_idx:
+                text = text[:idx] + end_font_change + text[idx + len(flag):]
+
+    return text
+
 def replaceFlaggedValue(Report, value, itemset, forjasper=False):
     '''
     replaces strings with flagged values with known paths
@@ -667,7 +719,9 @@ def replaceFlaggedValue(Report, value, itemset, forjasper=False):
                                '%%lessthan%%': '&lt;',
                                '%%lessthanequalto%%': '&le;',
                                '%%amp%%': '&amp;',
-                               '%%degrees%%': '&#176;'}
+                               '%%degrees%%': '&#176;',
+                               '%%b%%': "&#60;style isBold='true'&#62;",
+                               '%%/b%%': "&#60;/style&#62;"}
 
         else:
             flagged_values = {'%%gt%%': '>',
@@ -1763,22 +1817,28 @@ def formatTextFlags(text):
         text = text.replace(key, fixed)
     return text
 
-def formatIterations(iteration):
+def formatMembers(member):
     '''
-    format iterations to have DSS notation of 6 characters with leading 0's
-    :param iteration: single iteration or list of iterations, or regex match
-    :return: formatted iteration
+    format members to have DSS notation of 6 characters with leading 0's
+    :param member: single member or list of members, or regex match
+    :return: formatted member
     '''
 
-    if isinstance(iteration, re.Match):
-        return iteration.group(1).zfill(6)
-    elif isinstance(iteration, (np.ndarray, list)):
-        frmted_iterations = []
-        for it in iteration:
-            frmted_iterations.append(str(it).zfill(6))
-        return frmted_iterations
+    if isinstance(member, re.Match):
+        return member.group(1).zfill(6)
+    elif isinstance(member, (np.ndarray, list)):
+        frmted_members = []
+        for me in member:
+            frmted_members.append(str(me).zfill(6))
+        return frmted_members
     else:
-        return str(iteration).zfill(6)
+        return str(member).zfill(6)
+
+def matchMemberToEnsembleSet(ensemblesets, member):
+    for ensembleset in ensemblesets:
+        if member in ensembleset['members']:
+            return ensembleset
+    return {}
 
 def formatNumbers(number, numberformatsettings):
     '''

@@ -174,28 +174,28 @@ class DataOrganizer(object):
 
         return wse_data
 
-    def getIterations(self, object_settings, data_settings):
+    def getMembers(self, object_settings, data_settings):
         '''
-        Gets iterations to use from settings
+        Gets members to use from settings
         :param object_settings: dictionary of settings
         :param data_settings: dictionary of settings describing the data
-        :return: list of iterations to use
+        :return: list of members to use
         '''
 
-        if self.Report.forecastiteration: #if its a forecast iteration, grab the current iteration
-            iterations = [self.Report.Iteration]
-        elif 'iterations' in object_settings.keys(): #if user defined, use the user defined ones
-            iterations = [WF.formatIterations(n) for n in object_settings['iterations']]
+        if self.Report.memberiteration: #if its a forecast iteration, grab the current iteration
+            members = [self.Report.member]
+        elif 'members' in object_settings.keys(): #if user defined, use the user defined ones
+            members = [WF.formatMembers(n) for n in object_settings['members']]
         elif self.Report.reportType == 'forecast': #use the forecasts defined
-            iterations = self.Report.Iterations
+            members = self.Report.allMembers
         else: #otherwise, we just use everything that we have (if multi datasets, get the overlapping
-            iterations = []
+            members = []
             for i, ds in enumerate(data_settings.keys()):
                 if i == 0:
-                    iterations = data_settings[ds]['iterations']
+                    members = data_settings[ds]['members']
                 else:
-                    iterations = np.intersect1d(data_settings[ds]['iterations'], iterations)
-        return iterations
+                    members = np.intersect1d(data_settings[ds]['members'], members)
+        return members
 
     def filterTimeSeries(self, data, line_settings):
         '''
@@ -285,14 +285,6 @@ class DataOrganizer(object):
                     continue
 
                 elif line['flag'].lower() == 'computed':
-                    # if self.Report.reportType == 'forecast':
-                    #     curline = pickle.loads(pickle.dumps(line, -1))
-                    #     curline = self.Report.configureSettingsForID(ID, curline)
-                    #     curline['numtimesused'] = numtimesused
-                    #     data, line_settings, success = self.updateTimeSeriesDataDictionary(data, line_settings, curline)
-                    #     if success:
-                    #         numtimesused += 1
-                    # else:
                     for ID in self.Report.accepted_IDs:
                         curline = pickle.loads(pickle.dumps(line, -1))
                         curline = self.Report.configureSettingsForID(ID, curline)
@@ -396,16 +388,15 @@ class DataOrganizer(object):
                 if Line_info['dss_path'].split('/')[6].startswith('*|'):
 
                     metadata['collection'] = True
-                    metadata['allcollections'] = False
-                    if 'iterations' in Line_info.keys():
-                        iterations = Line_info['iterations']
+                    metadata['allmembers'] = False
+                    if 'members' in Line_info.keys():
+                        members = Line_info['members']
                     elif self.Report.reportType == 'forecast':
-                        iterations = self.Report.Iterations
+                        members = self.Report.allMembers
                     else:
-                        iterations = 'all'
-                        metadata['allcollections'] = True
-                    metadata['iterations'] = iterations #keep track of the original series, as this can change
-                    # iterations_to_grab = iterations
+                        members = 'all'
+                        metadata['allmembers'] = True
+                    metadata['members'] = members #keep track of the original series, as this can change
 
                 if datamem_key in self.Memory.keys():
                     WF.print2stdout('Reading {0} from memory'.format(datamem_key), debug=self.Report.debug) #noisy
@@ -418,39 +409,36 @@ class DataOrganizer(object):
                     metadata = datamementry['metadata']
 
                     metadata['frommemory'] = True #did we get data from memory
-                    iterations_to_grab = [] #reset, but we still know our iterations
+                    members_to_grab = [] #reset, but we still know our members
                     if metadata['collection']:
-                        if not metadata['allcollections']: #check if we've ever grabbed them all. if we did, no need to go back
-                            for iteration in iterations:
-                                if iteration not in metadata['iterations']:
-                                    iterations_to_grab.append(iteration)
+                        if not metadata['allmembers']: #check if we've ever grabbed them all. if we did, no need to go back
+                            for member in members:
+                                if member not in metadata['members']:
+                                    members_to_grab.append(member)
                                     metadata['frommemory'] = False
                                 else:
                                     metadata['partialmemory'] = True
 
-                        if len(iterations_to_grab) > 0:
-                            WF.print2stdout(f'Not all iterations in memory. Getting remaining: {iterations_to_grab}', debug=self.Report.debug)
+                        if len(members_to_grab) > 0:
+                            WF.print2stdout(f'Not all members in memory. Getting remaining: {members_to_grab}', debug=self.Report.debug)
 
-                        # if metadata['iterations'] != iterations:
-                        #     metadata['frommemory'] = False #if not the same list, grab again
-                        #     WF.print2stdout('Iterations do not allign with last read. Re-reading', debug=self.Report.debug)
 
                 if not metadata['frommemory']:
                     # if Line_info['flag'].lower() == 'computed' and (self.Report.isensemble or self.reportType == 'forecast'):
                     # if Line_info['dss_path'].split('/')[6].startswith('*|'):
                     if metadata['collection']:
                         if metadata['partialmemory']: #if we've only grabbed some of them...
-                            coll_times, coll_values, coll_units, coll_iterations = WDR.readCollectionsDSSData(Line_info['dss_filename'], Line_info['dss_path'],
-                                                                                                              iterations_to_grab, self.Report.StartTime,
+                            coll_times, coll_values, coll_units, coll_members = WDR.readCollectionsDSSData(Line_info['dss_filename'], Line_info['dss_path'],
+                                                                                                              members_to_grab, self.Report.StartTime,
                                                                                                               self.Report.EndTime, self.Report.debug)
 
                             values.update(coll_values)
-                            iterations = list(set(metadata['iterations'] + coll_iterations))
+                            members = list(set(metadata['members'] + coll_members))
                         else:
-                            times, values, units, iterations = WDR.readCollectionsDSSData(Line_info['dss_filename'], Line_info['dss_path'],
-                                                                                          metadata['iterations'], self.Report.StartTime,
+                            times, values, units, members = WDR.readCollectionsDSSData(Line_info['dss_filename'], Line_info['dss_path'],
+                                                                                          metadata['members'], self.Report.StartTime,
                                                                                           self.Report.EndTime, self.Report.debug)
-                        metadata['iterations'] = iterations
+                        metadata['members'] = members
                     else:
                         times, values, units = WDR.readDSSData(Line_info['dss_filename'], Line_info['dss_path'],
                                                                self.Report.StartTime, self.Report.EndTime,
@@ -1122,7 +1110,7 @@ class DataOrganizer(object):
         flags to filter on:
         headers - select what headers to be included in the table. All by default
         selectbyfirstcell - select by a list given by user cooresponding with the first row
-        reportType: Forecast - checks for the iteration in the first row and filters on it
+        reportType: Forecast - checks for the member in the first row and filters on it
         :param data: pandas dataframe of table
         :param object_settings: dictionary of settings for table
         :param primarykey: primary key of table if we've already figured it out
@@ -1143,7 +1131,7 @@ class DataOrganizer(object):
             selected_rows = object_settings['selectbyfirstcell']
             if 'formatprimaryascollection' in object_settings.keys():
                 if object_settings['formatprimaryascollection'].lower() == 'true':
-                    selected_rows = [WF.formatIterations(n) for n in selected_rows] #match the table if theyve been converted
+                    selected_rows = [WF.formatMembers(n) for n in selected_rows] #match the table if theyve been converted
 
             for index, row in data.iterrows():
                 if row[primarykey] not in selected_rows:
@@ -1151,7 +1139,7 @@ class DataOrganizer(object):
 
         if self.Report.reportType == 'forecast':
             for index, row in data.iterrows():
-                if row[primarykey] not in self.Report.Iterations:
+                if row[primarykey] not in self.Report.allMembers:
                     data.drop(index=index, inplace=True)
 
         return data

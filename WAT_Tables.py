@@ -30,6 +30,8 @@ class Tables(object):
         :param Report: self class from main Report Generator script
         '''
         self.Report = Report
+        if self.Report.reportType == 'forecast':
+            self.defineForecastTableColumns()
 
     def buildHeadersByTimestamps(self, timestamps, years):
         '''
@@ -1002,7 +1004,7 @@ class Tables(object):
                for datakey in data.keys():
                    df = data[datakey]
                    for i, row in df.iterrows():
-                       df.loc[i, primarykey] = WF.formatIterations(row[primarykey])
+                       df.loc[i, primarykey] = WF.formatMembers(row[primarykey])
                    data[datakey] = df
        return data
 
@@ -1227,21 +1229,21 @@ class Tables(object):
                     headings_i[hgi].append(hi)
         return headings_i
 
-    def configureRowsForCollection(self, rows, data_settings, object_settings):
+    def configureRowsForCollection(self, rows, object_settings):
         formatted_rows = []
-        #figure out IDs first
-        if 'iterations' in object_settings.keys():
-            iterations = object_settings['iterations']
-        else:
-            iterations = WF.getCollectionIDs(data_settings, object_settings)
+        #figure out members first
+        if 'members' in object_settings.keys(): #if a subset
+            members = object_settings['members']
+        else: #otherwise, get them all
+            members = self.Report.allMembers
         for row in rows:
-            if '%%iteration%%' in row:
-                for iteration in iterations:
+            if '%%member%%' in row:
+                for member in members:
                     srow = row.split('|')
                     frow = []
                     for sr in srow:
-                        if '%%iteration%%' in sr:
-                            sr = sr.replace('%%iteration%%', f'%%iteration.{iteration}%%')
+                        if '%%member%%' in sr:
+                            sr = sr.replace('%%member%%', f'%%member.{member}%%')
                         frow.append(sr)
                     formatted_rows.append('|'.join(frow))
             else:
@@ -1286,3 +1288,38 @@ class Tables(object):
         '''
 
         self.Report.makeTextBox({'text': f'\nTable "{description}" not generated due to insufficient data.'})
+
+    def defineForecastTableColumns(self):
+        #{name from XML | display name}
+        self.forecastTableColumns = {'name': 'Name',
+                                     'operationsname': 'Operations',
+                                     'metname': 'Met',
+                                     'temptargetname': 'Temp Target',
+                                     'member': 'Member Number'
+                                     }
+
+    def confirmForecastTableColumns(self, columns):
+        '''
+        confirms that user enteries for forecast tables are valid. If not, removes them from the table.
+        :param columns: user inputted columns
+        :return: list of approved columns
+        '''
+
+        rejected_columns = []
+        approved_columns = []
+        for column in columns:
+            if column.lower() not in self.forecastTableColumns.keys():
+                rejected_columns.append(column)
+            else:
+                approved_columns.append(column)
+        if len(rejected_columns) > 0:
+            WF.print2stdout(f'Invalid column(s) selected: {rejected_columns}')
+            WF.print2stdout(f'Approved column(s): {self.forecastTableColumns.keys()}')
+
+        return approved_columns
+
+    def formatForecastTableHeaders(self, columns):
+        formatted_headers = []
+        for column in columns:
+            formatted_headers.append(self.forecastTableColumns[column.lower()])
+        return formatted_headers
