@@ -159,8 +159,8 @@ def readChapterDefFile(CD_file):
         # collections_flags = ['isensemble', 'Isensemble', 'ISENSEMBLE'] #TODO: is this final flag??
         # ChapterDef['isensemble'] = findTargetinChapterDefFile(collections_flags, chapter, default='false')
 
-        forecastiteration_flags = ['forecastiteration', 'Forecastiteration', 'ForecastIteration', 'FORECASTITERATION'] #TODO: is this final flag??
-        ChapterDef['forecastiteration'] = findTargetinChapterDefFile(forecastiteration_flags, chapter, default='false')
+        memberiteration_flags = ['memberiteration', 'Memberiteration', 'MemberIteration', 'MEMBERITERATION', 'memberIteration'] #TODO: is this final flag??
+        ChapterDef['memberiteration'] = findTargetinChapterDefFile(memberiteration_flags, chapter, default='false')
 
         cd_sections = chapter.findall('Sections/Section')
         for section in cd_sections:

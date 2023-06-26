@@ -182,7 +182,7 @@ class DataOrganizer(object):
         :return: list of members to use
         '''
 
-        if self.Report.forecastiteration: #if its a forecast iteration, grab the current iteration
+        if self.Report.memberiteration: #if its a forecast iteration, grab the current iteration
             members = [self.Report.member]
         elif 'members' in object_settings.keys(): #if user defined, use the user defined ones
             members = [WF.formatMembers(n) for n in object_settings['members']]
@@ -1110,7 +1110,7 @@ class DataOrganizer(object):
         flags to filter on:
         headers - select what headers to be included in the table. All by default
         selectbyfirstcell - select by a list given by user cooresponding with the first row
-        reportType: Forecast - checks for the iteration in the first row and filters on it
+        reportType: Forecast - checks for the member in the first row and filters on it
         :param data: pandas dataframe of table
         :param object_settings: dictionary of settings for table
         :param primarykey: primary key of table if we've already figured it out
@@ -1139,7 +1139,7 @@ class DataOrganizer(object):
 
         if self.Report.reportType == 'forecast':
             for index, row in data.iterrows():
-                if row[primarykey] not in self.Report.Iterations:
+                if row[primarykey] not in self.Report.allMembers:
                     data.drop(index=index, inplace=True)
 
         return data

@@ -36,6 +36,11 @@ def getDefaultDefaultLineStyles(i):
             'linestylepattern': 'solid', 'alpha': 1.0, 'zorder': 4}
 
 def getDefaultDefaultForecastTableColumns():
+    '''
+    incase nothing is entered for forecast tables, arranges the columns
+    :return:
+    '''
+
     return ['member', 'operationsname', 'metname', 'temptargetname']
 
 def getDefaultDefaultPointStyles(i):

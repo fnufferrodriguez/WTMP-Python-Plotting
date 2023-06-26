@@ -1299,6 +1299,12 @@ class Tables(object):
                                      }
 
     def confirmForecastTableColumns(self, columns):
+        '''
+        confirms that user enteries for forecast tables are valid. If not, removes them from the table.
+        :param columns: user inputted columns
+        :return: list of approved columns
+        '''
+
         rejected_columns = []
         approved_columns = []
         for column in columns:
