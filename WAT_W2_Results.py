@@ -602,7 +602,7 @@ class W2_Results(object):
                     WSE = WSE[np.where(~np.isnan(WSE))][0] #otherwise find valid
                     WSE_array = np.full((self.layers.shape), WSE)
                     e = (WSE_array - self.layers) * 3.28084
-
+                    e = e[:len(wt[timestep])]
                     select_wt.append(wt[timestep][:]) #find WTs
 
                 else: #if timestep NOT in model, add empties
@@ -611,13 +611,13 @@ class W2_Results(object):
                     depths.append(np.array([]))
                     times.append(time)
                 elevations.append(np.asarray(e)) #then append for timestep
-                depths.append(self.layers * 3.28084) #append dpeths
+                depths.append((self.layers * 3.28084)[:len(e)]) #append dpeths
                 times.append(time) #get time
             select_wt, elevations, depths = self.matchProfileLengths(select_wt, elevations, depths)
 
             return select_wt, elevations, depths, np.asarray(times)
         else:
-            elevations = (WS_Elev - self.layers) * 3.28084
+            elevations = ((WS_Elev - self.layers) * 3.28084)[:len(wt)]
             return wt, elevations, [], self.dt_dates
 
     def readProfileTopwater(self, seg, timesteps):

@@ -1127,8 +1127,8 @@ class DataOrganizer(object):
                 if column not in selected_headers:
                     data.drop(column, axis=1, inplace=True)
 
-        if 'selectbyfirstcell' in object_settings.keys():
-            selected_rows = object_settings['selectbyfirstcell']
+        if 'filters' in object_settings.keys():
+            selected_rows = object_settings['filters']
             if 'formatprimaryascollection' in object_settings.keys():
                 if object_settings['formatprimaryascollection'].lower() == 'true':
                     selected_rows = [WF.formatMembers(n) for n in selected_rows] #match the table if theyve been converted
@@ -1138,9 +1138,11 @@ class DataOrganizer(object):
                     data.drop(index=index, inplace=True)
 
         if self.Report.reportType == 'forecast':
-            for index, row in data.iterrows():
-                if row[primarykey] not in self.Report.allMembers:
-                    data.drop(index=index, inplace=True)
+            if 'formatprimaryascollection' in object_settings.keys():
+                if object_settings['formatprimaryascollection'].lower() == 'true':
+                    for index, row in data.iterrows():
+                        if row[primarykey] not in self.Report.allMembers:
+                            data.drop(index=index, inplace=True)
 
         return data
 
