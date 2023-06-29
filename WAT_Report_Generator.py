@@ -3190,11 +3190,11 @@ class MakeAutomatedReport(object):
                 members_to_plot = self.allMembers
 
         #get columns/order, most likely using a default
-        if 'columns' in object_settings.keys():
-            columns = object_settings['columns']
+        if 'headers' in object_settings.keys():
+            headers = object_settings['headers']
         else:
-            columns = WD.getDefaultDefaultForecastTableColumns()
-        columns = self.Tables.confirmForecastTableColumns(columns)
+            headers = WD.getDefaultDefaultForecastTableHeaders()
+        headers = self.Tables.confirmForecastTableHeaders(headers)
 
         if 'description' in object_settings.keys():
             desc = object_settings['description']
@@ -3205,11 +3205,11 @@ class MakeAutomatedReport(object):
         # object_settings['primarykey'] = self.Data.getPrimaryTableKey(data, object_settings)
         # data = self.Tables.formatPrimaryKey(data, object_settings)
         # headings, rows = self.Tables.buildFormattedTable(data)
-        formatted_headers = self.Tables.formatForecastTableHeaders(columns)
-        primarykey = columns[0]
+        formatted_headers = self.Tables.formatForecastTableHeaders(headers)
+        primarykey = headers[0]
 
         table_constructor = {}
-        for ci, column in enumerate(columns[1:]): #first column will be done automatically
+        for ci, header in enumerate(headers[1:]): #first column will be done automatically
             rows = []
             for mi, member in enumerate(members_to_plot):
                 row = ''
@@ -3222,10 +3222,10 @@ class MakeAutomatedReport(object):
                     primaryitem = ensembleset[primarykey]
                 row += primaryitem
                 row += '|'
-                if column == 'member':
+                if header == 'member':
                     row += str(member)
                 else:
-                    row += ensembleset[column]
+                    row += ensembleset[header]
                 rows.append(row)
             table_constructor[ci] = {}
             table_constructor[ci]['rows'] = rows
