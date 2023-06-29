@@ -1105,9 +1105,19 @@ class Tables(object):
 
             if len(data_dict[flag]['values'][index]) < 2:
                 WF.print2stdout('Insufficient data points with current bounds for {0}'.format(flag), debug=self.Report.debug)
-                out_data[flag]['values'] = []
-                out_data[flag]['depths'] = []
-                out_data[flag]['elevations'] = []
+                if not useflagforinterp:
+                    out_data[flag]['values'] = np.full(len(output_interp_yvalues), np.nan)
+                    out_data[flag][y_flag] = np.full(len(output_interp_yvalues), np.nan)
+                    # out_data[flag]['depths'] = np.full(len(output_interp_yvalues), np.nan)
+                    # out_data[flag]['elevations'] = np.full(len(output_interp_yvalues), np.nan)
+                else:
+                    out_data[flag]['values'] = np.full_like(data_dict[interpolation]['values'][index], np.nan)
+                    out_data[flag][y_flag] = np.full_like(data_dict[interpolation][y_flag][index], np.nan)
+                    # out_data[flag]['depths'] = np.full_like(data_dict[interpolation]['depths'][index], np.nan)
+                    # out_data[flag]['elevations'] = np.full_like(data_dict[interpolation]['elevations'][index], np.nan)
+                # out_data[flag]['values'] = []
+                # out_data[flag]['depths'] = []
+                # out_data[flag]['elevations'] = []
                 continue
 
             if not useflagforinterp:

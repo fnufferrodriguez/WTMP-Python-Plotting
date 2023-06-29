@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '5.5.21'
+VERSIONNUMBER = '5.5.22'
 
 import os
 import sys
@@ -148,7 +148,7 @@ class MakeAutomatedReport(object):
                     self.WAT_log.addSimLogEntry(self.accepted_IDs, self.SimulationVariables, self.observedDir)
                     self.writeChapter()
                     self.Data.writeDataFiles()
-                self.appendXMLModelIntroduction(simorder) #todo: modified version of this?
+                    self.appendXMLModelIntroduction(simorder) #todo: modified version of this?
                 self.fixXMLModelIntroduction()
                 self.XML.writeReportEnd()
                 self.WAT_log.equalizeLog()
@@ -1620,7 +1620,7 @@ class MakeAutomatedReport(object):
                         member = None
                     if '%%' in rowname:
                         if isCollection and '%%member' in rowname:
-                            member = rowname.split('%%member.')[1].split('%%')[0]
+                            member = int(rowname.split('%%member.')[1].split('%%')[0])
                             rowname = re.sub(r"%%member\.(\d+)%%", WF.formatMembers, rowname, flags=re.IGNORECASE) #re.sub magic, counts \1 as two chars
 
                     if '%%' in row_val:
@@ -2227,6 +2227,7 @@ class MakeAutomatedReport(object):
                         for di in data_idx:
                             stats_data = self.Tables.formatStatsProfileLineData(row_val, data, object_settings_blueprint['resolution'],
                                                                            object_settings_blueprint['usedepth'], di)
+
                             rowval_stats = self.Profiles.stackProfileIndicies(rowval_stats, stats_data)
 
                         row_val, stat = self.Tables.getStatsLine(row_val, rowval_stats)
@@ -3141,7 +3142,7 @@ class MakeAutomatedReport(object):
         self.Tables.writeTable(table_constructor)
         WF.print2stdout(f'Table from file took {time.time() - objectstarttime} seconds.')
 
-    def makeForecastTable(self, object):
+    def makeForecastTable(self, object_settings):
         '''
         Makes a table for forecast runs
         Can look 1 of two ways..
@@ -3201,24 +3202,38 @@ class MakeAutomatedReport(object):
         else:
             desc = ''
 
+        # object_settings['primarykey'] = self.Data.getPrimaryTableKey(data, object_settings)
+        # data = self.Tables.formatPrimaryKey(data, object_settings)
+        # headings, rows = self.Tables.buildFormattedTable(data)
         formatted_headers = self.Tables.formatForecastTableHeaders(columns)
+        primarykey = columns[0]
 
         table_constructor = {}
-        for ci, column in enumerate(columns): #do each column first
-            row = ''
+        for ci, column in enumerate(columns[1:]): #first column will be done automatically
+            rows = []
             for mi, member in enumerate(members_to_plot):
+                row = ''
                 ensembleset = WF.matchMemberToEnsembleSet(self.ensembleSets, member)
                 if len(ensembleset.keys()) == 0:  # if for some reason, we cant find the matching ensemble set? should never happen..
                     continue
-                if mi != 0:
-                    row += '|'
-                row += ensembleset[column]
-            table_constructor[tcnum] = {}
+                if primarykey == 'member':
+                    primaryitem = str(member)
+                else:
+                    primaryitem = ensembleset[primarykey]
+                row += primaryitem
+                row += '|'
+                if column == 'member':
+                    row += str(member)
+                else:
+                    row += ensembleset[column]
+                rows.append(row)
+            table_constructor[ci] = {}
             table_constructor[ci]['rows'] = rows
-            table_constructor[ci]['thresholdcolors'] = np.full(len(columns), None) #not used but needed to build out the table
-            table_constructor[ci]['header'] = formatted_headers[ci]
 
-        self.XML.writeTableStart(desc, object_settings['primarykey'])
+            table_constructor[ci]['thresholdcolors'] = np.full(len(rows), None) #not used but needed to build out the table
+            table_constructor[ci]['header'] = formatted_headers[ci+1] #add 1 becuase we skip the first
+
+        self.XML.writeTableStart(desc, formatted_headers[0])
         self.Tables.writeTable(table_constructor)
         WF.print2stdout(f'Forecast Table from file took {time.time() - objectstarttime} seconds.')
 
@@ -3420,7 +3435,7 @@ class MakeAutomatedReport(object):
                     for member in ensemble['members']:
                         new_section_header = WF.updateFlaggedValues(section_header, '%%member%%', WF.formatMembers(member))
                         self.XML.writeSectionHeader(new_section_header)
-                        self.member = member
+                        self.member = int(member)
                         self.Ensemble = ensemble
                         self.iterateSection(section)
             else:

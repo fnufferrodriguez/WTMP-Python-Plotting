@@ -210,9 +210,10 @@ def readCollectionsDSSData(dss_file, pathname, members, startdate, enddate, debu
                 members = [int(n) for n in members]
 
             members.sort()
-            members = WF.formatMembers(members)
+            # members = WF.formatMembers(members)
             for i, member in enumerate(members):
-                CID_pathname_fpart = pathname.split('/')[6].replace('*|', f'C:{member}|')
+                member_frmt = WF.formatMembers(member)
+                CID_pathname_fpart = pathname.split('/')[6].replace('*|', f'C:{member_frmt}|')
                 CID_pathname_split = pathname.split('/')
                 CID_pathname_split[6] = CID_pathname_fpart
                 CID_pathname = '/'.join(CID_pathname_split)
