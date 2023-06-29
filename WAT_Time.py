@@ -226,11 +226,15 @@ def getIdxForTimestamp(time_Array, t_in):
 
     ords = np.asarray([n.toordinal() + float(n.hour) / 24. + float(n.minute) / (24. * 60.) for n in time_Array])
     t_in_ord = t_in.toordinal() + float(t_in.hour) / 24. + float(t_in.minute) / (24. * 60.)
-    tol = 0.04166666662786156  # 1 hour tolerance
+    tol_1hr = 0.04166666662786156  # 1 hour tolerance
+    tol_12hrs = 0.5
+    tol_1day = 1.0  # 1 day tolerance
     min_diff = np.min(np.abs(ords - t_in_ord))
-    if min_diff > tol:
-        # WF.print2stdout('nearest time step > 1 day away')
+    if min_diff > tol_1day:
+        WF.print2stdout('nearest time step > 1 day away')
         return -1
+    if min_diff > tol_12hrs:
+        WF.print2stdout(f'Warning: timestep {t_in} more than 12 hours away from closest timestep.')
     timestep = np.where(np.abs(ords - t_in_ord) == min_diff)[0][0]
     return timestep
 
