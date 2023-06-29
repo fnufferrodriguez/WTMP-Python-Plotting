@@ -57,7 +57,6 @@ def changeTimeSeriesInterval(times, values, Line_info, startYear):
         for key in values:
             new_times, new_values[key] = changeTimeSeriesInterval(times, values[key], Line_info, startYear)
     elif len(values.shape) == 2:
-        # t_vals = values.T
         for vi, valueset in enumerate(values):
             new_times, changed_vals = changeTimeSeriesInterval(times, valueset, Line_info, startYear)
             if vi == 0:
@@ -79,7 +78,6 @@ def changeTimeSeriesInterval(times, values, Line_info, startYear):
                 df = pd.DataFrame({'times': times, 'values': values})
                 df = df.set_index('times')
                 if df.index.inferred_freq != pd_interval:
-                    # df = df.resample(pd_interval, origin='end_day').asfreq().fillna(method='bfill')
                     df = df.resample(pd_interval, origin='end_day').asfreq()
                 new_values = df['values'].to_numpy()
                 new_times = df.index.to_pydatetime()
@@ -88,7 +86,6 @@ def changeTimeSeriesInterval(times, values, Line_info, startYear):
             if len(values.shape) == 1:
                 df = pd.DataFrame({'times': times, 'values': values})
                 df = df.set_index('times')
-                # df = df.cumsum(skipna=True).resample(pd_interval, origin='end_day').asfreq().fillna(method='bfill')
                 df = df.cumsum(skipna=True).resample(pd_interval, origin='end_day').asfreq()
                 new_values = df['values'].to_numpy()
                 new_times = df.index.to_pydatetime()
@@ -99,7 +96,6 @@ def changeTimeSeriesInterval(times, values, Line_info, startYear):
                 df = pd.DataFrame({'times': times, 'values': values})
                 df = df.set_index('times')
                 if df.index.inferred_freq != pd_interval:
-                    # df = df.resample(pd_interval, origin='end_day').mean().fillna(method='bfill')
                     df = df.resample(pd_interval, origin='end_day').mean()
                 new_values = df['values'].to_numpy()
                 new_times = df.index.to_pydatetime()
@@ -110,11 +106,9 @@ def changeTimeSeriesInterval(times, values, Line_info, startYear):
                 df = pd.DataFrame({'times': times, 'values': values})
                 df = df.set_index('times')
                 if df.index.inferred_freq != pd_interval:
-                    # df = df.resample(pd_interval, origin='end_day').sum().fillna(method='bfill')
                     df = df.resample(pd_interval, origin='end_day').sum()
                 new_values = df['values'].to_numpy()
                 new_times = df.index.to_pydatetime()
-
         else:
             # WF.print2stdout('INVALID INPUT TYPE DETECTED', avgtype)
             return times, values
@@ -237,26 +231,8 @@ def getIdxForTimestamp(time_Array, t_in):
     if min_diff > tol:
         # WF.print2stdout('nearest time step > 1 day away')
         return -1
-    # timestep = np.where((np.abs(ords - t_in_ord) - min_diff) < tol)[0][0]
     timestep = np.where(np.abs(ords - t_in_ord) == min_diff)[0][0]
     return timestep
-
-
-
-
-
-
-    # tol = 1. / (24. * 60.)  # 1 minute tolerance
-    # timestep = np.where(time_Array + dt.timedelta(minutes=1) > t_in and time_Array - dt.timedelta(minutes=1)  t_in)
-    #
-    # ttmp = t_in.toordinal() + float(t_in.hour) / 24. + float(t_in.minute) / (24. * 60.) - offset + 1 #jdate offsets...
-    # min_diff = np.min(np.abs(time_Array - ttmp))
-    # tol = 1. / (24. * 60.)  # 1 minute tolerance
-    # timestep = np.where((np.abs(time_Array - ttmp) - min_diff) < tol)[0][0]
-    # if min_diff > 1.:
-    #     # WF.print2stdout('nearest time step > 1 day away')
-    #     return -1
-    # return timestep
 
 def filterTimestepByYear(timestamps, year):
     '''
@@ -345,7 +321,6 @@ def JDateToDatetime(dates, startyear):
         dates: original date if unable to convert
     '''
 
-    # first_year_Date = dt.datetime(self.ModelAlt.dt_dates[0].year, 1, 1, 0, 0)
     first_year_Date = dt.datetime(startyear, 1, 1, 0, 0)
     #JDATES first day is at 1.0, so we need to subtract 1 or else we get an extra day..
     if isinstance(dates, (float, int)):
@@ -382,7 +357,6 @@ def DatetimeToJDate(dates):
     elif isinstance(dates, (list, np.ndarray)):
         if isinstance(dates[0], (float, int)):
             return dates
-        # jdates = np.asarray([(datetime2Ordinal(n) - time_offset) + 1 for n in dates])
         jdates = [((n.replace(tzinfo=None) - dt.datetime(dates[0].year, 1, 1, 0, 0)).total_seconds() / (24*60*60)+1) for n in dates]
         return jdates
     elif isinstance(dates, dt.datetime):

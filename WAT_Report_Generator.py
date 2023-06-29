@@ -142,13 +142,12 @@ class MakeAutomatedReport(object):
                 for simorder in self.SimulationCSV.keys():
                     self.setSimulationCSVVars(self.SimulationCSV[simorder])
                     WR.readDefinitionsFile(self, self.SimulationCSV[simorder])
-                    # self.initializeDataOrganizer() #todo: make sure this doesnt get too big..
                     self.loadModelAlts(self.SimulationCSV[simorder])
                     self.loadCurrentModelAltID(self.base_id)
                     self.WAT_log.addSimLogEntry(self.accepted_IDs, self.SimulationVariables, self.observedDir)
                     self.writeChapter()
                     self.Data.writeDataFiles()
-                    self.appendXMLModelIntroduction(simorder) #todo: modified version of this?
+                    self.appendXMLModelIntroduction(simorder)
                 self.fixXMLModelIntroduction()
                 self.XML.writeReportEnd()
                 self.WAT_log.equalizeLog()
@@ -166,7 +165,6 @@ class MakeAutomatedReport(object):
                     self.images_path
         '''
 
-        # self.images_path = os.path.join(self.studyDir, 'reports', 'Images')
         self.images_path = os.path.join(self.outputDir, 'Images')
         if not os.path.exists(self.images_path):
             try:
@@ -176,7 +174,6 @@ class MakeAutomatedReport(object):
                 WF.print2stderr(f'Unable to make {self.images_path}')
                 sys.exit(1)
 
-        # self.CSVPath = os.path.join(self.studyDir, 'reports', 'CSVData')
         self.CSVPath = os.path.join(self.outputDir, 'CSVData') #TODO: update
 
         if not os.path.exists(self.CSVPath):
@@ -763,14 +760,11 @@ class MakeAutomatedReport(object):
                             ax2_handles, ax2_labels = ax2.get_legend_handles_labels()
                             handles += ax2_handles
                             labels += ax2_labels
-                            # right_sided_axes.append(ax)
                             right_sided_axes.append([ax, ax2])
                             ax2ylabel = ax2.get_ylabel()
                             if ax2ylabel != '':
                                 ax2setylabel = ax2.set_ylabel(ax2ylabel)
                                 ylabel_x1 = ax2setylabel.get_window_extent().x1
-                                # right_offset = ax.get_window_extent().x0 / ylabel_x1
-                                # right_offset = ylabel_x1 + ax.get_window_extent().x0 / ylabel_x1
                                 right_offset = ax.get_window_extent().x0 / (ax.get_window_extent().width - ax2setylabel.get_window_extent().width)
                                 right_offset *= 1.20
                             else:
@@ -821,13 +815,11 @@ class MakeAutomatedReport(object):
                 else:
                     exists = False
             figname = tfn + '.png'
-            # plt.tight_layout()
-            # plt.savefig(figname)
+
             if self.highres:
                 plt.savefig(figname, dpi=300)
             else:
                 plt.savefig(figname)
-            # plt.savefig(figname, bbox_inches='tight')
             plt.close('all')
 
             if pageformat == 'half':
@@ -1081,8 +1073,6 @@ class MakeAutomatedReport(object):
         # object_settings['description'] = WF.parseForTextFlags(object_settings['description'])
         obj_desc = WF.updateFlaggedValues(object_settings['description'], '%%year%%', self.years_str)
 
-        # self.XML.writeProfilePlotStart(obj_desc)
-
         ################# Get timestamps #################
         object_settings['datessource_flag'] = WF.getDateSourceFlag(object_settings)
         object_settings['timestamps'] = self.Profiles.getProfileTimestamps(object_settings, self.StartTime, self.EndTime)
@@ -1125,10 +1115,6 @@ class MakeAutomatedReport(object):
         for yi, year in enumerate(object_settings['years']):
             self.XML.writeProfilePlotStart(obj_desc)
             yearstr = object_settings['yearstr'][yi]
-            # if object_settings['split_by_year']:
-            #     yearstr = str(year)
-            # else:
-            #     yearstr = self.years_str
 
             t_stmps = WT.filterTimestepByYear(object_settings['timestamps'], year)
 
@@ -1260,7 +1246,6 @@ class MakeAutomatedReport(object):
                         ax.grid(zorder=-9)
 
                     ### GATES ###
-                    # gategroups = {}
                     gateconfig = {}
                     if len(gatedata.keys()) > 0:
                         gatemsk = None
@@ -1401,11 +1386,9 @@ class MakeAutomatedReport(object):
                                 bottomtext_str.append(object_settings['timestamps'][j].strftime('%m/%d/%Y'))
                             elif text.lower() == 'gateconfiguration':
                                 gateconfignum = WGates.getGateConfigurationDays(gateconfig, gatedata, object_settings['timestamps'][j])
-                                # bottomtext_str.append(str(gateconfignum))
                                 bottomtext_str.append(str('{num:,.{digits}f}'.format(num=gateconfignum, digits=3)))
                             elif text.lower() == 'gateblend':
                                 gateblendnum = WGates.getGateBlendDays(gateconfig, gatedata, object_settings['timestamps'][j])
-                                # bottomtext_str.append(str(gateblendnum))
                                 bottomtext_str.append(str('{num:,.{digits}f}'.format(num=gateblendnum, digits=3)))
                             else:
                                 bottomtext_str.append(text)
@@ -1485,7 +1468,6 @@ class MakeAutomatedReport(object):
                 else:
                     plt.savefig(os.path.join(self.images_path, figname))
 
-                # plt.savefig(os.path.join(self.images_path, figname))
                 plt.close('all')
 
                 ################################################
@@ -1564,7 +1546,6 @@ class MakeAutomatedReport(object):
 
         object_settings = self.configureSettingsForID(self.base_id, object_settings)
 
-        # data = self.Tables.filterTableData(data, object_settings)
         data, data_settings = self.Tables.correctTableUnits(data, data_settings, object_settings)
 
         object_settings['units_list'] = WF.getUnitsList(data_settings)
@@ -2493,12 +2474,10 @@ class MakeAutomatedReport(object):
                 else:
                     vmax = np.nanmax(values)
 
-                # contr = ax.contourf(dates, distance, values.T, cmap=contour_plot_settings['colorbar']['colormap'],
                 contr = ax.contourf(dates, distance, values, cmap=contour_plot_settings['colorbar']['colormap'],
                                     vmin=vmin, vmax=vmax,
                                     levels=np.linspace(vmin, vmax, int(contour_plot_settings['colorbar']['bins'])), #add one to get the desired number..
                                     extend='both') #the .T transposes the array so dates on bottom TODO:make extend variable
-                # ax.invert_yaxis()
 
                 self.WAT_log.addLogEntry({'type': contour_plot_settings['label'] + '_ContourPlot' if contour_plot_settings['label'] != '' else 'ContourPlot',
                                           'name': self.ChapterRegion+'_'+yearstr,
@@ -2699,7 +2678,7 @@ class MakeAutomatedReport(object):
                 else:
                     exists = False
             figname = tfn + '.png'
-            # plt.savefig(figname, bbox_inches='tight')
+
             if self.highres:
                 plt.savefig(figname, dpi=300)
             else:
@@ -3031,9 +3010,6 @@ class MakeAutomatedReport(object):
             plt.tight_layout()
             plt.subplots_adjust(hspace=0.05)
 
-            # if 'description' not in cur_obj_settings.keys():
-            #     cur_obj_settings['description'] = ''
-
             basefigname = os.path.join(self.images_path, 'ContourPlot' + '_' + self.ChapterRegion.replace(' ','_')
                                        + '_' + yearstr)
             exists = True
@@ -3046,8 +3022,7 @@ class MakeAutomatedReport(object):
                 else:
                     exists = False
             figname = tfn + '.png'
-            # plt.savefig(figname, bbox_inches='tight')
-            # plt.savefig(figname)
+
             if self.highres:
                 plt.savefig(figname, dpi=300)
             else:
@@ -3202,9 +3177,6 @@ class MakeAutomatedReport(object):
         else:
             desc = ''
 
-        # object_settings['primarykey'] = self.Data.getPrimaryTableKey(data, object_settings)
-        # data = self.Tables.formatPrimaryKey(data, object_settings)
-        # headings, rows = self.Tables.buildFormattedTable(data)
         formatted_headers = self.Tables.formatForecastTableHeaders(headers)
         primarykey = headers[0]
 
@@ -3281,13 +3253,17 @@ class MakeAutomatedReport(object):
         self.SimulationVariables[ID]['ModelAlternatives'] = simulation['modelalternatives']
         if self.reportType == 'forecast':
             self.SimulationVariables[ID]['ensemblesets'] = simulation['ensemblesets']
-            # self.SimulationVariables[ID]['ensemblesets'] = self.formatMembers(simulation['ensemblesets'])
         else:
             self.SimulationVariables[ID]['ensemblesets'] = []
 
         WT.setSimulationDateTimes(self, ID)
 
     def organizeMembers(self):
+        '''
+        formats members part of an ensemble set and gets a list of all members
+        :return:
+        '''
+
         self.allMembers = []
         for simulation in self.Simulations:
             simulation['ensemblesets'] = self.formatMembers(simulation['ensemblesets'])
@@ -3297,6 +3273,13 @@ class MakeAutomatedReport(object):
         self.allMembers.sort()
 
     def formatMembers(self, ensemblesets):
+        '''
+        formats members as part of a collection set, takes the collection start and adds to the member number
+        ex: member 4, collection start 5000, return 5004
+        :param ensemblesets: dictionary for ensemble sets
+        :return: formatted ensemble set dictionaries
+        '''
+
         formatted_ensemblesets = []
         for ensembleset in ensemblesets:
             members = ensembleset['memberstoreport']
@@ -3576,6 +3559,7 @@ class MakeAutomatedReport(object):
         loads model alternative specific settings for a given ID
         :param ID: selected ID, such as 'base' or 'alt_1'
         '''
+
         if not self.modelIndependent:
             self.alternativeFpart = self.SimulationVariables[ID]['alternativeFpart']
             self.alternativeDirectory = self.SimulationVariables[ID]['alternativeDirectory']
@@ -3660,6 +3644,7 @@ class MakeAutomatedReport(object):
         :param simorder: number of simulation file
         :return:
         '''
+
         if not self.modelIndependent:
             modelstrs = []
             for Chapter in self.ChapterDefinitions:

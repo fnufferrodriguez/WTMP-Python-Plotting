@@ -74,6 +74,8 @@ class DataOrganizer(object):
                     structure_nums = [data_info['structurenumbers']]
                 elif isinstance(data_info['structurenumbers'], (list, np.ndarray)):
                     structure_nums = data_info['structurenumbers']
+                else:
+                    structure_nums = ''
                 outname += '_Struct_' + '_'.join(structure_nums) + f'_{very_special_flags}'
             else:
                 if 'column' in data_info.keys():
@@ -346,16 +348,12 @@ class DataOrganizer(object):
                             dates = timeserieslines[timeserieslinekey]['dates']
                             if 'timestamps' in settings.keys():
                                 idx = WR.getClosestTime(settings['timestamps'], dates)
-                                # if idx > len(values):
-                                #     straightlines[tosl][timeserieslinekey] = {'values': np.nan}
-                                # else:
                                 v_idx = []
                                 for id in idx:
                                     if id > len(values):
                                         v_idx.append(np.nan)
                                     else:
                                         v_idx.append(values[id])
-                                # straightlines[tosl][timeserieslinekey] = {'values': values[idx]}
                                 straightlines[tosl][timeserieslinekey] = {'values': v_idx}
                             for key in timeserieslinesettings[timeserieslinekey].keys():
                                 if key not in straightlines[tosl][timeserieslinekey].keys():
@@ -422,10 +420,7 @@ class DataOrganizer(object):
                         if len(members_to_grab) > 0:
                             WF.print2stdout(f'Not all members in memory. Getting remaining: {members_to_grab}', debug=self.Report.debug)
 
-
                 if not metadata['frommemory']:
-                    # if Line_info['flag'].lower() == 'computed' and (self.Report.isensemble or self.reportType == 'forecast'):
-                    # if Line_info['dss_path'].split('/')[6].startswith('*|'):
                     if metadata['collection']:
                         if metadata['partialmemory']: #if we've only grabbed some of them...
                             coll_times, coll_values, coll_units, coll_members = WDR.readCollectionsDSSData(Line_info['dss_filename'], Line_info['dss_path'],
@@ -564,14 +559,7 @@ class DataOrganizer(object):
                 if self.Report.plugin.lower() != 'ressim':
                     WF.print2stdout('Incorrect model type for line using ResSimResName', debug=self.Report.debug)
                     return [], [], metadata
-                # if 'target' not in Line_info.keys():
-                #     WF.print2stdout('No target data for profile target timeseries.', debug=self.Report.debug)
-                #     WF.print2stdout('Please enter target data including value and parameter.', debug=self.Report.debug)
-                #     return [], [], None
-                # if 'parameter' not in Line_info.keys():
-                #     WF.print2stdout('No parameter for profile target timeseries.', debug=self.Report.debug)
-                #     WF.print2stdout('Assuming output is elevation.', debug=self.Report.debug)
-                #     Line_info['parameter'] = 'elevation'
+
                 if 'target' in Line_info.keys():
                     if 'parameter' not in Line_info.keys():
                         WF.print2stdout('No parameter for profile target timeseries.', debug=self.Report.debug)
@@ -718,26 +706,15 @@ class DataOrganizer(object):
         if len(vals) > 0:
             datacheck = True
             datamem_key = self.buildMemoryKey(profile)
-            # if metadata['units'] == None:
-            #     if 'units' in profile.keys():
-            #         units = profile['units']
-            # else:
-            #     units = None
 
             if profile['flag'] in line_settings.keys() or profile['flag'] in data.keys():
                 datakey = '{0}_{1}'.format(profile['flag'], profile['numtimesused'])
             else:
                 datakey = profile['flag']
 
-            # subset = True
-            # if isinstance(timestamps, str):
-            #     subset = False
-
             line_settings[datakey] = {'logoutputfilename': datamem_key,
-                                      # 'numtimesused': profile['numtimesused'],
-                                      # 'subset': subset,
-                                      # 'units': units,
                                       }
+
             line_settings[datakey].update(metadata)
             line_settings[datakey].update(profile)
 
@@ -846,9 +823,6 @@ class DataOrganizer(object):
                                                                                              resultsfile=resultsfile)
                     metadata['units'] = 'c' #W2 outputs in metric
                     times = WT.JDateToDatetime(times, self.Report.startYear)
-                    # if isinstance(timesteps, str):
-                    #     vals, elevations = self.Report.Profiles.normalize2DElevations(vals, elevations)
-                    # return vals, elevations, depths, times, metadata
 
             elif 'ressimresname' in Profile_info.keys():
                 if self.Report.plugin.lower() == 'ressim':
@@ -887,7 +861,6 @@ class DataOrganizer(object):
                 curreach = self.Report.configureSettingsForID(ID, curreach)
                 if not self.Report.checkModelType(curreach):
                     continue
-                # object_settings['timestamps'] = 'all'
                 values, elevations, depths, dates, metadata = self.getProfileValues(curreach, 'all')
                 topwater = self.getProfileTopWater(curreach, 'all')
                 if 'interval' in curreach.keys():
@@ -914,13 +887,7 @@ class DataOrganizer(object):
                         WF.print2stdout('The new flag is {0}'.format(newflag), debug=self.Report.debug)
                     datamem_key = self.buildMemoryKey(datapath)
 
-                    # if 'units' in datapath.keys():
-                    #     units = datapath['units']
-                    # else:
-                    #     units = None
-
                     data_settings[flag] = {'logoutputfilename': datamem_key,
-                                           # 'units': units,
                                            'ID': ID,
                                            }
 
@@ -1065,8 +1032,6 @@ class DataOrganizer(object):
                 WF.print2stdout(f'Using Temporary flag {temp_flag}, but table may not work as intended', debug=self.Report.debug)
                 dp['flag'] = temp_flag
                 temp_flag_number += 1
-                # WF.print2stdout('Not using Line:', dp, debug=self.Report.debug)
-                # continue
             if type.lower() == 'timeseries':
                 if dp['flag'].lower() == 'computed':
                     for ID in self.Report.accepted_IDs:
@@ -1092,8 +1057,6 @@ class DataOrganizer(object):
                         numtimesused += 1
 
             elif type.lower() == 'formatted':
-                #TODO: update to handle different sheets?
-                #TODO: handle many tables? just select the first?
                 dp = self.Report.configureSettingsForID(self.Report.base_id, dp)
                 if 'filename' in dp.keys():
                     data[dp['flag']] = WR.readFormattedTable_Pandas(dp['filename'])
@@ -1118,7 +1081,7 @@ class DataOrganizer(object):
         '''
 
         if primarykey == None:
-            primarykey = self.Data.getPrimaryTableKey(data, object_settings)
+            primarykey = self.getPrimaryTableKey(data, object_settings)
 
         if 'headers' in object_settings.keys():
             selected_headers = object_settings['headers']

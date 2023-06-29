@@ -136,8 +136,6 @@ def readChapterDefFile(CD_file):
     tree = ET.parse(CD_file)
     root = tree.getroot()
     for chapter in root:
-        # check = definedVarCheck(chapter, ['Name', 'Region', 'Sections'])
-        # if check:
         ChapterDef = {}
         try: chap_name = chapter.find('Name').text
         except: chap_name = ''
@@ -156,10 +154,7 @@ def readChapterDefFile(CD_file):
         debug_flags = ['debug', 'Debug', 'DEBUG']
         ChapterDef['debug'] = findTargetinChapterDefFile(debug_flags, chapter, default='false')
 
-        # collections_flags = ['isensemble', 'Isensemble', 'ISENSEMBLE'] #TODO: is this final flag??
-        # ChapterDef['isensemble'] = findTargetinChapterDefFile(collections_flags, chapter, default='false')
-
-        memberiteration_flags = ['memberiteration', 'Memberiteration', 'MemberIteration', 'MEMBERITERATION', 'memberIteration'] #TODO: is this final flag??
+        memberiteration_flags = ['memberiteration', 'Memberiteration', 'MemberIteration', 'MEMBERITERATION', 'memberIteration']
         ChapterDef['memberiteration'] = findTargetinChapterDefFile(memberiteration_flags, chapter, default='false')
 
         cd_sections = chapter.findall('Sections/Section')
@@ -210,7 +205,6 @@ def readCollectionsDSSData(dss_file, pathname, members, startdate, enddate, debu
                 members = [int(n) for n in members]
 
             members.sort()
-            # members = WF.formatMembers(members)
             for i, member in enumerate(members):
                 member_frmt = WF.formatMembers(member)
                 CID_pathname_fpart = pathname.split('/')[6].replace('*|', f'C:{member_frmt}|')
@@ -271,7 +265,6 @@ def readDSSData(dss_file, pathname, startdate, enddate, debug):
     if ts.dtype == 'Regular TimeSeries':
         interval_seconds = ts.interval
         times = []
-        # current_time = startdate
         current_time = ts.startPyDateTime
         end_time = ts.endDateTime #bugged where the pydatetime shows start time..
         try:
@@ -675,7 +668,6 @@ def readGraphicsDefaultFile(Report):
 
     graphicsDefaultfile = os.path.join(Report.studyDir, 'reports', 'Graphics_Defaults.xml')
     WF.checkExists(graphicsDefaultfile)
-    # graphicsDefaultfile = os.path.join(self.default_dir, 'Graphics_Defaults.xml') #TODO: implement with build
     Report.graphicsDefault = readGraphicsDefaults(graphicsDefaultfile)
 
 def readDefinitionsFile(Report, simorder):

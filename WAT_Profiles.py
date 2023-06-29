@@ -426,7 +426,6 @@ class Profiles(object):
         bottom_elev = np.nanmin([np.nanmin(n) for n in elevations if ~np.all(np.isnan(n))])
         new_elevations = np.linspace(bottom_elev, top_elev, elevations.shape[1])
         for vi, v in enumerate(vals):
-            # valelev_interp = interpolate.interp1d(elevations[vi], v, bounds_error=False, fill_value = np.nan)
             valelev_interp = interpolate.interp1d(elevations[vi], v, bounds_error=False, fill_value ="extrapolate")
             newvals.append(valelev_interp(new_elevations))
         return np.asarray(newvals), np.asarray(new_elevations)
@@ -662,8 +661,3 @@ class Profiles(object):
                             data[key]['depths'][dsi][min_depth_i] = 0.0
 
         return data
-
-
-
-
-

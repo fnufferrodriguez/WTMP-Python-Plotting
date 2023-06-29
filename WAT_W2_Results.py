@@ -66,7 +66,6 @@ class W2_Results(object):
         elif self.control_file_type == 'csv':
             self.getOutputFileName_CSV()
 
-
     def buildTimes(self):
         '''
         builds two different timeseries to snap irregular data to, because W2 allows for two different output intervals.
@@ -97,10 +96,8 @@ class W2_Results(object):
         self.cf_lines = self.getControlFileLines(self.control_file)
         if self.control_file_type == 'npt':
             self.line_sections = self.formatNPTCFLines(self.cf_lines)
-        else:
+        else: #csv
             self.line_sections = self.formatCSVCFLines(self.cf_lines)
-            # self.line_sections = [] #csv file output contains depths and elevations in the output, which is nice.
-            #csv?
 
     def getInterval(self):
         '''
@@ -148,6 +145,7 @@ class W2_Results(object):
         :return: set class variables:
                     self.layers
         '''
+
         if self.control_file_type == 'npt':
             self.layers = np.asarray([float(n) for n in self.getNPTControlVariable(self.line_sections, 'TSR LAYE')])
         else:
@@ -574,14 +572,11 @@ class W2_Results(object):
                 elev_vals = op_file['elws(m)']
                 wt.append(wt_vals.values)
                 WS_Elev.append(elev_vals.values)
-                # wt[i-1] = wt_vals
-                # WS_Elev[i-1] = elev_vals
+
 
         max_len = len(self.jd_dates)
         wt = np.asarray([np.pad(array, (0, max_len - len(array)), mode='constant', constant_values=np.nan) for array in wt]).T
         WS_Elev = np.asarray([np.pad(array, (0, max_len - len(array)), mode='constant', constant_values=np.nan) for array in WS_Elev]).T
-        # wt = np.asarray(wt).T
-        # WS_Elev = np.asarray(WS_Elev).T
 
         if isinstance(timesteps, (list, np.ndarray)):
             select_wt = []
@@ -777,8 +772,6 @@ class W2_Results(object):
         :return: np.array of dates, and the values
         '''
 
-        # out_vals = np.full(len(self.jd_dates), np.nan)
-
         try:
             column = int(column)
         except:
@@ -835,13 +828,7 @@ class W2_Results(object):
         if len(dt_dates) < len(values): #in the event data file has full year of output and the time window changes
             values = values[:len(dt_dates)]
 
-        # print(len(dt_dates), len(values))
         return dt_dates, np.asarray(values)
-
-    # def subsetValues(self, values, dt_dates, jd_dates, dates):
-    #     #find offset
-    #     #find closest start
-
 
     def readSegment(self, filename, parameter):
         '''
@@ -885,9 +872,7 @@ class W2_Results(object):
                 elif line.startswith(' Model run at'):
                     checkForVar = True
 
-
         # otf.split('\n')
-
 
     def getParameterFileStr(self, parameter):
         '''

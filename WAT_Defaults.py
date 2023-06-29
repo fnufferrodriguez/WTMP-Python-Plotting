@@ -38,7 +38,7 @@ def getDefaultDefaultLineStyles(i):
 def getDefaultDefaultForecastTableHeaders():
     '''
     incase nothing is entered for forecast tables, arranges the columns
-    :return:
+    :return: list of table headers
     '''
 
     return ['member', 'operationsname', 'metname', 'temptargetname']

@@ -15,7 +15,6 @@ Created on 7/15/2021
 import datetime as dt
 import pickle
 import numpy as np
-from functools import reduce
 from matplotlib.colors import to_hex
 from scipy import interpolate
 
@@ -31,7 +30,7 @@ class Tables(object):
         '''
         self.Report = Report
         if self.Report.reportType == 'forecast':
-            self.defineForecastTableColumns()
+            self.defineForecastTableHeaders()
 
     def buildHeadersByTimestamps(self, timestamps, years):
         '''
@@ -66,6 +65,13 @@ class Tables(object):
         return headers, headers_i
 
     def buildErrorStatsTable(self, object_settings, data_settings):
+        '''
+        builds error stats table
+        :param object_settings: dictionary of settings for object
+        :param data_settings: dictionary containing data metadata
+        :return: headers and rows for table
+        '''
+
         headers = []
         rows = []
         for ri, row in enumerate(object_settings['rows']):
@@ -122,6 +128,13 @@ class Tables(object):
         return headers, rows
 
     def buildMonthlyStatsTable(self, object_settings, data_settings):
+        '''
+        builds monthly stats table
+        :param object_settings: dictionary of settings for object
+        :param data_settings: dictionary containing data metadata
+        :return: headers and rows for table
+        '''
+
         headers = []
         rows = []
         for ri, row in enumerate(object_settings['rows']):
@@ -289,6 +302,12 @@ class Tables(object):
         return headers, rows
 
     def buildFormattedTable(self, data):
+        '''
+        builds headers and rows for formatted tables
+        :param data: pandas dataframe of table
+        :return: headers and rows
+        '''
+
         headers = data.columns #ez
         rows = []
         for i, row in data.iterrows():
@@ -300,7 +319,6 @@ class Tables(object):
                     built_row += f'|{rowval}'
             rows.append(built_row)
         return headers, rows
-
 
     def buildProfileStatsTable(self, object_settings, timestamp, data):
         '''
@@ -398,21 +416,17 @@ class Tables(object):
             ### FALSE WHEN OUT OF BOUNDS, TRUE WHEN KEEP
 
             if xmax != None and filtbylims:
-                # xmax_filt = np.where(dates <= xmax)
+
                 xmax_filt = (dates <= xmax)
             else:
-                # xmax_filt = np.arange(len(dates))
                 xmax_filt = np.full(dates.shape, True)
 
             if xmin != None and filtbylims:
-                # xmin_filt = np.where(dates >= xmin)
                 xmin_filt = (dates >= xmin)
             else:
-                # xmin_filt = np.arange(len(dates))
                 xmin_filt = np.full(dates.shape, True)
 
             if ymax != None and filtbylims:
-                # ymax_filt = np.where(dates <= ymax)
                 if isinstance(values, dict):
                     ymax_filt = {}
                     for key, vs in values.items():
@@ -444,12 +458,6 @@ class Tables(object):
                 else:
                     ymin_filt = np.full(values.shape, True)
 
-
-            # if ymin != None and filtbylims:
-            #     ymin_filt = np.where(dates >= ymin)
-            # else:
-            #     ymin_filt = np.arange(len(dates))
-
             if omitvalues != None:
                 if isinstance(values, dict):
                     omit_filt = {}
@@ -476,7 +484,6 @@ class Tables(object):
             if isinstance(values, dict):
                 new_values = {}
                 for key, vs in values.items():
-                    # master_filter = reduce(np.intersect1d, (xmax_filt, xmin_filt, ymax_filt[key], ymin_filt[key], omitvals_filt[key])).astype(int)
                     master_filter = xmax_filt & xmin_filt & ymax_filt[key] & ymin_filt[key] & omitvals_filt[key]
                     vs[~master_filter] = np.nan
                     new_values[key] = vs
@@ -485,7 +492,6 @@ class Tables(object):
                 master_filter = xmax_filt & xmin_filt & ymax_filt & ymin_filt & omitvals_filt
                 values[~master_filter] = np.nan
                 data[lineflag]['values'] = values
-                # data[lineflag]['dates'] = dates[master_filter]
 
         return data
 
@@ -615,12 +621,6 @@ class Tables(object):
         #                  '%%nse': 2,
         #                  '%%count': 2, #can also be 1
         #                  '%%mean': 1}
-
-        # numFlagsReqd=2 #start with most restrictive..
-        # for key in stat_flag_Req.keys():
-        #     if row.lower().startswith(key):
-        #         numFlagsReqd = stat_flag_Req[key]
-        #         break
 
         flags = list(data.keys())
 
@@ -834,7 +834,6 @@ class Tables(object):
         default_color = '#a6a6a6' #default, grey
         default_when = 'under' #default
         accepted_threshold_conditions = ['under', 'over']
-        # thresholds = []
 
         threshold_settings = {}
 
@@ -998,15 +997,22 @@ class Tables(object):
         return new_headers
 
     def formatPrimaryKey(self, data, object_settings):
-       if 'formatprimaryascollection' in object_settings.keys():
-           if object_settings['formatprimaryascollection'].lower() == 'true':
-               primarykey = object_settings['primarykey']
-               for datakey in data.keys():
-                   df = data[datakey]
-                   for i, row in df.iterrows():
-                       df.loc[i, primarykey] = WF.formatMembers(row[primarykey])
-                   data[datakey] = df
-       return data
+        '''
+        formats the primary key of a table if its a collection
+        :param data: dictionary of incoming data
+        :param object_settings: dictionary of settings about object
+        :return: dtat dictionary
+        '''
+
+        if 'formatprimaryascollection' in object_settings.keys():
+            if object_settings['formatprimaryascollection'].lower() == 'true':
+                primarykey = object_settings['primarykey']
+                for datakey in data.keys():
+                    df = data[datakey]
+                    for i, row in df.iterrows():
+                        df.loc[i, primarykey] = WF.formatMembers(row[primarykey])
+                    data[datakey] = df
+        return data
 
     def formatStatsProfileLineData(self, row, data_dict, interpolation, usedepth, index):
         '''
@@ -1108,16 +1114,10 @@ class Tables(object):
                 if not useflagforinterp:
                     out_data[flag]['values'] = np.full(len(output_interp_yvalues), np.nan)
                     out_data[flag][y_flag] = np.full(len(output_interp_yvalues), np.nan)
-                    # out_data[flag]['depths'] = np.full(len(output_interp_yvalues), np.nan)
-                    # out_data[flag]['elevations'] = np.full(len(output_interp_yvalues), np.nan)
+
                 else:
                     out_data[flag]['values'] = np.full_like(data_dict[interpolation]['values'][index], np.nan)
                     out_data[flag][y_flag] = np.full_like(data_dict[interpolation][y_flag][index], np.nan)
-                    # out_data[flag]['depths'] = np.full_like(data_dict[interpolation]['depths'][index], np.nan)
-                    # out_data[flag]['elevations'] = np.full_like(data_dict[interpolation]['elevations'][index], np.nan)
-                # out_data[flag]['values'] = []
-                # out_data[flag]['depths'] = []
-                # out_data[flag]['elevations'] = []
                 continue
 
             if not useflagforinterp:
@@ -1240,6 +1240,13 @@ class Tables(object):
         return headings_i
 
     def configureRowsForCollection(self, rows, object_settings):
+        '''
+        configures rows for collections
+        :param rows: list of rows to format
+        :param object_settings: dictionary of settings about object
+        :return:
+        '''
+
         formatted_rows = []
         #figure out members first
         if 'members' in object_settings.keys(): #if a subset
@@ -1299,9 +1306,14 @@ class Tables(object):
 
         self.Report.makeTextBox({'text': f'\nTable "{description}" not generated due to insufficient data.'})
 
-    def defineForecastTableColumns(self):
+    def defineForecastTableHeaders(self):
+        '''
+        defines the fancy names for forecast table headers
+        :return: dictionary of names
+        '''
+
         #{name from XML | display name}
-        self.forecastTableColumns = {'name': 'Name',
+        self.forecastTableHeaders = {'name': 'Name',
                                      'operationsname': 'Operations',
                                      'metname': 'Met',
                                      'temptargetname': 'Temp Target',
@@ -1318,18 +1330,24 @@ class Tables(object):
         rejected_columns = []
         approved_columns = []
         for column in columns:
-            if column.lower() not in self.forecastTableColumns.keys():
+            if column.lower() not in self.forecastTableHeaders.keys():
                 rejected_columns.append(column)
             else:
                 approved_columns.append(column)
         if len(rejected_columns) > 0:
             WF.print2stdout(f'Invalid column(s) selected: {rejected_columns}')
-            WF.print2stdout(f'Approved column(s): {self.forecastTableColumns.keys()}')
+            WF.print2stdout(f'Approved column(s): {self.forecastTableHeaders.keys()}')
 
         return approved_columns
 
-    def formatForecastTableHeaders(self, columns):
+    def formatForecastTableHeaders(self, headers):
+        '''
+        iterates through forecast headers and formats them to their fancy names
+        :param headers: list of headers
+        :return:
+        '''
+
         formatted_headers = []
-        for column in columns:
-            formatted_headers.append(self.forecastTableColumns[column.lower()])
+        for header in headers:
+            formatted_headers.append(self.forecastTableHeaders[header.lower()])
         return formatted_headers
