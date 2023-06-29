@@ -187,7 +187,6 @@ class ResSim_Results(object):
                 break
         return k
 
-
     def loadElevation(self, alt_subdomain_name=None):
         '''
         loads elevations from the H5 file
@@ -303,8 +302,6 @@ class ResSim_Results(object):
 
         return units
 
-
-
     def readTimeSeries(self, metric, x, y, subdomain=None):
         '''
         Gets Time series values from Ressim H5 files.
@@ -361,7 +358,6 @@ class ResSim_Results(object):
             vt = WF.cleanComputed(vt)
             vdo = WF.cleanComputed(vdo)
             v = WF.calcComputedDOSat(vt, vdo, self.Report.Constants.satDO_interp)
-
 
         if not hasattr(self, 't_computed'):
             self.loadComputedTime()

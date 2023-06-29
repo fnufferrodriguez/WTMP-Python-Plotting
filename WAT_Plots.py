@@ -403,7 +403,6 @@ class Plots(object):
             xtickspacing = xtick_settings['spacing']
             try:
                 xtickspacing = float(xtickspacing)
-                # xtickspacing = dt.timedelta(days=xtickspacing)
                 xtickspacing = f'{xtickspacing}D'
             except ValueError:
                 xtickspacing = xtick_settings['spacing']
@@ -499,7 +498,6 @@ class Plots(object):
                 ax.set_ylim(top=max(newyticks))
                 return
 
-        # newyticks = np.linspace(ymin, ymax, len(ax.get_yticks())) #default num of
         newyticklabels = self.formatTickLabels(ax.get_yticks(), {})
         ax.set_yticks(ax.get_yticks())
         ax.set_yticklabels(newyticklabels)
@@ -546,7 +544,6 @@ class Plots(object):
                     xtickspacing = float(xtickspacing)
                 newxticks = np.arange(xmin, (xmax+xtickspacing), xtickspacing)
                 newxticklabels = self.formatTickLabels(newxticks, xtick_settings)
-                # ax.xaxis.set_major_locator(mticker.FixedLocator(newxticks))
                 ax.set_xticks(newxticks)
                 ax.set_xticklabels(newxticklabels)
 

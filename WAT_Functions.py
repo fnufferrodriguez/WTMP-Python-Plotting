@@ -30,7 +30,6 @@ import WAT_Time as WT
 
 constants = WC.WAT_Constants()
 
-
 def print2stdout(*a, debug=True):
     '''
     prints standard message to the console standard out
@@ -382,7 +381,6 @@ def calcMAE(data1, data2):
 
     return mean_absolute_error(data2['values'], data1['values'])
 
-
 def calcMeanBias(data1, data2):
     '''
     calculates the mean bias for two datasets
@@ -597,12 +595,10 @@ def replaceflaggedValues(Report, settings, itemset, include=[], exclude=[], forj
                 if key not in include:
                     continue
             if isinstance(settings[key], dict):
-                # settings[key] = replaceflaggedValues(Report, settings[key], itemset, include=include, exclude=exclude, forjasper=forjasper)
                 settings[key] = replaceflaggedValues(Report, settings[key], itemset, forjasper=forjasper)
             elif isinstance(settings[key], list):
                 new_list = []
                 for item in settings[key]:
-                    # new_list.append(replaceflaggedValues(Report, item, itemset, include=include, exclude=exclude, forjasper=forjasper))
                     new_list.append(replaceflaggedValues(Report, item, itemset, forjasper=forjasper))
                 settings[key] = new_list
             else:
@@ -776,7 +772,6 @@ def stackContours(contours, contours_settings):
         if len(output_values) == 0:
             output_values = pickle.loads(pickle.dumps(contour['values'], -1))
         else:
-            # output_values = np.append(output_values, contour['values'][:, 1:], axis=1)
             output_values = np.append(output_values, contour['values'][1:, :], axis=0)
         if len(output_dates) == 0:
             output_dates = contour['dates']
@@ -1418,7 +1413,6 @@ def fixDuplicateColors(line_settings):
             if 'pointfillcolors' in line_settings.keys():
                 if isinstance(line_settings['pointfillcolors'], dict):
                     line_settings['pointfillcolors'] = [line_settings['pointfillcolors']['pointfillcolor']]
-                # pfc_idx = copy.copy(lineusedcount_idx)
                 if lineusedcount > len(line_settings['pointfillcolors']):
                     pfc_idx = lineusedcount % len(line_settings['pointfillcolors'])
                 else:
@@ -1835,6 +1829,13 @@ def formatMembers(member):
         return str(member).zfill(6)
 
 def matchMemberToEnsembleSet(ensemblesets, member):
+    '''
+    finds the ensemble set a member belongs to
+    :param ensemblesets: collection of ensemble sets
+    :param member: member to get set for
+    :return: selected ensemble set
+    '''
+
     for ensembleset in ensemblesets:
         if member in ensembleset['members']:
             return ensembleset

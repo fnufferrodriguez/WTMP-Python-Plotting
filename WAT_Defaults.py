@@ -35,10 +35,10 @@ def getDefaultDefaultLineStyles(i):
     return {'linewidth': 2, 'linecolor': constants.def_colors[i],
             'linestylepattern': 'solid', 'alpha': 1.0, 'zorder': 4}
 
-def getDefaultDefaultForecastTableColumns():
+def getDefaultDefaultForecastTableHeaders():
     '''
     incase nothing is entered for forecast tables, arranges the columns
-    :return:
+    :return: list of table headers
     '''
 
     return ['member', 'operationsname', 'metname', 'temptargetname']
