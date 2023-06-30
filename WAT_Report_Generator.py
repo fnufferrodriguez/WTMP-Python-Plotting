@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '5.5.23'
+VERSIONNUMBER = '5.5.24'
 
 import os
 import sys
@@ -3155,12 +3155,19 @@ class MakeAutomatedReport(object):
 
         object_settings = WF.replaceflaggedValues(self, object_settings, 'fancytext', forjasper=True)
 
+        if 'description' in object_settings.keys():
+            desc = object_settings['description']
+            # desc = WF.parseForTextFlags(desc)
+        else:
+            desc = ''
+
         #Get members to plot
         if 'members' in object_settings.keys():
             members_to_plot = [int(n) for n in object_settings['members']]
         else:
             if self.memberiteration: #if we are looping through each member, we only want to table the one member, unless specified
                 members_to_plot = [self.member]
+                desc = WF.updateFlaggedValues(desc, '%%member%%', WF.formatMembers(self.member))
             else:
                 members_to_plot = self.allMembers
 
@@ -3170,12 +3177,6 @@ class MakeAutomatedReport(object):
         else:
             headers = WD.getDefaultDefaultForecastTableHeaders()
         headers = self.Tables.confirmForecastTableHeaders(headers)
-
-        if 'description' in object_settings.keys():
-            desc = object_settings['description']
-            # desc = WF.parseForTextFlags(desc)
-        else:
-            desc = ''
 
         formatted_headers = self.Tables.formatForecastTableHeaders(headers)
         primarykey = headers[0]
@@ -3205,7 +3206,7 @@ class MakeAutomatedReport(object):
             table_constructor[ci]['thresholdcolors'] = np.full(len(rows), None) #not used but needed to build out the table
             table_constructor[ci]['header'] = formatted_headers[ci+1] #add 1 becuase we skip the first
 
-        self.XML.writeTableStart(desc, formatted_headers[0])
+        self.XML.writeTableStart(desc, formatted_headers[0], limit=True)
         self.Tables.writeTable(table_constructor)
         WF.print2stdout(f'Forecast Table from file took {time.time() - objectstarttime} seconds.')
 
@@ -3421,10 +3422,12 @@ class MakeAutomatedReport(object):
                         self.member = int(member)
                         self.Ensemble = ensemble
                         self.iterateSection(section)
+                        self.XML.writeSectionHeaderEnd()
+
             else:
                 self.XML.writeSectionHeader(section_header)
                 self.iterateSection(section)
-            self.XML.writeSectionHeaderEnd()
+                self.XML.writeSectionHeaderEnd()
 
     def iterateSection(self, section):
         '''

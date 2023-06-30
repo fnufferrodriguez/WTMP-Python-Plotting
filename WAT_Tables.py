@@ -1315,7 +1315,7 @@ class Tables(object):
         #{name from XML | display name}
         self.forecastTableHeaders = {'name': 'Name',
                                      'operationsname': 'Operations',
-                                     'metname': 'Met',
+                                     'metname': 'Met Set',
                                      'temptargetname': 'Temp Target',
                                      'member': 'Member Number'
                                      }

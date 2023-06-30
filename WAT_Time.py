@@ -30,7 +30,6 @@ def changeTimeSeriesInterval(times, values, Line_info, startYear):
     '''
 
     convert_to_jdate = False
-
     if len(times) == 0:
         return times, values
 

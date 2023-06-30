@@ -615,7 +615,7 @@ def readSimulationInfo(Report, simulationInfoFile):
     tree = ET.parse(simulationInfoFile)
     root = tree.getroot()
 
-    Report.reportType = root.find('ReportType').text
+    Report.reportType = root.find('ReportType').text.lower()
     Report.studyDir = root.find('Study/Directory').text
     Report.observedDir = root.find('Study/ObservedData').text
     Report.installDir = root.find('Study/InstallDirectory').text #TODO: update

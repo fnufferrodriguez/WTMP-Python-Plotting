@@ -276,7 +276,7 @@ class XMLReport(object):
             XML.write('</Reservoir_Profiles>\n')
             XML.write('</Report_Element>\n')
 
-    def writeTableStart(self, desc, type):
+    def writeTableStart(self, desc, type, limit=False):
         '''
         writes start of table block for a desired table type
         :param desc: description of table
@@ -284,7 +284,10 @@ class XMLReport(object):
         '''
 
         with open(self.XML_fn, 'a') as XML:
-            XML.write('<Report_Element ReportElementOrder="{0}" Element="Control_Point_Tables">\n'.format(self.current_reportelem_num))
+            if limit:
+                XML.write('<Report_Element ReportElementOrder="{0}" Element="Control_Point_Tables_Four_Columns">\n'.format(self.current_reportelem_num))
+            else:
+                XML.write('<Report_Element ReportElementOrder="{0}" Element="Control_Point_Tables">\n'.format(self.current_reportelem_num))
             XML.write('<Output_Temp_Flow Location="{0}">\n'.format(desc))
             XML.write('<Output_Table TableNumber="{0}" TableDescription="{1}" TableType="{2}">\n'.format(self.current_table_num, desc, type))
 
