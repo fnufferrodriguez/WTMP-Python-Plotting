@@ -26,6 +26,9 @@ def getGateBlendDays(gateconfig, gatedata, timestamp):
     :return: decimal days number
     '''
 
+    if len(gateconfig) == 0:
+        return 'N/A'
+
     gd_key = list(gatedata.keys())[0]
     curgate = gatedata[gd_key]['gates'][list(gatedata[gd_key]['gates'].keys())[0]]
     idx = WR.getClosestTime([timestamp], curgate['dates'])[0]
@@ -62,6 +65,9 @@ def getGateConfigurationDays(gateconfig, gatedata, timestamp):
     :param timestamp: current timestamp to configure to
     :return: decimal days number
     '''
+
+    if len(gateconfig) == 0:
+        return 'N/A'
 
     gd_key = list(gatedata.keys())[0]
     curgate = gatedata[gd_key]['gates'][list(gatedata[gd_key]['gates'].keys())[0]]

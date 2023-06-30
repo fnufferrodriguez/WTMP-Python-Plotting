@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '5.5.24'
+VERSIONNUMBER = '5.5.25'
 
 import os
 import sys
@@ -775,16 +775,18 @@ class MakeAutomatedReport(object):
                         else:
                             numcols = 1
 
-                        if ax_settings['legend_outside'].lower() == 'true': #TODO: calibrate the offset
-                            if _usetwinx:
+                        if len(handles) > 0:
 
-                                ax.legend(handles=handles, labels=labels, loc='center left', bbox_to_anchor=(1+right_offset/2, 0.5), ncol=numcols,fontsize=legsize)
+                            if ax_settings['legend_outside'].lower() == 'true': #TODO: calibrate the offset
+                                if _usetwinx:
 
+                                    ax.legend(handles=handles, labels=labels, loc='center left', bbox_to_anchor=(1+right_offset/2, 0.5), ncol=numcols,fontsize=legsize)
+
+                                else:
+                                    # right_sided_axes.append(ax)
+                                    ax.legend(handles=handles, labels=labels, loc='center left', bbox_to_anchor=(1, 0.5), ncol=numcols,fontsize=legsize)
                             else:
-                                # right_sided_axes.append(ax)
-                                ax.legend(handles=handles, labels=labels, loc='center left', bbox_to_anchor=(1, 0.5), ncol=numcols,fontsize=legsize)
-                        else:
-                            ax.legend(handles=handles, labels=labels, fontsize=legsize, ncol=numcols)
+                                ax.legend(handles=handles, labels=labels, fontsize=legsize, ncol=numcols)
 
 
 
@@ -1290,6 +1292,9 @@ class MakeAutomatedReport(object):
                                 values = curgate['values']
                                 dates = curgate['dates']
 
+                                if len(values) == 0:
+                                    continue
+
                                 if 'dateformat' in cur_obj_settings.keys():
                                     if cur_obj_settings['dateformat'].lower() == 'datetime':
                                         if isinstance(dates[0], (int,float)):
@@ -1386,10 +1391,16 @@ class MakeAutomatedReport(object):
                                 bottomtext_str.append(object_settings['timestamps'][j].strftime('%m/%d/%Y'))
                             elif text.lower() == 'gateconfiguration':
                                 gateconfignum = WGates.getGateConfigurationDays(gateconfig, gatedata, object_settings['timestamps'][j])
-                                bottomtext_str.append(str('{num:,.{digits}f}'.format(num=gateconfignum, digits=3)))
+                                if isinstance(gateconfignum, float):
+                                    bottomtext_str.append(str('{num:,.{digits}f}'.format(num=gateconfignum, digits=3)))
+                                else:
+                                    bottomtext_str.append(gateconfignum)
                             elif text.lower() == 'gateblend':
                                 gateblendnum = WGates.getGateBlendDays(gateconfig, gatedata, object_settings['timestamps'][j])
-                                bottomtext_str.append(str('{num:,.{digits}f}'.format(num=gateblendnum, digits=3)))
+                                if isinstance(gateblendnum, float):
+                                    bottomtext_str.append(str('{num:,.{digits}f}'.format(num=gateblendnum, digits=3)))
+                                else:
+                                    bottomtext_str.append(gateblendnum)
                             else:
                                 bottomtext_str.append(text)
                         bottomtext = ', '.join(bottomtext_str)
