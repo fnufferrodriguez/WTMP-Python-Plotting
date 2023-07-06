@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '5.5.25'
+VERSIONNUMBER = '5.5.26'
 
 import os
 import sys
@@ -1101,10 +1101,10 @@ class MakeAutomatedReport(object):
         ################ convert yflags ################
         if object_settings['usedepth'].lower() == 'false':
             wse_data = self.Data.getProfileWSE(object_settings)
-            data, object_settings = self.Profiles.convertDepthsToElevations(data, object_settings, wse_data=wse_data)
+            data = self.Profiles.convertDepthsToElevations(data, wse_data)
         elif object_settings['usedepth'].lower() == 'true':
             wse_data = self.Data.getProfileWSE(object_settings)
-            data, object_settings = self.Profiles.convertElevationsToDepths(data, object_settings, wse_data=wse_data)
+            data, object_settings = self.Profiles.convertElevationsToDepths(data, wse_data=wse_data)
 
         # self.Data.commitProfileDataToMemory(data, line_settings, object_settings)
         linedata, object_settings = self.Profiles.filterProfileData(data, line_settings, object_settings)
