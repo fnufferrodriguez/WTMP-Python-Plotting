@@ -504,10 +504,15 @@ def getClosestTime(timestamps, dates):
     if len(dates) > 1:
         t_interval = dates[1] - t0 #timedelta
     t_interval_seconds = t_interval.total_seconds()
-    for timestamp in timestamps:
-        ts_diff = timestamp - t0
+    if isinstance(timestamps, (list, np.ndarray)):
+        for timestamp in timestamps:
+            ts_diff = timestamp - t0
+            index = int(round(ts_diff.total_seconds() / t_interval_seconds))
+            cdi.append(index)
+    else:
+        ts_diff = timestamps - t0
         index = int(round(ts_diff.total_seconds() / t_interval_seconds))
-        cdi.append(index)
+        cdi = index
     return cdi
 
 def getchildren(root, returnkeyless=False):

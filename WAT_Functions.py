@@ -1776,10 +1776,11 @@ def getMaxWSEFromElev(input_data):
     :return: list of WSE
     '''
 
-    elevations = []
-    for e in input_data:
-        elevations.append(max(e))
-    return elevations
+    return max(input_data)
+    # elevations = []
+    # for e in input_data:
+    #     elevations.append(max(e))
+    # return elevations
 
 def formatUnitsStrings(units, format='internal'):
     '''

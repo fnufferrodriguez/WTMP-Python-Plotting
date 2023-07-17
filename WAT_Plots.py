@@ -569,8 +569,10 @@ class Plots(object):
                 if 'parameter' in hline_settings.keys():
                     if object_settings['usedepth'].lower() == 'true':
                         if hline_settings['parameter'].lower() == 'elevation':
-                            valueconv, _ = self.Report.Profiles.convertElevationsToDepths({'hline': {'depths': [],
-                                                                                      'elevations': [value]}}, object_settings)
+                            valueconv = self.Report.Profiles.convertElevationsToDepths({'depths': [],
+                                                                                       'elevations': [value]},
+                                                                                       {},
+                                                                                       timestamp_index=timestamp_index)
                             if len(valueconv['hline']['depths']) == 0:
                                 WF.print2stdout('Unable to convert horizontal line elevations to depths.', debug=self.Report.debug)
                                 value = np.nan
@@ -578,8 +580,10 @@ class Plots(object):
                                 value = valueconv['hline']['depths'][0]
                     elif object_settings['usedepth'].lower() == 'false':
                         if hline_settings['parameter'].lower() == 'depth':
-                            valueconv, _ = self.Report.Profiles.convertDepthsToElevations({'hline': {'depths': [value],
-                                                                                      'elevations': []}}, object_settings)
+                            valueconv = self.Report.Profiles.convertDepthsToElevations({'depths': [value],
+                                                                                        'elevations': []},
+                                                                                        {},
+                                                                                        timestamp_index=timestamp_index)
                             if len(valueconv['hline']['depths']) == 0:
                                 WF.print2stdout('Unable to convert horizontal line depths to elevations.', debug=self.Report.debug)
                                 value = np.nan
