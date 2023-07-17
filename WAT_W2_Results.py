@@ -147,7 +147,7 @@ class W2_Results(object):
         '''
 
         if self.control_file_type == 'npt':
-            self.layers = np.asarray([float(n) for n in self.getNPTControlVariable(self.line_sections, 'TSR LAYE')])
+            self.layers = np.asarray([float(n) for n in self.getNPTControlVariable(self.line_sections, 'TSR LAYE') if n != ''])
         else:
             self.layers = float(self.getCSVControlVariable(self.line_sections, 'TSR LAYE'))
 
@@ -159,8 +159,9 @@ class W2_Results(object):
 
         # self.output_file_name = self.getControlVariable(self.line_sections, 'TSR FILE')[0]
         output_file_name = self.getNPTControlVariable(self.line_sections, 'TSR FILE')
-        if len(output_file_name) > 0:
-            self.output_file_name = output_file_name[0]
+        output_file_name = ''.join(output_file_name) #sometimes this goes multi line, but it shouldnt
+        # if len(output_file_name) > 0:
+        self.output_file_name = output_file_name
 
     def getOutputFileName_CSV(self):
         '''
