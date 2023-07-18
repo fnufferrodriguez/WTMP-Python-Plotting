@@ -147,9 +147,14 @@ class W2_Results(object):
         '''
 
         if self.control_file_type == 'npt':
-            self.layers = np.asarray([float(n) for n in self.getNPTControlVariable(self.line_sections, 'TSR LAYE')])
+            self.layers = np.asarray([float(n) for n in self.getNPTControlVariable(self.line_sections, 'TSR LAYE') if n != ''])
+            self.segments = np.asarray([int(n) for n in self.getNPTControlVariable(self.line_sections, 'TSR SEG') if n != ''])
+
         else:
             self.layers = float(self.getCSVControlVariable(self.line_sections, 'TSR LAYE'))
+            self.segments = int(self.getCSVControlVariable(self.line_sections, 'TSR SEG'))
+
+
 
     def getOutputFileName_NPT(self):
         '''
@@ -159,8 +164,9 @@ class W2_Results(object):
 
         # self.output_file_name = self.getControlVariable(self.line_sections, 'TSR FILE')[0]
         output_file_name = self.getNPTControlVariable(self.line_sections, 'TSR FILE')
-        if len(output_file_name) > 0:
-            self.output_file_name = output_file_name[0]
+        output_file_name = ''.join(output_file_name) #sometimes this goes multi line, but it shouldnt
+        # if len(output_file_name) > 0:
+        self.output_file_name = output_file_name
 
     def getOutputFileName_CSV(self):
         '''
@@ -553,6 +559,8 @@ class W2_Results(object):
                                               i,
                                               seg,
                                               self.output_file_name.split('.')[1])
+            if self.segments[i-1] != int(seg):
+                continue
             ofn_path = os.path.join(self.run_path, ofn)
             if not os.path.exists(ofn_path):
                 WF.print2stdout('File {0} not found'.format(ofn_path))
@@ -578,6 +586,8 @@ class W2_Results(object):
         wt = np.asarray([np.pad(array, (0, max_len - len(array)), mode='constant', constant_values=np.nan) for array in wt]).T
         WS_Elev = np.asarray([np.pad(array, (0, max_len - len(array)), mode='constant', constant_values=np.nan) for array in WS_Elev]).T
 
+        segment_layers = np.asarray([n for i, n in enumerate(self.layers) if self.segments[i] == int(seg)])
+
         if isinstance(timesteps, (list, np.ndarray)):
             select_wt = []
             elevations = []
@@ -595,8 +605,9 @@ class W2_Results(object):
                         times.append(time)
                         continue
                     WSE = WSE[np.where(~np.isnan(WSE))][0] #otherwise find valid
-                    WSE_array = np.full((self.layers.shape), WSE)
-                    e = (WSE_array - self.layers) * 3.28084
+                    # WSE_array = np.full((self.layers.shape), WSE)
+                    WSE_array = np.full((segment_layers.shape), WSE)
+                    e = (WSE_array - segment_layers) * 3.28084
                     e = e[:len(wt[timestep])]
                     select_wt.append(wt[timestep][:]) #find WTs
 
@@ -606,13 +617,13 @@ class W2_Results(object):
                     depths.append(np.array([]))
                     times.append(time)
                 elevations.append(np.asarray(e)) #then append for timestep
-                depths.append((self.layers * 3.28084)[:len(e)]) #append dpeths
+                depths.append((segment_layers * 3.28084)[:len(e)]) #append dpeths
                 times.append(time) #get time
             select_wt, elevations, depths = self.matchProfileLengths(select_wt, elevations, depths)
 
             return select_wt, elevations, depths, np.asarray(times)
         else:
-            elevations = ((WS_Elev - self.layers) * 3.28084)[:len(wt)]
+            elevations = ((WS_Elev - segment_layers) * 3.28084)[:len(wt)]
             return wt, elevations, [], self.dt_dates
 
     def readProfileTopwater(self, seg, timesteps):
