@@ -552,6 +552,7 @@ class W2_Results(object):
 
         wt = []
         WS_Elev = []
+        profile_jdates = []
 
         for i in range(1,len(self.layers)+1):
             # WF.print2stdout('{0} of {1}'.format(i, len(self.layers)+1))
@@ -575,12 +576,42 @@ class W2_Results(object):
             op_file = pd.read_csv(ofn_path, header=headerline, skip_blank_lines=False)
             op_file.columns = op_file.columns.str.lower()
 
+            # Get the full set of result JDATE values from the uppermost layer file with data in it
+            if len(profile_jdates) == 0:
+                profile_jdates = op_file['jday']
+
             if len(op_file['jday']) > 1:
+                # if the new dataset doesn't have the full set of JDAY values,
+                #    append new empty rows with the missing dates to the dataframe,
+                #    then sort to put them in chronlogical order again
+                file_jdates = op_file['jday']
+                if len(file_jdates) < len(profile_jdates):
+                    new_dates = []
+                    search_index = 0
+                    # Find the missing JDATE values
+                    for jd in profile_jdates:
+                        try:
+                            jdf = file_jdates[search_index]
+                        except KeyError:
+                            # JDATE values in the file don't go to the end of the run
+                            new_dates.append(jd)
+                            continue
+                        if(jd < jdf):
+                                new_dates.append(jd)
+                        else:
+                            search_index += 1
+
+                    # build, concatonate, and sort-in rows for the missing JDATE values
+                    new_values = np.full((len(new_dates),len(op_file.columns)), np.nan)
+                    for i, jd in enumerate(new_dates):
+                        new_values[i,0] = jd
+                    op_file = pd.concat([op_file, pd.DataFrame(columns=op_file.columns, data=new_values, index=range(1,len(new_dates)+1))])
+                    op_file = op_file.sort_values('jday', ignore_index=True)
+
                 wt_vals = op_file['t2(c)']
                 elev_vals = op_file['elws(m)']
                 wt.append(wt_vals.values)
                 WS_Elev.append(elev_vals.values)
-
 
         max_len = len(self.jd_dates)
         wt = np.asarray([np.pad(array, (0, max_len - len(array)), mode='constant', constant_values=np.nan) for array in wt]).T
