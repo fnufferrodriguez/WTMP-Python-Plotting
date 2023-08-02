@@ -272,11 +272,11 @@ class Tables(object):
                     observed_keys.append(datakey)
             if len(computed_keys) == 0 and len(observed_keys) > 0: #if none are computed and some are observed, assume the rest computed
                 for datakey in datakeys:
-                    if data[datakey]['flag'].lower() not in observed_keys:
+                    if data[datakey]['flag'] not in observed_keys:
                         computed_keys.append(datakey)
             if len(observed_keys) == 0 and len(computed_keys) > 0: #if some are computed and none are observed, assume the rest computed
                 for datakey in datakeys:
-                    if data[datakey]['flag'].lower() not in computed_keys:
+                    if data[datakey]['flag'] not in computed_keys:
                         observed_keys.append(datakey)
 
         if 'missingmarker' in object_settings.keys():
