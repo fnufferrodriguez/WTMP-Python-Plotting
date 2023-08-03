@@ -443,7 +443,7 @@ class W2_Results(object):
 
         # turns out jdates can be passed into timedelta (decimals) and it works correctly. Just subtract 1 becuase jdates
         # start at 1
-        dt_dates = pd.date_range(start_day,end_day,freq=dt.timedelta(interval)).to_pydatetime()
+        dt_dates = pd.date_range(start_day,end_day,freq=dt.timedelta(seconds=np.floor(dt.timedelta(interval).total_seconds()))).to_pydatetime()
         jd_dates = np.asarray(WT.DatetimeToJDate(dt_dates))
 
         return jd_dates, dt_dates
@@ -831,6 +831,7 @@ class W2_Results(object):
             WF.print2stdout('Data File not found!', ofn_path)
             return [], []
 
+        # if output_file_name.lower().startswith(('qwo', 'two', 'wl')):
         if output_file_name.lower().startswith(('qwo', 'two')):
             jd_dates = self.wdo_jd_dates
             dt_dates = self.wdo_dt_dates
