@@ -658,6 +658,7 @@ class DataOrganizer(object):
 
         data = {}
         line_settings = {}
+        missing = []
         timestamps = settings['timestamps']
         for line in settings[settings['datakey']]:
             numtimesused = 0
@@ -677,6 +678,8 @@ class DataOrganizer(object):
                     data, line_settings, success = self.updateProfileDataDictionary(data, line_settings, curline, timestamps)
                     if success:
                         numtimesused += 1
+                    else:
+                        missing.append(curline['flag'])
             else:
                 if self.Report.currentlyloadedID != self.Report.base_id:
                     line = self.Report.configureSettingsForID(self.Report.base_id, line)
@@ -688,9 +691,10 @@ class DataOrganizer(object):
                 data, line_settings, success = self.updateProfileDataDictionary(data, line_settings, line, timestamps)
                 if success:
                     numtimesused += 1
+                else:
+                    missing.append(line['flag'])
 
-        return data, line_settings
-
+        return data, line_settings, missing
     def updateProfileDataDictionary(self, data, line_settings, profile, timestamps):
         '''
         organizes line information and places it into a data dictionary
@@ -1023,6 +1027,7 @@ class DataOrganizer(object):
 
         data = {}
         line_settings = {}
+        missing = []
         temp_flag_number = 1
         for dp in object_settings['datapaths']:
             numtimesused = 0
@@ -1044,6 +1049,8 @@ class DataOrganizer(object):
                         data, line_settings, success = self.updateTimeSeriesDataDictionary(data, line_settings, cur_dp)
                         if success:
                             numtimesused += 1
+                        else:
+                            missing.append(dp['flag'])
                 else:
                     if self.Report.currentlyloadedID != self.Report.base_id:
                         dp = self.Report.configureSettingsForID(self.Report.base_id, dp)
@@ -1055,6 +1062,8 @@ class DataOrganizer(object):
                     data, line_settings, success = self.updateTimeSeriesDataDictionary(data, line_settings, dp)
                     if success:
                         numtimesused += 1
+                    else:
+                        missing.append(dp['flag'])
 
             elif type.lower() == 'formatted':
                 dp = self.Report.configureSettingsForID(self.Report.base_id, dp)
@@ -1065,7 +1074,7 @@ class DataOrganizer(object):
                 line_settings[dp['flag']]['logoutputfilename'] = datamem_key
                 line_settings[dp['flag']].update(dp)
 
-        return data, line_settings
+        return data, line_settings, missing
 
     def filterFormattedTable(self, data, object_settings, primarykey=None):
         '''
@@ -1235,6 +1244,7 @@ class DataOrganizer(object):
 
         data = {}
         data_settings = {}
+        # missing = []
         for reach in settings['reaches']:
             for ID in self.Report.accepted_IDs:
                 curreach = pickle.loads(pickle.dumps(reach, -1))
@@ -1274,6 +1284,8 @@ class DataOrganizer(object):
 
                     data_settings[flag].update(metadata)
                     data_settings[flag].update(reach)
+                # else:
+                    # missing.append(curreach['flag'])
 
         #reset
         self.Report.loadCurrentID(self.Report.base_id)
