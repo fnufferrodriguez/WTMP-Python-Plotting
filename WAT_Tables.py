@@ -214,6 +214,9 @@ class Tables(object):
         else:
             numflagsneeded = 2
 
+        if len(datakeys) != numflagsneeded:
+            hasdata = False
+
         if self.Report.iscomp:
             if 'headers' in object_settings.keys():
                 hdrs = object_settings['headers']
@@ -1351,3 +1354,14 @@ class Tables(object):
         for header in headers:
             formatted_headers.append(self.forecastTableHeaders[header.lower()])
         return formatted_headers
+
+    def checkForMissingData(self, row_val, missing):
+        row_split = [n.replace('%', '') for n in row_val.split('.')]
+        for m in missing:
+            if m in row_split:
+                return True
+        return False
+
+    def getStat(self, row_val):
+        srv = row_val.split('.')[0].lower().replace('%', '')
+        return srv

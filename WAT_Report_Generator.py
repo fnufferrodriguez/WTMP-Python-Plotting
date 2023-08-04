@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '5.5.29'
+VERSIONNUMBER = '5.5.31'
 
 import os
 import sys
@@ -868,7 +868,7 @@ class MakeAutomatedReport(object):
         object_settings['plot_parameter'] = self.getPlotParameter(object_settings)
 
         ################# Get data #################
-        data, line_settings = self.Data.getProfileDataDictionary(object_settings)
+        data, line_settings, missing = self.Data.getProfileDataDictionary(object_settings)
         object_settings['warnings'] = self.Profiles.checkProfileValidity(data, object_settings)
 
         line_settings = WF.correctDuplicateLabels(line_settings)
@@ -936,7 +936,12 @@ class MakeAutomatedReport(object):
                         if '%%' in row_val:
                             stats_data = self.Tables.formatStatsProfileLineData(row_val, data, object_settings['resolution'],
                                                                                 object_settings['usedepth'], header_i)
-                            row_val, stat = self.Tables.getStatsLine(row_val, stats_data)
+                            missing_data = self.Tables.checkForMissingData(row_val, missing)
+                            if missing_data:
+                                stat = self.Tables.getStat(row_val)
+                                row_val = np.nan
+                            else:
+                                row_val, stat = self.Tables.getStatsLine(row_val, stats_data)
                             if not np.isnan(row_val) and row_val != None:
                                 thresholdsettings = self.Tables.matchThresholdToStat(stat, object_settings)
 
@@ -1083,7 +1088,7 @@ class MakeAutomatedReport(object):
         object_settings['plot_parameter'] = self.getPlotParameter(object_settings)
 
         ################# Get data #################
-        data, line_settings = self.Data.getProfileDataDictionary(object_settings)
+        data, line_settings, missing = self.Data.getProfileDataDictionary(object_settings)
 
         straightlines = self.Data.getStraightLineValue(object_settings)
 
@@ -1544,7 +1549,7 @@ class MakeAutomatedReport(object):
         object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = WF.getObjectYears(self, object_settings)
         object_settings['allyearsstr'] = WF.getObjectAllYears(object_settings['years'])
 
-        data, data_settings = self.Data.getTableDataDictionary(object_settings)
+        data, data_settings, missing = self.Data.getTableDataDictionary(object_settings)
         data = WF.mergeLines(data, data_settings, object_settings)
 
         data = self.Data.filterTimeSeries(data, data_settings)
@@ -1618,10 +1623,15 @@ class MakeAutomatedReport(object):
                     if '%%' in row_val:
                         rowdata, sr_month = self.Tables.getStatsLineData(row_val, yearlydata, year=year, data_key=member)
                         if len(rowdata) == 0:
+                            stat = self.Tables.getStat(row_val)
                             row_val = None
-                            stat = None
                         else:
-                            row_val, stat = self.Tables.getStatsLine(row_val, rowdata)
+                            missing_data = self.Tables.checkForMissingData(row_val, missing)
+                            if missing_data:
+                                stat = self.Tables.getStat(row_val)
+                                row_val = np.nan
+                            else:
+                                row_val, stat = self.Tables.getStatsLine(row_val, rowdata)
                             if not np.isnan(row_val) and row_val != None:
                                 thresholdsettings = self.Tables.matchThresholdToStat(stat, object_settings)
                                 for thresh in thresholdsettings:
@@ -1753,7 +1763,7 @@ class MakeAutomatedReport(object):
 
         object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = WF.getObjectYears(self, object_settings)
 
-        data, data_settings = self.Data.getTableDataDictionary(object_settings)
+        data, data_settings, missing = self.Data.getTableDataDictionary(object_settings)
         data = WF.mergeLines(data, data_settings, object_settings)
 
         data = self.Data.filterTimeSeries(data, data_settings)
@@ -1803,10 +1813,15 @@ class MakeAutomatedReport(object):
                     if '%%' in row_val:
                         rowdata, sr_month = self.Tables.getStatsLineData(row_val, data, year=year)
                         if len(rowdata) == 0:
+                            stat = self.Tables.getStat(row_val)
                             row_val = None
-                            stat = None
                         else:
-                            row_val, stat = self.Tables.getStatsLine(row_val, rowdata)
+                            missing_data = self.Tables.checkForMissingData(row_val, missing)
+                            if missing_data:
+                                stat = self.Tables.getStat(row_val)
+                                row_val = np.nan
+                            else:
+                                row_val, stat = self.Tables.getStatsLine(row_val, rowdata)
                             if not np.isnan(row_val) and row_val != None:
                                 for thresh in thresholds:
                                     if row_val < thresh['value']:
@@ -1937,7 +1952,7 @@ class MakeAutomatedReport(object):
 
         object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = WF.getObjectYears(self, object_settings)
 
-        data, data_settings = self.Data.getTableDataDictionary(object_settings)
+        data, data_settings, missing = self.Data.getTableDataDictionary(object_settings)
         data = WF.mergeLines(data, data_settings, object_settings)
 
         data = self.Data.filterTimeSeries(data, data_settings)
@@ -1995,9 +2010,15 @@ class MakeAutomatedReport(object):
                     if '%%' in row_val:
                         rowdata, sr_month = self.Tables.getStatsLineData(row_val, data, year=year)
                         if len(rowdata) == 0:
-                            row_val = None
+                            stat = self.Tables.getStat(row_val)
+                            row_val = np.nan
                         else:
-                            row_val, stat = self.Tables.getStatsLine(row_val, rowdata)
+                            missing_data = self.Tables.checkForMissingData(row_val, missing)
+                            if missing_data:
+                                stat = self.Tables.getStat(row_val)
+                                row_val = np.nan
+                            else:
+                                row_val, stat = self.Tables.getStatsLine(row_val, rowdata)
                             if np.isnan(row_val):
                                 if 'missingmarker' in object_settings.keys():
                                     row_val = object_settings['missingmarker']
@@ -2140,7 +2161,7 @@ class MakeAutomatedReport(object):
 
         object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = WF.getObjectYears(self, object_settings)
 
-        data, line_settings = self.Data.getProfileDataDictionary(object_settings)
+        data, line_settings, missing = self.Data.getProfileDataDictionary(object_settings)
         line_settings = WF.correctDuplicateLabels(line_settings)
         object_settings['warnings'] = self.Profiles.checkProfileValidity(data, object_settings, combineyears=True)
 
@@ -2222,7 +2243,12 @@ class MakeAutomatedReport(object):
 
                             rowval_stats = self.Profiles.stackProfileIndicies(rowval_stats, stats_data)
 
-                        row_val, stat = self.Tables.getStatsLine(row_val, rowval_stats)
+                        missing_data = self.Tables.checkForMissingData(row_val, missing)
+                        if missing_data:
+                            stat = self.Tables.getStat(row_val)
+                            row_val = np.nan
+                        else:
+                            row_val, stat = self.Tables.getStatsLine(row_val, rowval_stats)
                         if np.isnan(row_val):
                             if 'missingmarker' in object_settings.keys():
                                 row_val = object_settings['missingmarker']
@@ -3091,7 +3117,7 @@ class MakeAutomatedReport(object):
 
         object_settings = WF.replaceflaggedValues(self, object_settings, 'fancytext', forjasper=True)
 
-        data, data_settings = self.Data.getTableDataDictionary(object_settings, type='formatted')
+        data, data_settings, missing = self.Data.getTableDataDictionary(object_settings, type='formatted')
         object_settings['primarykey'] = self.Data.getPrimaryTableKey(data, object_settings)
         data = self.Tables.formatPrimaryKey(data, object_settings)
         data, data_settings = self.Data.mergeFormattedTables(data, data_settings, object_settings)
