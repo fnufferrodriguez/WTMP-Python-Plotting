@@ -181,7 +181,7 @@ class Profiles(object):
                             e = self.convertObsDepths2Elevations(data[noelev_flag]['depths'][tsi],
                                                                  wse_at_timestep)
                     else:
-                        e = np.full_like(data[noelev_flag]['depths'], fill_value=np.nan)
+                        e = np.full_like(data[noelev_flag]['depths'][tsi], fill_value=np.nan)
                     if np.all(np.isnan(e)): #if theyre all nan
                         if otherkey != None:
                             try:

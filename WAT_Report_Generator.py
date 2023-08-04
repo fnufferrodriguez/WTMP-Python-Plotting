@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '5.5.29'
+VERSIONNUMBER = '5.5.30'
 
 import os
 import sys
