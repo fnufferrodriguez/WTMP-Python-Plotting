@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '5.5.31'
+VERSIONNUMBER = '5.5.32'
 
 import os
 import sys
@@ -886,9 +886,19 @@ class MakeAutomatedReport(object):
 
         # self.Data.commitProfileDataToMemory(data, line_settings, object_settings)
 
-        object_settings['usedepth'] = self.Profiles.confirmValidDepths(data)
-        if object_settings['usedepth']:
-            data = self.Profiles.snapTo0Depth(data, line_settings)
+        # object_settings['usedepth'] = self.Profiles.confirmValidDepths(data)
+        # if object_settings['usedepth']:
+        #     data = self.Profiles.snapTo0Depth(data, line_settings)
+
+        if 'usedepth' not in object_settings.keys():
+            object_settings['usedepth'] = 'true'
+
+        if object_settings['usedepth'].lower() == 'false':
+            wse_data = self.Data.getProfileWSE(object_settings, onflag='datapaths')
+            data = self.Profiles.convertDepthsToElevations(data, wse_data)
+        elif object_settings['usedepth'].lower() == 'true':
+            wse_data = self.Data.getProfileWSE(object_settings, onflag='datapaths')
+            data = self.Profiles.convertElevationsToDepths(data, wse_data=wse_data)
 
         data, object_settings = self.Profiles.filterProfileData(data, line_settings, object_settings)
 
@@ -1109,7 +1119,7 @@ class MakeAutomatedReport(object):
             data = self.Profiles.convertDepthsToElevations(data, wse_data)
         elif object_settings['usedepth'].lower() == 'true':
             wse_data = self.Data.getProfileWSE(object_settings)
-            data, object_settings = self.Profiles.convertElevationsToDepths(data, wse_data=wse_data)
+            data = self.Profiles.convertElevationsToDepths(data, wse_data=wse_data)
 
         # self.Data.commitProfileDataToMemory(data, line_settings, object_settings)
         linedata, object_settings = self.Profiles.filterProfileData(data, line_settings, object_settings)
@@ -2176,9 +2186,18 @@ class MakeAutomatedReport(object):
 
         # self.Data.commitProfileDataToMemory(data, line_settings, object_settings)
 
-        object_settings['usedepth'] = self.Profiles.confirmValidDepths(data)
-        if object_settings['usedepth']:
-            data = self.Profiles.snapTo0Depth(data, line_settings)
+        # object_settings['usedepth'] = self.Profiles.confirmValidDepths(data)
+        # if object_settings['usedepth']:
+        #     data = self.Profiles.snapTo0Depth(data, line_settings)
+        if 'usedepth' not in object_settings.keys():
+            object_settings['usedepth'] = 'true'
+
+        if object_settings['usedepth'].lower() == 'false':
+            wse_data = self.Data.getProfileWSE(object_settings, onflag='datapaths')
+            data = self.Profiles.convertDepthsToElevations(data, wse_data)
+        elif object_settings['usedepth'].lower() == 'true':
+            wse_data = self.Data.getProfileWSE(object_settings, onflag='datapaths')
+            data = self.Profiles.convertElevationsToDepths(data, wse_data=wse_data)
 
         data, object_settings = self.Profiles.filterProfileData(data, line_settings, object_settings)
 
