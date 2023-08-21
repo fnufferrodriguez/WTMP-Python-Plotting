@@ -1031,7 +1031,10 @@ def getMostCommon(listvars):
     '''
 
     occurence_count = Counter(listvars)
-    most_common_interval = occurence_count.most_common(1)[0][0]
+    if len(occurence_count) == 0:
+        most_common_interval = None
+    else:
+        most_common_interval = occurence_count.most_common(1)[0][0]
     return most_common_interval
 
 def translateUnits(units):

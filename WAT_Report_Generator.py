@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '5.5.32'
+VERSIONNUMBER = '5.5.33'
 
 import os
 import sys
@@ -286,6 +286,8 @@ class MakeAutomatedReport(object):
                 unitslist = []
                 unitslist2 = []
                 stackplots = {}
+                if 'relative' in ax_settings.keys():
+                    print('stop')
                 linedata, line_settings = self.Data.getTimeSeriesDataDictionary(ax_settings)
                 linedata = WF.filterDataByYear(linedata, year)
                 linedata = self.Data.filterTimeSeries(linedata, line_settings)
@@ -3302,7 +3304,12 @@ class MakeAutomatedReport(object):
         self.SimulationVariables[ID] = {}
         self.SimulationVariables[ID]['SimulationName'] = simulation['name']
         self.SimulationVariables[ID]['baseSimulationName'] = simulation['basename']
-        self.SimulationVariables[ID]['simulationDir'] = simulation['directory']
+        simulation_dir = simulation['directory'] #todo: remove when mark fixes xml output
+        simulation_dir_split = simulation_dir.split(os.path.sep)
+        simulation_list = [s for s in simulation_dir_split if s != '']
+        simulation_dir = os.path.sep.join(simulation_list)
+        self.SimulationVariables[ID]['simulationDir'] = simulation_dir
+        # self.SimulationVariables[ID]['simulationDir'] = simulation['directory']
         self.SimulationVariables[ID]['DSSFile'] = simulation['dssfile']
         self.SimulationVariables[ID]['StartTimeStr'] = simulation['starttime']
         self.SimulationVariables[ID]['EndTimeStr'] = simulation['endtime']

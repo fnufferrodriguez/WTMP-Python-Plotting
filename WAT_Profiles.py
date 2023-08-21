@@ -270,7 +270,9 @@ class Profiles(object):
         '''
 
         obs_elev = []
-        if np.isnan(max_wse):
+        if max_wse.size == 0:
+            np.full(len(input_depths), np.nan)
+        elif np.isnan(max_wse):
             obs_elev = np.full(len(input_depths), np.nan)
         else:
             for depth in input_depths:
