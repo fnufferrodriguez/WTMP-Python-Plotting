@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '5.5.33'
+VERSIONNUMBER = '5.5.34'
 
 import os
 import sys
@@ -292,7 +292,7 @@ class MakeAutomatedReport(object):
                 linedata = WF.filterDataByYear(linedata, year)
                 linedata = self.Data.filterTimeSeries(linedata, line_settings)
                 linedata = self.Data.scaleValuesByTable(linedata, line_settings)
-                linedata = WF.mergeLines(linedata, line_settings, ax_settings)
+                linedata, line_settings = WF.mergeLines(linedata, line_settings, ax_settings)
                 ax_settings = self.configureSettingsForID(self.base_id, ax_settings)
                 gatedata, gate_settings = self.Data.getGateDataDictionary(ax_settings, makecopy=False)
                 line_settings = WF.correctDuplicateLabels(line_settings)
@@ -1562,7 +1562,7 @@ class MakeAutomatedReport(object):
         object_settings['allyearsstr'] = WF.getObjectAllYears(object_settings['years'])
 
         data, data_settings, missing = self.Data.getTableDataDictionary(object_settings)
-        data = WF.mergeLines(data, data_settings, object_settings)
+        data, data_settings = WF.mergeLines(data, data_settings, object_settings)
 
         data = self.Data.filterTimeSeries(data, data_settings)
 
@@ -1776,7 +1776,7 @@ class MakeAutomatedReport(object):
         object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = WF.getObjectYears(self, object_settings)
 
         data, data_settings, missing = self.Data.getTableDataDictionary(object_settings)
-        data = WF.mergeLines(data, data_settings, object_settings)
+        data, data_settings = WF.mergeLines(data, data_settings, object_settings)
 
         data = self.Data.filterTimeSeries(data, data_settings)
 
@@ -1965,7 +1965,7 @@ class MakeAutomatedReport(object):
         object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = WF.getObjectYears(self, object_settings)
 
         data, data_settings, missing = self.Data.getTableDataDictionary(object_settings)
-        data = WF.mergeLines(data, data_settings, object_settings)
+        data, data_settings= WF.mergeLines(data, data_settings, object_settings)
 
         data = self.Data.filterTimeSeries(data, data_settings)
 
@@ -2016,7 +2016,10 @@ class MakeAutomatedReport(object):
                     if rowname == 'ALLYEARS':
                         rowname = 'All'
                     year = object_settings['years'][ri]
-                    row_val = s_row[i+(len(headings)*mi)+1]
+                    try:
+                        row_val = s_row[i+(len(headings)*mi)+1]
+                    except:
+                        print('stop')
                     stat = None
                     addasterisk = False
                     if '%%' in row_val:
@@ -2243,7 +2246,10 @@ class MakeAutomatedReport(object):
                     if rowname == 'ALLYEARS':
                         rowname = 'All'
                     year = object_settings['years'][ri]
-                    row_val = s_row[i+(len(headings)*mi)+1]
+                    try:
+                        row_val = s_row[i+(len(headings)*mi)+1]
+                    except:
+                        print('stop')
                     stat = None
                     addasterisk = False
                     if '%%' in row_val:
