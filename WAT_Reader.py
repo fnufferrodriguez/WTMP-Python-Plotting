@@ -602,7 +602,13 @@ def readDefaultSimulationsCSV(Report, Simulation):
     '''
 
     simbasename = Simulation['basename'].replace(' ', '_')
-    simulation_file = os.path.join(Report.studyDir, 'reports', '{0}.csv'.format(simbasename))
+    if Report.reportType == 'validation':
+        simulation_file = os.path.join(Report.studyDir, 'reports', '{0}.csv'.format(simbasename))
+    elif Report.reportType == 'comparison':
+        simulation_file = os.path.join(Report.studyDir, 'reports', '{0}_comparison.csv'.format(simbasename))
+    elif Report.reportType == 'forecast':
+        simulation_file = os.path.join(Report.studyDir, 'reports', '{0}_forecast.csv'.format(simbasename))
+
     csv_info = readSimulationFile_deprecated(simulation_file)
     return csv_info
 
@@ -630,7 +636,7 @@ def readReportCSVFile(Report, Simulation):
                     use_deprecated = checkforDeprecatedCSV(xmlfile)
                     if use_deprecated:
                         break
-                    keywords = [str(n).lower() for n in sline[1:]] #optional keywords for CSV files to use to match simulations
+                    keywords = [str(n).lower() for n in sline[2:] if n != ''] #optional keywords for CSV files to use to match simulations
                     if programs_raw not in program_used:
                         program_used[programs_raw] = 1
                     else:
@@ -808,15 +814,15 @@ def readDefinitionsFile(Report, simorder):
     WF.checkExists(ChapterDefinitionsFile)
     Report.ChapterDefinitions = readChapterDefFile(ChapterDefinitionsFile)
 
-def readComparisonSimulationsCSV(Report):
-    '''
-    Reads in the simulation CSV but for comparison plots. Comparison plots have '_comparison' appended to the end of them,
-    but are built in general the same as regular Simulation CSV files.
-    :return:
-    '''
-
-    simulation_file = os.path.join(Report.studyDir, 'reports', '{0}_comparison.csv'.format(Report.SimulationVariables[Report.base_id]['baseSimulationName'].replace(' ', '_')))
-    Report.SimulationCSV = readSimulationFile_deprecated(simulation_file)
+# def readComparisonSimulationsCSV(Report):
+#     '''
+#     Reads in the simulation CSV but for comparison plots. Comparison plots have '_comparison' appended to the end of them,
+#     but are built in general the same as regular Simulation CSV files.
+#     :return:
+#     '''
+#
+#     simulation_file = os.path.join(Report.studyDir, 'reports', '{0}_comparison.csv'.format(Report.SimulationVariables[Report.base_id]['baseSimulationName'].replace(' ', '_')))
+#     Report.SimulationCSV = readSimulationFile_deprecated(simulation_file)
 
 def readForecastSimulationsCSV(Report):
     '''

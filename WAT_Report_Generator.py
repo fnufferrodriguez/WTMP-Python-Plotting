@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '6.0.1'
+VERSIONNUMBER = '6.0.2'
 
 import os
 import sys
@@ -73,16 +73,15 @@ class MakeAutomatedReport(object):
         self.reportType = WR.getReportType(self)
         # self.reportCSV = WR.readReportCSVFile(self)
 
-        # self.modelOrder = 0
+        self.modelOrder = 0
         # chapterkeys = list(self.reportCSV.keys())
         # chapterkeys.sort() #these are always numbers, so it works
 
-        self.reportType = WR.getReportType(self)
-
         if self.reportType == 'validation':
+
             for simulation in self.Simulations:
                 self.reportCSV = WR.readReportCSVFile(self, simulation)
-                self.modelOrder = 0
+                # self.modelOrder = 0
                 chapterkeys = list(self.reportCSV.keys())
                 chapterkeys.sort()  # these are always numbers, so it works
 
@@ -110,18 +109,21 @@ class MakeAutomatedReport(object):
                 self.fixXMLModelIntroduction()
                 self.XML.writeReportEnd()
                 self.WAT_log.equalizeLog()
-        '''
+
         elif self.reportType == 'comparison':
             self.initSimulationDict()
             for simulation in self.Simulations:
                 self.setSimulationVariables(simulation)
                 WF.checkExists(simulation['directory'])
-            self.base_id = self.Simulations[0]['ID']
+            self.base_id = 'base' #this should always be base?
             self.loadCurrentID(self.base_id) #load the data for the current sim, we do 1 at a time here..
             WT.setMultiRunStartEndYears(self) #find the start and end time
             WT.defineStartEndYears(self) #format the years correctly after theyre set
             self.cleanOutputDirs()
             self.initializeXML()
+            self.reportCSV = WR.readReportCSVFile(self, [sim for sim in self.Simulations if sim['ID'] == self.base_id][0]) #use the base
+            chapterkeys = list(self.reportCSV.keys())
+            chapterkeys.sort()  # these are always numbers, so it works
             self.writeXMLIntroduction()
             for chapterkey in chapterkeys:
                 self.setSimulationCSVVars(self.reportCSV[chapterkey])
@@ -136,21 +138,28 @@ class MakeAutomatedReport(object):
             self.fixXMLModelIntroduction()
             self.XML.writeReportEnd()
             self.WAT_log.equalizeLog()
+
         elif self.reportType == 'forecast':
             self.initSimulationDict()
             self.organizeMembers()
+
             for simulation in self.Simulations:
                 WF.checkExists(simulation['directory'])
                 self.setSimulationVariables(simulation)
-                self.base_id = self.Simulations[0]['ID']
+                # self.base_id = self.Simulations[0]['ID']
+                self.base_id = 'base'
                 self.loadCurrentID(self.base_id) #load the first simulation
                 WT.setMultiRunStartEndYears(self) #find the start and end time
                 WT.defineStartEndYears(self) #format the years correctly after theyre set
-                WR.readForecastSimulationsCSV(self) #read to determine order/sims/regions in report
+                # WR.readForecastSimulationsCSV(self) #read to determine order/sims/regions in report
+                self.reportCSV = WR.readReportCSVFile(self,[sim for sim in self.Simulations if sim['ID'] == self.base_id][0])  # use the base
                 self.cleanOutputDirs()
                 self.initializeXML()
                 self.writeXMLIntroduction()
                 self.initializeDataOrganizer() #Do this here because forecast runs are likely to overlap over chapters
+
+                chapterkeys = list(self.reportCSV.keys())
+                chapterkeys.sort()  # these are always numbers, so it works
                 for chapterkey in chapterkeys:
                     self.setSimulationCSVVars(self.reportCSV[chapterkey])
                     WR.readDefinitionsFile(self, self.reportCSV[chapterkey])
@@ -163,10 +172,11 @@ class MakeAutomatedReport(object):
                 self.fixXMLModelIntroduction()
                 self.XML.writeReportEnd()
                 self.WAT_log.equalizeLog()
+
         else:
             WF.print2stderr('UNKNOWN REPORT TYPE:', self.reportType)
             sys.exit(1)
-        '''
+
         self.WAT_log.writeLogFile(self.images_path)
         self.Data.writeDataFiles()
 
@@ -3182,8 +3192,12 @@ class MakeAutomatedReport(object):
             table_constructor[tcnum]['header'] = header
 
 
-        self.XML.writeTableStart(desc, object_settings['primarykey'])
-        self.Tables.writeTable(table_constructor)
+        if len(table_constructor) == 0:
+            self.Tables.writeMissingTableWarning(desc)
+            WF.print2stdout('No values found for table. Not writing table.', debug=self.debug)
+        else:
+            self.XML.writeTableStart(desc, object_settings['primarykey'])
+            self.Tables.writeTable(table_constructor)
         WF.print2stdout(f'Table from file took {time.time() - objectstarttime} seconds.')
 
     def makeForecastTable(self, object_settings):

@@ -1089,6 +1089,9 @@ class DataOrganizer(object):
         :return: formatted pandas DF with excluded data
         '''
 
+        if data.empty:
+            return data
+
         if primarykey == None:
             primarykey = self.getPrimaryTableKey(data, object_settings)
 
@@ -1174,7 +1177,11 @@ class DataOrganizer(object):
         else:
             if isinstance(data, dict):
                 firstkey = list(data.keys())[0]
-                primarykey = list(data[firstkey].columns)[0]
+                primarykey = list(data[firstkey].columns)
+                if len(primarykey) == 0:
+                    primarykey = firstkey
+                else:
+                    primarykey = primarykey[0]
             elif isinstance(data, pd.DataFrame):
                 primarykey = list(data.columns)[0]
             WF.print2stdout('Unable to establish table primary key based on input.', debug=self.Report.debug)
