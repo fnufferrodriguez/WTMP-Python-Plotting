@@ -693,7 +693,8 @@ def replaceFlaggedValue(Report, value, itemset, forjasper=False):
     if itemset == 'modelspecific':
         flagged_values = {'%%ModelDSS%%': Report.DSSFile,
                           '%%Fpart%%': Report.alternativeFpart,
-                          '%%plugin%%': Report.plugin,
+                          '%%program%%': Report.program,
+                          '%%plugin%%': Report.program,
                           '%%modelAltName%%': Report.modelAltName,
                           '%%SimulationName%%': Report.SimulationName,
                           '%%SimulationDir%%': Report.SimulationDir,

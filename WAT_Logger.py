@@ -112,7 +112,7 @@ class WAT_Logger(object):
             self.Log['start_time'].append(SimulationVariables[ID]['StartTimeStr'])
             self.Log['end_time'].append(SimulationVariables[ID]['EndTimeStr'])
             self.Log['compute_time'].append(SimulationVariables[ID]['LastComputed'])
-            self.Log['program'].append(SimulationVariables[ID]['plugin'])
+            self.Log['program'].append(SimulationVariables[ID]['program'])
             self.Log['alternative_name'].append(SimulationVariables[ID]['modelAltName'])
             self.Log['fpart'].append(SimulationVariables[ID]['alternativeFpart'])
             self.Log['program_directory'].append(SimulationVariables[ID]['alternativeDirectory'])

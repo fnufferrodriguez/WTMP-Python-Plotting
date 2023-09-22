@@ -39,36 +39,36 @@ def definedVarCheck(Block, flags):
             return False
     return True
 
-def readSimulationFile(simulationfile):
-    '''
-    Read the right csv file, and determine what region you are working with.
-    Simulation CSV files are named after the simulation, and consist of plugin, model alter name, and then region(s)
-    :param simulation_name: name of simulation to find file
-    :param studyfolder: full path to study folder
-    :returns: dictionary containing information from file
-    '''
-
-    WF.print2stdout('Attempting to read {0}'.format(simulationfile))
-    if not os.path.exists(simulationfile):
-        WF.print2stderr(f'Could not find CSV file: {simulationfile}')
-        WF.print2stderr(f'Please create {simulationfile} in the Reports Directory and run report again.')
-        sys.exit(1)
-    sim_info = {}
-    with open(simulationfile, 'r') as sf:
-        for i, line in enumerate(sf):
-            if len(line.strip()) > 0:
-                sline = line.strip().split(',')
-                sim_info[i] = {'deffile': sline[-1].strip()} #comparison reports always put xml last
-                sline = sline[:-1]
-                sim_info[i]['plugins'] = []
-                sim_info[i]['modelaltnames'] = []
-                for si, s in enumerate(sline):
-                    if len(s.strip()) > 1:
-                        if si % 2 == 0: #even
-                            sim_info[i]['plugins'].append(s.strip())
-                        else: #odd
-                            sim_info[i]['modelaltnames'].append(s.strip())
-    return sim_info
+# def readSimulationFile(simulationfile):
+#     '''
+#     Read the right csv file, and determine what region you are working with.
+#     Simulation CSV files are named after the simulation, and consist of program, model alter name, and then region(s)
+#     :param simulation_name: name of simulation to find file
+#     :param studyfolder: full path to study folder
+#     :returns: dictionary containing information from file
+#     '''
+#
+#     WF.print2stdout('Attempting to read {0}'.format(simulationfile))
+#     if not os.path.exists(simulationfile):
+#         WF.print2stderr(f'Could not find CSV file: {simulationfile}')
+#         WF.print2stderr(f'Please create {simulationfile} in the Reports Directory and run report again.')
+#         sys.exit(1)
+#     sim_info = {}
+#     with open(simulationfile, 'r') as sf:
+#         for i, line in enumerate(sf):
+#             if len(line.strip()) > 0:
+#                 sline = line.strip().split(',')
+#                 sim_info[i] = {'deffile': sline[-1].strip()} #comparison reports always put xml last
+#                 sline = sline[:-1]
+#                 sim_info[i]['programs'] = []
+#                 sim_info[i]['modelaltnames'] = []
+#                 for si, s in enumerate(sline):
+#                     if len(s.strip()) > 1:
+#                         if si % 2 == 0: #even
+#                             sim_info[i]['programs'].append(s.strip())
+#                         else: #odd
+#                             sim_info[i]['modelaltnames'].append(s.strip())
+#     return sim_info
 
 def readGraphicsDefaults(GD_file):
     '''
@@ -594,14 +594,127 @@ def iterateChapterDefintions(root):
         out.append(keylist)
     return out
 
-def readSimulationsCSV(Report):
+def readDefaultSimulationsCSV(Report, Simulation):
     '''
     reads the Simulation file and gets the region info
     :return: class variable
-                self.SimulationCSV
+                self.reportCSV
     '''
-    simulation_file = os.path.join(Report.studyDir, 'reports', '{0}.csv'.format(Report.SimulationVariables[Report.base_id]['baseSimulationName'].replace(' ', '_')))
-    Report.SimulationCSV = readSimulationFile(simulation_file)
+
+    simbasename = Simulation['basename'].replace(' ', '_')
+    simulation_file = os.path.join(Report.studyDir, 'reports', '{0}.csv'.format(simbasename))
+    csv_info = readSimulationFile_deprecated(simulation_file)
+    return csv_info
+
+def readReportCSVFile(Report, Simulation):
+    if Simulation["csvfile"] is None: #if they didnt specify a csv file, use the default
+        csv_info = readDefaultSimulationsCSV(Report, Simulation)
+    else:
+        WF.print2stdout('Attempting to read {0}'.format(Simulation["csvfile"]))
+        if not os.path.exists(Simulation["csvfile"]):
+            WF.print2stderr(f'Could not find CSV file: {Simulation["csvfile"]}')
+            WF.print2stderr(f'Please create {Simulation["csvfile"]} run report again.')
+            sys.exit(1)
+        csv_info = {}
+        program_used = {}
+        accepted_lines = 0
+        use_deprecated = False
+        with open(Simulation["csvfile"], 'r') as csvf:
+            for i, line in enumerate(csvf):
+                if len(line.strip()) >= 2: #needs to at least have a filename and report type
+                    accepted_lines += 1
+                    sline = line.strip().split(',')
+                    programs_raw = sline[0].strip().lower()
+                    programs = [n for n in programs_raw.split('|') if n != '']
+                    xmlfile = sline[1].strip().lower()
+                    use_deprecated = checkforDeprecatedCSV(xmlfile)
+                    if use_deprecated:
+                        break
+                    keywords = [str(n).lower() for n in sline[1:]] #optional keywords for CSV files to use to match simulations
+                    if programs_raw not in program_used:
+                        program_used[programs_raw] = 1
+                    else:
+                        program_used[programs_raw] += 1
+
+                    csv_info[accepted_lines] = {'xmlfile': xmlfile,
+                                                'programs': programs,
+                                                'keywords': keywords,
+                                                'order': accepted_lines,
+                                                'numtimesprogramused': program_used[programs_raw],
+                                                'deprecated_method': False}
+        if use_deprecated:
+            csv_info = readSimulationFile_deprecated(Simulation["csvfile"])
+    return csv_info
+
+def checkforDeprecatedCSV(xmlfile):
+    if not xmlfile.split('.')[-1] == 'xml':
+        WF.print2stdout('Deprecated CSV file detected as of 6.0.0. Using old style.')
+        WF.print2stdout('Please update CSV style to the following:')
+        WF.print2stdout('Program (ressim, cequalw2), XML file path, keywords (optional)')
+        return True
+    return False
+
+def readSimulationFile_deprecated(simulationfile):
+    '''
+    DEPRECATED METHOD: DO NOT USE EXCEPT IF BACKUP
+    Read the right csv file, and determine what region you are working with.
+    Simulation CSV files are named after the simulation, and consist of program, model alter name, and then region(s)
+    :param simulation_name: name of simulation to find file
+    :param studyfolder: full path to study folder
+    :returns: dictionary containing information from file
+    '''
+
+    WF.print2stdout('Attempting to read {0}'.format(simulationfile))
+    if not os.path.exists(simulationfile):
+        WF.print2stderr(f'Could not find CSV file: {simulationfile}')
+        WF.print2stderr(f'Please create {simulationfile} in the Reports Directory and run report again.')
+        sys.exit(1)
+    csv_info = {}
+    with open(simulationfile, 'r') as sf:
+        for i, line in enumerate(sf):
+            if len(line.strip()) > 0:
+                sline = line.strip().split(',')
+                csv_info[i] = {'xmlfile': sline[-1].strip()} #comparison reports always put xml last
+                sline = sline[:-1]
+                csv_info[i]['programs'] = []
+                csv_info[i]['modelaltnames'] = []
+                for si, s in enumerate(sline):
+                    if len(s.strip()) > 1:
+                        if si % 2 == 0: #even
+                            csv_info[i]['programs'].append(s.strip())
+                        else: #odd
+                            csv_info[i]['modelaltnames'].append(s.strip())
+                csv_info[i]['deprecated_method'] = True
+
+    return csv_info
+
+def getReportType(Report):
+    '''
+    main report type is based off of the folder its placed in.
+    :param reportCSVFile: path to csv file. Second to last path will be what we want
+    :return:
+    '''
+    return Report.reportType
+    # if Report.reportCSV is None:
+    #     return Report.reportType
+    # else:
+    #     path_sep = Report.reportCSV.split(os.path.sep)
+    #     csv_origin = path_sep[-2].lower()
+    #     if csv_origin.lower() in ['validation_report']: #todo: confirm these
+    #         reportType = 'validation'
+    #     elif csv_origin.lower() in ['comparison_report']:
+    #         reportType = 'comparison'
+    #     elif csv_origin.lower() in ['forecast_report']:
+    #         reportType = 'forecast'
+    #     else:
+    #         WF.print2stdout(f'Warning: unable to identify report type from file containing CSV file: {csv_origin}')
+    #         WF.print2stdout('Please use one of the applicable following: validation, comparison, forecast')
+    #         WF.print2stdout('Using validation for now.')
+    #         reportType = 'validation'
+    #
+    #     return reportType
+
+
 
 def readSimulationInfo(Report, simulationInfoFile):
     '''
@@ -628,8 +741,11 @@ def readSimulationInfo(Report, simulationInfoFile):
 
     Report.iscomp = False
     Report.isforecast = False
+    if Report.reportType == 'single':
+        Report.reportType = 'validation'
     if Report.reportType == 'alternativecomparison':
         Report.iscomp = True
+        Report.reportType = 'comparison'
     elif Report.reportType == 'forecast':
         Report.isforecast = True
 
@@ -643,6 +759,11 @@ def readSimulationInfo(Report, simulationInfoFile):
                           'endtime': simulation.find('EndTime').text,
                           'lastcomputed': simulation.find('LastComputed').text
                           }
+        try:
+            Report.reportCSV = simulation.find('CsvFile').text
+        except AttributeError:
+            Report.reportCSV = None
+        simulationInfo['csvfile'] = Report.reportCSV
 
         if Report.isforecast:
             ensemblesets = getchildren(simulation.find('EnsembleSets'), returnkeyless=True)
@@ -677,13 +798,13 @@ def readGraphicsDefaultFile(Report):
 
 def readDefinitionsFile(Report, simorder):
     '''
-    reads the chapter definitions file defined in the plugin csv file for a specified simulation
+    reads the chapter definitions file defined in the program csv file for a specified simulation
     :param simorder: simulation dictionary object
     :return: class variable
                 self.ChapterDefinitions
     '''
 
-    ChapterDefinitionsFile = os.path.join(Report.studyDir, 'reports', simorder['deffile'])
+    ChapterDefinitionsFile = os.path.join(Report.studyDir, 'reports', simorder['xmlfile'])
     WF.checkExists(ChapterDefinitionsFile)
     Report.ChapterDefinitions = readChapterDefFile(ChapterDefinitionsFile)
 
@@ -695,7 +816,7 @@ def readComparisonSimulationsCSV(Report):
     '''
 
     simulation_file = os.path.join(Report.studyDir, 'reports', '{0}_comparison.csv'.format(Report.SimulationVariables[Report.base_id]['baseSimulationName'].replace(' ', '_')))
-    Report.SimulationCSV = readSimulationFile(simulation_file)
+    Report.SimulationCSV = readSimulationFile_deprecated(simulation_file)
 
 def readForecastSimulationsCSV(Report):
     '''
@@ -705,7 +826,7 @@ def readForecastSimulationsCSV(Report):
     '''
 
     simulation_file = os.path.join(Report.studyDir, 'reports', '{0}_forecast.csv'.format(Report.SimulationVariables[Report.base_id]['baseSimulationName'].replace(' ', '_')))
-    Report.SimulationCSV = readSimulationFile(simulation_file)
+    Report.SimulationCSV = readSimulationFile_deprecated(simulation_file)
 
 def readTemplate(Report, templatefilename):
     '''
