@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '6.0.2'
+VERSIONNUMBER = '6.0.4'
 
 import os
 import sys
@@ -3619,6 +3619,7 @@ class MakeAutomatedReport(object):
                         keywords = csvChapterSettings['keywords']
                         for keyword in keywords: #for each keyword
                             for modelalt in approved_modelalts: #for each already approved model alt
+
                                 if keyword in modelalt['name'].lower():
                                     keyword_approved_modelalts.append(modelalt)
                         if len(keyword_approved_modelalts) > 0: #if any worked.. none will if there are no keyword or none that apply
@@ -3626,7 +3627,7 @@ class MakeAutomatedReport(object):
 
                     if len(approved_modelalts) > 1: #try and filter by order now
                         try:
-                            approved_modelalts = [approved_modelalts[csvChapterSettings['numtimesprogramused']]]
+                            approved_modelalts = [approved_modelalts[csvChapterSettings['numtimesprogramused']-1]]
                         except IndexError:
                             WF.print2stdout(f'Unable to confidently choose model alt for ID {ID}')
                             WF.print2stdout(f'Using model alt: {approved_modelalts[-1]["name"]} for {csvChapterSettings["xmlfile"]}')
