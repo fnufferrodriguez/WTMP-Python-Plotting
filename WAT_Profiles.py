@@ -156,7 +156,7 @@ class Profiles(object):
                         otherkey = 'Computed'
                 else:
                     for key in data.keys():
-                        if not np.isnan(data[key]['elevations']) > 0:
+                        if len(data[key]['elevations']) > 0:
                             otherkey = key
                             break
 
@@ -190,9 +190,9 @@ class Profiles(object):
                                 e = self.convertObsDepths2Elevations(data[noelev_flag]['depths'][tsi],
                                                                      maxelev)
                             except IndexError:
-                                e = np.full_like(data[noelev_flag]['depths'], fill_value=np.nan)
+                                e = np.full_like(data[noelev_flag]['depths'][tsi], fill_value=np.nan)
                         else:
-                            e = np.full_like(data[noelev_flag]['depths'], fill_value=np.nan)
+                            e = np.full_like(data[noelev_flag]['depths'][tsi], fill_value=np.nan)
 
                     converted_elevations.append(e)
                 data[noelev_flag]['elevations'] = converted_elevations

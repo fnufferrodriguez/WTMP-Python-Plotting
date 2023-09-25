@@ -214,7 +214,7 @@ class Tables(object):
         else:
             numflagsneeded = 2
 
-        if len(datakeys) != numflagsneeded:
+        if len(datakeys) < numflagsneeded:
             hasdata = False
 
         if self.Report.iscomp:
@@ -297,9 +297,15 @@ class Tables(object):
                         for datakey in computed_keys:
                             row += f'|%%{stat}.{datakey}.MONTH={month.upper()}%%'
                     else:
-                        for cflag in computed_keys:
-                            for oflag in observed_keys:
-                                row += f'|%%{stat}.{cflag}.MONTH={month.upper()}.{data[oflag]["flag"]}.MONTH={month.upper()}%%'
+                        if len(computed_keys) == 0:
+                            row += f'|{missingmarker}'
+                        else:
+                            for cflag in computed_keys:
+                                if len(observed_keys) == 0:
+                                    row += f'|{missingmarker}'
+                                else:
+                                    for oflag in observed_keys:
+                                        row += f'|%%{stat}.{cflag}.MONTH={month.upper()}.{data[oflag]["flag"]}.MONTH={month.upper()}%%'
             rows.append(row)
 
         return headers, rows

@@ -693,7 +693,8 @@ def replaceFlaggedValue(Report, value, itemset, forjasper=False):
     if itemset == 'modelspecific':
         flagged_values = {'%%ModelDSS%%': Report.DSSFile,
                           '%%Fpart%%': Report.alternativeFpart,
-                          '%%plugin%%': Report.plugin,
+                          '%%program%%': Report.program,
+                          '%%plugin%%': Report.program,
                           '%%modelAltName%%': Report.modelAltName,
                           '%%SimulationName%%': Report.SimulationName,
                           '%%SimulationDir%%': Report.SimulationDir,
@@ -799,50 +800,50 @@ def mergeLines(data, data_settings, plot_settings):
         for mergeline in plot_settings['mergelines']:
             dataflags = mergeline['flags']
             if 'controller' in mergeline.keys():
+                #Controller matches the flag defined in data[keys]
                 controller = mergeline['controller']
-                if controller not in data.keys():
-                    controller = dataflags[0]
+                if controller.lower() not in [data_settings[n]['flag'].lower() for n in data.keys()]: #do it this way so if theres comp runs we can still make this work
+                    print2stdout('Mergeline Controller {0} not found in data {1}'.format(controller, data.keys()))
+                    print2stdout('Not Running Merge.')
+                    continue
             else:
-                controller = dataflags[0]
-            otherflags = [n for n in dataflags if n != controller]
-            if controller not in data.keys():
-                print2stdout('Mergeline Controller {0} not found in data {1}'.format(controller, data.keys()))
-                continue
-            flagnotfound = False
-            for OF in otherflags:
-                if OF not in data.keys():
-                    print2stdout('Mergeline flag {0} not found in data {1}'.format(OF, data.keys()))
-                    flagnotfound = True
-            if flagnotfound:
-                continue
+                controller = data_settings[dataflags[0]]['flag']
+            # otherflags = [data_settings[n]['flag'] for n in dataflags if n != controller]
+            data_keys_with_controller = [n for n in data.keys() if data_settings[n]['flag'].lower() == controller]
+            data_keys_for_otherflags = [n for n in data.keys() if data_settings[n]['flag'].lower() != controller
+                                        and data_settings[n]['flag'].lower() in dataflags]
+
             if 'math' in mergeline.keys():
                 math = mergeline['math'].lower()
             else:
                 math = 'add'
-                print2stdout('no Mergeline math flag. Set to add by default.'.format(OF, data.keys()))
-            baseunits = data_settings[controller]['units']
-            for flag in otherflags:
-                if data_settings[flag]['units'] != baseunits:
-                    print2stdout('WARNING: Attempting to merge lines with differing units')
-                    print2stdout('{0}: {1} and {2}: {3}'.format(flag, data[flag]['units'], controller, baseunits))
-                    print2stdout('If incorrect, please modify/append input settings to ensure lines '
-                          'are converted prior to merging.')
-                data[controller], data[flag] = matchData(data[controller], data[flag])
-                if math == 'add':
-                    data[controller]['values'] += data[flag]['values']
-                elif math == 'multiply':
-                    data[controller]['values'] *= data[flag]['values']
-                elif math == 'divide':
-                    data[controller]['values'] /= data[flag]['values']
-                elif math == 'subtract':
-                    data[controller]['values'] -= data[flag]['values']
+                print2stdout('no Mergeline math flag. Set to add by default.')
+
+            for datakey_controller in data_keys_with_controller:
+                baseunits = data_settings[datakey_controller]['units']
+                for datakey_otherflag in data_keys_for_otherflags:
+                    if data_settings[datakey_otherflag]['units'] != baseunits:
+                        print2stdout('WARNING: Attempting to merge lines with differing units')
+                        print2stdout('{0}: {1} and {2}: {3}'.format(datakey_otherflag, data[datakey_otherflag]['units'], controller, baseunits))
+                        print2stdout('If incorrect, please modify/append input settings to ensure lines '
+                              'are converted prior to merging.')
+                    data[datakey_controller], data[datakey_otherflag] = matchData(data[datakey_controller], data[datakey_otherflag])
+                    if math == 'add':
+                        data[datakey_controller]['values'] += data[datakey_otherflag]['values']
+                    elif math == 'multiply':
+                        data[datakey_controller]['values'] *= data[datakey_otherflag]['values']
+                    elif math == 'divide':
+                        data[datakey_controller]['values'] /= data[datakey_otherflag]['values']
+                    elif math == 'subtract':
+                        data[datakey_controller]['values'] -= data[datakey_otherflag]['values']
             if 'keeplines' in mergeline.keys():
                 if mergeline['keeplines'].lower() == 'false':
-                    for flag in otherflags:
+                    for flag in data_keys_for_otherflags:
                         removekeys.append(flag)
         for flag in removekeys:
             data.pop(flag)
-    return data
+            data_settings.pop(flag)
+    return data, data_settings
 
 def filterDataByYear(data, year, extraflag=None):
     '''
@@ -1400,7 +1401,11 @@ def fixDuplicateColors(line_settings):
                     lc_idx = lineusedcount%len(line_settings['linecolors'])
                 else:
                     lc_idx = lineusedcount
-                line_settings['linecolor'] = line_settings['linecolors'][lc_idx]
+                try:
+                    line_settings['linecolor'] = line_settings['linecolors'][lc_idx]
+                except IndexError:
+                    Warning('Index Error in linecolors. Using default color')
+                    line_settings['linecolor'] = constants.def_colors[defcol_idx]
             else:
                 line_settings['linecolor'] = constants.def_colors[defcol_idx]
 

@@ -449,7 +449,7 @@ class DataOrganizer(object):
                     return np.array([]), np.array([]), metadata
 
         elif 'w2_file' in Line_info.keys():
-            if self.Report.plugin.lower() != 'cequalw2':
+            if self.Report.program.lower() != 'cequalw2':
                 return np.array([]), np.array([]), None
             datamem_key = self.buildMemoryKey(Line_info)
             if datamem_key in self.Memory.keys():
@@ -556,7 +556,7 @@ class DataOrganizer(object):
             if not metadata['frommemory']:
                 times = []
                 values = []
-                if self.Report.plugin.lower() != 'ressim':
+                if self.Report.program.lower() != 'ressim':
                     WF.print2stdout('Incorrect model type for line using ResSimResName', debug=self.Report.debug)
                     return [], [], metadata
 
@@ -816,7 +816,7 @@ class DataOrganizer(object):
                 metadata['units'] = units
 
             elif 'w2_segment' in Profile_info.keys():
-                if self.Report.plugin.lower() == 'cequalw2':
+                if self.Report.program.lower() == 'cequalw2':
                     if 'w2_file' in Profile_info.keys():
                         resultsfile = Profile_info['w2_file']
                     else:
@@ -829,7 +829,7 @@ class DataOrganizer(object):
                     times = WT.JDateToDatetime(times, self.Report.startYear)
 
             elif 'ressimresname' in Profile_info.keys():
-                if self.Report.plugin.lower() == 'ressim':
+                if self.Report.program.lower() == 'ressim':
                     metadata['source'] = Profile_info['ressimresname']
                     values, elevations, depths, times, units = self.Report.ModelAlt.readProfileData(Profile_info['ressimresname'],
                                                                                                    Profile_info['parameter'], timesteps,
@@ -966,13 +966,13 @@ class DataOrganizer(object):
             return topwater
 
         elif 'w2_segment' in profile.keys():
-            if self.Report.plugin.lower() != 'cequalw2':
+            if self.Report.program.lower() != 'cequalw2':
                 return []
             topwater = self.Report.ModelAlt.readProfileTopwater(profile['w2_segment'], timesteps)
             return topwater
 
         elif 'ressimresname' in profile.keys():
-            if self.Report.plugin.lower() != 'ressim':
+            if self.Report.program.lower() != 'ressim':
                 return []
             topwater = self.Report.ModelAlt.readProfileTopwater(profile['ressimresname'], timesteps)
             return topwater
@@ -1089,6 +1089,9 @@ class DataOrganizer(object):
         :return: formatted pandas DF with excluded data
         '''
 
+        if data.empty:
+            return data
+
         if primarykey == None:
             primarykey = self.getPrimaryTableKey(data, object_settings)
 
@@ -1174,7 +1177,11 @@ class DataOrganizer(object):
         else:
             if isinstance(data, dict):
                 firstkey = list(data.keys())[0]
-                primarykey = list(data[firstkey].columns)[0]
+                primarykey = list(data[firstkey].columns)
+                if len(primarykey) == 0:
+                    primarykey = firstkey
+                else:
+                    primarykey = primarykey[0]
             elif isinstance(data, pd.DataFrame):
                 primarykey = list(data.columns)[0]
             WF.print2stdout('Unable to establish table primary key based on input.', debug=self.Report.debug)

@@ -125,14 +125,14 @@ class XMLReport(object):
         self.current_reportgroup_num += 1
         self.current_reportelem_num += 1
 
-    def writeIntroLine(self, Plugin):
+    def writeIntroLine(self, program):
         '''
-        writes line in intro for a given plugin
-        :param Plugin: name of plugin to be added to model order
+        writes line in intro for a given program
+        :param program: name of program to be added to model order
         '''
 
         with open(self.XML_fn, 'a') as XML:
-            XML.write('<Model ModelOrder="0" >{1}</Model>\n'.format(self.current_model_num, Plugin))
+            XML.write('<Model ModelOrder="0" >{1}</Model>\n'.format(self.current_model_num, program))
         self.current_model_num += 1
 
     def writeIntroEnd(self):
@@ -394,5 +394,5 @@ def fixXMLModelIntroduction(Report, simorder):
     for cnt, ID in enumerate(Report.accepted_IDs):
         if cnt > 0:
             outstr += ','
-        outstr += ' {0}'.format(Report.SimulationVariables[ID]['plugin'])
+        outstr += ' {0}'.format(Report.SimulationVariables[ID]['program'])
     Report.XML.replaceinXML('%%REPLACEINTRO_{0}%%'.format(simorder), outstr)

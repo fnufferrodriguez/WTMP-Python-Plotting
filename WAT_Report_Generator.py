@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '5.5.33'
+VERSIONNUMBER = '6.0.2'
 
 import os
 import sys
@@ -70,10 +70,21 @@ class MakeAutomatedReport(object):
         WR.readGraphicsDefaultFile(self) #read graphical component defaults
         self.defaultLineStyles = WD.readDefaultLineStylesFile(self)
         self.WAT_log = WL.WAT_Logger(self)
-        self.modelOrder = 0
+        self.reportType = WR.getReportType(self)
+        # self.reportCSV = WR.readReportCSVFile(self)
 
-        if self.reportType == 'single': #Eventually be able to do comparison reports, put that here
+        self.modelOrder = 0
+        # chapterkeys = list(self.reportCSV.keys())
+        # chapterkeys.sort() #these are always numbers, so it works
+
+        if self.reportType == 'validation':
+
             for simulation in self.Simulations:
+                self.reportCSV = WR.readReportCSVFile(self, simulation)
+                # self.modelOrder = 0
+                chapterkeys = list(self.reportCSV.keys())
+                chapterkeys.sort()  # these are always numbers, so it works
+
                 WF.print2stdout('Running Simulation:', simulation)
                 self.base_id = self.Simulations[0]['ID']
                 self.initSimulationDict()
@@ -81,79 +92,91 @@ class MakeAutomatedReport(object):
                 self.loadCurrentID(self.base_id) #load the data for the current sim, we do 1 at a time here..
                 WF.checkExists(self.SimulationDir)
                 WT.defineStartEndYears(self)
-                WR.readSimulationsCSV(self) #read to determine order/sims/regions in report
                 self.cleanOutputDirs()
                 self.initializeXML()
                 self.writeXMLIntroduction()
-                for simorder in self.SimulationCSV.keys():
-                    self.setSimulationCSVVars(self.SimulationCSV[simorder])
-                    WR.readDefinitionsFile(self, self.SimulationCSV[simorder])
-                    self.loadModelAlts(self.SimulationCSV[simorder])
+                for chapterkey in chapterkeys:
+                    self.setSimulationCSVVars(self.reportCSV[chapterkey])
+                    WR.readDefinitionsFile(self, self.reportCSV[chapterkey])
+                    self.loadModelAlts(self.reportCSV[chapterkey])
                     self.initializeDataOrganizer()
                     self.loadCurrentModelAltID(self.base_id)
+                    WF.print2stdout(f'\nRunning Chapter: {self.modelAltName} using {self.reportCSV[chapterkey]["xmlfile"]}')
                     self.WAT_log.addSimLogEntry(self.accepted_IDs, self.SimulationVariables, self.observedDir)
                     self.writeChapter()
-                    self.appendXMLModelIntroduction(simorder)
+                    self.appendXMLModelIntroduction(chapterkey)
                     self.Data.writeDataFiles()
                 self.fixXMLModelIntroduction()
                 self.XML.writeReportEnd()
                 self.WAT_log.equalizeLog()
-        elif self.reportType == 'alternativecomparison':
+
+        elif self.reportType == 'comparison':
             self.initSimulationDict()
             for simulation in self.Simulations:
                 self.setSimulationVariables(simulation)
                 WF.checkExists(simulation['directory'])
-            self.base_id = self.Simulations[0]['ID']
+            self.base_id = 'base' #this should always be base?
             self.loadCurrentID(self.base_id) #load the data for the current sim, we do 1 at a time here..
             WT.setMultiRunStartEndYears(self) #find the start and end time
             WT.defineStartEndYears(self) #format the years correctly after theyre set
-            WR.readComparisonSimulationsCSV(self) #read to determine order/sims/regions in report
             self.cleanOutputDirs()
             self.initializeXML()
+            self.reportCSV = WR.readReportCSVFile(self, [sim for sim in self.Simulations if sim['ID'] == self.base_id][0]) #use the base
+            chapterkeys = list(self.reportCSV.keys())
+            chapterkeys.sort()  # these are always numbers, so it works
             self.writeXMLIntroduction()
-            for simorder in self.SimulationCSV.keys():
-                self.setSimulationCSVVars(self.SimulationCSV[simorder])
-                WR.readDefinitionsFile(self, self.SimulationCSV[simorder])
-                self.loadModelAlts(self.SimulationCSV[simorder])
+            for chapterkey in chapterkeys:
+                self.setSimulationCSVVars(self.reportCSV[chapterkey])
+                WR.readDefinitionsFile(self, self.reportCSV[chapterkey])
+                self.loadModelAlts(self.reportCSV[chapterkey])
                 self.initializeDataOrganizer()
                 self.loadCurrentModelAltID(self.base_id)
                 self.WAT_log.addSimLogEntry(self.accepted_IDs, self.SimulationVariables, self.observedDir)
                 self.writeChapter()
-                self.appendXMLModelIntroduction(simorder)
+                self.appendXMLModelIntroduction(chapterkey)
                 self.Data.writeDataFiles()
             self.fixXMLModelIntroduction()
             self.XML.writeReportEnd()
             self.WAT_log.equalizeLog()
+
         elif self.reportType == 'forecast':
             self.initSimulationDict()
             self.organizeMembers()
+
             for simulation in self.Simulations:
                 WF.checkExists(simulation['directory'])
                 self.setSimulationVariables(simulation)
-                self.base_id = self.Simulations[0]['ID']
+                # self.base_id = self.Simulations[0]['ID']
+                self.base_id = 'base'
                 self.loadCurrentID(self.base_id) #load the first simulation
                 WT.setMultiRunStartEndYears(self) #find the start and end time
                 WT.defineStartEndYears(self) #format the years correctly after theyre set
-                WR.readForecastSimulationsCSV(self) #read to determine order/sims/regions in report
+                # WR.readForecastSimulationsCSV(self) #read to determine order/sims/regions in report
+                self.reportCSV = WR.readReportCSVFile(self,[sim for sim in self.Simulations if sim['ID'] == self.base_id][0])  # use the base
                 self.cleanOutputDirs()
                 self.initializeXML()
                 self.writeXMLIntroduction()
                 self.initializeDataOrganizer() #Do this here because forecast runs are likely to overlap over chapters
-                for simorder in self.SimulationCSV.keys():
-                    self.setSimulationCSVVars(self.SimulationCSV[simorder])
-                    WR.readDefinitionsFile(self, self.SimulationCSV[simorder])
-                    self.loadModelAlts(self.SimulationCSV[simorder])
+
+                chapterkeys = list(self.reportCSV.keys())
+                chapterkeys.sort()  # these are always numbers, so it works
+                for chapterkey in chapterkeys:
+                    self.setSimulationCSVVars(self.reportCSV[chapterkey])
+                    WR.readDefinitionsFile(self, self.reportCSV[chapterkey])
+                    self.loadModelAlts(self.reportCSV[chapterkey])
                     self.loadCurrentModelAltID(self.base_id)
                     self.WAT_log.addSimLogEntry(self.accepted_IDs, self.SimulationVariables, self.observedDir)
                     self.writeChapter()
                     self.Data.writeDataFiles()
-                    self.appendXMLModelIntroduction(simorder)
+                    self.appendXMLModelIntroduction(chapterkey)
                 self.fixXMLModelIntroduction()
                 self.XML.writeReportEnd()
                 self.WAT_log.equalizeLog()
+
         else:
             WF.print2stderr('UNKNOWN REPORT TYPE:', self.reportType)
             sys.exit(1)
+
         self.WAT_log.writeLogFile(self.images_path)
         self.Data.writeDataFiles()
 
@@ -286,13 +309,11 @@ class MakeAutomatedReport(object):
                 unitslist = []
                 unitslist2 = []
                 stackplots = {}
-                if 'relative' in ax_settings.keys():
-                    print('stop')
                 linedata, line_settings = self.Data.getTimeSeriesDataDictionary(ax_settings)
                 linedata = WF.filterDataByYear(linedata, year)
                 linedata = self.Data.filterTimeSeries(linedata, line_settings)
                 linedata = self.Data.scaleValuesByTable(linedata, line_settings)
-                linedata = WF.mergeLines(linedata, line_settings, ax_settings)
+                linedata, line_settings = WF.mergeLines(linedata, line_settings, ax_settings)
                 ax_settings = self.configureSettingsForID(self.base_id, ax_settings)
                 gatedata, gate_settings = self.Data.getGateDataDictionary(ax_settings, makecopy=False)
                 line_settings = WF.correctDuplicateLabels(line_settings)
@@ -1476,7 +1497,7 @@ class MakeAutomatedReport(object):
 
 
                 basefigname = 'ProfilePlot_{0}_{1}_{2}_{3}_{4}'.format(self.ChapterName, yearstr,
-                                                                       object_settings['plot_parameter'], self.plugin,
+                                                                       object_settings['plot_parameter'], self.program,
                                                                        page_i)
 
                 exists = True
@@ -1562,7 +1583,7 @@ class MakeAutomatedReport(object):
         object_settings['allyearsstr'] = WF.getObjectAllYears(object_settings['years'])
 
         data, data_settings, missing = self.Data.getTableDataDictionary(object_settings)
-        data = WF.mergeLines(data, data_settings, object_settings)
+        data, data_settings = WF.mergeLines(data, data_settings, object_settings)
 
         data = self.Data.filterTimeSeries(data, data_settings)
 
@@ -1776,7 +1797,7 @@ class MakeAutomatedReport(object):
         object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = WF.getObjectYears(self, object_settings)
 
         data, data_settings, missing = self.Data.getTableDataDictionary(object_settings)
-        data = WF.mergeLines(data, data_settings, object_settings)
+        data, data_settings = WF.mergeLines(data, data_settings, object_settings)
 
         data = self.Data.filterTimeSeries(data, data_settings)
 
@@ -1965,7 +1986,7 @@ class MakeAutomatedReport(object):
         object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = WF.getObjectYears(self, object_settings)
 
         data, data_settings, missing = self.Data.getTableDataDictionary(object_settings)
-        data = WF.mergeLines(data, data_settings, object_settings)
+        data, data_settings= WF.mergeLines(data, data_settings, object_settings)
 
         data = self.Data.filterTimeSeries(data, data_settings)
 
@@ -3171,8 +3192,12 @@ class MakeAutomatedReport(object):
             table_constructor[tcnum]['header'] = header
 
 
-        self.XML.writeTableStart(desc, object_settings['primarykey'])
-        self.Tables.writeTable(table_constructor)
+        if len(table_constructor) == 0:
+            self.Tables.writeMissingTableWarning(desc)
+            WF.print2stdout('No values found for table. Not writing table.', debug=self.debug)
+        else:
+            self.XML.writeTableStart(desc, object_settings['primarykey'])
+            self.Tables.writeTable(table_constructor)
         WF.print2stdout(f'Table from file took {time.time() - objectstarttime} seconds.')
 
     def makeForecastTable(self, object_settings):
@@ -3268,19 +3293,23 @@ class MakeAutomatedReport(object):
         self.Tables.writeTable(table_constructor)
         WF.print2stdout(f'Forecast Table from file took {time.time() - objectstarttime} seconds.')
 
-    def setSimulationCSVVars(self, simlist):
+    def setSimulationCSVVars(self, simulationCSV):
         '''
         set variables pertaining to a specified simulation
-        :param simlist: dictionary of specified simulation
+        :param simulationCSV: dictionary of specified simulation
         :return: class variables
-                    self.plugin
+                    self.program
                     self.modelAltName
-                    self.defFile
-        '''
 
-        self.plugins = simlist['plugins']
-        self.modelAltNames = simlist['modelaltnames']
-        self.defFile = simlist['deffile']
+        '''
+        if simulationCSV['deprecated_method']:
+            self.programs = simulationCSV['programs']
+            self.reportXML_modelAltNames = simulationCSV['modelaltnames']
+            self.reportXMLFile = simulationCSV['xmlfile']
+        else:
+            self.programs = simulationCSV['programs']
+            self.reportXMLFile = simulationCSV['xmlfile']
+            self.reportXML_Keywords = simulationCSV['keywords']
 
     def setSimulationVariables(self, simulation):
         '''
@@ -3415,8 +3444,8 @@ class MakeAutomatedReport(object):
         '''
 
         self.XML.writeIntroStart()
-        for model in self.SimulationCSV.keys():
-            # self.XML.writeIntroLine(self.SimulationCSV[model]['plugin'])
+        for model in self.reportCSV.keys():
+            # program = self.XML.writeIntroLine(self.reportCSV[model]['program'])
             self.XML.writeIntroLine('%%REPLACEINTRO_{0}%%'.format(model))
         self.XML.writeIntroEnd()
 
@@ -3461,7 +3490,8 @@ class MakeAutomatedReport(object):
             self.WAT_log.addLogEntry({'region': self.ChapterRegion})
             self.XML.writeChapterStart(WF.replaceflaggedValues(self, self.ChapterName, 'fancytext', forjasper=True),
                                        WF.replaceflaggedValues(self, self.ChapterText, 'fancytext', forjasper=True))
-            self.writeSections(Chapter)
+
+            self.writeSections(Chapter) ### where the magic happens
 
             WF.print2stdout('\n################################')
             WF.print2stdout('Chapter Complete.')
@@ -3543,63 +3573,99 @@ class MakeAutomatedReport(object):
         WF.cleanOutputDirectory(self.images_path, '.csv')
         WF.cleanOutputDirectory(self.CSVPath, '.csv')
 
-    def loadModelAlts(self, simCSVAlt):
+    def loadModelAlts(self, csvChapterSettings):
         '''
-        Loads info for specified model alts. Loads correct model plugin class from WDR
-        :param simCSVAlt: simulation alt dict object from self.simulation class
+        Loads info for specified model alts. Loads correct model program class from WDR
+        :param csvChapterSettings: simulation alt dict object from self.simulation class
         :return: class variables
                 self.alternativeFpart
                 self.alternativeDirectory
-                self.ModelAlt - WDR class that is plugin specific
+                self.ModelAlt - WDR class that is program specific
         '''
 
-        self.accepted_IDs = []
-        for ID in self.SimulationVariables.keys():
-            approved_modelalts = [modelalt for modelalt in self.SimulationVariables[ID]['ModelAlternatives']
-                                  if modelalt['name'] in simCSVAlt['modelaltnames'] and
-                                  modelalt['program'] in simCSVAlt['plugins']]
+        self.accepted_IDs = [] #IDs are tied to Model Alts in Simulations
 
-            if len(approved_modelalts) > 0:
-                approved_modelalt = approved_modelalts[0]
+        if len(csvChapterSettings['programs']) == 0:
+            #you can have chapters/sections in the report that are not tied to models, either of text of non model results
+            #such as boundary conditions or something
+            WF.print2stdout('Model independent plotting occurring. If this is a mistake, check the input CSV for missing flags.')
+            self.modelIndependent = True
+
+        else:
+            for ID in self.SimulationVariables.keys(): #for each simulation
+
+                if csvChapterSettings['deprecated_method'] == True: #TODO: remove this far enough into the future
+                    approved_modelalts = [modelalt for modelalt in self.SimulationVariables[ID]['ModelAlternatives']
+                                         if modelalt['name'] in csvChapterSettings['modelaltnames'] and
+                                         modelalt['program'] in csvChapterSettings['programs']]
+                    if len(approved_modelalts) == 0:
+                        #this chapter does not apply to this simulation if no model alts have the correct program. do no consider.
+                        continue
+
+                    approved_modelalt = approved_modelalts[0] #if there are many, just do the first
+
+
+                else:
+                    #first, for each simulation, figure out which model alts per sim work
+                    approved_modelalts = [modelalt for modelalt in self.SimulationVariables[ID]['ModelAlternatives']
+                                          if modelalt['program'].lower() in csvChapterSettings['programs']]
+
+                    if approved_modelalts == 0:
+                        #this chapter does not apply to this simulation if no model alts have the correct program. do no consider.
+                        continue
+
+                    if len(approved_modelalts) > 1: #Now, try and filter by keywords
+                        keyword_approved_modelalts = []
+                        keywords = csvChapterSettings['keywords']
+                        for keyword in keywords: #for each keyword
+                            for modelalt in approved_modelalts: #for each already approved model alt
+                                if keyword in modelalt['name'].lower():
+                                    keyword_approved_modelalts.append(modelalt)
+                        if len(keyword_approved_modelalts) > 0: #if any worked.. none will if there are no keyword or none that apply
+                            approved_modelalts = keyword_approved_modelalts
+
+                    if len(approved_modelalts) > 1: #try and filter by order now
+                        try:
+                            approved_modelalts = [approved_modelalts[csvChapterSettings['numtimesprogramused']]]
+                        except IndexError:
+                            WF.print2stdout(f'Unable to confidently choose model alt for ID {ID}')
+                            WF.print2stdout(f'Using model alt: {approved_modelalts[-1]["name"]} for {csvChapterSettings["xmlfile"]}')
+                            WF.print2stdout('If this is incorrect, use keyword(s) in the CSV file to narrow down the selection.')
+                            approved_modelalt = approved_modelalts[-1]
+
+                    if len(approved_modelalts) == 1:
+                        approved_modelalt = approved_modelalts[0]
+
                 WF.print2stdout('Added {0} for ID {1}'.format(approved_modelalt['program'], ID))
                 self.SimulationVariables[ID]['alternativeFpart'] = approved_modelalt['fpart']
                 self.SimulationVariables[ID]['alternativeDirectory'] = approved_modelalt['directory']
                 self.SimulationVariables[ID]['modelAltName'] = approved_modelalt['name']
-                self.SimulationVariables[ID]['plugin'] = approved_modelalt['program']
+                self.SimulationVariables[ID]['program'] = approved_modelalt['program']
 
-                if self.SimulationVariables[ID]['plugin'].lower() == "ressim":
+                if self.SimulationVariables[ID]['program'].lower() == "ressim":
                     self.SimulationVariables[ID]['ModelAlt'] = WRSS.ResSim_Results(self.SimulationVariables[ID]['simulationDir'],
                                                                                   self.SimulationVariables[ID]['alternativeFpart'],
                                                                                   self.StartTime, self.EndTime, self)
-                elif self.SimulationVariables[ID]['plugin'].lower() == 'cequalw2':
+                elif self.SimulationVariables[ID]['program'].lower() == 'cequalw2':
                     self.SimulationVariables[ID]['ModelAlt'] = WW2.W2_Results(self.SimulationVariables[ID]['simulationDir'],
                                                                               self.SimulationVariables[ID]['modelAltName'],
                                                                               self.SimulationVariables[ID]['alternativeDirectory'],
                                                                               self.StartTime, self.EndTime, self)
                 else:
                     self.SimulationVariables[ID]['ModelAlt'] == 'unknown'
+
                 self.accepted_IDs.append(ID)
                 self.modelIndependent = False
 
-        if len(simCSVAlt['plugins']) == 0:
-            #you can have chapters/sections in the report that are not tied to models, either of text of non model results
-            #such as boundary conditions or something
-            WF.print2stdout('Model independent plotting occurring. If this is a mistake, check the input CSV for None flags.')
-            self.modelIndependent = True
-
-        elif len(self.accepted_IDs) == 0:
-
-            if self.iscomp:
-                csv_file_name = '{0}_comparison.csv'.format(self.baseSimulationName.replace(' ', '_'))
-            else:
-                csv_file_name = '{0}.csv'.format(self.baseSimulationName.replace(' ', '_'))
-            WF.print2stderr('Incompatible input information from the WAT XML output file ({0})\nand Simulation CSV file ({1})'.format(self.simulationInfoFile, csv_file_name))
-            WF.print2stderr('Please Confirm inputs and run again.')
-            if self.iscomp:
-                WF.print2stderr('If comparison plot, ensure that all model alts are in {0}'.format(csv_file_name))
-                WF.print2stderr('Example line: ResSim, TmpNFlo, CeQualW2, Shasta from DSS 15, Shasta_ResSim_TCD_comparison.XML')
-            WF.print2stderr('Now Exiting...')
-            sys.exit(1)
+            if not self.modelIndependent:
+                if len(self.accepted_IDs) == 0: #if we accept no IDs
+                    WF.print2stderr('Incompatible input information from the WAT XML output file ({0})\nand Simulation CSV file ({1})'.format(self.simulationInfoFile, self.reportCSVFile))
+                    WF.print2stderr('Please confirm inputs and run again.')
+                    if self.reportType == 'comparison':
+                        WF.print2stderr('If comparison plot, ensure that all programs are in the first cell line for {0}'.format(csv_file_name))
+                        WF.print2stderr('Example line: CeQualW2|Ressim, format/Shasta_ResSim_TCD_comparison.XML')
+                    WF.print2stderr('Now Exiting...')
+                    sys.exit(1)
 
     def loadCurrentID(self, ID):
         '''
@@ -3630,7 +3696,7 @@ class MakeAutomatedReport(object):
             self.alternativeFpart = self.SimulationVariables[ID]['alternativeFpart']
             self.alternativeDirectory = self.SimulationVariables[ID]['alternativeDirectory']
             self.modelAltName = self.SimulationVariables[ID]['modelAltName']
-            self.plugin = self.SimulationVariables[ID]['plugin']
+            self.program = self.SimulationVariables[ID]['program']
             self.ModelAlt = self.SimulationVariables[ID]['ModelAlt']
             self.ensembleSets = self.SimulationVariables[ID]['ensemblesets']
             # WF.print2stdout('Model {0} Loaded'.format(ID), debug=self.debug) #noisy
@@ -3638,7 +3704,7 @@ class MakeAutomatedReport(object):
             self.alternativeFpart = 'none'
             self.alternativeDirectory = 'none'
             self.modelAltName = 'none'
-            self.plugin = 'none'
+            self.program = 'none'
             self.ModelAlt = 'none'
 
     def initializeXML(self):
@@ -3650,7 +3716,7 @@ class MakeAutomatedReport(object):
 
         # new_xml = os.path.join(self.studyDir, 'reports', 'Datasources', 'USBRAutomatedReportOutput.xml') #required name for file
         new_xml = os.path.join(self.outputDir, 'Datasources', 'USBRAutomatedReportOutput.xml') #required name for file
-        print(f'Creating new XML at {new_xml}')
+        print(f'Creating new XML at {new_xml}\n')
 
         self.XML = WXMLU.XMLReport(new_xml)
         if self.reportType == 'forecast':
@@ -3694,7 +3760,7 @@ class MakeAutomatedReport(object):
         attempts to figure out what model the data is for based off the model source as an attempt to filter out data
         retrieval attempts
         :param Line_info: dictionary of settings for line
-        :return: model plugin name if possible
+        :return: model program name if possible
         '''
 
         for var, ident in self.Constants.model_specific_vars.items():
@@ -3719,7 +3785,7 @@ class MakeAutomatedReport(object):
                 for cnt, ID in enumerate(self.accepted_IDs):
                     if cnt > 0:
                         outstr += ','
-                    outstr += ' {0}'.format(self.SimulationVariables[ID]['plugin'])
+                    outstr += ' {0}'.format(self.SimulationVariables[ID]['program'])
                 outstr += '</Model>\n'
                 modelstrs.append(outstr)
 
@@ -3747,7 +3813,7 @@ class MakeAutomatedReport(object):
         modeltype = self.getLineModelType(line_info)
         if modeltype == 'undefined':
             return True
-        if modeltype.lower() != self.plugin.lower():
+        if modeltype.lower() != self.program.lower():
             return False
         return True
 
