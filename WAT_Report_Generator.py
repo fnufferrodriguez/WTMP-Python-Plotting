@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '6.0.4'
+VERSIONNUMBER = '6.0.6'
 
 import os
 import sys
@@ -85,7 +85,7 @@ class MakeAutomatedReport(object):
                 chapterkeys = list(self.reportCSV.keys())
                 chapterkeys.sort()  # these are always numbers, so it works
 
-                WF.print2stdout('Running Simulation:', simulation)
+                WF.printSimulationInfo(simulation)
                 self.base_id = self.Simulations[0]['ID']
                 self.initSimulationDict()
                 self.setSimulationVariables(simulation)
@@ -96,12 +96,12 @@ class MakeAutomatedReport(object):
                 self.initializeXML()
                 self.writeXMLIntroduction()
                 for chapterkey in chapterkeys:
+                    WF.print2stdout(f'Running XML file {self.reportCSV[chapterkey]["xmlfile"]}')
                     self.setSimulationCSVVars(self.reportCSV[chapterkey])
                     WR.readDefinitionsFile(self, self.reportCSV[chapterkey])
                     self.loadModelAlts(self.reportCSV[chapterkey])
                     self.initializeDataOrganizer()
                     self.loadCurrentModelAltID(self.base_id)
-                    WF.print2stdout(f'\nRunning Chapter: {self.modelAltName} using {self.reportCSV[chapterkey]["xmlfile"]}')
                     self.WAT_log.addSimLogEntry(self.accepted_IDs, self.SimulationVariables, self.observedDir)
                     self.writeChapter()
                     self.appendXMLModelIntroduction(chapterkey)
@@ -113,6 +113,7 @@ class MakeAutomatedReport(object):
         elif self.reportType == 'comparison':
             self.initSimulationDict()
             for simulation in self.Simulations:
+                WF.printSimulationInfo(simulation)
                 self.setSimulationVariables(simulation)
                 WF.checkExists(simulation['directory'])
             self.base_id = 'base' #this should always be base?
@@ -126,6 +127,7 @@ class MakeAutomatedReport(object):
             chapterkeys.sort()  # these are always numbers, so it works
             self.writeXMLIntroduction()
             for chapterkey in chapterkeys:
+                WF.print2stdout(f'Running XML file {self.reportCSV[chapterkey]["xmlfile"]}')
                 self.setSimulationCSVVars(self.reportCSV[chapterkey])
                 WR.readDefinitionsFile(self, self.reportCSV[chapterkey])
                 self.loadModelAlts(self.reportCSV[chapterkey])
@@ -144,6 +146,7 @@ class MakeAutomatedReport(object):
             self.organizeMembers()
 
             for simulation in self.Simulations:
+                WF.printSimulationInfo(simulation)
                 WF.checkExists(simulation['directory'])
                 self.setSimulationVariables(simulation)
                 # self.base_id = self.Simulations[0]['ID']
@@ -161,6 +164,7 @@ class MakeAutomatedReport(object):
                 chapterkeys = list(self.reportCSV.keys())
                 chapterkeys.sort()  # these are always numbers, so it works
                 for chapterkey in chapterkeys:
+                    WF.print2stdout(f'Running XML file {self.reportCSV[chapterkey]["xmlfile"]}')
                     self.setSimulationCSVVars(self.reportCSV[chapterkey])
                     WR.readDefinitionsFile(self, self.reportCSV[chapterkey])
                     self.loadModelAlts(self.reportCSV[chapterkey])
@@ -969,7 +973,7 @@ class MakeAutomatedReport(object):
                         if '%%' in row_val:
                             stats_data = self.Tables.formatStatsProfileLineData(row_val, data, object_settings['resolution'],
                                                                                 object_settings['usedepth'], header_i)
-                            missing_data = self.Tables.checkForMissingData(row_val, missing)
+                            missing_data = self.Tables.checkForMissingData(row_val, stats_data)
                             if missing_data:
                                 stat = self.Tables.getStat(row_val)
                                 row_val = np.nan
@@ -1582,7 +1586,7 @@ class MakeAutomatedReport(object):
         object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = WF.getObjectYears(self, object_settings)
         object_settings['allyearsstr'] = WF.getObjectAllYears(object_settings['years'])
 
-        data, data_settings, missing = self.Data.getTableDataDictionary(object_settings)
+        data, data_settings = self.Data.getTableDataDictionary(object_settings)
         data, data_settings = WF.mergeLines(data, data_settings, object_settings)
 
         data = self.Data.filterTimeSeries(data, data_settings)
@@ -1659,7 +1663,7 @@ class MakeAutomatedReport(object):
                             stat = self.Tables.getStat(row_val)
                             row_val = None
                         else:
-                            missing_data = self.Tables.checkForMissingData(row_val, missing)
+                            missing_data = self.Tables.checkForMissingData(row_val, rowdata)
                             if missing_data:
                                 stat = self.Tables.getStat(row_val)
                                 row_val = np.nan
@@ -1796,7 +1800,7 @@ class MakeAutomatedReport(object):
 
         object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = WF.getObjectYears(self, object_settings)
 
-        data, data_settings, missing = self.Data.getTableDataDictionary(object_settings)
+        data, data_settings = self.Data.getTableDataDictionary(object_settings)
         data, data_settings = WF.mergeLines(data, data_settings, object_settings)
 
         data = self.Data.filterTimeSeries(data, data_settings)
@@ -1849,7 +1853,7 @@ class MakeAutomatedReport(object):
                             stat = self.Tables.getStat(row_val)
                             row_val = None
                         else:
-                            missing_data = self.Tables.checkForMissingData(row_val, missing)
+                            missing_data = self.Tables.checkForMissingData(row_val, rowdata)
                             if missing_data:
                                 stat = self.Tables.getStat(row_val)
                                 row_val = np.nan
@@ -1985,7 +1989,7 @@ class MakeAutomatedReport(object):
 
         object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = WF.getObjectYears(self, object_settings)
 
-        data, data_settings, missing = self.Data.getTableDataDictionary(object_settings)
+        data, data_settings = self.Data.getTableDataDictionary(object_settings)
         data, data_settings= WF.mergeLines(data, data_settings, object_settings)
 
         data = self.Data.filterTimeSeries(data, data_settings)
@@ -2046,7 +2050,7 @@ class MakeAutomatedReport(object):
                             stat = self.Tables.getStat(row_val)
                             row_val = np.nan
                         else:
-                            missing_data = self.Tables.checkForMissingData(row_val, missing)
+                            missing_data = self.Tables.checkForMissingData(row_val, rowdata)
                             if missing_data:
                                 stat = self.Tables.getStat(row_val)
                                 row_val = np.nan
@@ -2285,7 +2289,7 @@ class MakeAutomatedReport(object):
 
                             rowval_stats = self.Profiles.stackProfileIndicies(rowval_stats, stats_data)
 
-                        missing_data = self.Tables.checkForMissingData(row_val, missing)
+                        missing_data = self.Tables.checkForMissingData(row_val, rowval_stats)
                         if missing_data:
                             stat = self.Tables.getStat(row_val)
                             row_val = np.nan
@@ -3159,7 +3163,7 @@ class MakeAutomatedReport(object):
 
         object_settings = WF.replaceflaggedValues(self, object_settings, 'fancytext', forjasper=True)
 
-        data, data_settings, missing = self.Data.getTableDataDictionary(object_settings, type='formatted')
+        data, data_settings = self.Data.getTableDataDictionary(object_settings, type='formatted')
         object_settings['primarykey'] = self.Data.getPrimaryTableKey(data, object_settings)
         data = self.Tables.formatPrimaryKey(data, object_settings)
         data, data_settings = self.Data.mergeFormattedTables(data, data_settings, object_settings)
@@ -3619,7 +3623,6 @@ class MakeAutomatedReport(object):
                         keywords = csvChapterSettings['keywords']
                         for keyword in keywords: #for each keyword
                             for modelalt in approved_modelalts: #for each already approved model alt
-
                                 if keyword in modelalt['name'].lower():
                                     keyword_approved_modelalts.append(modelalt)
                         if len(keyword_approved_modelalts) > 0: #if any worked.. none will if there are no keyword or none that apply
@@ -3627,7 +3630,7 @@ class MakeAutomatedReport(object):
 
                     if len(approved_modelalts) > 1: #try and filter by order now
                         try:
-                            approved_modelalts = [approved_modelalts[csvChapterSettings['numtimesprogramused']-1]]
+                            approved_modelalts = [approved_modelalts[csvChapterSettings['numtimesprogramused']-1]] #starts at 1
                         except IndexError:
                             WF.print2stdout(f'Unable to confidently choose model alt for ID {ID}')
                             WF.print2stdout(f'Using model alt: {approved_modelalts[-1]["name"]} for {csvChapterSettings["xmlfile"]}')

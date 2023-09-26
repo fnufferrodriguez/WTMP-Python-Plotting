@@ -628,7 +628,10 @@ class W2_Results(object):
                 e = []
                 timestep = WT.getIdxForTimestamp(self.dt_dates, time)
                 if timestep > -1:#timestep in model
-                    WSE = WS_Elev[timestep] #Meters #get WSE
+                    try:
+                        WSE = WS_Elev[timestep] #Meters #get WSE
+                    except IndexError:
+                        WSE = []
                     if not WF.checkData(WSE): #if WSE is bad, skip usually first timestep...
                         elevations.append(np.array([]))
                         depths.append(np.array([]))

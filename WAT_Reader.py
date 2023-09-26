@@ -630,6 +630,7 @@ def readReportCSVFile(Report, Simulation):
                 if len(line.strip()) >= 2: #needs to at least have a filename and report type
                     accepted_lines += 1
                     sline = line.strip().split(',')
+                    sline = [n for n in sline if n != '']
                     programs_raw = sline[0].strip().lower()
                     programs = [n for n in programs_raw.split('|') if n != '']
                     xmlfile = sline[1].strip().lower()
@@ -680,6 +681,8 @@ def readSimulationFile_deprecated(simulationfile):
         for i, line in enumerate(sf):
             if len(line.strip()) > 0:
                 sline = line.strip().split(',')
+                #remove all '' from sline
+                sline = [n for n in sline if n != '']
                 csv_info[i] = {'xmlfile': sline[-1].strip()} #comparison reports always put xml last
                 sline = sline[:-1]
                 csv_info[i]['programs'] = []
