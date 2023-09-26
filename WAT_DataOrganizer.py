@@ -1027,7 +1027,6 @@ class DataOrganizer(object):
 
         data = {}
         line_settings = {}
-        missing = []
         temp_flag_number = 1
         for dp in object_settings['datapaths']:
             numtimesused = 0
@@ -1049,8 +1048,7 @@ class DataOrganizer(object):
                         data, line_settings, success = self.updateTimeSeriesDataDictionary(data, line_settings, cur_dp)
                         if success:
                             numtimesused += 1
-                        else:
-                            missing.append(dp['flag'])
+                            dp_used = True
                 else:
                     if self.Report.currentlyloadedID != self.Report.base_id:
                         dp = self.Report.configureSettingsForID(self.Report.base_id, dp)
@@ -1062,8 +1060,7 @@ class DataOrganizer(object):
                     data, line_settings, success = self.updateTimeSeriesDataDictionary(data, line_settings, dp)
                     if success:
                         numtimesused += 1
-                    else:
-                        missing.append(dp['flag'])
+
 
             elif type.lower() == 'formatted':
                 dp = self.Report.configureSettingsForID(self.Report.base_id, dp)
@@ -1074,7 +1071,7 @@ class DataOrganizer(object):
                 line_settings[dp['flag']]['logoutputfilename'] = datamem_key
                 line_settings[dp['flag']].update(dp)
 
-        return data, line_settings, missing
+        return data, line_settings
 
     def filterFormattedTable(self, data, object_settings, primarykey=None):
         '''

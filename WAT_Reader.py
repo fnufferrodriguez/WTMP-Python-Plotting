@@ -680,7 +680,12 @@ def readSimulationFile_deprecated(simulationfile):
         for i, line in enumerate(sf):
             if len(line.strip()) > 0:
                 sline = line.strip().split(',')
-                csv_info[i] = {'xmlfile': sline[-1].strip()} #comparison reports always put xml last
+                #iterate through sline in reverse until non '' is found
+                for si, s in enumerate(sline[::-1]):
+                    if len(s.strip()) > 0:
+                        csv_info[i] = {'xmlfile': sline[len(sline)-1-si].strip()} #subtract 1
+                        break
+                # csv_info[i] = {'xmlfile': sline[-1].strip()} #comparison reports always put xml last
                 sline = sline[:-1]
                 csv_info[i]['programs'] = []
                 csv_info[i]['modelaltnames'] = []

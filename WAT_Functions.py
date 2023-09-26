@@ -226,6 +226,19 @@ def matchData(data1, data2):
         data2['values'] = v_2_msk
         return data1, data2
 
+def printSimulationInfo(simulation):
+    print2stdout(f'\nSimulation: {simulation["name"]} - {simulation["basename"]} - {simulation["ID"]}')
+    print2stdout('Directory: {}'.format(simulation['directory']))
+    print2stdout('DSS file: {}'.format(simulation['dssfile']))
+    print2stdout('starttime: {}'.format(simulation['starttime']))
+    print2stdout('endtime: {}'.format(simulation['endtime']))
+    if 'csvfile' in simulation.keys():
+        print2stdout('csvfile: {}'.format(simulation['csvfile']))
+    if 'modelalternatives' in simulation.keys() and len(simulation['modelalternatives']) > 0:
+        print2stdout('Model Alternatives:')
+        for modelalt in simulation['modelalternatives']:
+            print2stdout('\t{0} - {1}'.format(modelalt['name'], modelalt['program']))
+
 def checkData(dataset, flag=None):
     '''
     checks datasets to ensure that they are valid for representation. Checks for a given flag, any length and

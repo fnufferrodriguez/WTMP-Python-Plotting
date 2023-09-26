@@ -1288,16 +1288,21 @@ class Tables(object):
                 continue
             current_col = table_constructor[i]
             if self.Report.iscomp:
-                if current_col['datecolumn'] != lastdatecol:
-                    if lastdatecol != '':
-                        self.Report.XML.writeDateColumnEnd()
-                    self.Report.XML.writeDateColumn(current_col['datecolumn'])
-                    lastdatecol = current_col['datecolumn']
+                if current_col['datecolumn'] != lastdatecol: #if the date column is different
+                    if lastdatecol != '': #but not the first one
+                        self.Report.XML.writeDateColumnEnd() #write date column end
+                    self.Report.XML.writeDateColumn(current_col['datecolumn']) #write date column
+                    lastdatecol = current_col['datecolumn'] #set last date column
             self.Report.XML.writeTableColumn(current_col['header'], current_col['rows'], thresholdcolors=current_col['thresholdcolors'])
-            if self.Report.iscomp:
-                if i == (len(table_constructor.keys())-1):
-                    self.Report.XML.writeDateColumnEnd()
+            # if self.Report.iscomp:
+            #     if i == (len(table_constructor.keys())-1):
+            #         self.Report.XML.writeDateColumnEnd()
+        if self.Report.iscomp:
+            self.Report.XML.writeDateColumnEnd() #write date column end ifccomp
         self.Report.XML.writeTableEnd()
+
+
+
 
     def writeMissingTableItemsWarning(self, description):
         '''
@@ -1361,12 +1366,21 @@ class Tables(object):
             formatted_headers.append(self.forecastTableHeaders[header.lower()])
         return formatted_headers
 
-    def checkForMissingData(self, row_val, missing):
+    # def checkForMissingData(self, row_val, missing):
+        # row_split = [n.replace('%', '') for n in row_val.split('.')]
+        # for m in missing:
+        #     if m in row_split:
+        #         return True
+        # return False
+    def checkForMissingData(self, row_val, row_data):
         row_split = [n.replace('%', '') for n in row_val.split('.')]
-        for m in missing:
-            if m in row_split:
-                return True
+        for key in row_data:
+            if key in row_split:
+                check = WF.checkData(row_data[key]['values'])
+                if not check:
+                    return True
         return False
+
 
     def getStat(self, row_val):
         srv = row_val.split('.')[0].lower().replace('%', '')
