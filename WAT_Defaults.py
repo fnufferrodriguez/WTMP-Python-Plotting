@@ -80,9 +80,11 @@ def getDefaultLineSettings(defaultLineStyles, LineSettings, param, i, debug=Fals
     if LineSettings['drawline'].lower() == 'true':
         if param != None:
             if param.lower() in defaultLineStyles.keys():
-                if i >= len(defaultLineStyles[param.lower()]['lines']):
+                while i >= len(defaultLineStyles[param.lower()]['lines']):
                     i = i - len(defaultLineStyles[param.lower()]['lines'])
+
                 default_lines = defaultLineStyles[param.lower()]['lines'][i]
+
                 for key in default_lines.keys():
                     if key not in LineSettings.keys():
                         LineSettings[key] = default_lines[key]
@@ -97,7 +99,7 @@ def getDefaultLineSettings(defaultLineStyles, LineSettings, param, i, debug=Fals
 
     if LineSettings['drawpoints'] == 'true':
         if param in defaultLineStyles.keys():
-            if i >= len(defaultLineStyles[param]['lines']):
+            while i >= len(defaultLineStyles[param]['lines']):
                 i = i - len(defaultLineStyles[param]['lines'])
             default_lines = defaultLineStyles[param]['lines'][i]
             for key in default_lines.keys():
