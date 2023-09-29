@@ -270,13 +270,15 @@ class Profiles(object):
         '''
 
         obs_elev = []
-        if max_wse.size == 0:
-            np.full(len(input_depths), np.nan)
+        if isinstance(max_wse, (list, np.ndarray)):
+            if len(max_wse) == 0:
+                return np.full(len(input_depths), np.nan)
+            if np.all(np.isnan(max_wse)):
+                return np.full(len(input_depths), np.nan)
         elif np.isnan(max_wse):
-            obs_elev = np.full(len(input_depths), np.nan)
-        else:
-            for depth in input_depths:
-                obs_elev.append(max_wse - depth)
+            return np.full(len(input_depths), np.nan)
+        for depth in input_depths:
+            obs_elev.append(max_wse - depth)
         return np.asarray(obs_elev)
 
     def convertObsElevations2Depths(self, input_elevs, max_wse):

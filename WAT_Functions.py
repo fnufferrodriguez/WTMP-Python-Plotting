@@ -1797,7 +1797,10 @@ def getMaxWSEFromElev(input_data):
     :return: list of WSE
     '''
 
-    return max(input_data)
+    try:
+        return max(input_data)
+    except ValueError:
+        return np.nan
     # elevations = []
     # for e in input_data:
     #     elevations.append(max(e))
