@@ -71,6 +71,11 @@ def changeTimeSeriesInterval(times, values, Line_info, startYear):
             # WF.print2stdout('No time interval Defined.')
             return times, values
 
+        if len(values.shape) == 1:
+            if len(values) != len(times):
+                WF.print2stdout('Time and Value arrays not the same length')
+                return times, values
+
         if avgtype == 'INST-VAL':
             #at the point in time, find intervals and use values
             if len(values.shape) == 1:

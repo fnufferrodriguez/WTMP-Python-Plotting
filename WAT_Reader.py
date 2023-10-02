@@ -213,11 +213,21 @@ def readCollectionsDSSData(dss_file, pathname, members, startdate, enddate, debu
                 CID_pathname = '/'.join(CID_pathname_split)
                 WF.print2stdout(f'Currently working on {member}', debug=debug)
                 ts = fid.read_ts(CID_pathname, window=(startdate, enddate), regular=True, trim_missing=True)
-                values = np.asarray(ts.values, dtype=np.float64)
-                if i == 0: #set vars like times and units that are always the same for all collection
+
+                if i == 0:  # set vars like times and units that are always the same for all collection
                     times = np.array(ts.pytimes)
                     units = ts.units
                     collection_values = {}
+
+                if ts.empty: #if empty, it must be the path or time window. DSS record must exist
+                    WF.print2stdout('Invalid Timeseries record path of {0} or time window of {1} - {2}'.format(CID_pathname, startdate, enddate), debug=debug)
+                    WF.print2stdout('Please check these parameters and rerun.', debug=debug)
+                    values = np.full(len(times), np.nan)
+                else:
+                    values = np.asarray(ts.values, dtype=np.float64)
+                    if units == '':
+                        units = ts.units
+
                 collection_values[member] = values
             fid.close()
             return times, collection_values, units, members
