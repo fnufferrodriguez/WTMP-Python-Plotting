@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '6.0.10'
+VERSIONNUMBER = '6.0.11'
 
 import os
 import sys
@@ -3588,6 +3588,7 @@ class MakeAutomatedReport(object):
         '''
 
         self.accepted_IDs = [] #IDs are tied to Model Alts in Simulations
+        self.modelIndependent = False
 
         if len(csvChapterSettings['programs']) == 0:
             #you can have chapters/sections in the report that are not tied to models, either of text of non model results
@@ -3597,7 +3598,6 @@ class MakeAutomatedReport(object):
 
         else:
             for ID in self.SimulationVariables.keys(): #for each simulation
-
                 if csvChapterSettings['deprecated_method'] == True: #TODO: remove this far enough into the future
                     approved_modelalts = [modelalt for modelalt in self.SimulationVariables[ID]['ModelAlternatives']
                                          if modelalt['name'] in csvChapterSettings['modelaltnames'] and
@@ -3614,7 +3614,7 @@ class MakeAutomatedReport(object):
                     approved_modelalts = [modelalt for modelalt in self.SimulationVariables[ID]['ModelAlternatives']
                                           if modelalt['program'].lower() in csvChapterSettings['programs']]
 
-                    if approved_modelalts == 0:
+                    if len(approved_modelalts) == 0:
                         #this chapter does not apply to this simulation if no model alts have the correct program. do no consider.
                         continue
 
@@ -3663,10 +3663,10 @@ class MakeAutomatedReport(object):
 
             if not self.modelIndependent:
                 if len(self.accepted_IDs) == 0: #if we accept no IDs
-                    WF.print2stderr('Incompatible input information from the WAT XML output file ({0})\nand Simulation CSV file ({1})'.format(self.simulationInfoFile, self.reportCSVFile))
+                    WF.print2stderr('Incompatible input information from the WAT XML output file ({0}))'.format(self.simulationInfoFile))
                     WF.print2stderr('Please confirm inputs and run again.')
                     if self.reportType == 'comparison':
-                        WF.print2stderr('If comparison plot, ensure that all programs are in the first cell line for {0}'.format(csv_file_name))
+                        WF.print2stderr('If comparison plot, ensure that all programs are in the first cell line CSV file')
                         WF.print2stderr('Example line: CeQualW2|Ressim, format/Shasta_ResSim_TCD_comparison.XML')
                     WF.print2stderr('Now Exiting...')
                     sys.exit(1)
