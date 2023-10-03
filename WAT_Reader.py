@@ -212,7 +212,9 @@ def readCollectionsDSSData(dss_file, pathname, members, startdate, enddate, debu
                 CID_pathname_split[6] = CID_pathname_fpart
                 CID_pathname = '/'.join(CID_pathname_split)
                 WF.print2stdout(f'Currently working on {member}', debug=debug)
-                ts = fid.read_ts(CID_pathname, window=(startdate, enddate), regular=True, trim_missing=True)
+                ts = fid.read_ts(CID_pathname, window=(startdate, enddate), regular=True, trim_missing=False)
+                values = np.array(ts.values)
+                values[ts.nodata] = np.nan
 
                 if i == 0:  # set vars like times and units that are always the same for all collection
                     times = np.array(ts.pytimes)
@@ -224,7 +226,7 @@ def readCollectionsDSSData(dss_file, pathname, members, startdate, enddate, debu
                     WF.print2stdout('Please check these parameters and rerun.', debug=debug)
                     values = np.full(len(times), np.nan)
                 else:
-                    values = np.asarray(ts.values, dtype=np.float64)
+                    values = np.asarray(values, dtype=np.float64)
                     if units == '':
                         units = ts.units
 
