@@ -271,8 +271,11 @@ def checkData(dataset, flag=None):
                         multicheck = True
                 if multicheck == False:
                     print2stdout(f'Invalid at {key}')
-                    return False
-            return True
+                    # return False
+            if multicheck: #just need 1 valid
+                return True
+            else:
+                return False
 
     elif isinstance(dataset, list) or isinstance(dataset, np.ndarray):
         if len(dataset) == 0:

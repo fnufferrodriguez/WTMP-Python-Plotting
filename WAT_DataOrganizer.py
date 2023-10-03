@@ -630,7 +630,10 @@ class DataOrganizer(object):
                     quantilevals = []
                     for key, vs in values.items():
                         quantilevals.append(vs[vi])
-                    collected_envelopes[envelope].append(np.quantile(quantilevals, quantile))
+                    if np.all(np.isnan(quantilevals)):
+                        collected_envelopes[envelope].append(np.nan)
+                    else:
+                        collected_envelopes[envelope].append(np.nanquantile(quantilevals, quantile))
                 except AssertionError:
                     if quantile < 0.:
                         WF.print2stdout(f'Envelope {envelope} under 0. Envelopes must be between 0 and 1.', debug=self.Report.debug)
