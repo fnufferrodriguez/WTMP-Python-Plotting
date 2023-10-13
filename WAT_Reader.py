@@ -698,7 +698,7 @@ def readSimulationFile_deprecated(simulationfile):
                         csv_info[i] = {'xmlfile': sline[len(sline)-1-si].strip()} #subtract 1
                         break
                 # csv_info[i] = {'xmlfile': sline[-1].strip()} #comparison reports always put xml last
-                sline = sline[:-1]
+                sline = sline[:len(sline)-si-1]
                 csv_info[i]['programs'] = []
                 csv_info[i]['modelaltnames'] = []
                 for si, s in enumerate(sline):
