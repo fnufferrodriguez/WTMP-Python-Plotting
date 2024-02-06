@@ -703,10 +703,12 @@ def replaceFlaggedValue(Report, value, itemset, forjasper=False):
                           '%%observedDir%%': Report.observedDir,
                           '%%startyear%%': str(Report.startYear),
                           '%%endyear%%': str(Report.endYear),
-                          '%%studydir%%': str(Report.studyDir)
+                          '%%studydir%%': str(Report.studyDir),
+                          '%%studyname%%': Report.studyname,
+                          '%%simulationgroup%%': Report.SimulationGroup['Name'],
                           }
 
-    if itemset == 'modelspecific':
+    elif itemset == 'modelspecific':
         flagged_values = {'%%ModelDSS%%': Report.DSSFile,
                           '%%Fpart%%': Report.alternativeFpart,
                           '%%program%%': Report.program,
@@ -718,10 +720,13 @@ def replaceFlaggedValue(Report, value, itemset, forjasper=False):
                           '%%starttime%%': Report.StartTimeStr,
                           '%%endtime%%': Report.EndTimeStr,
                           '%%LastComputed%%': Report.LastComputed,
-                          '%%id%%': Report.currentlyloadedID
+                          '%%id%%': Report.currentlyloadedID,
+                          '%%studyname%%': Report.studyname,
+                          '%%analysisperiod%%': Report.AnalysisPeriod['Name'],
+                          '%%watalternative%%': Report.WatAlternative['Name'],
                           }
 
-    if itemset == 'fancytext':
+    elif itemset == 'fancytext':
         if forjasper:
             flagged_values = {'%%gt%%': '&gt;',
                                '%%gte%%': '&ge;',
@@ -747,6 +752,10 @@ def replaceFlaggedValue(Report, value, itemset, forjasper=False):
                                '%%lessthanequalto%%': u'\u2264',
                                '%%amp%%': '&',
                                '%%degrees%%': u'\u00b0'}
+
+    else:
+        print2stderr('Invalid flag itemset: {0}'.format(itemset))
+        return value
 
     for fv in flagged_values.keys():
         pattern = re.compile(re.escape(fv), re.IGNORECASE)
@@ -1903,6 +1912,123 @@ def formatNumbers(number, numberformatsettings):
                 return '{num:,.{digits}f}'.format(num=number, digits=decplaces)
 
     return f'{number:,.2f}'
+
+def replaceAllFlags(Report, text):
+    '''
+    Replaces all flags in text with the correct values for text boxes
+    :param Report: wat report generator main object
+    :param text: text to parse
+    :return: updated string
+    '''
+
+    text = replaceflaggedValues(Report, text, 'fancytext', forjasper=True) #these are text formatted and dont matter
+    text = replaceflaggedValues(Report, text, 'general', forjasper=True) #these should be the same for ALL IDs
+
+    starting_ID = Report.currentlyloadedID
+    flag_objects = list(set(re.findall(r'%%(.*?)%%', text)))
+    for fo in flag_objects:
+        original_str = '%%{0}%%'.format(fo)
+
+        if not Report.modelIndependent: #need to make sure its model independent and there are IDs to load
+            if len(fo.split('.')) > 1:  # if its longer than 2 then its wanting a specific ID
+                wanted_ID = fo.split('.')[-1]
+                if Report.currentlyloadedID != wanted_ID and wanted_ID in Report.All_IDs:
+                    Report.loadCurrentID(wanted_ID)
+                if wanted_ID in Report.All_IDs: #if it is an ID flag, we want to trim it off
+                    fo = '.'.join(fo.split('.')[:-1])
+            flagged_text = '%%{0}%%'.format(fo) #format it back like its a flag, but we've got the right alts loaded
+
+            flagged_text = replaceflaggedValues(Report, flagged_text, 'modelspecific', forjasper=True)
+            flagged_text = formatDescriptionsForPrint(Report, flagged_text)
+
+            text = text.replace(original_str, flagged_text)
+
+            if starting_ID != Report.currentlyloadedID:
+                Report.loadCurrentID(starting_ID)
+
+        else:
+            flagged_text = '%%{0}%%'.format(fo)
+            flagged_text = formatDescriptionsForPrint(Report, flagged_text)
+            text = text.replace(original_str, flagged_text)
+
+    return text
+
+def formatDescriptionsForPrint(Report, text):
+    '''
+    formats descriptions for printing
+    :param text: text to be formatted
+    :return: formatted text
+    '''
+
+    #format should be %%description.object%% where object is the object to get the description from
+    desc_objects = list(set(re.findall(r'%%description\.(.*?)%%', text)))
+    for do in desc_objects:
+        do_low = do.lower()
+        desciption_str = '%%description.{0}%%'.format(do)
+        desc = getDescription(Report, do_low)
+        desc = formatDescription(desc)
+        text = text.replace(desciption_str, desc)
+    return text
+
+def formatDescription(description):
+    '''
+    formats description for printing
+    :param description: description to be formatted
+    :return: formatted description
+    '''
+    if description == None:
+        return ''
+
+    desc_split = description.split('\n')#handle newlines
+    desc_list = []
+    for item in desc_split:
+        desc_list.append(item.strip())
+    description = '\n'.join(desc_list)
+
+    return formatTextFlags(description)
+
+def getDescription(Report, do):
+    '''
+    gets the description from the report object
+    :param do: object to get description from
+    :return: description
+    '''
+
+    # starting_ID = Report.currentlyloadedID
+    # if len(do.split('.')) > 1: #if its longer than 2 then its wanting a specific ID
+    #     wanted_ID = do.split('.')[-1]
+    #     if starting_ID != wanted_ID:
+    #         Report.loadCurrentID(wanted_ID)
+    #     do = '.'.join(do.split('.')[:-1])
+
+    desc = ''
+
+    if do == 'study':
+        desc = Report.description
+    elif do == 'simulationgroup':
+        desc = Report.SimulationGroup['Description']
+    elif do == 'simulation':
+        # if Report.reportType == 'validation':
+        desc = Report.SimulationDescription
+        # else:
+        #     desc = '' #TODO add comparison and forecast
+    elif do == 'watalternative':
+        desc = Report.WatAlternative['Description']
+    elif do == 'analysisperiod':
+        desc = Report.AnalysisPeriod['Description']
+
+    elif do == 'modelalternative':
+        desc = Report.ModelAltDescription
+
+    else:
+        print2stderr('No description found for object: {0}'.format(do))
+        desc = ''
+
+    # if starting_ID != Report.currentlyloadedID:
+    #     Report.loadCurrentID(starting_ID)
+
+    return desc
+
 
 def checkJasperFiles(study_dir, install_dir):
     '''

@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '6.0.14'
+VERSIONNUMBER = '6.0.15'
 
 import os
 import sys
@@ -3131,9 +3131,32 @@ class MakeAutomatedReport(object):
         if 'text' not in object_settings.keys():
             WF.print2stdout('Failed to input textbox contents using <text> flag.', debug=self.debug)
 
-        object_settings['text'] = WF.parseForTextFlags(object_settings['text'])
-        object_settings = WF.replaceflaggedValues(self, object_settings, 'fancytext', forjasper=True)
+        if 'iteration_sep' in object_settings.keys():
+            iteration_sep = object_settings['iteration_sep']
+        else:
+            iteration_sep = '\n'
 
+        object_settings['text'] = WF.parseForTextFlags(object_settings['text'])
+
+        #if we are doing a comaprison report, the user can specify sections to be repeated for each alt by wrapping the text in {}
+        if self.reportType == 'comparison' and not self.modelIndependent:
+            if '{' in object_settings['text']  and '}' in object_settings['text']:  # iterate sections
+                sections = list(set(re.findall(r'{(.*?)}', object_settings['text'])))
+                for section in sections:
+                    replace_section = []
+                    for ID in self.SimulationVariables.keys():
+                        flaggedvals = list(set(re.findall(r'%%(.*?)%%', object_settings['text'])))
+                        tmp_text = section
+                        for fv in flaggedvals:
+                            tmp_text = tmp_text.replace(fv, fv+f'.{ID}')
+                        replace_section.append(tmp_text)
+                    replace_section = iteration_sep.join(replace_section)
+                    object_settings['text'] = object_settings['text'].replace(f'{section}', replace_section)
+                object_settings['text'] = object_settings['text'].replace('{', '')
+                object_settings['text'] = object_settings['text'].replace('}', '')
+
+
+        object_settings['text'] = WF.replaceAllFlags(self, object_settings['text'])
         self.XML.writeTextBox(object_settings['text'])
 
         WF.print2stdout(f'Text box took {time.time() - objectstarttime} seconds.')
@@ -3348,6 +3371,9 @@ class MakeAutomatedReport(object):
         self.SimulationVariables[ID]['EndTimeStr'] = simulation['endtime']
         self.SimulationVariables[ID]['LastComputed'] = simulation['lastcomputed']
         self.SimulationVariables[ID]['ModelAlternatives'] = simulation['modelalternatives']
+        self.SimulationVariables[ID]['Description'] = simulation['Description']
+        self.SimulationVariables[ID]['AnalysisPeriod'] = simulation['AnalysisPeriod']
+        self.SimulationVariables[ID]['WatAlternative'] = simulation['WatAlternative']
         if self.reportType == 'forecast':
             self.SimulationVariables[ID]['ensemblesets'] = simulation['ensemblesets']
         else:
@@ -3645,6 +3671,7 @@ class MakeAutomatedReport(object):
                 self.SimulationVariables[ID]['alternativeDirectory'] = approved_modelalt['directory']
                 self.SimulationVariables[ID]['modelAltName'] = approved_modelalt['name']
                 self.SimulationVariables[ID]['program'] = approved_modelalt['program']
+                self.SimulationVariables[ID]['modelAltDesc'] = approved_modelalt['description']
 
                 if self.SimulationVariables[ID]['program'].lower() == "ressim":
                     self.SimulationVariables[ID]['ModelAlt'] = WRSS.ResSim_Results(self.SimulationVariables[ID]['simulationDir'],
@@ -3689,6 +3716,11 @@ class MakeAutomatedReport(object):
         self.StartTime = self.SimulationVariables[ID]['StartTime']
         self.EndTime = self.SimulationVariables[ID]['EndTime']
         self.ensemblesets = self.SimulationVariables[ID]['ensemblesets']
+        self.SimulationDescription = self.SimulationVariables[ID]['Description']
+        if 'AnalysisPeriod' in self.SimulationVariables[ID].keys():
+            self.AnalysisPeriod = self.SimulationVariables[ID]['AnalysisPeriod']
+        if 'WatAlternative' in self.SimulationVariables[ID].keys():
+            self.WatAlternative = self.SimulationVariables[ID]['WatAlternative']
 
     def loadCurrentModelAltID(self, ID):
         '''
@@ -3703,6 +3735,8 @@ class MakeAutomatedReport(object):
             self.program = self.SimulationVariables[ID]['program']
             self.ModelAlt = self.SimulationVariables[ID]['ModelAlt']
             self.ensembleSets = self.SimulationVariables[ID]['ensemblesets']
+            self.ModelAltDescription = self.SimulationVariables[ID]['modelAltDesc']
+
             # WF.print2stdout('Model {0} Loaded'.format(ID), debug=self.debug) #noisy
         else:
             self.alternativeFpart = 'none'
@@ -3710,6 +3744,7 @@ class MakeAutomatedReport(object):
             self.modelAltName = 'none'
             self.program = 'none'
             self.ModelAlt = 'none'
+            self.ModelAltDescription = None #todo: why are these others texts?
 
     def initializeXML(self):
         '''

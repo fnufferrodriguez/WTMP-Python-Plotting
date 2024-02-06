@@ -759,8 +759,22 @@ def readSimulationInfo(Report, simulationInfoFile):
     Report.reportType = root.find('ReportType').text.lower()
     Report.studyDir = root.find('Study/Directory').text
     Report.observedDir = root.find('Study/ObservedData').text
-    Report.installDir = root.find('Study/InstallDirectory').text #TODO: update
-    Report.outputDir = root.find('Study/WriteDirectory').text #TODO: update
+    Report.installDir = root.find('Study/InstallDirectory').text
+    Report.outputDir = root.find('Study/WriteDirectory').text
+    Report.description = root.find('Study/Description').text
+    try:
+        Report.studyname = root.find('Study/Name').text #todo: remove after backwards compat
+    except:
+        Report.studyname = None
+
+    SimulationGroupRoot = root.find('SimulationGroup')
+    Report.SimulationGroup = {}
+    if SimulationGroupRoot != None: #legacy for old files
+        Report.SimulationGroup['Name'] = SimulationGroupRoot.find('Name').text
+        Report.SimulationGroup['Description'] = SimulationGroupRoot.find('Description').text #Todo: test to make sure this works with nones
+    else:
+        Report.SimulationGroup['Name'] = None
+        Report.SimulationGroup['Description'] = None
 
     Report.iscomp = False
     Report.isforecast = False
@@ -772,6 +786,7 @@ def readSimulationInfo(Report, simulationInfoFile):
     elif Report.reportType == 'forecast':
         Report.isforecast = True
 
+    Report.All_IDs = []
     SimRoot = root.find('Simulations')
     for simulation in SimRoot:
         simulationInfo = {'name': simulation.find('Name').text,
@@ -780,8 +795,28 @@ def readSimulationInfo(Report, simulationInfoFile):
                           'dssfile': simulation.find('DSSFile').text,
                           'starttime': simulation.find('StartTime').text,
                           'endtime': simulation.find('EndTime').text,
-                          'lastcomputed': simulation.find('LastComputed').text
+                          'lastcomputed': simulation.find('LastComputed').text,
+                          'Description': simulation.find('Description').text
                           }
+
+        analysisperiodRoot = simulation.find('AnalysisPeriod')
+        simulationInfo['AnalysisPeriod'] = {}
+        if analysisperiodRoot != None:  # legacy for old files
+            simulationInfo['AnalysisPeriod']['Name'] = analysisperiodRoot.find('Name').text
+            simulationInfo['AnalysisPeriod']['Description'] = analysisperiodRoot.find('Description').text
+        else:
+            simulationInfo['AnalysisPeriod']['Name'] = None
+            simulationInfo['AnalysisPeriod']['Description'] = None
+
+        watAlternativeRoot = simulation.find('WatAlternative')
+        simulationInfo['WatAlternative'] = {}
+        if watAlternativeRoot != None:  # legacy for old files
+            simulationInfo['WatAlternative']['Name'] = watAlternativeRoot.find('Name').text
+            simulationInfo['WatAlternative']['Description'] = watAlternativeRoot.find('Description').text
+        else:
+            simulationInfo['WatAlternative']['Name'] = None
+            simulationInfo['WatAlternative']['Description'] = None
+
         try:
             Report.reportCSV = simulation.find('CsvFile').text
         except AttributeError:
@@ -796,14 +831,8 @@ def readSimulationInfo(Report, simulationInfoFile):
             simulationInfo['ID'] = simulation.find('ID').text
         except AttributeError:
             simulationInfo['ID'] = Report.base_id
+        Report.All_IDs.append(simulationInfo['ID'])
 
-
-        # modelAlternatives = []
-        # for modelAlt in simulation.find('ModelAlternatives'):
-        #     modelAlternatives.append({'name': modelAlt.find('Name').text,
-        #                               'program': modelAlt.find('Program').text,
-        #                               'fpart': modelAlt.find('FPart').text,
-        #                               'directory': modelAlt.find('Directory').text})
         modelAlternatives = getchildren(simulation.find('ModelAlternatives'), returnkeyless=True)
         simulationInfo['modelalternatives'] = modelAlternatives
         Report.Simulations.append(simulationInfo)
@@ -812,7 +841,7 @@ def readGraphicsDefaultFile(Report):
     '''
     sets up path for graphics default file in study and reads the xml
     :return: class variable
-                self.graphicsDefault
+                self.graphicsDefault.
     '''
 
     graphicsDefaultfile = os.path.join(Report.studyDir, 'reports', 'Graphics_Defaults.xml')
