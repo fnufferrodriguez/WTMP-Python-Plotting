@@ -212,9 +212,32 @@ class DataOrganizer(object):
                 target_elevation = float(line_settings[d]['target_elevation'])
                 values = data[d]['values']
                 if isinstance(values, dict): #w2 results kept in dict with elev
-                    for sn in values.keys():
-                        targelev_failed = np.where(values[sn]['elevcl'] != target_elevation)
-                        data[d]['values'][sn]['q(m3/s)'][targelev_failed] = 0.
+                    if self.Report.reportType == 'forecast': #has to be from DSS
+                        if 'elevation' in line_settings[d].keys():
+                            for member in values.keys():
+                                member_values = values[member]
+                                if 'flag' not in line_settings[d]['elevation'].keys():
+                                    line_settings[d]['elevation']['flag'] = line_settings[d]['flag'] + '_elev'
+                                    line_settings[d]['elevation']['members'] = [member]
+                                    elev_times, elev_values, elev_metadata = self.getTimeSeries(line_settings[d]['elevation'])
+                                    targelev_failed = np.where(elev_values[member] != target_elevation)
+                                    if len(elev_times) == len(data[d]['dates']):
+                                        member_values[targelev_failed] = 0.
+                                        data[d]['values'][member] = member_values
+                                    else:
+                                        WF.print2stdout(f'Values and Elevations in {d} member {member} different. Equalizing.',
+                                                        debug=self.Report.debug)
+                                        mainvalues, elev_data = WF.matchData(
+                                                                        {'dates': data[d]['dates'], 'values': member_values},
+                                                                        {'dates': elev_times, 'values': elev_values[member]})
+                                        targelev_failed = np.where(elev_data['values'] != target_elevation)
+                                        mainvalues['values'][targelev_failed] = 0.
+                                        data[d]['values'][member] = mainvalues['values']
+                                        data[d]['dates'] = mainvalues['dates']
+                    else:
+                        for sn in values.keys():
+                            targelev_failed = np.where(values[sn]['elevcl'] != target_elevation)
+                            data[d]['values'][sn]['q(m3/s)'][targelev_failed] = 0.
                 elif isinstance(values, (list, np.ndarray)):
                     if 'elevation' in line_settings[d].keys():
                         if 'flag' not in line_settings[d]['elevation'].keys():
@@ -281,6 +304,11 @@ class DataOrganizer(object):
         if 'lines' in settings.keys():
             for line in settings['lines']:
                 numtimesused = 0
+
+                if self.Report.memberiteration:
+                    if 'members' not in line.keys():
+                        line['members'] = [self.Report.member]
+
                 if 'flag' not in line.keys():
                     WF.print2stdout('Flag not set for line (Computed/Observed/etc)', debug=self.Report.debug)
                     WF.print2stdout('Not plotting Line:', line, debug=self.Report.debug)
@@ -299,6 +327,7 @@ class DataOrganizer(object):
                 else:
                     if self.Report.reportType == 'forecast':
                         line = WF.replaceflaggedValues(self.Report, line, 'modelspecific')
+
                     else:
                         if self.Report.currentlyloadedID != self.Report.base_id: #for comparison plotting mostly
                             line = self.Report.configureSettingsForID(self.Report.base_id, line)
@@ -388,13 +417,13 @@ class DataOrganizer(object):
                     metadata['collection'] = True
                     metadata['allmembers'] = False
                     if 'members' in Line_info.keys():
-                        members = Line_info['members']
-                    elif self.Report.reportType == 'forecast':
-                        members = self.Report.allMembers
-                    else:
-                        members = 'all'
+                        wanted_members = Line_info['members']
+                    elif self.Report.reportType == 'forecast': #uses the ones defined in the forecast
+                        wanted_members = self.Report.allMembers
+                    else: #otherwise, grab ALL in the dssfile
+                        wanted_members = 'all'
                         metadata['allmembers'] = True
-                    metadata['members'] = members #keep track of the original series, as this can change
+                    metadata['members'] = wanted_members #keep track of the original series, as this can change
 
                 if datamem_key in self.Memory.keys():
                     WF.print2stdout('Reading {0} from memory'.format(datamem_key), debug=self.Report.debug) #noisy
@@ -410,10 +439,12 @@ class DataOrganizer(object):
                     members_to_grab = [] #reset, but we still know our members
                     if metadata['collection']:
                         if not metadata['allmembers']: #check if we've ever grabbed them all. if we did, no need to go back
-                            for member in members:
-                                if member not in metadata['members']:
+                            for member in wanted_members:
+                                # if member not in metadata['members']:
+                                if member not in datamementry['metadata']['members']:
                                     members_to_grab.append(member)
                                     metadata['frommemory'] = False
+                                    metadata['partialmemory'] = True
                                 else:
                                     metadata['partialmemory'] = True
 
@@ -423,7 +454,7 @@ class DataOrganizer(object):
                 if not metadata['frommemory']:
                     if metadata['collection']:
                         if metadata['partialmemory']: #if we've only grabbed some of them...
-                            coll_times, coll_values, coll_units, coll_members = WDR.readCollectionsDSSData(Line_info['dss_filename'], Line_info['dss_path'],
+                            coll_times, coll_values, units, coll_members = WDR.readCollectionsDSSData(Line_info['dss_filename'], Line_info['dss_path'],
                                                                                                               members_to_grab, self.Report.StartTime,
                                                                                                               self.Report.EndTime, self.Report.debug)
 
@@ -593,6 +624,10 @@ class DataOrganizer(object):
         else:
             WF.print2stdout('No Data Defined for line', debug=self.Report.debug)
             return np.array([]), np.array([]), metadata
+
+        if metadata['collection']:
+            if wanted_members != 'all':
+                values = WF.filterByMember(values, wanted_members)
 
         if 'omitvalue' in Line_info.keys():
             omitval = float(Line_info['omitvalue'])

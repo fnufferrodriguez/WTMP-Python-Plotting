@@ -823,16 +823,16 @@ def mergeLines(data, data_settings, plot_settings):
     removekeys = []
     if 'mergelines' in plot_settings.keys():
         for mergeline in plot_settings['mergelines']:
-            dataflags = mergeline['flags']
+            dataflags = [n.lower() for n in mergeline['flags']]
             if 'controller' in mergeline.keys():
                 #Controller matches the flag defined in data[keys]
-                controller = mergeline['controller']
-                if controller.lower() not in [data_settings[n]['flag'].lower() for n in data.keys()]: #do it this way so if theres comp runs we can still make this work
+                controller = mergeline['controller'].lower()
+                if controller not in [data_settings[n]['flag'].lower() for n in data.keys()]: #do it this way so if theres comp runs we can still make this work
                     print2stdout('Mergeline Controller {0} not found in data {1}'.format(controller, data.keys()))
                     print2stdout('Not Running Merge.')
                     continue
             else:
-                controller = data_settings[dataflags[0]]['flag']
+                controller = data_settings[dataflags[0]]['flag'].lower()
             # otherflags = [data_settings[n]['flag'] for n in dataflags if n != controller]
             data_keys_with_controller = [n for n in data.keys() if data_settings[n]['flag'].lower() == controller]
             data_keys_for_otherflags = [n for n in data.keys() if data_settings[n]['flag'].lower() != controller
@@ -853,14 +853,26 @@ def mergeLines(data, data_settings, plot_settings):
                         print2stdout('If incorrect, please modify/append input settings to ensure lines '
                               'are converted prior to merging.')
                     data[datakey_controller], data[datakey_otherflag] = matchData(data[datakey_controller], data[datakey_otherflag])
-                    if math == 'add':
-                        data[datakey_controller]['values'] += data[datakey_otherflag]['values']
-                    elif math == 'multiply':
-                        data[datakey_controller]['values'] *= data[datakey_otherflag]['values']
-                    elif math == 'divide':
-                        data[datakey_controller]['values'] /= data[datakey_otherflag]['values']
-                    elif math == 'subtract':
-                        data[datakey_controller]['values'] -= data[datakey_otherflag]['values']
+                    if data_settings[datakey_controller]['collection']:
+                        if data_settings[datakey_otherflag]['collection']:
+                            members = list(set(data_settings[datakey_controller]['members'] + data_settings[datakey_otherflag]['members']))
+                            for member in members:
+                                data[datakey_controller]['values'][member] = doMathOn2Datasets(
+                                    data[datakey_controller]['values'][member],
+                                    data[datakey_otherflag]['values'][member], math)
+                        else: #add non collection onto a collection
+                            members = data_settings[datakey_controller]['members']
+                            for member in members:
+                                data[datakey_controller]['values'][member] = doMathOn2Datasets(
+                                    data[datakey_controller]['values'][member],
+                                    data[datakey_otherflag]['values'], math)
+                    else:
+                        if data_settings[datakey_otherflag]['collection']:
+                            print2stderr(f'Unable to merge collection ({datakey_controller}) onto non collection ({datakey_otherflag}')
+                        else:
+                            data[datakey_controller]['values'] = doMathOn2Datasets(data[datakey_controller]['values'],
+                                                                                 data[datakey_otherflag]['values'], math)
+
             if 'keeplines' in mergeline.keys():
                 if mergeline['keeplines'].lower() == 'false':
                     for flag in data_keys_for_otherflags:
@@ -869,6 +881,17 @@ def mergeLines(data, data_settings, plot_settings):
             data.pop(flag)
             data_settings.pop(flag)
     return data, data_settings
+
+def doMathOn2Datasets(data1, data2, math):
+    if math == 'add':
+        data1 += data2
+    elif math == 'multiply':
+        data1 *= data2
+    elif math == 'divide':
+        data1 /= data2
+    elif math == 'subtract':
+        data1 -= data2
+    return data1
 
 def filterDataByYear(data, year, extraflag=None):
     '''
@@ -2069,6 +2092,26 @@ def checkJasperFiles(study_dir, install_dir):
                 print2stdout(f'\nNewer JRXML file detected for {jrxml_file}')
                 print2stdout(f'Deleting {jasper_file}')
                 os.remove(jasper_file)
+
+def filterByMember(values, members):
+    '''
+    filters values by member
+    :param values: dictionary of values
+    :param members: list of members
+    :return: filtered values
+    '''
+
+    filtered_values = {}
+
+    for member in members:
+        try:
+            membervalues = values[member]
+        except KeyError:
+            print2stderr(f'Member {member} not found in values')
+            continue
+        filtered_values[member] = membervalues
+
+    return filtered_values
 
 def checkForCollections(data_settings):
     '''

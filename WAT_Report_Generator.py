@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '6.0.15'
+VERSIONNUMBER = '6.0.16'
 
 import os
 import sys
@@ -46,6 +46,7 @@ warnings.filterwarnings("always")
 
 mpl.rcParams['axes.autolimit_mode'] = 'round_numbers'
 mpl.use("Agg")
+
 class MakeAutomatedReport(object):
     '''
     class to organize data and generate XML file for Jasper processing in conjunction with WAT. Takes in a simulation
@@ -244,6 +245,7 @@ class MakeAutomatedReport(object):
 
         object_settings['years'], object_settings['yearstr'] = WF.organizePlotYears(object_settings)
 
+
         if 'description' not in object_settings.keys():
             object_settings['description'] = ''
         # else:
@@ -256,6 +258,8 @@ class MakeAutomatedReport(object):
             cur_obj_settings = WF.updateFlaggedValues(cur_obj_settings, '%%year%%', yearstr)
             if self.memberiteration:
                 cur_obj_settings = WF.updateFlaggedValues(cur_obj_settings, '%%member%%', WF.formatMembers(self.member))
+                cur_obj_settings['member'] = self.member
+                cur_obj_settings['memberiteration'] = self.memberiteration
 
             if len(cur_obj_settings['axs']) == 1:
                 figsize=(12, 6)
@@ -313,7 +317,9 @@ class MakeAutomatedReport(object):
                 unitslist = []
                 unitslist2 = []
                 stackplots = {}
+
                 linedata, line_settings = self.Data.getTimeSeriesDataDictionary(ax_settings)
+
                 linedata = WF.filterDataByYear(linedata, year)
                 linedata = self.Data.filterTimeSeries(linedata, line_settings)
                 linedata = self.Data.scaleValuesByTable(linedata, line_settings)
@@ -389,7 +395,11 @@ class MakeAutomatedReport(object):
                     if 'scalar' in curline_settings.keys():
                         try:
                             scalar = float(curline_settings['scalar'])
-                            values = scalar * values
+                            if self.reportType == 'forecast':
+                                for member in values.keys():
+                                    values[member] = scalar * values[member]
+                            else:
+                                values = scalar * values
                         except ValueError:
                             WF.print2stdout('Invalid Scalar. {0}'.format(curline_settings['scalar']), debug=self.debug)
                             continue
@@ -449,9 +459,17 @@ class MakeAutomatedReport(object):
                                     self.Plots.plot(dates, valueset, curax, line_draw_settings)
                                 if modifiedalpha:
                                     line_draw_settings['alpha'] = 1.
-                            else:
+                            elif self.memberiteration:
                                 valueset = values[self.member]
-                                self.Plots.plot(dates, valueset, curax, line_draw_settings)
+                                if curline_settings['stack']:
+                                    if axis not in stackplots.keys():  # left or right
+                                        stackplots[axis] = []
+                                    stackplots[axis].append({'values': valueset,
+                                                             'dates': dates,
+                                                             'label': line_draw_settings['label'],
+                                                             'color': line_draw_settings['linecolor']})
+                                else:
+                                    self.Plots.plot(dates, valueset, curax, line_draw_settings)
 
                         else:
                             single_coll_line_settings = self.Plots.seperateCollectionLines(line_draw_settings)
