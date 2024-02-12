@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '6.0.16'
+VERSIONNUMBER = '6.0.17'
 
 import os
 import sys

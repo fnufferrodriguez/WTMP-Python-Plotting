@@ -395,7 +395,10 @@ def calcMAE(data1, data2):
     if not dcheck1 or not dcheck2:
         return np.nan
 
-    return mean_absolute_error(data2['values'], data1['values'])
+    data1_val = np.array(data1['values'], dtype=np.float64)
+    data2_val = np.array(data2['values'], dtype=np.float64)
+
+    return mean_absolute_error(data2_val, data1_val)
 
 def calcMeanBias(data1, data2):
     '''
@@ -412,8 +415,12 @@ def calcMeanBias(data1, data2):
     dcheck2 = checkData(data2, flag='values')
     if not dcheck1 or not dcheck2:
         return np.nan
-    diff = data1['values'] - data2['values']
-    count = len(data1['values'])
+
+    data1_val = np.array(data1['values'], dtype=np.float64)
+    data2_val = np.array(data2['values'], dtype=np.float64)
+
+    diff = data1_val - data2_val
+    count = len(data1_val)
     mean_diff = np.sum(diff) / count
     return mean_diff
 
@@ -432,9 +439,16 @@ def calcRMSE(data1, data2):
     dcheck2 = checkData(data2, flag='values')
     if not dcheck1 or not dcheck2:
         return np.nan
-    diff = data1['values'] - data2['values']
-    count = len(data1['values'])
+
+    data1_val = np.array(data1['values'], dtype=np.float64)
+    data2_val = np.array(data2['values'], dtype=np.float64)
+
+    diff = data1_val - data2_val
+    count = len(data1_val)
+
     rmse = np.sqrt(np.sum(diff ** 2) / count)
+
+
     return rmse
 
 def calcNSE(data1, data2):
@@ -466,10 +480,13 @@ def calcNSE(data1, data2):
     if not dcheck1 or not dcheck2:
         return np.nan
     # nash = nse(data1['values'], data2['values'])
+    data1_val = np.array(data1['values'], dtype=np.float64)
+    data2_val = np.array(data2['values'], dtype=np.float64)
+
     ### STEVE
     nse_ = 1 - (
-            np.sum((data2['values'] - data1['values']) ** 2, axis=0, dtype=float)
-            / np.sum((data2['values'] - np.mean(data2['values'])) ** 2, dtype=float)
+            np.sum((data2_val - data1_val) ** 2, axis=0, dtype=float)
+            / np.sum((data2_val - np.mean(data2_val)) ** 2, dtype=float)
                )
 
     ### MIKE DEAS
