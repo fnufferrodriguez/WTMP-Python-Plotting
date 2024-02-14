@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '6.0.17'
+VERSIONNUMBER = '6.0.19'
 
 import os
 import sys
@@ -3149,33 +3149,119 @@ class MakeAutomatedReport(object):
         if 'text' not in object_settings.keys():
             WF.print2stdout('Failed to input textbox contents using <text> flag.', debug=self.debug)
 
+        if isinstance(object_settings['text'], list):
+            texts = object_settings['text']
+        else:
+            texts = [object_settings['text']]
+
         if 'iteration_sep' in object_settings.keys():
             iteration_sep = object_settings['iteration_sep']
         else:
             iteration_sep = '\n'
 
-        object_settings['text'] = WF.parseForTextFlags(object_settings['text'])
+        exclude_programs = []
+        if 'exclude' in object_settings.keys():
+            exclude_programs = object_settings['exclude']
+        if not isinstance(exclude_programs, list):
+            exclude_programs = [exclude_programs]
 
-        #if we are doing a comaprison report, the user can specify sections to be repeated for each alt by wrapping the text in {}
+        iteratesimulations = False
+        if 'iteratesimulations' in object_settings.keys():
+            if object_settings['iteratesimulations'].lower() == 'true':
+                iteratesimulations = True
+
+            #if we are doing a comaprison report, the user can specify sections to be repeated for each alt by wrapping the text in {}
         if self.reportType == 'comparison' and not self.modelIndependent:
-            if '{' in object_settings['text']  and '}' in object_settings['text']:  # iterate sections
-                sections = list(set(re.findall(r'{(.*?)}', object_settings['text'])))
+            for text in texts:
+                # object_settings['text'] = WF.parseForTextFlags(object_settings['text'])
+                text = WF.parseForTextFlags(text)
+            if '{' in text  and '}' in text:  # iterate sections
+                sections = list(set(re.findall(r'{(.*?)}', text)))
                 for section in sections:
                     replace_section = []
                     for ID in self.SimulationVariables.keys():
-                        flaggedvals = list(set(re.findall(r'%%(.*?)%%', object_settings['text'])))
+                        flaggedvals = list(set(re.findall(r'%%(.*?)%%', text)))
                         tmp_text = section
                         for fv in flaggedvals:
                             tmp_text = tmp_text.replace(fv, fv+f'.{ID}')
                         replace_section.append(tmp_text)
                     replace_section = iteration_sep.join(replace_section)
-                    object_settings['text'] = object_settings['text'].replace(f'{section}', replace_section)
-                object_settings['text'] = object_settings['text'].replace('{', '')
-                object_settings['text'] = object_settings['text'].replace('}', '')
+                    text = text.replace(f'{section}', replace_section)
+                text = text.replace('{', '')
+                text = text.replace('}', '')
+            text = WF.replaceAllFlags(self, text)
+            self.XML.writeTextBox(text)
 
+        elif self.reportType == 'comparison' and self.modelIndependent and iteratesimulations == True:
+            for ID in self.SimulationVariables.keys():  # should be onle 1 sim at this point..
+                out_text = []
+                for text in texts:
+                    text = WF.parseForTextFlags(text)
 
-        object_settings['text'] = WF.replaceAllFlags(self, object_settings['text'])
-        self.XML.writeTextBox(object_settings['text'])
+                    self.modelIndependent = False  # turn off model independent flag for this iteration so we can set the model alt var
+                    self.loadCurrentID(ID)
+                    if '{' in text and '}' in text:  # iterate model alts
+                        sections = list(set(re.findall(r'{(.*?)}', text)))
+                        replace_section = []
+                        for section in sections:
+                            for modelalt in self.SimulationVariables[ID]['ModelAlternatives']:
+                                self.softLoadModelAlt(modelalt)
+                                if self.program.lower() in [n.lower() for n in exclude_programs]:
+                                    WF.print2stdout('Skipping model alt {modelalt["name"]} for program {self.program}.',
+                                                    debug=self.debug)
+                                    continue
+                                ma_text = WF.replaceAllFlags(self, section)
+                                ma_text += '\n'
+                                replace_section.append(ma_text)
+                            replace_section = iteration_sep.join(replace_section)
+                            text = text.replace(f'{section}', replace_section)
+                        text = text.replace('{', '')
+                        text = text.replace('}', '')
+                    out_text.append(text)
+
+                out_text = iteration_sep.join(out_text)
+                out_text = WF.replaceAllFlags(self, out_text)
+                self.modelIndependent = True
+                self.loadCurrentModelAltID('')  # reset to model independent
+                text = out_text
+                self.XML.writeTextBox(text)
+
+        elif self.reportType != 'comparison' and self.modelIndependent and iteratesimulations:
+            for text in texts:
+                # object_settings['text'] = WF.parseForTextFlags(object_settings['text'])
+                text = WF.parseForTextFlags(text)
+                out_text = []
+                for ID in self.SimulationVariables.keys():  # should be onle 1 sim at this point..
+                    self.modelIndependent = False  # turn off model independent flag for this iteration so we can set the model alt var
+                    self.loadCurrentID(ID)
+                    if '{' in text and '}' in text:  # iterate model alts
+                        sections = list(set(re.findall(r'{(.*?)}', text)))
+                        replace_section = []
+                        for section in sections:
+                            for modelalt in self.SimulationVariables[ID]['ModelAlternatives']:
+                                self.softLoadModelAlt(modelalt)
+                                if self.program.lower() in [n.lower() for n in exclude_programs]:
+                                    WF.print2stdout('Skipping model alt {modelalt["name"]} for program {self.program}.', debug=self.debug)
+                                    continue
+                                ma_text = WF.replaceAllFlags(self, section)
+                                ma_text += '\n'
+                                replace_section.append(ma_text)
+                            replace_section = iteration_sep.join(replace_section)
+                            text = text.replace(f'{section}', replace_section)
+                        text = text.replace('{', '')
+                        text = text.replace('}', '')
+                    out_text.append(text)
+
+                    out_text = iteration_sep.join(out_text)
+                    out_text = WF.replaceAllFlags(self, out_text)
+                    self.modelIndependent = True
+                    self.loadCurrentModelAltID('') #reset to model independent
+                    text = out_text
+                self.XML.writeTextBox(text)
+        else:
+            for text in texts:
+                text = WF.replaceAllFlags(self, text)
+                self.XML.writeTextBox(text)
 
         WF.print2stdout(f'Text box took {time.time() - objectstarttime} seconds.')
 
@@ -3641,11 +3727,14 @@ class MakeAutomatedReport(object):
             self.modelIndependent = True
 
         else:
+            csv_programs = [n.lower() for n in csvChapterSettings['programs']]
+            if csvChapterSettings['deprecated_method'] == True: #new method does not care about this
+                csv_modelaltnames = [n.lower() for n in csvChapterSettings['modelaltnames']]
             for ID in self.SimulationVariables.keys(): #for each simulation
                 if csvChapterSettings['deprecated_method'] == True: #TODO: remove this far enough into the future
                     approved_modelalts = [modelalt for modelalt in self.SimulationVariables[ID]['ModelAlternatives']
-                                         if modelalt['name'] in csvChapterSettings['modelaltnames'] and
-                                         modelalt['program'] in csvChapterSettings['programs']]
+                                         if modelalt['name'].lower() in csv_modelaltnames and
+                                         modelalt['program'].lower() in csv_programs]
                     if len(approved_modelalts) == 0:
                         #this chapter does not apply to this simulation if no model alts have the correct program. do no consider.
                         continue
@@ -3710,6 +3799,11 @@ class MakeAutomatedReport(object):
                 if len(self.accepted_IDs) == 0: #if we accept no IDs
                     WF.print2stderr('Incompatible input information from the WAT XML output file ({0}))'.format(self.simulationInfoFile))
                     WF.print2stderr('Please confirm inputs and run again.')
+                    WF.print2stdout('CSV Programs: {0}'.format(csvChapterSettings['programs']))
+                    WF.print2stdout('Simulation Programs: {0}'.format([n['program'] for n in self.SimulationVariables[ID]['ModelAlternatives']]))
+                    if csvChapterSettings['deprecated_method'] == True:
+                        WF.print2stdout('CSV Model Alt Names: {0}'.format(csvChapterSettings['modelaltnames']))
+                        WF.print2stdout('Simulation Programs: {0}'.format([n['name'] for n in self.SimulationVariables[ID]['ModelAlternatives']]))
                     if self.reportType == 'comparison':
                         WF.print2stderr('If comparison plot, ensure that all programs are in the first cell line CSV file')
                         WF.print2stderr('Example line: CeQualW2|Ressim, format/Shasta_ResSim_TCD_comparison.XML')
@@ -3739,6 +3833,13 @@ class MakeAutomatedReport(object):
             self.AnalysisPeriod = self.SimulationVariables[ID]['AnalysisPeriod']
         if 'WatAlternative' in self.SimulationVariables[ID].keys():
             self.WatAlternative = self.SimulationVariables[ID]['WatAlternative']
+
+    def softLoadModelAlt(self, modelalt):
+        self.alternativeFpart = modelalt['fpart']
+        self.modelAltName = modelalt['name']
+        self.ModelAlt = modelalt
+        self.ModelAltDescription = modelalt['description']
+        self.program = modelalt['program']
 
     def loadCurrentModelAltID(self, ID):
         '''
