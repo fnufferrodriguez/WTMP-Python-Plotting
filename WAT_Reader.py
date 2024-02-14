@@ -606,12 +606,12 @@ def iterateChapterDefintions(root):
         out.append(keylist)
     return out
 
-def readDefaultSimulationsCSV(Report, Simulation):
+def findDefaultCSVFile(Report, Simulation):
     '''
-    reads the Simulation file and gets the region info
-    :return: class variable
-                self.reportCSV
-    '''
+        finds the default Simulation file
+        :return: class variable
+                    self.reportCSV
+        '''
 
     simbasename = Simulation['basename'].replace(' ', '_')
     if Report.reportType == 'validation':
@@ -621,47 +621,54 @@ def readDefaultSimulationsCSV(Report, Simulation):
     elif Report.reportType == 'forecast':
         simulation_file = os.path.join(Report.studyDir, 'reports', '{0}_forecast.csv'.format(simbasename))
 
-    csv_info = readSimulationFile_deprecated(simulation_file)
-    return csv_info
+    return simulation_file
 
 def readReportCSVFile(Report, Simulation):
+    '''
+    reads the report csv file and returns a dictionary of the information
+    :param Report: Report object (Self)
+    :param Simulation: dictionary containing values about simulation
+    :return:
+    '''
     if Simulation["csvfile"] is None: #if they didnt specify a csv file, use the default
-        csv_info = readDefaultSimulationsCSV(Report, Simulation)
+        Simulation["csvfile"] = findDefaultCSVFile(Report, Simulation)
+        WF.print2stdout('Attempting to read default {0}'.format(Simulation["csvfile"]))
     else:
-        WF.print2stdout('Attempting to read {0}'.format(Simulation["csvfile"]))
-        if not os.path.exists(Simulation["csvfile"]):
-            WF.print2stderr(f'Could not find CSV file: {Simulation["csvfile"]}')
-            WF.print2stderr(f'Please create {Simulation["csvfile"]} run report again.')
-            sys.exit(1)
-        csv_info = {}
-        program_used = {}
-        accepted_lines = 0
-        use_deprecated = False
-        with open(Simulation["csvfile"], 'r') as csvf:
-            for i, line in enumerate(csvf):
-                if len(line.strip()) >= 2: #needs to at least have a filename and report type
-                    accepted_lines += 1
-                    sline = line.strip().split(',')
-                    programs_raw = sline[0].strip().lower()
-                    programs = [n for n in programs_raw.split('|') if n != '']
-                    xmlfile = sline[1].strip().lower()
-                    use_deprecated = checkforDeprecatedCSV(xmlfile)
-                    if use_deprecated:
-                        break
-                    keywords = [str(n).lower() for n in sline[2:] if n != ''] #optional keywords for CSV files to use to match simulations
-                    if programs_raw not in program_used:
-                        program_used[programs_raw] = 1
-                    else:
-                        program_used[programs_raw] += 1
+        WF.print2stdout('Attempting to read specified {0}'.format(Simulation["csvfile"]))
 
-                    csv_info[accepted_lines] = {'xmlfile': xmlfile,
-                                                'programs': programs,
-                                                'keywords': keywords,
-                                                'order': accepted_lines,
-                                                'numtimesprogramused': program_used[programs_raw],
-                                                'deprecated_method': False}
-        if use_deprecated:
-            csv_info = readSimulationFile_deprecated(Simulation["csvfile"])
+    if not os.path.exists(Simulation["csvfile"]):
+        WF.print2stderr(f'Could not find CSV file: {Simulation["csvfile"]}')
+        WF.print2stderr(f'Please create {Simulation["csvfile"]} run report again.')
+        sys.exit(1)
+    csv_info = {}
+    program_used = {}
+    accepted_lines = 0
+    use_deprecated = False
+    with open(Simulation["csvfile"], 'r') as csvf:
+        for i, line in enumerate(csvf):
+            if len(line.strip()) >= 2: #needs to at least have a filename and report type
+                accepted_lines += 1
+                sline = line.strip().split(',')
+                programs_raw = sline[0].strip().lower()
+                programs = [n for n in programs_raw.split('|') if n != '']
+                xmlfile = sline[1].strip().lower()
+                use_deprecated = checkforDeprecatedCSV(xmlfile)
+                if use_deprecated:
+                    break
+                keywords = [str(n).lower() for n in sline[2:] if n != ''] #optional keywords for CSV files to use to match simulations
+                if programs_raw not in program_used:
+                    program_used[programs_raw] = 1
+                else:
+                    program_used[programs_raw] += 1
+
+                csv_info[accepted_lines] = {'xmlfile': xmlfile,
+                                            'programs': programs,
+                                            'keywords': keywords,
+                                            'order': accepted_lines,
+                                            'numtimesprogramused': program_used[programs_raw],
+                                            'deprecated_method': False}
+    if use_deprecated:
+        csv_info = readSimulationFile_deprecated(Simulation["csvfile"])
     return csv_info
 
 def checkforDeprecatedCSV(xmlfile):
@@ -682,7 +689,7 @@ def readSimulationFile_deprecated(simulationfile):
     :returns: dictionary containing information from file
     '''
 
-    WF.print2stdout('Attempting to read {0}'.format(simulationfile))
+    WF.print2stdout('Attempting to read {0} using old method'.format(simulationfile))
     if not os.path.exists(simulationfile):
         WF.print2stderr(f'Could not find CSV file: {simulationfile}')
         WF.print2stderr(f'Please create {simulationfile} in the Reports Directory and run report again.')

@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '6.0.17'
+VERSIONNUMBER = '6.0.18'
 
 import os
 import sys
@@ -3641,11 +3641,14 @@ class MakeAutomatedReport(object):
             self.modelIndependent = True
 
         else:
+            csv_programs = [n.lower() for n in csvChapterSettings['programs']]
+            if csvChapterSettings['deprecated_method'] == True: #new method does not care about this
+                csv_modelaltnames = [n.lower() for n in csvChapterSettings['modelaltnames']]
             for ID in self.SimulationVariables.keys(): #for each simulation
                 if csvChapterSettings['deprecated_method'] == True: #TODO: remove this far enough into the future
                     approved_modelalts = [modelalt for modelalt in self.SimulationVariables[ID]['ModelAlternatives']
-                                         if modelalt['name'] in csvChapterSettings['modelaltnames'] and
-                                         modelalt['program'] in csvChapterSettings['programs']]
+                                         if modelalt['name'].lower() in csv_modelaltnames and
+                                         modelalt['program'].lower() in csv_programs]
                     if len(approved_modelalts) == 0:
                         #this chapter does not apply to this simulation if no model alts have the correct program. do no consider.
                         continue
@@ -3710,6 +3713,11 @@ class MakeAutomatedReport(object):
                 if len(self.accepted_IDs) == 0: #if we accept no IDs
                     WF.print2stderr('Incompatible input information from the WAT XML output file ({0}))'.format(self.simulationInfoFile))
                     WF.print2stderr('Please confirm inputs and run again.')
+                    WF.print2stdout('CSV Programs: {0}'.format(csvChapterSettings['programs']))
+                    WF.print2stdout('Simulation Programs: {0}'.format([n['program'] for n in self.SimulationVariables[ID]['ModelAlternatives']]))
+                    if csvChapterSettings['deprecated_method'] == True:
+                        WF.print2stdout('CSV Model Alt Names: {0}'.format(csvChapterSettings['modelaltnames']))
+                        WF.print2stdout('Simulation Programs: {0}'.format([n['name'] for n in self.SimulationVariables[ID]['ModelAlternatives']]))
                     if self.reportType == 'comparison':
                         WF.print2stderr('If comparison plot, ensure that all programs are in the first cell line CSV file')
                         WF.print2stderr('Example line: CeQualW2|Ressim, format/Shasta_ResSim_TCD_comparison.XML')
