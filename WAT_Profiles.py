@@ -308,18 +308,34 @@ class Profiles(object):
         '''
 
         if 'unitsystem' not in object_settings.keys():
-            WF.print2stdout('Unit system not defined.', debug=self.Report.debug)
-            return data, line_settings
-        for flag in data.keys():
-            if line_settings[flag]['units'] == None:
-                continue
-            else:
-                profiles = data[flag]['values']
-                profileunits = line_settings[flag]['units']
-                for pi, profile in enumerate(profiles):
-                    profile, newunits = WF.convertUnitSystem(profile, profileunits, object_settings['unitsystem'])
-                    profiles[pi] = profile
-                line_settings[flag]['units'] = newunits
+            WF.print2stdout('Unit system (unitsystem) not defined.', debug=self.Report.debug)
+            # return data, line_settings
+        else:
+            for flag in data.keys():
+                if line_settings[flag]['units'] == None:
+                    continue
+                else:
+                    profiles = data[flag]['values']
+                    profileunits = line_settings[flag]['units']
+                    for pi, profile in enumerate(profiles):
+                        profile, newunits = WF.convertUnitSystem(profile, profileunits, object_settings['unitsystem'])
+                        profiles[pi] = profile
+                    line_settings[flag]['units'] = newunits
+        if 'y_unitsystem' not in object_settings.keys():
+            WF.print2stdout('Y Unit system (y_unitsystem) not defined.', debug=self.Report.debug)
+        else:
+            for flag in data.keys():
+                if line_settings[flag]['y_units'] == None:
+                    continue
+                else:
+                    yunits = line_settings[flag]['y_units']
+                    for pi, profile in enumerate(data[flag]['depths']):
+                        profile, newunits = WF.convertUnitSystem(profile, yunits, object_settings['y_unitsystem'])
+                        data[flag]['depths'][pi] = profile
+                    for pi, profile in enumerate(data[flag]['elevations']):
+                        profile, newunits = WF.convertUnitSystem(profile, yunits, object_settings['y_unitsystem'])
+                        data[flag]['elevations'][pi] = profile
+                    line_settings[flag]['y_units'] = newunits
         return data, line_settings
 
     def filterProfileData(self, data, line_settings, object_settings):

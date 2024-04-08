@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 '''
 
-VERSIONNUMBER = '6.0.19'
+VERSIONNUMBER = '6.0.20'
 
 import os
 import sys
@@ -1152,12 +1152,6 @@ class MakeAutomatedReport(object):
         object_settings = self.configureSettingsForID(self.base_id, object_settings)
         gatedata, gate_settings = self.Data.getGateDataDictionary(object_settings, makecopy=False)
 
-        ################# Get plot units #################
-        data, line_settings = self.Profiles.convertProfileDataUnits(object_settings, data, line_settings)
-        object_settings['units_list'] = WF.getUnitsList(line_settings)
-        object_settings['plot_units'] = WF.getPlotUnits(object_settings['units_list'], object_settings)
-        object_settings = WF.updateFlaggedValues(object_settings, '%%units%%', WF.formatUnitsStrings(object_settings['plot_units']))
-
         ################ convert yflags ################
         if object_settings['usedepth'].lower() == 'false':
             wse_data = self.Data.getProfileWSE(object_settings)
@@ -1165,6 +1159,23 @@ class MakeAutomatedReport(object):
         elif object_settings['usedepth'].lower() == 'true':
             wse_data = self.Data.getProfileWSE(object_settings)
             data = self.Profiles.convertElevationsToDepths(data, wse_data=wse_data)
+
+        ################# Get plot units #################
+        data, line_settings = self.Profiles.convertProfileDataUnits(object_settings, data, line_settings)
+        object_settings['units_list'] = WF.getUnitsList(line_settings)
+        object_settings['y_units_list'] = WF.getUnitsList(line_settings, mod='y_')
+        object_settings['plot_units'] = WF.getPlotUnits(object_settings['units_list'], object_settings)
+        object_settings['y_plot_units'] = WF.getPlotUnits(object_settings['y_units_list'], object_settings, axis='y')
+        object_settings = WF.updateFlaggedValues(object_settings, '%%units%%', WF.formatUnitsStrings(object_settings['plot_units']))
+        object_settings = WF.updateFlaggedValues(object_settings, '%%y_units%%', WF.formatUnitsStrings(object_settings['y_plot_units']))
+
+        # ################ convert yflags ################
+        # if object_settings['usedepth'].lower() == 'false':
+        #     wse_data = self.Data.getProfileWSE(object_settings)
+        #     data = self.Profiles.convertDepthsToElevations(data, wse_data)
+        # elif object_settings['usedepth'].lower() == 'true':
+        #     wse_data = self.Data.getProfileWSE(object_settings)
+        #     data = self.Profiles.convertElevationsToDepths(data, wse_data=wse_data)
 
         # self.Data.commitProfileDataToMemory(data, line_settings, object_settings)
         linedata, object_settings = self.Profiles.filterProfileData(data, line_settings, object_settings)
