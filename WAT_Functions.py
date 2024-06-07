@@ -1020,7 +1020,7 @@ def getMonthlyFilterIdx(dates, month):
 
     return s_idx, e_idx
 
-def getUnitsList(line_settings):
+def getUnitsList(line_settings, mod=''):
     '''
     creates a list of units from defined lines in user defined settings
     :param object_settings: currently selected object settings dictionary
@@ -1029,7 +1029,7 @@ def getUnitsList(line_settings):
 
     units_list = []
     for flag in line_settings.keys():
-        units = line_settings[flag]['units']
+        units = line_settings[flag][mod+'units']
         if units != None:
             units_list.append(units)
     return units_list
@@ -1061,7 +1061,7 @@ def getAllMonthIdx(timestamp_indexes, i):
         out_idx += yearlist[i]
     return out_idx
 
-def getPlotUnits(unitslist, object_settings):
+def getPlotUnits(unitslist, object_settings, axis='x'):
     '''
     gets units for the plot. Either looks at data already plotted units, or if there are no defined units
     in the plotted data, look for a parameter flag
@@ -1069,12 +1069,14 @@ def getPlotUnits(unitslist, object_settings):
     :return: string units value
     '''
 
-    if 'parameter' in object_settings.keys():
+    param_flag = 'parameter' if axis == 'x' else 'y_parameter'
+    unitsystem_flag = 'unitsystem' if axis == 'x' else 'y_unitsystem'
+    if param_flag in object_settings.keys():
         try:
-            plotunits = constants.units[object_settings['parameter'].lower()]
+            plotunits = constants.units[object_settings[param_flag].lower()]
             if isinstance(plotunits, dict):
-                if 'unitsystem' in object_settings.keys():
-                    plotunits = plotunits[object_settings['unitsystem'].lower()]
+                if unitsystem_flag in object_settings.keys():
+                    plotunits = plotunits[object_settings[unitsystem_flag].lower()]
                 else:
                     plotunits = plotunits['metric']
         except KeyError:

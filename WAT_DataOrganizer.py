@@ -785,6 +785,7 @@ class DataOrganizer(object):
                     'subset': False,
                     'flag': Profile_info['flag'],
                     'units': None,
+                    'y_units': None,
                     'isprofile': True
                     }
 
