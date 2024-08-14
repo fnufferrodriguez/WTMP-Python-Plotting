@@ -22,7 +22,8 @@ import WAT_Time as WT
 
 def changeTimeSeriesInterval(times, values, Line_info, startYear):
     '''
-    changes time series of time series data. If type is defined, use that to average data. default is INST-VAL
+    changes time series of time series data. If type is defined, use that to average data.
+    #update 8/12/24 - per reclamation default has changed from INST-VAL to PER-AVER -Kayla
     :param times: list of times
     :param values: list of values
     :param Line_info: settings dictionary for line
@@ -48,8 +49,8 @@ def changeTimeSeriesInterval(times, values, Line_info, startYear):
     if 'type' in Line_info:
         avgtype = Line_info['type'].upper()
     else:
-        avgtype = 'INST-VAL'
-        # avgtype = 'PER-AVER'
+        # avgtype = 'INST-VAL'
+        avgtype = 'PER-AVER'
 
     if isinstance(values, dict):
         new_values = {}

@@ -2147,7 +2147,7 @@ def checkForCollections(data_settings):
 
 def organizePlotYears(object_settings):
     '''
-    orgnaizes years and year strings for report objects
+    organizes years and year strings for report objects
     :param object_settings: settings to parse for year information
     :return: years, year strings
     '''
