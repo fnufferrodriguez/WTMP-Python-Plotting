@@ -720,6 +720,8 @@ def replaceFlaggedValue(Report, value, itemset, forjasper=False):
                           '%%observedDir%%': Report.observedDir,
                           '%%startyear%%': str(Report.startYear),
                           '%%endyear%%': str(Report.endYear),
+                          '%%startmonth%%': str(Report.startMonth),
+                          '%%endmonth%%': str(Report.endMonth),
                           '%%studydir%%': str(Report.studyDir),
                           '%%studyname%%': Report.studyname,
                           '%%simulationgroup%%': Report.SimulationGroup['Name'],
