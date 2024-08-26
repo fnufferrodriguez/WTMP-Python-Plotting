@@ -138,6 +138,7 @@ def defineStartEndYears(Report):
 
     tw_start = Report.StartTime
     tw_end = Report.EndTime
+    #check if endTime is on the first day of the year at midnight
     if tw_end == dt.datetime(tw_end.year, 1, 1, 0, 0):
         tw_end += dt.timedelta(seconds=-1) #if its this day just go back
 
@@ -149,6 +150,43 @@ def defineStartEndYears(Report):
     else:
         Report.years = range(tw_start.year, tw_end.year + 1)
         Report.years_str = "{0}-{1}".format(Report.startYear, Report.endYear)
+
+def defineStartEndMonths(Report):
+    '''
+    Defines the start and end months for the simulation, so they can be replaced by flagged values.
+    If the end date falls on the first day of the month(ex: Jan 1 ),
+    it adjusts the end date to the last day of the previous month to accurately represent the period
+    :param Report: instance from main report script that includes `StartTime` and `EndTime` attributes as `datetime` objects.
+    :return: class variables
+                self.startMonth
+                self.endMonth
+                self.months_str
+                self.months
+    '''
+
+    tw_start = Report.StartTime
+    tw_end = Report.EndTime
+
+    if tw_end == dt.datetime(tw_end.year, tw_end.month, 1, 0, 0):
+        tw_end += dt.timedelta(seconds=-1) #go back one day
+
+    Report.startMonth = tw_start.strftime("%b")
+    Report.endMonth = tw_end.strftime("%b")
+
+    if tw_start.year == tw_end.year and tw_start.month == tw_end.month:
+        Report.months_str = Report.startMonth
+        Report.months = [Report.startMonth]
+    else:
+        start_month = dt.datetime(tw_start.year, tw_start.month, 1)
+        end_month = dt.datetime(tw_end.year, tw_end.month, 1)
+        months = []
+        while start_month <= end_month:
+            months.append(start_month.strftime("%b"))
+            start_month += dt.timedelta(days=31)
+            start_month = dt.datetime(start_month.year, start_month.month, 1)
+
+        Report.months = months
+        Report.months_str = "{0}-{1}".format(Report.months[0], Report.months[-1])
 
 def setMultiRunStartEndYears(Report):
     '''

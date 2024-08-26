@@ -93,6 +93,7 @@ class MakeAutomatedReport(object):
                 self.loadCurrentID(self.base_id) #load the data for the current sim, we do 1 at a time here..
                 WF.checkExists(self.SimulationDir)
                 WT.defineStartEndYears(self)
+                WT.defineStartEndMonths(self)
                 self.cleanOutputDirs()
                 self.initializeXML()
                 self.writeXMLIntroduction()
@@ -121,6 +122,7 @@ class MakeAutomatedReport(object):
             self.loadCurrentID(self.base_id) #load the data for the current sim, we do 1 at a time here..
             WT.setMultiRunStartEndYears(self) #find the start and end time
             WT.defineStartEndYears(self) #format the years correctly after theyre set
+            WT.defineStartEndMonths(self) #format the months correctly after they are set
             self.cleanOutputDirs()
             self.initializeXML()
             self.reportCSV = WR.readReportCSVFile(self, [sim for sim in self.Simulations if sim['ID'] == self.base_id][0]) #use the base
@@ -154,7 +156,8 @@ class MakeAutomatedReport(object):
                 self.base_id = 'base'
                 self.loadCurrentID(self.base_id) #load the first simulation
                 WT.setMultiRunStartEndYears(self) #find the start and end time
-                WT.defineStartEndYears(self) #format the years correctly after theyre set
+                WT.defineStartEndYears(self) #format the years correctly after they are set
+                WT.defineStartEndMonths(self) #format the months correctly after they are set
                 # WR.readForecastSimulationsCSV(self) #read to determine order/sims/regions in report
                 self.reportCSV = WR.readReportCSVFile(self,[sim for sim in self.Simulations if sim['ID'] == self.base_id][0])  # use the base
                 self.cleanOutputDirs()
