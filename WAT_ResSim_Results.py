@@ -319,35 +319,37 @@ class ResSim_Results(object):
             WF.print2stdout(f'XY coords ({x}, {y}) not found', debug=self.Report.debug)
             return [], [], units
 
-        if metric.lower() == 'flow':
+        accepted_metrics = ['flow', 'elevation', 'temperature', 'do', 'do_sat']
+        metric = metric.lower().replace('_', '').replace(' ', '')
+        if metric in ['flow']:
             dataset_name = 'Cell flow'
             dataset = self.h['Results/Subdomains/{0}/{1}'.format(subdomain_name, dataset_name)]
             attrs = dataset.attrs
             units = self.getUnitsFromAttrs(attrs)
             v = np.array(dataset[:, i])
             v = WF.cleanComputed(v)
-        elif metric.lower() == 'elevation':
+        elif metric in ['elevation', 'wse', 'waterlevel', 'watersurfaceelevation']:
             dataset_name = 'Water Surface Elevation'
             dataset = self.h['Results/Subdomains/{0}/{1}'.format(subdomain_name, dataset_name)]
             attrs = dataset.attrs
             units = self.getUnitsFromAttrs(attrs)
             v = np.array(dataset[:])
             v = WF.cleanComputed(v)
-        elif metric.lower() == 'temperature':
+        elif metric in ['temperature', 'temp', 'tempc', 'tempcelsius', 'watertemperature']:
             dataset_name = 'Water Temperature'
             dataset = self.h['Results/Subdomains/{0}/{1}'.format(subdomain_name, dataset_name)]
             attrs = dataset.attrs
             units = self.getUnitsFromAttrs(attrs)
             v = np.array(dataset[:, i])
             v = WF.cleanComputed(v)
-        elif metric.lower() == 'do':
+        elif metric in ['do', 'dissolvedoxygen']:
             dataset_name = 'Dissolved Oxygen'
             dataset = self.h['Results/Subdomains/{0}/{1}'.format(subdomain_name, dataset_name)]
             attrs = dataset.attrs
             units = self.getUnitsFromAttrs(attrs)
             v = np.array(dataset[:, i])
             v = WF.cleanComputed(v)
-        elif metric.lower() == 'do_sat':
+        elif metric in ['dosat', 'saturateddo', 'satdo', 'dissolvedoxygensaturation']:
             dataset_name = 'Water Temperature'
             dataset = self.h['Results/Subdomains/{0}/{1}'.format(subdomain_name, dataset_name)]
             vt = np.array(dataset[:, i])
@@ -358,6 +360,9 @@ class ResSim_Results(object):
             vt = WF.cleanComputed(vt)
             vdo = WF.cleanComputed(vdo)
             v = WF.calcComputedDOSat(vt, vdo, self.Report.Constants.satDO_interp)
+        else:
+            WF.print2stdout(f'ERROR: Metric {metric} not in accepted metrics list: {accepted_metrics}')
+            return [], [], units
 
         if not hasattr(self, 't_computed'):
             self.loadComputedTime()

@@ -1001,7 +1001,6 @@ def getMonthlyFilterIdx(dates, month):
     :param month: target month
     :return: start and end index for that year
     '''
-
     start_date = dates[0]
     end_date = dates[-1]
     s_month_date = dt.datetime(start_date.year, month,1,0,0)
@@ -1009,6 +1008,10 @@ def getMonthlyFilterIdx(dates, month):
         e_month_date = dt.datetime(start_date.year+1,1,1,0,0) - dt.timedelta(seconds=1)
     else:
         e_month_date = dt.datetime(start_date.year,month+1,1,0,0) - dt.timedelta(seconds=1)
+
+    if start_date.month > month or end_date.month < month:
+        print2stdout(f'Desired month prior to start date month. {start_date.month}, {month}')
+        return 0, 0
 
     interval = (dates[1] - start_date).total_seconds()
     if start_date.month == month:
@@ -1019,7 +1022,12 @@ def getMonthlyFilterIdx(dates, month):
         e_idx = len(dates)
     else:
         e_idx = round(int((e_month_date - start_date).total_seconds() / interval))
-
+    if s_idx < 0:
+        print2stdout(f'SIdx less than zero for {month}. Contact developer.')
+        s_idx = 0
+    if e_idx < 0:
+        print2stdout(f'EIdx less than zero for {month}. Contact developer.')
+        e_idx = 0
     return s_idx, e_idx
 
 def getUnitsList(line_settings, mod=''):
