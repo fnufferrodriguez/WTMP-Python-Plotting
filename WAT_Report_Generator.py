@@ -398,11 +398,13 @@ class MakeAutomatedReport(object):
                     if 'scalar' in curline_settings.keys():
                         try:
                             scalar = float(curline_settings['scalar'])
-                            if self.reportType == 'forecast':
+                            if isinstance(values, np.ndarray):
+                                values = scalar * values
+                            elif isinstance(values, dict):
                                 for member in values.keys():
                                     values[member] = scalar * values[member]
                             else:
-                                values = scalar * values
+                                raise TypeError("Unsupported type for values: must be dict or ndarray")
                         except ValueError:
                             WF.print2stdout('Invalid Scalar. {0}'.format(curline_settings['scalar']), debug=self.debug)
                             continue
