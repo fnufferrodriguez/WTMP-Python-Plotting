@@ -1,4 +1,4 @@
-'''
+"""
 * Copyright 2022 United States Bureau of Reclamation (USBR).
 * United States Department of the Interior
 * All Rights Reserved. USBR PROPRIETARY/CONFIDENTIAL.
@@ -10,7 +10,7 @@ Created on 7/15/2021
 @organization: Resource Management Associates
 @contact: scott@rmanet.com
 @note:
-'''
+"""
 
 VERSIONNUMBER = '6.0.20'
 
@@ -18,6 +18,7 @@ import os
 import sys
 import matplotlib.pyplot as plt
 import matplotlib as mpl
+import matplotlib.dates
 import numpy as np
 import pickle
 import itertools
@@ -41,34 +42,36 @@ import WAT_Plots as WPlot
 import WAT_Gates as WGates
 
 import warnings
+
 # warnings.simplefilter('error') #turn on for debugging warnings
 warnings.filterwarnings("always")
 
 mpl.rcParams['axes.autolimit_mode'] = 'round_numbers'
 mpl.use("Agg")
 
+
 class MakeAutomatedReport(object):
-    '''
+    """
     class to organize data and generate XML file for Jasper processing in conjunction with WAT. Takes in a simulation
     information file output from WAT and develops the report from there.
-    '''
+    """
 
     def __init__(self, simulationInfoFile, batdir):
-        '''
+        """
         organizes input data and generates XML report
         :param simulationInfoFile: full path to simulation information XML file output from WAT.
-        '''
+        """
 
         WF.printVersion(VERSIONNUMBER)
         self.simulationInfoFile = simulationInfoFile
         self.WriteLog = True #TODO we're testing this.
         self.batdir = batdir
-        WR.readSimulationInfo(self, simulationInfoFile) #read file output by WAT
+        WR.readSimulationInfo(self, simulationInfoFile)  # Read file output by WAT
         self.definePaths()
         self.Constants = WC.WAT_Constants()
         self.cleanOutputDirs()
         WF.checkJasperFiles(self.studyDir, self.installDir)
-        WR.readGraphicsDefaultFile(self) #read graphical component defaults
+        WR.readGraphicsDefaultFile(self)  # Read graphical component defaults
         self.defaultLineStyles = WD.readDefaultLineStylesFile(self)
         self.WAT_log = WL.WAT_Logger(self)
         self.reportType = WR.getReportType(self)
@@ -90,7 +93,7 @@ class MakeAutomatedReport(object):
                 self.base_id = self.Simulations[0]['ID']
                 self.initSimulationDict()
                 self.setSimulationVariables(simulation)
-                self.loadCurrentID(self.base_id) #load the data for the current sim, we do 1 at a time here..
+                self.loadCurrentID(self.base_id)  # Load the data for the current sim, we do 1 at a time here.
                 WF.checkExists(self.SimulationDir)
                 WT.defineStartEndYears(self)
                 WT.defineStartEndMonths(self)
@@ -118,14 +121,15 @@ class MakeAutomatedReport(object):
                 WF.printSimulationInfo(simulation)
                 self.setSimulationVariables(simulation)
                 WF.checkExists(simulation['directory'])
-            self.base_id = 'base' #this should always be base?
-            self.loadCurrentID(self.base_id) #load the data for the current sim, we do 1 at a time here..
-            WT.setMultiRunStartEndYears(self) #find the start and end time
-            WT.defineStartEndYears(self) #format the years correctly after theyre set
-            WT.defineStartEndMonths(self) #format the months correctly after they are set
+            self.base_id = 'base'  # this should always be base?
+            self.loadCurrentID(self.base_id)  # load the data for the current sim, we do 1 at a time here.
+            WT.setMultiRunStartEndYears(self)  # find the start and end time
+            WT.defineStartEndYears(self)  # format the years correctly after they are set
+            WT.defineStartEndMonths(self)  # format the months correctly after they are set
             self.cleanOutputDirs()
             self.initializeXML()
-            self.reportCSV = WR.readReportCSVFile(self, [sim for sim in self.Simulations if sim['ID'] == self.base_id][0]) #use the base
+            self.reportCSV = WR.readReportCSVFile(self, [sim for sim in self.Simulations if sim['ID'] == self.base_id][
+                0])  # use the base
             chapterkeys = list(self.reportCSV.keys())
             chapterkeys.sort()  # these are always numbers, so it works
             self.writeXMLIntroduction()
@@ -147,6 +151,34 @@ class MakeAutomatedReport(object):
         elif self.reportType == 'forecast':
             self.initSimulationDict()
             self.organizeMembers()
+            self.Ensemble = None
+            self.member = None
+            self.plot_name = None
+
+            self.identical_members_key = ''  # issue 179 - Kayla - identical plots dict key for updating %%member%% of identicals
+            self.cur_section_members_all_checked = False  # issue 179 - Kayla - verify all section members checked for identicals
+            self.use_identical_output_variation = False  # issue 179 - Kayla - all plots in a section were identical
+            self.use_original_output_variation = False  # issue 179 - Kayla - no identical plots were found, use original code
+            self.use_split_results_output_variation = False  # issue 179 - Kayla - some identicals and some not found in a section
+            self.member_in_identical_group = False  # issue 179 - Kayla - member is in an identical group
+            self.water_temp_line_values_dict = {} # issue 179 - Kayla
+            self.water_flow_line_values_dict = {}   # issue 179 - Kayla
+            self.identical_members_per_plot = {}  # issue 179 - Kayla
+            self.non_identical_members_per_plot = {} # issue 179 - Kayla - ex: 'plot_1': ['11', '511'], 'plot_2': ['11', '511'] --TESTING
+            self.plot_identical_members_key = {} # issue 179 - Kayla - keys attached to each plot incase multiple differing identical groups
+            self.total_plot_lines = 0 # issue 179 this will be the total number of lines in the plot
+            self.total_lines_processed = 0 # issue 179 - Kayla
+            self.total_lines_needed_for_compare = 0 # issue 179 - Kayla
+            self.non_identicals_per_plot = []
+            self.identical_groups_per_plot = []
+            self.second_pass_initiated = False
+
+            self.forecast_description_for_identicals = None
+            self.complete_identical_members_groups = []
+            self.identical_members_do_not_plot = []
+
+            self.original_section_header = None
+            self.skip_identical_plot = False
 
             for simulation in self.Simulations:
                 WF.printSimulationInfo(simulation)
@@ -154,16 +186,16 @@ class MakeAutomatedReport(object):
                 self.setSimulationVariables(simulation)
                 # self.base_id = self.Simulations[0]['ID']
                 self.base_id = 'base'
-                self.loadCurrentID(self.base_id) #load the first simulation
-                WT.setMultiRunStartEndYears(self) #find the start and end time
-                WT.defineStartEndYears(self) #format the years correctly after they are set
-                WT.defineStartEndMonths(self) #format the months correctly after they are set
+                self.loadCurrentID(self.base_id)  # load the first simulation
+                WT.setMultiRunStartEndYears(self)  # find the start and end time
+                WT.defineStartEndYears(self)  # format the years correctly after they are set
+                WT.defineStartEndMonths(self)  # format the months correctly after they are set
                 # WR.readForecastSimulationsCSV(self) #read to determine order/sims/regions in report
                 self.reportCSV = WR.readReportCSVFile(self,[sim for sim in self.Simulations if sim['ID'] == self.base_id][0])  # use the base
                 self.cleanOutputDirs()
                 self.initializeXML()
                 self.writeXMLIntroduction()
-                self.initializeDataOrganizer() #Do this here because forecast runs are likely to overlap over chapters
+                self.initializeDataOrganizer()  # Do this here because forecast runs are likely to overlap over chapters
 
                 chapterkeys = list(self.reportCSV.keys())
                 chapterkeys.sort()  # these are always numbers, so it works
@@ -189,12 +221,12 @@ class MakeAutomatedReport(object):
         self.Data.writeDataFiles()
 
     def definePaths(self):
-        '''
+        """
         defines run specific paths
         used to contain more paths, but not needed. Consider moving.
         :return: set class variables
                     self.images_path
-        '''
+        """
 
         self.images_path = os.path.join(self.outputDir, 'Images')
         if not os.path.exists(self.images_path):
@@ -205,7 +237,7 @@ class MakeAutomatedReport(object):
                 WF.print2stderr(f'Unable to make {self.images_path}')
                 sys.exit(1)
 
-        self.CSVPath = os.path.join(self.outputDir, 'CSVData') #TODO: update
+        self.CSVPath = os.path.join(self.outputDir, 'CSVData')  #TODO: update
 
         if not os.path.exists(self.CSVPath):
             try:
@@ -215,12 +247,13 @@ class MakeAutomatedReport(object):
                 WF.print2stderr(f'Unable to make {self.CSVPath}')
                 sys.exit(1)
 
+
     def makeTimeSeriesPlot(self, object_settings):
-        '''
-        takes in object settings to build time series plot and write to XML
+        """
+        Takes in object settings to build time series plot and write to XML
         :param object_settings: currently selected object settings dictionary
         :return: creates png in images dir and writes to XML file
-        '''
+        """
 
         WF.print2stdout('\n################################')
         WF.print2stdout('Now making TimeSeries Plot.')
@@ -230,8 +263,8 @@ class MakeAutomatedReport(object):
 
         self.Plots = WPlot.Plots(self)
 
-        default_settings = self.loadDefaultPlotObject('timeseriesplot') #get default TS plot items
-        object_settings = WF.replaceDefaults(self, default_settings, object_settings) #overwrite the defaults with chapter file
+        default_settings = self.loadDefaultPlotObject('timeseriesplot') # get default TS plot items
+        object_settings = WF.replaceDefaults(self, default_settings, object_settings) # overwrite the defaults with chapter file
 
         if 'template' in object_settings.keys():
             template_settings = WR.readTemplate(self, object_settings['template'])
@@ -248,7 +281,6 @@ class MakeAutomatedReport(object):
 
         object_settings['years'], object_settings['yearstr'] = WF.organizePlotYears(object_settings)
 
-
         if 'description' not in object_settings.keys():
             object_settings['description'] = ''
         # else:
@@ -260,15 +292,14 @@ class MakeAutomatedReport(object):
 
             cur_obj_settings = WF.updateFlaggedValues(cur_obj_settings, '%%year%%', yearstr)
             if self.memberiteration:
-                cur_obj_settings = WF.updateFlaggedValues(cur_obj_settings, '%%member%%', WF.formatMembers(self.member))
                 cur_obj_settings['member'] = self.member
                 cur_obj_settings['memberiteration'] = self.memberiteration
 
             if len(cur_obj_settings['axs']) == 1:
-                figsize=(12, 6)
+                figsize = (12, 6)
                 pageformat = 'half'
             else:
-                figsize=(12,14)
+                figsize = (12, 14)
                 pageformat = 'full'
 
             axis_weight = []
@@ -345,170 +376,289 @@ class MakeAutomatedReport(object):
                                                                                                     RelativeLineSettings['units'],
                                                                                                     ax_settings['unitsystem'])
                 # LINE DATA #
-                for line in linedata:
-                    curline = linedata[line]
-                    curline_settings = line_settings[line]
-                    parameter, ax_settings['param_count'] = WF.getParameterCount(curline_settings, ax_settings)
-                    i = ax_settings['param_count'][parameter]
 
-                    values = curline['values']
-                    dates = curline['dates']
-                    units = curline_settings['units']
+                if self.memberiteration and not self.second_pass_initiated:
+                    length_of_linedata = len(linedata)
+                    length_of_all_members = len(self.allMembers)
+                    self.lines_processed_for_curlinedata = 0
 
-                    if not curline_settings['collection']: #please dont do this for collection plots
-                        values = WF.ValueSum(dates, values) #check for dict values and add them all together
+                    for line in linedata:
+                        curline = linedata[line]
+                        curline_settings = line_settings[line]
+                        values = curline['values']
+                        units = curline_settings['units']
 
-                    curline_settings['stack'] = False
-                    if 'linetype' in curline_settings.keys():
-                        if curline_settings['linetype'].lower() == 'stacked': #stacked plots need to be added at the end..
-                            if _usetwinx:
-                                if 'yaxis' in curline_settings.keys():
-                                    axis = curline_settings['yaxis'].lower()
+                        # TODO: insert testing fake data here if need be
+                        plot_name = cur_obj_settings['title']
+                        normalized_units = None
+
+                        try:
+                            normalized_units = self.Constants.normalize_unit(units)
+                            WF.print2stdout(f'@@@@@ Normalized units: {normalized_units}', debug=self.debug)
+                        except Exception as e:
+                            WF.print2stdout(f'@@@@@ Error normalizing units: {e}', debug=True)
+
+                        if normalized_units in {'c', 'm3/s', 'cfs'}:
+                            WF.print2stdout(f'### if normalized_units in {{c, m3/s, cfs}} --- Processing Time Series Plot for  {plot_name} member {self.member}', debug=self.debug)
+
+                            if normalized_units == 'c':
+                                data_dict = self.water_temp_line_values_dict
                             else:
-                                axis = 'left' #if not twinx, then only can use left
+                                data_dict = self.water_flow_line_values_dict
 
-                            curline_settings['stack'] = True
+                            if plot_name not in data_dict:
+                                data_dict[plot_name] = {}
+                                self.total_plot_lines += len(linedata)
+                                self.total_lines_needed_for_compare += length_of_linedata * length_of_all_members
 
-                    if units == None:
-                        if parameter != None:
-                            try:
-                                units = self.Constants.units[parameter]
-                            except KeyError:
+                            if line not in data_dict[plot_name]:
+                                data_dict[plot_name][line] = {}
+
+                            data_dict[plot_name][line].update(values)
+                            self.total_lines_processed += 1
+                            self.lines_processed_for_curlinedata += 1
+
+                            if self.total_lines_processed != self.total_lines_needed_for_compare:
+                                if length_of_linedata == self.lines_processed_for_curlinedata:
+                                    WF.print2stdout(f'Waiting for all members to be checked for {plot_name}. Skipping plot generation.', debug=self.debug)
+                                    self.lines_processed_for_curlinedata = 0
+                                    return
+                                else:
+                                    continue
+                        else:
+                            WF.print2stdout(f'Normalized unit not in expected set: {normalized_units}', debug=self.debug)
+
+                        # Check if lists are full and compare for identicals
+                        if self.total_lines_processed == self.total_lines_needed_for_compare:
+                            self.total_plot_lines = 0
+                            self.total_lines_processed = 0
+                            self.total_lines_needed_for_compare = 0
+
+                            if self.water_flow_line_values_dict:
+                                self.check_for_identical_timeSeriesPlots(self.water_flow_line_values_dict)
+                                if self.cur_section_members_all_checked:
+                                    self.water_flow_line_values_dict = {}
+                                    WF.print2stdout('All water flow members checked, proceed with plot generation.')
+                                else:
+                                    WF.print2stdout('Waiting for all water flow members to be checked for identical values. Skipping plot generation.')
+                                return
+
+                            if self.water_temp_line_values_dict:
+                                self.check_for_identical_timeSeriesPlots(self.water_temp_line_values_dict)
+                                if self.cur_section_members_all_checked:
+                                    self.water_temp_line_values_dict = {}
+                                    WF.print2stdout('All water temp members checked, proceed with plot generation.')
+                                else:
+                                    WF.print2stdout('Waiting for all water temp members to be checked for identical values. Skipping plot generation.')
+                                return
+
+                # if not self.memberiteration: process per normal
+                if not self.memberiteration or self.second_pass_initiated:
+                    # if second_pass_initiated: process first identical member and skip the rest, process non-identicals
+                    if self.second_pass_initiated:
+                        plot_name = cur_obj_settings['title']
+                        self.member_in_identical_group = False
+
+                        if plot_name in self.identical_members_per_plot:
+                            identical_groups = self.identical_members_per_plot[plot_name]
+
+                            for group in identical_groups:
+                                if self.member in group:
+                                    self.member_in_identical_group = True
+                                    if self.member == group[0]:
+                                        self.set_identicals_member_key(plot_name, self.member)
+                                        WF.print2stdout(f'### Updating and outputting Time Series Plot for identical members {self.identical_members_key}', debug=self.debug)
+
+                                        # update member flags for identical headers/descriptions
+                                        WF.updateFlaggedValues(cur_obj_settings, '%%member%%', self.identical_members_key) # updates timeseriesplots png descriptions
+                                        updated_section_header = WF.updateFlaggedValues(self.original_section_header, '%%member%%', self.identical_members_key)
+                                        updated_forecast_table_desc = WF.updateFlaggedValues(self.forecast_description_for_identicals, '%%member%%', self.identical_members_key)
+                                        self.XML.replaceinXML(self.original_section_header, updated_section_header) #TODO: this is happening for sac and trin, it overwriting the same thing a second time.  not causing an issue, but is redundant
+                                        self.XML.replaceinXML(self.forecast_description_for_identicals, updated_forecast_table_desc)
+                                        break
+                                    else:
+                                        self.skip_identical_plot = True
+                                        return # skip all members for identical plots that are not the first one
+
+                        if not self.member_in_identical_group and self.member in self.non_identical_members_per_plot.get(plot_name, []):
+                            self.skip_identical_plot = False
+                            WF.print2stdout(f'### Updating and outputting Time Series Plot for non-identical member {self.member}', debug=self.debug)
+                            WF.updateFlaggedValues(cur_obj_settings, '%%member%%', WF.formatMembers(self.member)) # updates timeseriesplots png descriptions
+
+                            updated_section_header = WF.updateFlaggedValues(self.original_section_header, '%%member%%', WF.formatMembers(self.member))#TODO: testing
+                            updated_forecast_table_desc = WF.updateFlaggedValues(self.forecast_description_for_identicals, '%%member%%', WF.formatMembers(self.member))#TODO: testing
+                            self.XML.replaceinXML(self.original_section_header, updated_section_header) #TODO: this is happening for sac and trin, it overwriting the same thing a second time.  not causing an issue, but is redundant
+                            self.XML.replaceinXML(self.forecast_description_for_identicals, updated_forecast_table_desc)
+
+                    for line in linedata:
+                        curline = linedata[line]
+                        curline_settings = line_settings[line]
+                        parameter, ax_settings['param_count'] = WF.getParameterCount(curline_settings, ax_settings)
+                        i = ax_settings['param_count'][parameter]
+
+                        values = curline['values']
+                        dates = curline['dates']
+                        units = curline_settings['units']
+
+                        # TODO: insert testing fake data here if need be
+
+                        if not curline_settings['collection']:  # please don't do this for collection plots
+                            values = WF.ValueSum(dates, values)  # check for dict values and add them all together
+
+                        curline_settings['stack'] = False
+                        if 'linetype' in curline_settings.keys():
+                            if curline_settings['linetype'].lower() == 'stacked':  # Stacked plots need to be added at the end.
+                                if _usetwinx:
+                                    if 'yaxis' in curline_settings.keys():
+                                        axis = curline_settings['yaxis'].lower()
+                                else:
+                                    axis = 'left'  #if not twinx, then only can use left
+
+                                curline_settings['stack'] = True
+
+                        if units is None:
+                            if parameter is not None:
+                                try:
+                                    units = self.Constants.units[parameter]
+                                except KeyError:
+                                    units = None
+
+                        if isinstance(units, dict):
+                            if 'unitsystem' in ax_settings.keys():
+                                units = units[ax_settings['unitsystem'].lower()]
+                            else:
                                 units = None
 
-                    if isinstance(units, dict):
                         if 'unitsystem' in ax_settings.keys():
-                            units = units[ax_settings['unitsystem'].lower()]
-                        else:
-                            units = None
+                            values, units = WF.convertUnitSystem(values, units, ax_settings['unitsystem'])
 
-                    if 'unitsystem' in ax_settings.keys():
-                        values, units = WF.convertUnitSystem(values, units, ax_settings['unitsystem'])
-
-                    chkvals = WF.checkData(values)
-                    if not chkvals:
-                        WF.print2stdout('Invalid Data settings for line:', line, debug=self.debug)
-                        continue
-
-                    dates = WT.JDateToDatetime(dates, self.startYear)
-
-                    if 'elevation_storage_area_file' in curline_settings.keys():
-                        values = WF.calculateStorageFromElevation(values, curline_settings)
-
-                    if 'scalar' in curline_settings.keys():
-                        try:
-                            scalar = float(curline_settings['scalar'])
-                            if isinstance(values, np.ndarray):
-                                values = scalar * values
-                            elif isinstance(values, dict):
-                                for member in values.keys():
-                                    values[member] = scalar * values[member]
-                            else:
-                                raise TypeError("Unsupported type for values: must be dict or ndarray")
-                        except ValueError:
-                            WF.print2stdout('Invalid Scalar. {0}'.format(curline_settings['scalar']), debug=self.debug)
+                        chkvals = WF.checkData(values)
+                        if not chkvals:
+                            WF.print2stdout('Invalid Data settings for line:', line, debug=self.debug)
                             continue
 
-                    line_draw_settings = WD.getDefaultLineSettings(self.defaultLineStyles, curline_settings, parameter, i, debug=self.debug)
-                    line_draw_settings = WF.fixDuplicateColors(line_draw_settings) #used the line, used param, then double up so subtract 1
+                        dates = WT.JDateToDatetime(dates, self.startYear)
 
-                    if 'zorder' not in line_draw_settings.keys():
-                        line_draw_settings['zorder'] = 4
+                        if 'elevation_storage_area_file' in curline_settings.keys():
+                            values = WF.calculateStorageFromElevation(values, curline_settings)
 
-                    if 'label' not in line_draw_settings.keys():
-                        line_draw_settings['label'] = ''
-                    else:
-                        line_draw_settings['label'] = WF.formatTextFlags(line_draw_settings['label'])
-
-                    curax = ax
-                    axis2 = False
-                    if _usetwinx:
-                        if 'yaxis' in line_draw_settings.keys():
-                            if line_draw_settings['yaxis'].lower() == 'right':
-                                curax = ax2
-                                axis2 = True
-
-                    if units != '' and units != None:
-                        if axis2:
-                            unitslist2.append(units)
-                        else:
-                            unitslist.append(units)
-
-                    if 'relative' in ax_settings:
-                        if ax_settings['relative'].lower() == 'true':
-                            if RelativeLineSettings['interval'] != None:
-                                dates, values = WT.changeTimeSeriesInterval(dates, values, RelativeLineSettings,
-                                                                              self.startYear)
-                            values = values/RelativeMasterSet
-
-                    if isCollection: #if we have a collection for the datasource
-                        coloreach = False
-                        plotallmembers = False
-                        if 'coloreach' in curline_settings.keys():
-                            if curline_settings['coloreach'].lower() == 'true':
-                                coloreach = True
-                        if 'plotallmembers' in curline_settings.keys():
-                            if curline_settings['plotallmembers'].lower() == 'true':
-                                plotallmembers = True
-                        if not coloreach:
-                            if not self.memberiteration or plotallmembers:
-                                modifiedalpha = False
-                                if line_draw_settings['alpha'] == 1.:
-                                    modifiedalpha = True
-                                    line_draw_settings['alpha'] = 0.25 #for collection plots, set to low opac for a jillion lines
-
-                                for cIT, member in enumerate(curline_settings['members']):
-                                    valueset = values[member]
-                                    if cIT > 0:
-                                        line_draw_settings['label'] = ''
-                                    self.Plots.plot(dates, valueset, curax, line_draw_settings)
-                                if modifiedalpha:
-                                    line_draw_settings['alpha'] = 1.
-                            elif self.memberiteration:
-                                valueset = values[self.member]
-                                if curline_settings['stack']:
-                                    if axis not in stackplots.keys():  # left or right
-                                        stackplots[axis] = []
-                                    stackplots[axis].append({'values': valueset,
-                                                             'dates': dates,
-                                                             'label': line_draw_settings['label'],
-                                                             'color': line_draw_settings['linecolor']})
+                        if 'scalar' in curline_settings.keys():
+                            try:
+                                scalar = float(curline_settings['scalar'])
+                                if self.reportType == 'forecast':
+                                    if isinstance(values, np.ndarray):
+                                        values = scalar * values
+                                    elif isinstance(values, dict):
+                                        for member in values.keys():
+                                            values[member] = scalar * values[member]
                                 else:
-                                    self.Plots.plot(dates, valueset, curax, line_draw_settings)
+                                    values = scalar * values
+                            except ValueError:
+                                WF.print2stdout('Invalid Scalar. {0}'.format(curline_settings['scalar']), debug=self.debug)
+                                continue
+
+                        line_draw_settings = WD.getDefaultLineSettings(self.defaultLineStyles, curline_settings, parameter, i, debug=self.debug)
+                        line_draw_settings = WF.fixDuplicateColors(line_draw_settings) #used the line, used param, then double up so subtract 1
+
+                        if 'zorder' not in line_draw_settings.keys():
+                            line_draw_settings['zorder'] = 4
+
+                        if 'label' not in line_draw_settings.keys():
+                            line_draw_settings['label'] = ''
+                        else:
+                            line_draw_settings['label'] = WF.formatTextFlags(line_draw_settings['label'])
+
+                        curax = ax
+                        axis2 = False
+                        if _usetwinx:
+                            if 'yaxis' in line_draw_settings.keys():
+                                if line_draw_settings['yaxis'].lower() == 'right':
+                                    curax = ax2
+                                    axis2 = True
+
+                        if units != '' and units is not None:
+                            if axis2:
+                                unitslist2.append(units)
+                            else:
+                                unitslist.append(units)
+
+                        if 'relative' in ax_settings:
+                            if ax_settings['relative'].lower() == 'true':
+                                if RelativeLineSettings['interval'] is not None:
+                                    dates, values = WT.changeTimeSeriesInterval(dates, values, RelativeLineSettings,
+                                                                                self.startYear)
+                                values = values / RelativeMasterSet
+
+                        if isCollection:  #if we have a collection for the datasource
+                            coloreach = False
+                            plotallmembers = False
+                            if 'coloreach' in curline_settings.keys():
+                                if curline_settings['coloreach'].lower() == 'true':
+                                    coloreach = True
+                            if 'plotallmembers' in curline_settings.keys():
+                                if curline_settings['plotallmembers'].lower() == 'true':
+                                    plotallmembers = True
+                            if not coloreach:
+                                if not self.memberiteration or plotallmembers:
+                                    modifiedalpha = False
+                                    if line_draw_settings['alpha'] == 1.:
+                                        modifiedalpha = True
+                                        line_draw_settings['alpha'] = 0.25 #for collection plots, set to low opac for a jillion lines
+
+                                    for cIT, member in enumerate(curline_settings['members']):
+                                        valueset = values[member]
+                                        if cIT > 0:
+                                            line_draw_settings['label'] = ''
+                                        self.Plots.plot(dates, valueset, curax, line_draw_settings)
+                                    if modifiedalpha:
+                                        line_draw_settings['alpha'] = 1.
+                                elif self.memberiteration:
+                                    valueset = values[self.member]
+                                    if curline_settings['stack']:
+                                        if axis not in stackplots.keys():  # left or right
+                                            stackplots[axis] = []
+                                        stackplots[axis].append({'values': valueset,
+                                                                 'dates': dates,
+                                                                 'label': line_draw_settings['label'],
+                                                                 'color': line_draw_settings['linecolor']})
+                                    else:
+                                        self.Plots.plot(dates, valueset, curax, line_draw_settings)
+
+                            else:
+                                single_coll_line_settings = self.Plots.seperateCollectionLines(line_draw_settings)
+                                for member in curline_settings['members']:
+                                    valueset = values[member]
+                                    coll_line_settings = single_coll_line_settings[member]
+                                    self.Plots.plot(dates, valueset, curax, coll_line_settings)
+
+                            self.Plots.plotCollectionEnvelopes(dates, values, curax, line_draw_settings)
+
+                        elif curline_settings['stack']:
+                            if axis not in stackplots.keys():  # left or right
+                                stackplots[axis] = []
+                            stackplots[axis].append({'values': values,
+                                                     'dates': dates,
+                                                     'label': line_draw_settings['label'],
+                                                     'color': line_draw_settings['linecolor']})
 
                         else:
-                            single_coll_line_settings = self.Plots.seperateCollectionLines(line_draw_settings)
-                            for member in curline_settings['members']:
-                                valueset = values[member]
-                                coll_line_settings = single_coll_line_settings[member]
-                                self.Plots.plot(dates, valueset, curax, coll_line_settings)
+                            self.Plots.plot(dates, values, curax, line_draw_settings)
 
-                        self.Plots.plotCollectionEnvelopes(dates, values, curax, line_draw_settings)
+                            self.WAT_log.addLogEntry({'type': line_draw_settings['label'] +
+                                                      '_TimeSeries' if line_draw_settings['label'] != '' else 'Timeseries',
+                                                      'name': self.ChapterRegion + '_' + yearstr,
+                                                      'description': ax_settings['description'],
+                                                      'units': units,
+                                                      'value_start_date': WT.translateDateFormat(dates[0], 'datetime', '',
+                                                                                                 self.StartTime, self.EndTime,
+                                                                                                 debug=self.debug).strftime('%d %b %Y'),
+                                                      'value_end_date': WT.translateDateFormat(dates[-1], 'datetime', '',
+                                                                                               self.StartTime, self.EndTime,
+                                                                                               debug=self.debug).strftime('%d %b %Y'),
+                                                      'logoutputfilename': line_draw_settings['logoutputfilename']
+                                                      },
+                                                     isdata=True)
 
-                    elif curline_settings['stack']:
-                        if axis not in stackplots.keys(): #left or right
-                            stackplots[axis] = []
-                        stackplots[axis].append({'values': values,
-                                                 'dates': dates,
-                                                 'label': line_draw_settings['label'],
-                                                 'color': line_draw_settings['linecolor']})
-
-                    else:
-                        self.Plots.plot(dates, values, curax, line_draw_settings)
-
-                        self.WAT_log.addLogEntry({'type': line_draw_settings['label'] + '_TimeSeries' if line_draw_settings['label'] != '' else 'Timeseries',
-                                                  'name': self.ChapterRegion+'_'+yearstr,
-                                                  'description': ax_settings['description'],
-                                                  'units': units,
-                                                  'value_start_date': WT.translateDateFormat(dates[0], 'datetime', '',
-                                                                                             self.StartTime, self.EndTime,
-                                                                                             debug=self.debug).strftime('%d %b %Y'),
-                                                  'value_end_date': WT.translateDateFormat(dates[-1], 'datetime', '',
-                                                                                           self.StartTime, self.EndTime,
-                                                                                           debug=self.debug).strftime('%d %b %Y'),
-                                                  'logoutputfilename': line_draw_settings['logoutputfilename']
-                                                 },
-                                                 isdata=True)
                 # GATE DATA #
                 if 'gatespacing' in ax_settings.keys():
                     gatespacing = float(ax_settings['gatespacing'])
@@ -532,7 +682,7 @@ class MakeAutomatedReport(object):
 
                     for ggi, gateop in enumerate(gateop_rev):
                         # gate_placement += ggi*gatespacing
-                        gate_count = 0 #keep track of gate number in group
+                        gate_count = 0  # keep track of gate number in group
                         if 'label' in gate_settings[gateop]:
                             gategroup_label = WF.formatTextFlags(gate_settings[gateop]['label'])
                             gategroup_labels.append(gategroup_label)
@@ -574,10 +724,11 @@ class MakeAutomatedReport(object):
 
                                 self.Plots.plot(dates, gatevalues, curax, gate_line_settings)
 
-                                gate_count += 1 #keep track of gate number in group
-                                gate_placement += 1 #keep track of gate palcement in space
-                                self.WAT_log.addLogEntry({'type': gate_line_settings['label'] + '_GateTimeSeries' if gate_line_settings['label'] != '' else 'GateTimeseries',
-                                                          'name': self.ChapterRegion+'_'+yearstr,
+                                gate_count += 1  #keep track of gate number in group
+                                gate_placement += 1  #keep track of gate palcement in space
+                                self.WAT_log.addLogEntry({'type': gate_line_settings['label'] +
+                                                          '_GateTimeSeries' if gate_line_settings['label'] != '' else 'GateTimeseries',
+                                                          'name': self.ChapterRegion + '_' + yearstr,
                                                           'description': ax_settings['description'],
                                                           'units': 'BINARY',
                                                           'value_start_date': WT.translateDateFormat(dates[0], 'datetime', '',
@@ -605,16 +756,17 @@ class MakeAutomatedReport(object):
                     for ax_to_add_line in axs_to_add_line:
                         for operationTime in operationtimes:
                             operationTime = WT.translateDateFormat(operationTime, 'datetime', '',
-                                                                       self.StartTime, self.EndTime,
-                                                                       debug=self.debug)
+                                                                   self.StartTime, self.EndTime,
+                                                                   debug=self.debug)
 
                             if 'zorder' not in opline_settings.keys():
                                 opline_settings['zorder'] = 3
 
                             ax_to_add_line.axvline(operationTime, c=opline_settings['linecolor'],
-                                                   lw=opline_settings['linewidth'], ls=opline_settings['linestylepattern'],
+                                                   lw=opline_settings['linewidth'],
+                                                   ls=opline_settings['linestylepattern'],
                                                    zorder=float(opline_settings['zorder']),
-                                                       alpha=float(opline_settings['alpha']))
+                                                   alpha=float(opline_settings['alpha']))
 
                 for stackplot_ax in stackplots.keys():
                     if stackplot_ax == 'left':
@@ -628,20 +780,21 @@ class MakeAutomatedReport(object):
                     stacklabels = [n['label'] for n in sps]
                     stackcolors = [n['color'] for n in sps]
 
-                    matched_dates = list(set(stackdates[0]).intersection(*stackdates)) #find dates that ALL dates have.
+                    matched_dates = list(set(stackdates[0]).intersection(*stackdates))  #find dates that ALL dates have.
                     matched_dates.sort()
 
                     if len(matched_dates) == 0:
                         WF.print2stdout('Mismatching dates for stack plot.', debug=self.debug)
-                        WF.print2stdout('Please check inputs are on the date interval and time stamps are on the same hours.', debug=self.debug)
+                        WF.print2stdout(
+                            'Please check inputs are on the date interval and time stamps are on the same hours.',
+                            debug=self.debug)
 
-                    #now filter values associated with dates not in this list
+                    # Now filter values associated with dates not in this list
                     for di, datelist in enumerate(stackdates):
                         mask_date_idx = [ni for ni, date in enumerate(datelist) if date in matched_dates]
                         stackvalues[di] = np.asarray(stackvalues[di])[mask_date_idx]
 
                     curax.stackplot(matched_dates, stackvalues, labels=stacklabels, colors=stackcolors, zorder=2)
-
 
                 ### VERTICAL LINES ###
                 self.Plots.plotVerticalLines(straightlines, ax, cur_obj_settings, isdate=True)
@@ -804,7 +957,7 @@ class MakeAutomatedReport(object):
                                     if ax_settings['useblanklegendentry'].lower() == 'true':
                                         plot_blank = True
                                 if plot_blank:
-                                    empty_handle, = ax.plot([],[],color="w", alpha=0.0)
+                                    empty_handle, = ax.plot([], [], color="w", alpha=0.0)
                                     handles.append(empty_handle)
                                     labels.append('')
                             ax2_handles, ax2_labels = ax2.get_legend_handles_labels()
@@ -827,25 +980,29 @@ class MakeAutomatedReport(object):
 
                         if len(handles) > 0:
 
-                            if ax_settings['legend_outside'].lower() == 'true': #TODO: calibrate the offset
+                            if ax_settings['legend_outside'].lower() == 'true':  #TODO: calibrate the offset
                                 if _usetwinx:
 
-                                    ax.legend(handles=handles, labels=labels, loc='center left', bbox_to_anchor=(1+right_offset/2, 0.5), ncol=numcols,fontsize=legsize)
+                                    ax.legend(handles=handles, labels=labels, loc='center left',
+                                              bbox_to_anchor=(1 + right_offset / 2, 0.5), ncol=numcols,
+                                              fontsize=legsize)
 
                                 else:
                                     # right_sided_axes.append(ax)
-                                    ax.legend(handles=handles, labels=labels, loc='center left', bbox_to_anchor=(1, 0.5), ncol=numcols,fontsize=legsize)
+                                    ax.legend(handles=handles, labels=labels, loc='center left',
+                                              bbox_to_anchor=(1, 0.5), ncol=numcols, fontsize=legsize)
                             else:
                                 ax.legend(handles=handles, labels=labels, fontsize=legsize, ncol=numcols)
 
 
-
             if not any(useAx):
+                WF.print2stdout(f'Plot for {year} not included due to xlimits.')
+
                 print(f'Plot for {year} not included due to xlimits.')
                 plt.close("all")
                 continue
 
-            plt.gcf().canvas.draw() #refresh so we can get legend stuff
+            plt.gcf().canvas.draw()  #refresh so we can get legend stuff
 
             plt.tight_layout()
 
@@ -855,7 +1012,7 @@ class MakeAutomatedReport(object):
             else:
                 plt.subplots_adjust(wspace=0, hspace=0)
 
-            basefigname = os.path.join(self.images_path, 'TimeSeriesPlot' + '_' + self.ChapterRegion.replace(' ','_')
+            basefigname = os.path.join(self.images_path, 'TimeSeriesPlot' + '_' + self.ChapterRegion.replace(' ', '_')
                                        + '_' + yearstr)
             exists = True
             tempnum = 1
@@ -879,15 +1036,149 @@ class MakeAutomatedReport(object):
             if pageformat == 'full':
                 self.XML.writeFullPagePlot(os.path.basename(figname), cur_obj_settings['description'])
 
+
         WF.print2stdout(f'Timeseries Plot took {time.time() - objectstarttime} seconds.')
 
+    def set_identicals_member_key(self, plot_name, member):
+        """
+           Update `self.identical_members_key` with the formatted members for the given member in the specified plot.
+           :param plot_name: The name of the plot to use for lookup
+           :param member: The member to get the formatted string for
+           """
+        if plot_name in self.plot_identical_members_key:
+            member_dict = self.plot_identical_members_key[plot_name]
+            if member in member_dict:
+                self.identical_members_key = member_dict[member]
+            else:
+                self.identical_members_key = f'Member {member} not found in plot {plot_name}'
+        else:
+            self.identical_members_key = f'Plot name {plot_name} not found in plot_identical_members_key'
+
+
+    def check_for_identical_timeSeriesPlots(self, values_dict):
+        """
+        Compares members' data within each plot to identify identical and non-identical groups.
+
+        :param values_dict: Dictionary of time series data with plot names as keys.
+        :return: Updates internal variables with results for each plot.
+        """
+
+        plots_processed = 0
+
+        for plot_name, plot_data in values_dict.items():
+            member_keys = list(next(iter(plot_data.values())).keys())
+            self.identical_groups_per_plot, self.non_identicals_per_plot = [], []
+            self.checked_members = set() #reset for each plot
+
+            # Compare each member against others
+            for reference_member in member_keys:
+                if reference_member in self.checked_members:
+                    continue
+
+                identical_to_current = [reference_member]
+
+                for other_member in member_keys:
+                    if other_member == reference_member or other_member in self.checked_members:
+                        continue
+
+                    if self.are_members_identical(plot_data, reference_member, other_member):
+                        identical_to_current.append(other_member)
+
+                # Update identical and non-identical groups
+                if len(identical_to_current) > 1:
+                    self.identical_groups_per_plot.append(sorted(identical_to_current))
+                    self.checked_members.update(identical_to_current)
+                else:
+                    self.non_identicals_per_plot.append(reference_member)
+                    self.checked_members.add(reference_member)
+
+            # Handle members not yet checked
+            remaining_members = set(member_keys) - self.checked_members
+            self.non_identicals_per_plot.extend(remaining_members)
+
+            self.process_plot_results(plot_name)
+            plots_processed += 1
+
+        # Final check to confirm all plots have been checked
+        self.cur_section_members_all_checked = (plots_processed == len(values_dict))
+
+        # Final check after processing all plots
+        WF.print2stdout(f'#### After checking for identicals:  \nidentical_members_per_plot: \n{self.identical_members_per_plot}', debug=self.debug)
+        WF.print2stdout(f'non_identical_members_per_plot: \n{self.non_identical_members_per_plot} ####', debug=self.debug)
+
+
+    def are_members_identical(self, plot_data, reference_member, other_member):
+        """
+        Compares two members' data across all time series in the plot.
+
+        :param plot_data: Dictionary of time series data for the plot.
+        :param reference_member: The member to compare against.
+        :param other_member: The member to compare with the reference.
+        :return: True if members are identical, False otherwise.
+        """
+        for member_data in plot_data.values():
+            if not np.array_equal(member_data[reference_member], member_data[other_member]):
+                return False
+        return True
+
+
+    def process_plot_results(self, plot_name):
+        """
+        Stores results for identical and non-identical members for each plot.
+
+        :param plot_name: The name of the plot being processed.
+        """
+        if self.identical_groups_per_plot:
+            self.identical_members_per_plot[plot_name] = self.identical_groups_per_plot
+            self.create_identical_members_keys(self.identical_groups_per_plot, plot_name)
+            self.update_identical_members_list(self.identical_groups_per_plot)
+
+        if self.non_identicals_per_plot:
+            self.non_identical_members_per_plot[plot_name] = self.non_identicals_per_plot
+
+
+    def update_identical_members_list(self, identical_groups):
+        """
+        Marks identical members and skips plotting for non-primary members.
+
+        :param identical_groups: List of groups of identical members.
+        """
+        for group in identical_groups:
+            if group not in self.complete_identical_members_groups:  # Avoid duplicates
+                self.complete_identical_members_groups.append(group)
+                for member in group:
+                    if member != group[0]:
+                        self.identical_members_do_not_plot.append(member) # Skip non-primary members
+
+
+    def create_identical_members_keys(self, identical_groups, plot_name):
+        """
+        Creates and stores keys for identical members within each plot.
+
+        :param identical_groups: Groups of identical members.
+        :param plot_name: The plot being processed.
+         plot_identical_members_key dict ex: {plot_name: {member1: 'member1, member2'}}
+        """
+        if plot_name not in self.plot_identical_members_key:
+            self.plot_identical_members_key[plot_name] = {}
+
+        # Format each group and update the dictionary
+        for group in identical_groups:
+            first_member = group[0]
+            formatted_members = ', '.join(WF.formatMembers(group))
+            if first_member in self.plot_identical_members_key[plot_name]:
+                self.plot_identical_members_key[plot_name][first_member] += f', {formatted_members}'
+            else:
+                self.plot_identical_members_key[plot_name][first_member] = formatted_members
+
+
     def makeProfileStatisticsTable(self, object_settings):
-        '''
+        """
         Makes a table to compute stats based off of profile lines. Data is interpolated over a series of points
         determined by the user
         :param object_settings: currently selected object settings dictionary
         :return: writes table to XML
-        '''
+        """
 
         WF.print2stdout('\n################################')
         WF.print2stdout('Now making Profile Stats Table.')
@@ -964,7 +1255,7 @@ class MakeAutomatedReport(object):
         # else:
         #     object_settings['description'] = WF.parseForTextFlags(object_settings['description'])
 
-        if not object_settings['split_by_year']: #if we dont want to split by year, just make a big ass list
+        if not object_settings['split_by_year']:  #if we don't want to split by year, just make a huge list
             yrheaders = [list(itertools.chain.from_iterable(yrheaders))]
             yrheaders_i = [list(itertools.chain.from_iterable(yrheaders_i))]
         for yi, yrheader_group in enumerate(yrheaders):
@@ -981,7 +1272,7 @@ class MakeAutomatedReport(object):
             for yhi, yrheader in enumerate(yrheader_group):
                 header_i = yrheaders_i[yi][yhi]
                 headings, rows = self.Tables.buildProfileStatsTable(table_blueprint, yrheader, line_settings)
-                for hi,heading in enumerate(headings):
+                for hi, heading in enumerate(headings):
                     tcnum = len(table_constructor.keys())
                     table_constructor[tcnum] = {}
                     if self.iscomp:
@@ -991,10 +1282,11 @@ class MakeAutomatedReport(object):
                     for ri, row in enumerate(rows):
                         s_row = row.split('|')
                         rowname = s_row[0]
-                        row_val = s_row[hi+1]
+                        row_val = s_row[hi + 1]
                         addasterisk = False
                         if '%%' in row_val:
-                            stats_data = self.Tables.formatStatsProfileLineData(row_val, data, object_settings['resolution'],
+                            stats_data = self.Tables.formatStatsProfileLineData(row_val, data,
+                                                                                object_settings['resolution'],
                                                                                 object_settings['usedepth'], header_i)
                             missing_data = self.Tables.checkForMissingData(row_val, stats_data)
                             if missing_data:
@@ -1002,7 +1294,7 @@ class MakeAutomatedReport(object):
                                 row_val = np.nan
                             else:
                                 row_val, stat = self.Tables.getStatsLine(row_val, stats_data)
-                            if not np.isnan(row_val) and row_val != None:
+                            if not np.isnan(row_val) and row_val is not None:
                                 thresholdsettings = self.Tables.matchThresholdToStat(stat, object_settings)
 
                                 for thresh in thresholdsettings:
@@ -1039,7 +1331,9 @@ class MakeAutomatedReport(object):
                                                       'units': object_settings['plot_units'],
                                                       'value_start_date': yrheader,
                                                       'value_end_date': yrheader,
-                                                      'logoutputfilename': ', '.join([line_settings[flag]['logoutputfilename'] for flag in line_settings])
+                                                      'logoutputfilename': ', '.join(
+                                                          [line_settings[flag]['logoutputfilename'] for flag in
+                                                           line_settings])
                                                       },
                                                      isdata=True)
                         numberFormat = self.Tables.matchNumberFormatByStat(stat, object_settings)
@@ -1069,23 +1363,23 @@ class MakeAutomatedReport(object):
                             keepcolumn[header] = True
 
             for key in keepcolumn.keys():
-                if keepcolumn[key] == True:
+                if keepcolumn[key] is True:
                     keeptable = True
                 else:
                     keepall = False
 
-            if keeptable: #quick check if we're even writing a table..
+            if keeptable:  #quick check if we're even writing a table.
                 if not keepall:
                     new_table_constructor = {}
                     for row_num in table_constructor.keys():
                         constructor = table_constructor[row_num]
                         header = constructor['header']
-                        if keepcolumn[header] == True:
+                        if keepcolumn[header]:
                             new_table_constructor[row_num] = constructor
                 else:
                     new_table_constructor = table_constructor
 
-                #THEN write table
+                # THEN write table
                 if self.iscomp:
                     self.XML.writeDateControlledTableStart(object_desc, 'Statistics')
                 else:
@@ -1109,11 +1403,11 @@ class MakeAutomatedReport(object):
         WF.print2stdout(f'Profile Stat Table took {time.time() - objectstarttime} seconds.')
 
     def makeProfilePlot(self, object_settings):
-        '''
-        takes in object settings to build profile plot and write to XML
+        """
+        Takes in object settings to build profile plot and write to XML
         :param object_settings: currently selected object settings dictionary
         :return: creates png in images dir and writes to XML file
-        '''
+        """
 
         WF.print2stdout('\n################################')
         WF.print2stdout('Now making Profile Plot.')
@@ -1200,14 +1494,15 @@ class MakeAutomatedReport(object):
             n = int(object_settings['profilesperrow']) * int(object_settings['rowsperpage']) #Get number of plots on page
             page_indices = [prof_indices[i * n:(i + 1) * n] for i in range((len(prof_indices) + n - 1) // n)]
             cur_obj_settings = pickle.loads(pickle.dumps(object_settings, -1))
-            cur_obj_settings = WF.updateFlaggedValues(cur_obj_settings, '%%year%%', yearstr) #TODO: reudce the settings
+            cur_obj_settings = WF.updateFlaggedValues(cur_obj_settings, '%%year%%', yearstr)  #TODO: reudce the settings
 
             for page_i, pgi in enumerate(page_indices):
 
                 subplot_rows, subplot_cols = WF.getSubplotConfig(len(pgi), int(cur_obj_settings['profilesperrow']))
                 n_nrow_active = np.ceil(len(pgi) / subplot_cols)
 
-                fig, axs = plt.subplots(nrows=int(object_settings['rowsperpage']), ncols=int(object_settings['profilesperrow']), figsize=(9,10))
+                fig, axs = plt.subplots(nrows=int(object_settings['rowsperpage']),
+                                        ncols=int(object_settings['profilesperrow']), figsize=(9, 10))
 
                 for i in range(n):
 
@@ -1215,7 +1510,7 @@ class MakeAutomatedReport(object):
                     current_col = i % int(object_settings['profilesperrow'])
 
                     ax = axs[current_row, current_col]
-                    if i+1 > len(pgi):
+                    if i + 1 > len(pgi):
                         ax.axis('off')
                         continue
                     else:
@@ -1228,12 +1523,15 @@ class MakeAutomatedReport(object):
                         try:
                             values = data[line]['values'][j]
                             if len(values) == 0:
-                                WF.print2stdout('No values for {0} on {1}'.format(line, object_settings['timestamps'][j]), debug=self.debug)
+                                WF.print2stdout(
+                                    'No values for {0} on {1}'.format(line, object_settings['timestamps'][j]),
+                                    debug=self.debug)
                                 continue
                             msk = np.where(~np.isnan(values))
                             values = values[msk]
                         except IndexError:
-                            WF.print2stdout('No values for {0} on {1}'.format(line, object_settings['timestamps'][j]), debug=self.debug)
+                            WF.print2stdout('No values for {0} on {1}'.format(line, object_settings['timestamps'][j]),
+                                            debug=self.debug)
                             continue
 
                         try:
@@ -1332,7 +1630,7 @@ class MakeAutomatedReport(object):
                             gatebottom = None
                             gatemiddle = None
                             gateop_has_value = False
-                            gate_count = 0 #keep track of gate number in group
+                            gate_count = 0  #keep track of gate number in group
                             numgates = len(gatedata[gategroup]['gates'])
                             gatepoint_xpositions = np.linspace(ax.get_xlim()[0], ax.get_xlim()[1],numgates+2)[1:-1] #+2 for start and end
 
@@ -1347,18 +1645,18 @@ class MakeAutomatedReport(object):
 
                             if 'middle' in cur_gateop_settings.keys():
                                 gatemiddle = float(cur_gateop_settings['middle'])
-                            elif gatetop != None and gatebottom != None:
+                            elif gatetop is not None and gatebottom is not None:
                                 gatemiddle = np.mean([gatetop, gatebottom])
 
-                            if gatetop == None and gatebottom != None and gatemiddle == None: #bottom no top/middle
+                            if gatetop is None and gatebottom is not None and gatemiddle is None:  #bottom no top/middle
                                 gatetop = gatebottom + float(object_settings['defaultgateenvelope'])
-                                gatemiddle = gatebottom + float(object_settings['defaultgateenvelope'])/2
-                            elif gatetop != None and gatebottom == None and gatemiddle == None: #top no bottom/middle
+                                gatemiddle = gatebottom + float(object_settings['defaultgateenvelope']) / 2
+                            elif gatetop is not None and gatebottom is None and gatemiddle is None:  #top no bottom/middle
                                 gatebottom = gatetop - float(object_settings['defaultgateenvelope'])
-                                gatemiddle = gatetop - float(object_settings['defaultgateenvelope'])/2
-                            elif gatetop == None and gatebottom == None and gatemiddle != None: #only middle
-                                gatebottom = gatemiddle - float(object_settings['defaultgateenvelope'])/2
-                                gatetop = gatemiddle + float(object_settings['defaultgateenvelope'])/2
+                                gatemiddle = gatetop - float(object_settings['defaultgateenvelope']) / 2
+                            elif gatetop is None and gatebottom is None and gatemiddle is not None:  #only middle
+                                gatebottom = gatemiddle - float(object_settings['defaultgateenvelope']) / 2
+                                gatetop = gatemiddle + float(object_settings['defaultgateenvelope']) / 2
 
                             for gate in cur_gateop['gates'].keys():
 
@@ -1373,10 +1671,10 @@ class MakeAutomatedReport(object):
 
                                 if 'dateformat' in cur_obj_settings.keys():
                                     if cur_obj_settings['dateformat'].lower() == 'datetime':
-                                        if isinstance(dates[0], (int,float)):
+                                        if isinstance(dates[0], (int, float)):
                                             dates = WT.JDateToDatetime(dates, self.startYear)
 
-                                if gatemsk == None:
+                                if gatemsk is None:
                                     gatemsk = WR.getClosestTime([object_settings['timestamps'][j]], dates)
                                 if len(gatemsk) == 0:
                                     value = np.nan
@@ -1402,20 +1700,21 @@ class MakeAutomatedReport(object):
                                     if showgate:
                                         ax.scatter(xpos, gatemiddle, edgecolor='black', facecolor='black', marker='o')
 
-                                gate_count += 1 #keep track of gate number in group
-                                self.WAT_log.addLogEntry({'type': gate + '_GateTimeSeries' if gate != '' else 'GateTimeseries',
-                                                          'name': self.ChapterRegion+'_'+yearstr,
-                                                          'description': cur_obj_settings['description'],
-                                                          'units': 'BINARY',
-                                                          'value_start_date': WT.translateDateFormat(dates[0], 'datetime', '',
-                                                                                                     self.StartTime, self.EndTime,
-                                                                                                     debug=self.debug).strftime('%d %b %Y'),
-                                                          'value_end_date': WT.translateDateFormat(dates[-1], 'datetime', '',
-                                                                                                   self.StartTime, self.EndTime,
-                                                                                                   debug=self.debug).strftime('%d %b %Y'),
-                                                          'logoutputfilename': curgate_settings['logoutputfilename']
-                                                          },
-                                                         isdata=True)
+                                gate_count += 1  #keep track of gate number in group
+                                self.WAT_log.addLogEntry(
+                                    {'type': gate + '_GateTimeSeries' if gate != '' else 'GateTimeseries',
+                                     'name': self.ChapterRegion + '_' + yearstr,
+                                     'description': cur_obj_settings['description'],
+                                     'units': 'BINARY',
+                                     'value_start_date': WT.translateDateFormat(dates[0], 'datetime', '',
+                                                                                self.StartTime, self.EndTime,
+                                                                                debug=self.debug).strftime('%d %b %Y'),
+                                     'value_end_date': WT.translateDateFormat(dates[-1], 'datetime', '',
+                                                                              self.StartTime, self.EndTime,
+                                                                              debug=self.debug).strftime('%d %b %Y'),
+                                     'logoutputfilename': curgate_settings['logoutputfilename']
+                                     },
+                                    isdata=True)
 
                             if 'color' in cur_gateop_settings.keys():
                                 color = cur_gateop_settings['color']
@@ -1429,7 +1728,7 @@ class MakeAutomatedReport(object):
                                 ax.axhline(gatemiddle, color=color, zorder=-7)
 
                             if gateop_has_value:
-                                ax.axhspan(gatebottom,gatetop, alpha=0.5, color=color, zorder=-8)
+                                ax.axhspan(gatebottom, gatetop, alpha=0.5, color=color, zorder=-8)
 
                     cur_timestamp = object_settings['timestamps'][j]
                     if 'dateformat' in object_settings:
@@ -1456,8 +1755,8 @@ class MakeAutomatedReport(object):
                             yl = ax.get_ylim()
                             xtext = xl[0] + xbufr * (xl[1] - xl[0])
                             ytext = yl[1] - ybufr * (yl[1] - yl[0])
-                            ax.text(xtext, ytext, ttl_str, ha='left', va='top', size=10, #TODO: make this variable
-                                    bbox=dict(boxstyle='round',facecolor='w', alpha=0.35),
+                            ax.text(xtext, ytext, ttl_str, ha='left', va='top', size=10,  #TODO: make this variable
+                                    bbox=dict(boxstyle='round', facecolor='w', alpha=0.35),
                                     zorder=10)
 
                     if 'bottomtext' in cur_obj_settings.keys():
@@ -1524,12 +1823,12 @@ class MakeAutomatedReport(object):
                             if n_legends_row < 1:
                                 n_legends_row = 1
 
-                            plt.subplots_adjust(bottom=.1*n_legends_row)
+                            plt.subplots_adjust(bottom=.1 * n_legends_row)
                             # fig_ratio = (axs[int(n_nrow_active)-1,0].bbox.extents[1] - (fig.bbox.height * (.1025 * n_legends_row))) / fig.bbox.height
                             fig_ratio = (axs[int(n_nrow_active)-1,0].bbox.extents[1] - (fig.bbox.height * .055)) / fig.bbox.height
                             # fig_ratio += text_y * linestext
                             # plt.legend(bbox_to_anchor=(.5,fig_ratio), loc="lower center", fontsize=legsize,
-                            plt.legend(bbox_to_anchor=(.5,fig_ratio), loc="upper center", fontsize=legsize,
+                            plt.legend(bbox_to_anchor=(.5, fig_ratio), loc="upper center", fontsize=legsize,
                                        bbox_transform=fig.transFigure, ncol=ncolumns, handles=leg_handles,
                                        labels=leg_labels)
 
@@ -1559,22 +1858,25 @@ class MakeAutomatedReport(object):
 
                 ################################################
 
-                description = '{0}: {1} of {2}'.format(cur_obj_settings['description'], page_i+1, len(page_indices))
+                description = '{0}: {1} of {2}'.format(cur_obj_settings['description'], page_i + 1, len(page_indices))
                 self.XML.writeProfilePlotFigure(figname, description)
 
                 self.WAT_log.addLogEntry({'type': 'ProfilePlot',
                                           'name': self.ChapterRegion,
                                           'description': description,
                                           'units': object_settings['plot_units'],
-                                          'value_start_date': WT.translateDateFormat(object_settings['timestamps'][pgi[0]],
-                                                                                     'datetime', '',
-                                                                                     self.StartTime, self.EndTime,
-                                                                                     debug=self.debug).strftime('%d %b %Y'),
-                                          'value_end_date': WT.translateDateFormat(object_settings['timestamps'][pgi[-1]],
-                                                                                   'datetime', '',
-                                                                                   self.StartTime, self.EndTime,
-                                                                                   debug=self.debug).strftime('%d %b %Y'),
-                                          'logoutputfilename': ', '.join([line_settings[flag]['logoutputfilename'] for flag in line_settings])
+                                          'value_start_date': WT.translateDateFormat(
+                                              object_settings['timestamps'][pgi[0]],
+                                              'datetime', '',
+                                              self.StartTime, self.EndTime,
+                                              debug=self.debug).strftime('%d %b %Y'),
+                                          'value_end_date': WT.translateDateFormat(
+                                              object_settings['timestamps'][pgi[-1]],
+                                              'datetime', '',
+                                              self.StartTime, self.EndTime,
+                                              debug=self.debug).strftime('%d %b %Y'),
+                                          'logoutputfilename': ', '.join(
+                                              [line_settings[flag]['logoutputfilename'] for flag in line_settings])
                                           },
                                          isdata=True)
 
@@ -1591,11 +1893,11 @@ class MakeAutomatedReport(object):
         WF.print2stdout(f'Profile Plot took {time.time() - objectstarttime} seconds.')
 
     def makeErrorStatisticsTable(self, object_settings):
-        '''
-        takes in object settings to build error stats table and write to XML
+        """
+        Takes in object settings to build error stats table and write to XML
         :param object_settings: currently selected object settings dictionary
         :return: writes to XML file
-        '''
+        """
 
         WF.print2stdout('\n################################')
         WF.print2stdout('Now making Error Stats table.')
@@ -1629,7 +1931,7 @@ class MakeAutomatedReport(object):
 
         headings, rows = self.Tables.buildErrorStatsTable(object_settings, data_settings)
         headings = self.Tables.replaceIllegalJasperCharactersHeadings(headings)
-        rows =self.Tables.replaceIllegalJasperCharactersRows(rows)
+        rows = self.Tables.replaceIllegalJasperCharactersRows(rows)
 
         object_settings = self.configureSettingsForID(self.base_id, object_settings)
 
@@ -1652,7 +1954,20 @@ class MakeAutomatedReport(object):
             members = self.Data.getMembers(object_settings, data_settings)
             object_settings['members'] = members
             if self.memberiteration:
-                object_settings = WF.updateFlaggedValues(object_settings, '%%member%%', WF.formatMembers(self.member))
+                # If the member is part of an identical group
+                if self.member_in_identical_group:
+                    for group in self.complete_identical_members_groups:
+                        if self.member in group:
+                            if self.member == group[0]:
+                                # Only output the error statistics table for the first member in the identical group
+                                object_settings = WF.updateFlaggedValues(object_settings, '%%member%%', self.identical_members_key)
+                                break # Stop after updating for the first member in the group
+                            else:
+                                return # Do not output a second table for non-primary members of the group
+                # Handle non-identical members
+                else:
+                    object_settings = WF.updateFlaggedValues(object_settings, '%%member%%', WF.formatMembers(self.member))
+
             rows = self.Tables.configureRowsForCollection(rows, object_settings)
 
         if 'description' in object_settings.keys():
@@ -1664,7 +1979,7 @@ class MakeAutomatedReport(object):
 
         table_constructor = {}
 
-        for yi, year in enumerate(object_settings['years']): #iterate years. If comp, thats the date header.
+        for yi, year in enumerate(object_settings['years']):  #iterate years. If iscomp, that;s the date header.
             yearlydata = self.Tables.filterTableData(data, object_settings)
             yearheader = object_settings['yearstr'][yi]
             for hi, header in enumerate(headings):
@@ -1679,7 +1994,7 @@ class MakeAutomatedReport(object):
                 for ri, row in enumerate(rows):
                     s_row = row.split('|')
                     rowname = s_row[0]
-                    row_val = s_row[hi+1]
+                    row_val = s_row[hi + 1]
                     stat = None
                     addasterisk = False
                     if self.memberiteration:
@@ -1703,7 +2018,7 @@ class MakeAutomatedReport(object):
                                 row_val = np.nan
                             else:
                                 row_val, stat = self.Tables.getStatsLine(row_val, rowdata)
-                            if not np.isnan(row_val) and row_val != None:
+                            if not np.isnan(row_val) and row_val is not None:
                                 thresholdsettings = self.Tables.matchThresholdToStat(stat, object_settings)
                                 for thresh in thresholdsettings:
                                     if row_val < thresh['value']:
@@ -1737,17 +2052,23 @@ class MakeAutomatedReport(object):
                                                       'value': row_val,
                                                       'function': stat,
                                                       'units': object_settings['plot_units'],
-                                                      'value_start_date': WT.translateDateFormat(data_start_date, 'datetime', '',
-                                                                                                 self.StartTime, self.EndTime,
+                                                      'value_start_date': WT.translateDateFormat(data_start_date,
+                                                                                                 'datetime', '',
+                                                                                                 self.StartTime,
+                                                                                                 self.EndTime,
                                                                                                  debug=self.debug),
-                                                      'value_end_date': WT.translateDateFormat(data_end_date, 'datetime', '',
-                                                                                               self.StartTime, self.EndTime,
+                                                      'value_end_date': WT.translateDateFormat(data_end_date,
+                                                                                               'datetime', '',
+                                                                                               self.StartTime,
+                                                                                               self.EndTime,
                                                                                                debug=self.debug),
-                                                      'logoutputfilename': ', '.join([data_settings[flag]['logoutputfilename'] for flag in data_settings])
+                                                      'logoutputfilename': ', '.join(
+                                                          [data_settings[flag]['logoutputfilename'] for flag in
+                                                           data_settings])
                                                       },
                                                      isdata=True)
 
-                    header_frmt = '' if header_frmt == None else header_frmt
+                    header_frmt = '' if header_frmt is None else header_frmt
                     numberFormat = self.Tables.matchNumberFormatByStat(stat, object_settings)
                     formatted_number = WF.formatNumbers(row_val, numberFormat)
                     if addasterisk:
@@ -1775,26 +2096,28 @@ class MakeAutomatedReport(object):
                     keepcolumn[header] = True
 
         for key in keepcolumn.keys():
-            if keepcolumn[key] == True:
+            if keepcolumn[key]:
                 keeptable = True
             else:
                 keepall = False
 
-        if keeptable: #quick check if we're even writing a table..
+        if keeptable:  #quick check if we're even writing a table.
             if not keepall:
                 new_table_constructor = {}
                 for row_num in table_constructor.keys():
                     constructor = table_constructor[row_num]
                     header = constructor['header']
-                    if keepcolumn[header] == True:
+                    if keepcolumn[header]:
                         new_table_constructor[row_num] = constructor
             else:
                 new_table_constructor = table_constructor
 
-            #THEN write table
+            # THEN write table
+            WF.print2stdout(f'##### Made it to makeErrorStatisticsTable ending, time to write the table #####')
             if self.iscomp:
                 self.XML.writeDateControlledTableStart(desc, primarykeyheader)
             else:
+                WF.print2stdout(f'##### if self.iscomp: = False ##### , writing table start, should output Report_Element : control_point_tables ')
                 self.XML.writeTableStart(desc, primarykeyheader)
 
             self.Tables.writeTable(new_table_constructor)
@@ -1804,15 +2127,14 @@ class MakeAutomatedReport(object):
             self.Tables.writeMissingTableWarning(desc)
             WF.print2stdout('No values found for table. Not writing table.', debug=self.debug)
 
-
         WF.print2stdout(f'Error Stats table took {time.time() - objectstarttime} seconds.')
 
     def makeMonthlyStatisticsTable(self, object_settings):
-        '''
-        takes in object settings to build monthly stats table and write to XML
+        """
+        Takes in object settings to build monthly stats table and write to XML
         :param object_settings: currently selected object settings dictionary
         :return: writes to XML file
-        '''
+        """
 
         WF.print2stdout('\n################################')
         WF.print2stdout('Now making Monthly Stats Table.')
@@ -1843,7 +2165,7 @@ class MakeAutomatedReport(object):
 
         headings, rows = self.Tables.buildMonthlyStatsTable(object_settings, data_settings)
 
-        object_settings= self.configureSettingsForID(self.base_id, object_settings)
+        object_settings = self.configureSettingsForID(self.base_id, object_settings)
 
         data = self.Tables.filterTableData(data, object_settings)
         data, data_settings = self.Tables.correctTableUnits(data, data_settings, object_settings)
@@ -1862,7 +2184,7 @@ class MakeAutomatedReport(object):
 
         table_constructor = {}
 
-        for yi, year in enumerate(object_settings['years']): #iterate years. If comp, thats the date header.
+        for yi, year in enumerate(object_settings['years']):  # Iterate years. If iscomp, that's the date header.
 
             yearheader = object_settings['yearstr'][yi]
             for hi, header in enumerate(headings):
@@ -1878,7 +2200,7 @@ class MakeAutomatedReport(object):
                 for ri, row in enumerate(rows):
                     s_row = row.split('|')
                     rowname = s_row[0]
-                    row_val = s_row[hi+1]
+                    row_val = s_row[hi + 1]
                     stat = None
                     addasterisk = False
                     if '%%' in row_val:
@@ -1893,7 +2215,7 @@ class MakeAutomatedReport(object):
                                 row_val = np.nan
                             else:
                                 row_val, stat = self.Tables.getStatsLine(row_val, rowdata)
-                            if not np.isnan(row_val) and row_val != None:
+                            if not np.isnan(row_val) and row_val is not None:
                                 for thresh in thresholds:
                                     if row_val < thresh['value']:
                                         if 'colorwhen' in thresh.keys():
@@ -1927,17 +2249,23 @@ class MakeAutomatedReport(object):
                                                       'value': row_val,
                                                       'function': stat,
                                                       'units': object_settings['plot_units'],
-                                                      'value_start_date': WT.translateDateFormat(data_start_date, 'datetime', '',
-                                                                                                 self.StartTime, self.EndTime,
+                                                      'value_start_date': WT.translateDateFormat(data_start_date,
+                                                                                                 'datetime', '',
+                                                                                                 self.StartTime,
+                                                                                                 self.EndTime,
                                                                                                  debug=self.debug),
-                                                      'value_end_date': WT.translateDateFormat(data_end_date, 'datetime', '',
-                                                                                               self.StartTime, self.EndTime,
-                                                                                              debug=self.debug),
-                                                      'logoutputfilename': ', '.join([data_settings[flag]['logoutputfilename'] for flag in data_settings])
+                                                      'value_end_date': WT.translateDateFormat(data_end_date,
+                                                                                               'datetime', '',
+                                                                                               self.StartTime,
+                                                                                               self.EndTime,
+                                                                                               debug=self.debug),
+                                                      'logoutputfilename': ', '.join(
+                                                          [data_settings[flag]['logoutputfilename'] for flag in
+                                                           data_settings])
                                                       },
                                                      isdata=True)
 
-                    header_frmt = '' if header_frmt == None else header_frmt
+                    header_frmt = '' if header_frmt is None else header_frmt
                     numberFormat = self.Tables.matchNumberFormatByStat(stat, object_settings)
                     formattedNumber = WF.formatNumbers(row_val, numberFormat)
                     if addasterisk:
@@ -1965,23 +2293,23 @@ class MakeAutomatedReport(object):
                     keepcolumn[header] = True
 
         for key in keepcolumn.keys():
-            if keepcolumn[key] == True:
+            if keepcolumn[key]:
                 keeptable = True
             else:
                 keepall = False
 
-        if keeptable: #quick check if we're even writing a table..
+        if keeptable:  # quick check if we're even writing a table.
             if not keepall:
                 new_table_constructor = {}
                 for row_num in table_constructor.keys():
                     constructor = table_constructor[row_num]
                     header = constructor['header']
-                    if keepcolumn[header] == True:
+                    if keepcolumn[header]:
                         new_table_constructor[row_num] = constructor
             else:
                 new_table_constructor = table_constructor
 
-            #THEN write table
+            # THEN write table
             if self.iscomp:
                 self.XML.writeDateControlledTableStart(desc, 'Month')
             else:
@@ -1997,11 +2325,11 @@ class MakeAutomatedReport(object):
         WF.print2stdout(f'Monthly Stat Table took {time.time() - objectstarttime} seconds.')
 
     def makeSingleStatisticTable(self, object_settings):
-        '''
+        """
         takes in object settings to build Single Statistic table and write to XML
         :param object_settings: currently selected object settings dictionary
         :return: creates png in images dir and writes to XML file
-        '''
+        """
 
         WF.print2stdout('\n################################')
         WF.print2stdout('Now making Single Statistic Table.')
@@ -2024,7 +2352,7 @@ class MakeAutomatedReport(object):
         object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = WF.getObjectYears(self, object_settings)
 
         data, data_settings = self.Data.getTableDataDictionary(object_settings)
-        data, data_settings= WF.mergeLines(data, data_settings, object_settings)
+        data, data_settings = WF.mergeLines(data, data_settings, object_settings)
 
         data = self.Data.filterTimeSeries(data, data_settings)
 
@@ -2050,13 +2378,12 @@ class MakeAutomatedReport(object):
         else:
             desc = ''
 
-
         table_constructor = {}
 
         if self.iscomp:
             datecolumns = self.Constants.mo_str_3
         else:
-            datecolumns = [''] #if not comp run we dont need date headings, months will be in headings
+            datecolumns = ['']  # if not comp run, we don't need date headings, months will be in headings
 
         for mi, month in enumerate(datecolumns):
             if len(headings) == 0:
@@ -2075,7 +2402,7 @@ class MakeAutomatedReport(object):
                     if rowname == 'ALLYEARS':
                         rowname = 'All'
                     year = object_settings['years'][ri]
-                    row_val = s_row[i+(len(headings)*mi)+1]
+                    row_val = s_row[i + (len(headings) * mi) + 1]
                     stat = None
                     addasterisk = False
                     if '%%' in row_val:
@@ -2124,17 +2451,23 @@ class MakeAutomatedReport(object):
                                                       'value': row_val,
                                                       'units': object_settings_blueprint['units_list'],
                                                       'function': stat,
-                                                      'value_start_date': WT.translateDateFormat(data_start_date, 'datetime', '',
-                                                                                                 self.StartTime, self.EndTime,
+                                                      'value_start_date': WT.translateDateFormat(data_start_date,
+                                                                                                 'datetime', '',
+                                                                                                 self.StartTime,
+                                                                                                 self.EndTime,
                                                                                                  debug=self.debug),
-                                                      'value_end_date': WT.translateDateFormat(data_end_date, 'datetime', '',
-                                                                                               self.StartTime, self.EndTime,
+                                                      'value_end_date': WT.translateDateFormat(data_end_date,
+                                                                                               'datetime', '',
+                                                                                               self.StartTime,
+                                                                                               self.EndTime,
                                                                                                debug=self.debug),
-                                                      'logoutputfilename': ', '.join([data_settings[flag]['logoutputfilename'] for flag in data_settings])
+                                                      'logoutputfilename': ', '.join(
+                                                          [data_settings[flag]['logoutputfilename'] for flag in
+                                                           data_settings])
                                                       },
                                                      isdata=True)
 
-                    header = '' if header == None else header
+                    header = '' if header is None else header
                     numberFormat = self.Tables.matchNumberFormatByStat(stat, object_settings_blueprint)
                     formattedNumber = WF.formatNumbers(row_val, numberFormat)
                     if addasterisk:
@@ -2144,7 +2477,7 @@ class MakeAutomatedReport(object):
                 table_constructor[tcnum]['thresholdcolors'] = threshold_colors
                 table_constructor[tcnum]['header'] = header
 
-        #check for entire rows/columns that can be sniped
+        # Check for entire rows/columns that can be sniped
         keeptable = False
         keepall = True
         keepheader = {}
@@ -2162,12 +2495,12 @@ class MakeAutomatedReport(object):
                     keepheader[srow[0]] = True
 
         for key in keepheader.keys():
-            if keepheader[key] == True:
+            if keepheader[key]:
                 keeptable = True
             else:
                 keepall = False
 
-        if keeptable: #quick check if we're even writing a table..
+        if keeptable:  #quick check if we're even writing a table.
             if not keepall:
                 for row_num in table_constructor.keys():
                     constructor = table_constructor[row_num]
@@ -2176,13 +2509,13 @@ class MakeAutomatedReport(object):
                     new_thresh = []
                     for r, row in enumerate(rows):
                         srow = row.split('|')
-                        if keepheader[srow[0]] == True:
+                        if keepheader[srow[0]]:
                             new_rows.append(row)
                             new_thresh.append(constructor['thresholdcolors'][r])
                     table_constructor[row_num]['rows'] = new_rows
                     table_constructor[row_num]['thresholdcolors'] = new_thresh
 
-            #THEN write table
+            # THEN write table
             if self.iscomp:
                 self.XML.writeDateControlledTableStart(desc, 'Year')
             else:
@@ -2198,11 +2531,11 @@ class MakeAutomatedReport(object):
         WF.print2stdout(f'Single Stat Table took {time.time() - objectstarttime} seconds.')
 
     def makeSingleStatisticProfileTable(self, object_settings):
-        '''
+        """
         takes in object settings to build Single Statistic profile table and write to XML
         :param object_settings: currently selected object settings dictionary
         :return: creates png in images dir and writes to XML file
-        '''
+        """
 
         WF.print2stdout('\n################################')
         WF.print2stdout('Now making Single Statistic Profile Table.')
@@ -2278,13 +2611,12 @@ class MakeAutomatedReport(object):
         else:
             desc = ''
 
-
         table_constructor = {}
 
         if self.iscomp:
             datecolumns = self.Constants.mo_str_3
         else:
-            datecolumns = [''] #if not comp run we dont need date headings, months will be in headings
+            datecolumns = ['']  # If not comp run we don't need date headings, months will be in headings
 
         for mi, month in enumerate(datecolumns):
             if len(headings) == 0:
@@ -2302,7 +2634,7 @@ class MakeAutomatedReport(object):
                     if rowname == 'ALLYEARS':
                         rowname = 'All'
                     year = object_settings['years'][ri]
-                    row_val = s_row[i+(len(headings)*mi)+1]
+                    row_val = s_row[i + (len(headings) * mi) + 1]
                     stat = None
                     addasterisk = False
                     if '%%' in row_val:
@@ -2318,8 +2650,10 @@ class MakeAutomatedReport(object):
                             else:
                                 data_idx = object_settings_blueprint['timestamp_index'][ri][i]
                         for di in data_idx:
-                            stats_data = self.Tables.formatStatsProfileLineData(row_val, data, object_settings_blueprint['resolution'],
-                                                                           object_settings_blueprint['usedepth'], di)
+                            stats_data = self.Tables.formatStatsProfileLineData(row_val, data,
+                                                                                object_settings_blueprint['resolution'],
+                                                                                object_settings_blueprint['usedepth'],
+                                                                                di)
 
                             rowval_stats = self.Profiles.stackProfileIndicies(rowval_stats, stats_data)
 
@@ -2368,11 +2702,13 @@ class MakeAutomatedReport(object):
                                                   'units': object_settings_blueprint['plot_units'],
                                                   'value_start_date': data_start_date,
                                                   'value_end_date': data_end_date,
-                                                  'logoutputfilename': ', '.join([line_settings[flag]['logoutputfilename'] for flag in line_settings])
+                                                  'logoutputfilename': ', '.join(
+                                                      [line_settings[flag]['logoutputfilename'] for flag in
+                                                       line_settings])
                                                   },
                                                  isdata=True)
 
-                    header = '' if header == None else header
+                    header = '' if header is None else header
                     numberFormat = self.Tables.matchNumberFormatByStat(stat, object_settings_blueprint)
                     formattedNumber = WF.formatNumbers(row_val, numberFormat)
                     if addasterisk:
@@ -2399,12 +2735,12 @@ class MakeAutomatedReport(object):
                     keepheader[srow[0]] = True
 
         for key in keepheader.keys():
-            if keepheader[key] == True:
+            if keepheader[key]:
                 keeptable = True
             else:
                 keepall = False
 
-        if keeptable: #quick check if we're even writing a table..
+        if keeptable:  # Quick check if we're even writing a table.
             if not keepall:
                 for row_num in table_constructor.keys():
                     constructor = table_constructor[row_num]
@@ -2413,13 +2749,13 @@ class MakeAutomatedReport(object):
                     new_thresh = []
                     for r, row in enumerate(rows):
                         srow = row.split('|')
-                        if keepheader[srow[0]] == True:
+                        if keepheader[srow[0]]:
                             new_rows.append(row)
                             new_thresh.append(constructor['thresholdcolors'][r])
                     table_constructor[row_num]['rows'] = new_rows
                     table_constructor[row_num]['thresholdcolors'] = new_thresh
 
-            #THEN write table
+            # THEN write table
             if self.iscomp:
                 self.XML.writeDateControlledTableStart(desc, 'Year')
             else:
@@ -2444,11 +2780,11 @@ class MakeAutomatedReport(object):
         WF.print2stdout(f'Single Profile Stat Table took {time.time() - objectstarttime} seconds.')
 
     def makeContourPlot(self, object_settings):
-        '''
-        takes in object settings to build contour plot and write to XML
+        """
+        Takes in object settings to build contour plot and write to XML
         :param object_settings: currently selected object settings dictionary
         :return: creates png in images dir and writes to XML file
-        '''
+        """
 
         WF.print2stdout('\n################################')
         WF.print2stdout('Now making Contour Plot.')
@@ -2487,15 +2823,15 @@ class MakeAutomatedReport(object):
 
             cur_obj_settings = self.Plots.setTimeSeriesXlims(cur_obj_settings, yearstr, object_settings['years'])
 
-            #NOTES
-            #Data structure:
-            #2D array of dates[distance from source]
+            # NOTES
+            # Data structure:
+            # 2D array of dates[distance from source]
             # array of dates corresponding to the number of the first D of array above
             # supplementary array for distances corrsponding to the second D of array above
-            #ex
-            #[[1,2,3,5],[2,3,4,2],[5,3,2,5]] #values per date at a distance
-            #[01jan2016, 04Feb2016, 23May2016] #dates
-            #[0, 19, 25, 35] #distances
+            # ex
+            # [[1,2,3,5],[2,3,4,2],[5,3,2,5]] #values per date at a distance
+            # [01jan2016, 04Feb2016, 23May2016] #dates
+            # [0, 19, 25, 35] #distances
 
             contoursbyID, contoursbyID_settings = self.Data.getContourDataDictionary(cur_obj_settings)
             contoursbyID = WF.filterDataByYear(contoursbyID, year)
@@ -2504,21 +2840,21 @@ class MakeAutomatedReport(object):
             straightlines = self.Data.getStraightLineValue(cur_obj_settings)
 
             if len(selectedContourIDs) == 1:
-                figsize=(12, 6)
+                figsize = (12, 6)
                 pageformat = 'half'
             else:
-                figsize=(12,12)
+                figsize = (12, 12)
                 pageformat = 'full'
 
             if pageformat == 'full':
                 height_ratios = []
                 for i in range(len(selectedContourIDs)):
-                    if i == len(selectedContourIDs)-1:
+                    if i == len(selectedContourIDs) - 1:
                         height_ratios.append(1)
                     else:
                         height_ratios.append(.75)
                 fig, axes = plt.subplots(ncols=1, nrows=len(selectedContourIDs), sharex=True, figsize=figsize,
-                                         gridspec_kw={'height_ratios':height_ratios})
+                                         gridspec_kw={'height_ratios': height_ratios})
             else:
                 fig, axes = plt.subplots(ncols=1, nrows=1, figsize=figsize,
                                          )
@@ -2596,8 +2932,9 @@ class MakeAutomatedReport(object):
                                     levels=np.linspace(vmin, vmax, int(contour_plot_settings['colorbar']['bins'])), #add one to get the desired number..
                                     extend='both') #the .T transposes the array so dates on bottom TODO:make extend variable
 
-                self.WAT_log.addLogEntry({'type': contour_plot_settings['label'] + '_ContourPlot' if contour_plot_settings['label'] != '' else 'ContourPlot',
-                                          'name': self.ChapterRegion+'_'+yearstr,
+                self.WAT_log.addLogEntry({'type': contour_plot_settings['label'] +
+                                          '_ContourPlot' if contour_plot_settings['label'] != '' else 'ContourPlot',
+                                          'name': self.ChapterRegion + '_' + yearstr,
                                           'description': contour_plot_settings['description'],
                                           'units': units,
                                           'value_start_date': WT.translateDateFormat(dates[0], 'datetime', '',
@@ -2664,7 +3001,6 @@ class MakeAutomatedReport(object):
                     ylabel = WF.formatTextFlags(contour_plot_settings['ylabel'])
                     ax.set_ylabel(ylabel, fontsize=ylabsize)
 
-
                 xmin, xmax = ax.get_xlim()
                 # if contour_settings['dateformat'].lower() == 'datetime':
                 xmin = mpl.dates.num2date(xmin)
@@ -2699,7 +3035,7 @@ class MakeAutomatedReport(object):
 
                             if trans_flag in contour_settings[transkey].keys():
                                 trans_name = contour_settings[transkey][trans_flag]
-                            if trans_name != None:
+                            if trans_name is not None:
                                 if ax.get_ylim()[0] <= transition_start <= ax.get_ylim()[1]:
                                     trans_y_value = transition_start + ((ax.get_ylim()[1] - ax.get_ylim()[0]) * .01)
 
@@ -2783,7 +3119,7 @@ class MakeAutomatedReport(object):
             # else:
             #     cur_obj_settings['description'] = WF.parseForTextFlags(cur_obj_settings['description'])
 
-            basefigname = os.path.join(self.images_path, 'ContourPlot' + '_' + self.ChapterRegion.replace(' ','_')
+            basefigname = os.path.join(self.images_path, 'ContourPlot' + '_' + self.ChapterRegion.replace(' ', '_')
                                        + '_' + yearstr)
             exists = True
             tempnum = 1
@@ -2810,11 +3146,11 @@ class MakeAutomatedReport(object):
         WF.print2stdout(f'Contour Plot took {time.time() - objectstarttime} seconds.')
 
     def makeReservoirContourPlot(self, object_settings):
-        '''
-        takes in object settings to build reservoir contour plot and write to XML
+        """
+        Takes in object settings to build reservoir contour plot and write to XML
         :param object_settings: currently selected object settings dictionary
         :return: creates png in images dir and writes to XML file
-        '''
+        """
 
         WF.print2stdout('\n################################')
         WF.print2stdout('Now making Reservoir Contour Plot.')
@@ -2854,16 +3190,16 @@ class MakeAutomatedReport(object):
 
             cur_obj_settings = self.Plots.setTimeSeriesXlims(cur_obj_settings, yearstr, object_settings['years'])
 
-            #NOTES
-            #Data structure:
-            #2D array of dates[distance from source]
+            # NOTES
+            # Data structure:
+            # 2D array of dates[distance from source]
             # array of dates corresponding to the number of the first D of array above
             # supplementary array for distances corrsponding to the second D of array above
-            #ex
-            #[[1,2,3,5],[2,3,4,2],[5,3,2,5]] #values per date
-            #[01jan2016, 04Feb2016, 23May2016] #dates
-            #[0, 19, 25, 35] #elevations
-            #[0, 19, 25, 35] #top water elevations
+            # ex
+            # [[1,2,3,5],[2,3,4,2],[5,3,2,5]] #values per date
+            # [01jan2016, 04Feb2016, 23May2016] #dates
+            # [0, 19, 25, 35] #elevations
+            # [0, 19, 25, 35] #top water elevations
 
             contoursbyID, contoursbyID_settings = self.Data.getReservoirContourDataDictionary(cur_obj_settings)
             contoursbyID = WF.filterDataByYear(contoursbyID, year, extraflag='topwater')
@@ -2871,21 +3207,21 @@ class MakeAutomatedReport(object):
             straightlines = self.Data.getStraightLineValue(cur_obj_settings)
 
             if len(selectedContourIDs) == 1:
-                figsize=(12, 6)
+                figsize = (12, 6)
                 pageformat = 'half'
             else:
-                figsize=(12,12)
+                figsize = (12, 12)
                 pageformat = 'full'
 
             if pageformat == 'full':
                 height_ratios = []
                 for i in range(len(selectedContourIDs)):
-                    if i == len(selectedContourIDs)-1:
+                    if i == len(selectedContourIDs) - 1:
                         height_ratios.append(1)
                     else:
                         height_ratios.append(.75)
                 fig, axes = plt.subplots(ncols=1, nrows=len(selectedContourIDs), sharex=True, figsize=figsize,
-                                         gridspec_kw={'height_ratios':height_ratios})
+                                         gridspec_kw={'height_ratios': height_ratios})
             else:
                 fig, axes = plt.subplots(ncols=1, nrows=1, figsize=figsize,
                                          )
@@ -2896,7 +3232,8 @@ class MakeAutomatedReport(object):
                 contours = WF.selectContourByID(contoursbyID, ID)
                 contours_settings = WF.selectContourByID(contoursbyID_settings, ID)
                 if len(contours.keys()) > 1:
-                    WF.print2stdout(f'Too many reservoir keys defined. Using the first, {list(contours.keys())[0]}', debug=self.debug)
+                    WF.print2stdout(f'Too many reservoir keys defined. Using the first, {list(contours.keys())[0]}',
+                                    debug=self.debug)
                 elif len(contours.keys()) == 0:
                     WF.print2stdout(f'No reservoir keys defined.', debug=self.debug)
                     return
@@ -2971,8 +3308,9 @@ class MakeAutomatedReport(object):
                                     extend='both') #the .T transposes the array so dates on bottom TODO:make extend variable
 
                 # ax.plot(dates, topwater, c='red') #debug topwater
-                self.WAT_log.addLogEntry({'type': contour_plot_settings['label'] + '_ContourPlot' if contour_plot_settings['label'] != '' else 'ContourPlot',
-                                          'name': self.ChapterRegion+'_'+yearstr,
+                self.WAT_log.addLogEntry({'type': contour_plot_settings['label'] +
+                                          '_ContourPlot' if contour_plot_settings['label'] != '' else 'ContourPlot',
+                                          'name': self.ChapterRegion + '_' + yearstr,
                                           'description': contour_plot_settings['description'],
                                           'units': units,
                                           'value_start_date': WT.translateDateFormat(dates[0], 'datetime', '',
@@ -2995,7 +3333,8 @@ class MakeAutomatedReport(object):
                             WF.print2stdout('No Value set for contour line.', debug=self.debug)
                             continue
                         contourline = WD.getDefaultContourLineSettings(contourline)
-                        cs = ax.contour(contr, levels=[val], linewidths=[float(contourline['linewidth'])], colors=[contourline['linecolor']],
+                        cs = ax.contour(contr, levels=[val], linewidths=[float(contourline['linewidth'])],
+                                        colors=[contourline['linecolor']],
                                         linestyles=contourline['linestylepattern'], alpha=float(contourline['alpha']))
                         if 'contourlinetext' in contourline.keys():
                             if contourline['contourlinetext'].lower() == 'true':
@@ -3024,7 +3363,6 @@ class MakeAutomatedReport(object):
                         modeltext = self.SimulationName
                     plt.text(1.02, 0.5, modeltext, fontsize=12, transform=ax.transAxes, verticalalignment='center',
                              horizontalalignment='center', rotation='vertical')
-
 
                 if 'gridlines' in contour_plot_settings.keys():
                     if contour_plot_settings['gridlines'].lower() == 'true':
@@ -3127,7 +3465,7 @@ class MakeAutomatedReport(object):
             plt.tight_layout()
             plt.subplots_adjust(hspace=0.05)
 
-            basefigname = os.path.join(self.images_path, 'ContourPlot' + '_' + self.ChapterRegion.replace(' ','_')
+            basefigname = os.path.join(self.images_path, 'ContourPlot' + '_' + self.ChapterRegion.replace(' ', '_')
                                        + '_' + yearstr)
             exists = True
             tempnum = 1
@@ -3154,11 +3492,11 @@ class MakeAutomatedReport(object):
         WF.print2stdout(f'Reservoir Contour Plot took {time.time() - objectstarttime} seconds.')
 
     def makeTextBox(self, object_settings):
-        '''
+        """
         Makes a text box object in the report
         :param object_settings: currently selected object settings dictionary
         :return:
-        '''
+        """
 
         objectstarttime = time.time()
 
@@ -3186,12 +3524,12 @@ class MakeAutomatedReport(object):
             if object_settings['iteratesimulations'].lower() == 'true':
                 iteratesimulations = True
 
-            #if we are doing a comaprison report, the user can specify sections to be repeated for each alt by wrapping the text in {}
+            # If we are doing a comaprison report, the user can specify sections to be repeated for each alt by wrapping the text in {}
         if self.reportType == 'comparison' and not self.modelIndependent:
             for text in texts:
                 # object_settings['text'] = WF.parseForTextFlags(object_settings['text'])
                 text = WF.parseForTextFlags(text)
-            if '{' in text  and '}' in text:  # iterate sections
+            if '{' in text and '}' in text:  # iterate sections
                 sections = list(set(re.findall(r'{(.*?)}', text)))
                 for section in sections:
                     replace_section = []
@@ -3199,7 +3537,7 @@ class MakeAutomatedReport(object):
                         flaggedvals = list(set(re.findall(r'%%(.*?)%%', text)))
                         tmp_text = section
                         for fv in flaggedvals:
-                            tmp_text = tmp_text.replace(fv, fv+f'.{ID}')
+                            tmp_text = tmp_text.replace(fv, fv + f'.{ID}')
                         replace_section.append(tmp_text)
                     replace_section = iteration_sep.join(replace_section)
                     text = text.replace(f'{section}', replace_section)
@@ -3208,13 +3546,13 @@ class MakeAutomatedReport(object):
             text = WF.replaceAllFlags(self, text)
             self.XML.writeTextBox(text)
 
-        elif self.reportType == 'comparison' and self.modelIndependent and iteratesimulations == True:
-            for ID in self.SimulationVariables.keys():  # should be onle 1 sim at this point..
+        elif self.reportType == 'comparison' and self.modelIndependent and iteratesimulations is True:
+            for ID in self.SimulationVariables.keys():  # should be onle 1 simulation at this point.
                 out_text = []
                 for text in texts:
                     text = WF.parseForTextFlags(text)
 
-                    self.modelIndependent = False  # turn off model independent flag for this iteration so we can set the model alt var
+                    self.modelIndependent = False  # turn off model independent flag for this iteration, so we can set the model alt var
                     self.loadCurrentID(ID)
                     if '{' in text and '}' in text:  # iterate model alts
                         sections = list(set(re.findall(r'{(.*?)}', text)))
@@ -3247,8 +3585,8 @@ class MakeAutomatedReport(object):
                 # object_settings['text'] = WF.parseForTextFlags(object_settings['text'])
                 text = WF.parseForTextFlags(text)
                 out_text = []
-                for ID in self.SimulationVariables.keys():  # should be onle 1 sim at this point..
-                    self.modelIndependent = False  # turn off model independent flag for this iteration so we can set the model alt var
+                for ID in self.SimulationVariables.keys():  # should be only 1 simulation at this point.
+                    self.modelIndependent = False  # turn off model independent flag for this iteration, so we can set the model alt var
                     self.loadCurrentID(ID)
                     if '{' in text and '}' in text:  # iterate model alts
                         sections = list(set(re.findall(r'{(.*?)}', text)))
@@ -3271,7 +3609,7 @@ class MakeAutomatedReport(object):
                     out_text = iteration_sep.join(out_text)
                     out_text = WF.replaceAllFlags(self, out_text)
                     self.modelIndependent = True
-                    self.loadCurrentModelAltID('') #reset to model independent
+                    self.loadCurrentModelAltID('')  #reset to model independent
                     text = out_text
                 self.XML.writeTextBox(text)
         else:
@@ -3282,11 +3620,11 @@ class MakeAutomatedReport(object):
         WF.print2stdout(f'Text box took {time.time() - objectstarttime} seconds.')
 
     def makeTableFromFile(self, object_settings):
-        '''
+        """
         Makes a table from a formatted CSV file
         :param object_settings:
-        :return: 
-        '''
+        :return:
+        """
 
         WF.print2stdout('\n################################')
         WF.print2stdout('Now making Table From File.')
@@ -3338,7 +3676,6 @@ class MakeAutomatedReport(object):
             table_constructor[tcnum]['thresholdcolors'] = threshold_colors
             table_constructor[tcnum]['header'] = header
 
-
         if len(table_constructor) == 0:
             self.Tables.writeMissingTableWarning(desc)
             WF.print2stdout('No values found for table. Not writing table.', debug=self.debug)
@@ -3348,16 +3685,16 @@ class MakeAutomatedReport(object):
         WF.print2stdout(f'Table from file took {time.time() - objectstarttime} seconds.')
 
     def makeForecastTable(self, object_settings):
-        '''
+        """
         Makes a table for forecast runs
-        Can look 1 of two ways..
-        if member iteration is turned on, itll be for a single forecast member
-        member number | Operations Name | Met Name | TempTargetName
-        if its off, that line will be repeated for each available member (unless specified).
+        Can look 1 of two ways.
+            1. If member iteration is turned on, it will be for a single forecast member.
+            member number | Operations Name | Met Name | TempTargetName
+            2. If it's off, that line will be repeated for each available member (unless specified).
         Order of rows and contents is also variable.
         :param object_settings:
         :return:
-        '''
+        """
 
         if self.reportType != 'forecast':
             WF.print2stdout('### WARNING ###')
@@ -3387,21 +3724,37 @@ class MakeAutomatedReport(object):
 
         if 'description' in object_settings.keys():
             desc = object_settings['description']
+            self.forecast_description_for_identicals = object_settings['description']
             # desc = WF.parseForTextFlags(desc)
         else:
             desc = ''
 
-        #Get members to plot
+        # Get members to plot
+        members_to_plot = []
         if 'members' in object_settings.keys():
             members_to_plot = [int(n) for n in object_settings['members']]
         else:
-            if self.memberiteration: #if we are looping through each member, we only want to table the one member, unless specified
+            # If we are looping through each member, we only want to table the one member, unless specified
+            if self.memberiteration:
                 members_to_plot = [self.member]
-                desc = WF.updateFlaggedValues(desc, '%%member%%', WF.formatMembers(self.member))
+
+                # Check if all members in the current section have been processed
+                if self.cur_section_members_all_checked:
+                    for group in self.complete_identical_members_groups:
+                        if self.member in group:
+                            if group[0] == self.member:
+                                # If this member is the first in the group, table all members in the group
+                                members_to_plot = group
+                                # We update the description later, once the identicals key is set
+                                break # Only need to do this once for the first member
+                            else:
+                                # Skip generating a second table for non-primary members in the group
+                                return
+
             else:
                 members_to_plot = self.allMembers
 
-        #get columns/order, most likely using a default
+        # get columns/order, most likely using a default
         if 'headers' in object_settings.keys():
             headers = object_settings['headers']
         else:
@@ -3412,12 +3765,12 @@ class MakeAutomatedReport(object):
         primarykey = headers[0]
 
         table_constructor = {}
-        for ci, header in enumerate(headers[1:]): #first column will be done automatically
+        for ci, header in enumerate(headers[1:]):  #first column will be done automatically
             rows = []
             for mi, member in enumerate(members_to_plot):
                 row = ''
                 ensembleset = WF.matchMemberToEnsembleSet(self.ensembleSets, member)
-                if len(ensembleset.keys()) == 0:  # if for some reason, we cant find the matching ensemble set? should never happen..
+                if len(ensembleset.keys()) == 0:  # if for some reason, we cant find the matching ensemble set? should never happen.
                     continue
                 if primarykey == 'member':
                     primaryitem = str(member)
@@ -3441,14 +3794,14 @@ class MakeAutomatedReport(object):
         WF.print2stdout(f'Forecast Table from file took {time.time() - objectstarttime} seconds.')
 
     def setSimulationCSVVars(self, simulationCSV):
-        '''
-        set variables pertaining to a specified simulation
+        """
+        Set variables pertaining to a specified simulation.
         :param simulationCSV: dictionary of specified simulation
         :return: class variables
                     self.program
                     self.modelAltName
 
-        '''
+        """
         if simulationCSV['deprecated_method']:
             self.programs = simulationCSV['programs']
             self.reportXML_modelAltNames = simulationCSV['modelaltnames']
@@ -3459,9 +3812,9 @@ class MakeAutomatedReport(object):
             self.reportXML_Keywords = simulationCSV['keywords']
 
     def setSimulationVariables(self, simulation):
-        '''
-        sets various class variables for selected variable
-        sets simulation dates and times
+        """
+        Sets various class variables for selected variable
+        Sets simulation dates and times
         :param simulation: simulation dictionary object for specified simulation
         :return: class variables
                     self.Data.Memory
@@ -3473,14 +3826,14 @@ class MakeAutomatedReport(object):
                     self.EndTimeStr
                     self.LastComputed
                     self.ModelAlternatives
-        '''
+        """
 
         # self.Data.Memory = {}
         ID = simulation['ID']
         self.SimulationVariables[ID] = {}
         self.SimulationVariables[ID]['SimulationName'] = simulation['name']
         self.SimulationVariables[ID]['baseSimulationName'] = simulation['basename']
-        simulation_dir = simulation['directory'] #todo: remove when mark fixes xml output
+        simulation_dir = simulation['directory']  #todo: remove when mark fixes xml output
         simulation_dir_split = simulation_dir.split(os.path.sep)
         simulation_list = [s for s in simulation_dir_split if s != '']
         simulation_dir = os.path.sep.join(simulation_list)
@@ -3502,10 +3855,10 @@ class MakeAutomatedReport(object):
         WT.setSimulationDateTimes(self, ID)
 
     def organizeMembers(self):
-        '''
-        formats members part of an ensemble set and gets a list of all members
+        """
+        Formats members part of an ensemble set and gets a list of all members
         :return:
-        '''
+        """
 
         self.allMembers = []
         for simulation in self.Simulations:
@@ -3516,12 +3869,12 @@ class MakeAutomatedReport(object):
         self.allMembers.sort()
 
     def formatMembers(self, ensemblesets):
-        '''
-        formats members as part of a collection set, takes the collection start and adds to the member number
+        """
+        Formats members as part of a collection set. Takes the collection start and adds to the member number
         ex: member 4, collection start 5000, return 5004
         :param ensemblesets: dictionary for ensemble sets
         :return: formatted ensemble set dictionaries
-        '''
+        """
 
         formatted_ensemblesets = []
         for ensembleset in ensemblesets:
@@ -3536,25 +3889,25 @@ class MakeAutomatedReport(object):
         return formatted_ensemblesets
 
     def getLineSettings(self, LineSettings, Flag):
-        '''
-        gets the correct line settings for the selected flag
+        """
+        Gets the correct line settings for the selected flag
         :param LineSettings: dictionary of settings
         :param Flag: selected flag to match line
         :return: deep copy of line
-        '''
+        """
 
         for line in LineSettings:
             if Flag == line['flag']:
                 return pickle.loads(pickle.dumps(line, -1))
 
     def getPlotLabelMasks(self, idx, nprofiles, cols):
-        '''
-        Get plot label masks
+        """
+        Gets plot label masks
         :param idx: page index
         :param nprofiles: number of profiles
         :param cols: number of columns
         :return: boolean fields for plotting
-        '''
+        """
 
         if idx >= nprofiles - cols:
             add_xlabel = True
@@ -3568,12 +3921,12 @@ class MakeAutomatedReport(object):
         return add_xlabel, add_ylabel
 
     def getPlotParameter(self, object_settings):
-        '''
-        Gets the plot parameter based on user settings. If explicitly stated, uses that. Otherwise, looks at the
+        """
+        Gets the plot parameters based on user settings. If explicitly stated, uses that. Otherwise, looks at the
         defined parameters in the linedata and grabs the most common one.
         :param object_settings: currently selected object settings dictionary
         :return: plot parameter if possible, otherwise None
-        '''
+        """
 
         if 'parameter' in object_settings.keys():
             plot_parameter = object_settings['parameter']
@@ -3589,9 +3942,9 @@ class MakeAutomatedReport(object):
         return plot_parameter
 
     def writeXMLIntroduction(self):
-        '''
-        writes the intro section for XML file. Creates a line in the intro for each model used
-        '''
+        """
+        Writes the intro section for XML file. Creates a line in the intro for each model used
+        """
 
         self.XML.writeIntroStart()
         for model in self.reportCSV.keys():
@@ -3600,12 +3953,18 @@ class MakeAutomatedReport(object):
         self.XML.writeIntroEnd()
 
     def writeChapter(self):
-        '''
-        writes each chapter defined in the simulation CSV file to the XML file. Generates plots and figures
-        :return: class variables
-                    self.ChapterName
-                    self.ChapterRegion
-        '''
+        """
+
+        Writes each chapter defined in the simulation CSV file to the XML file during initialization.
+
+        This function:
+        - Iterates through ChapterDefinitions(), extracting and setting chapter-specific attributes.
+        - Calls writeSections() to process the sections of the chapter,
+          which in turn calls iterateSections() to generate plots and figures.
+
+        :return: Updates class variables
+
+        """
 
         for Chapter in self.ChapterDefinitions:
             self.ChapterName = Chapter['name']
@@ -3613,7 +3972,7 @@ class MakeAutomatedReport(object):
             self.ChapterText = Chapter['grouptext']
             self.ChapterResolution = Chapter['resolution']
             self.debug_boolean = Chapter['debug']
-            self.memberiteration_boolean = Chapter['memberiteration'] #TODO: is this what were doing?
+            self.memberiteration_boolean = Chapter['memberiteration']  #TODO: is this what were doing?
 
             self.debug = False
             if self.debug_boolean.lower() == 'true':
@@ -3622,7 +3981,7 @@ class MakeAutomatedReport(object):
             else:
                 WF.print2stdout('Quiet mode activated.')
 
-            self.highres = True #default
+            self.highres = True  #default
             if self.ChapterResolution.lower() == 'high':
                 self.highres = True
                 WF.print2stdout('Running High Res Mode!')
@@ -3641,7 +4000,7 @@ class MakeAutomatedReport(object):
             self.XML.writeChapterStart(WF.replaceflaggedValues(self, self.ChapterName, 'fancytext', forjasper=True),
                                        WF.replaceflaggedValues(self, self.ChapterText, 'fancytext', forjasper=True))
 
-            self.writeSections(Chapter) ### where the magic happens
+            self.writeSections(Chapter)  # Triggers iterateSections for plot and table creation
 
             WF.print2stdout('\n################################')
             WF.print2stdout('Chapter Complete.')
@@ -3649,34 +4008,94 @@ class MakeAutomatedReport(object):
             self.XML.writeChapterEnd()
 
     def writeSections(self, Chapter):
-        '''
-        sets up the sections to be written. Changes depending on if its a member iteration or not
-        :param Chapter: dictionary read from XMl file
-        '''
+        """
+        Processes sections for a chapter. If `self.memberiteration` is True, it loops
+        through ensembles and members, handling a second pass for non-identical members.
+        Otherwise, processes sections directly.
+
+        :param Chapter: Dictionary with section details from the XML file.
+        """
 
         for section in Chapter['sections']:
-            section_header = section['header']
-            section_header = WF.replaceFlaggedValue(self, section_header, 'fancytext', forjasper=True)
+            # Reset variables for each section
+            self.reset_section_variables() # this needs to be here for separating flow and temp in sections.
+            original_section_header = WF.replaceFlaggedValue(self, section['header'], 'fancytext', forjasper=True)
+            self.XML.writeSectionHeader(original_section_header)
+
             if self.memberiteration:
                 for ensemble in self.ensemblesets:
                     for member in ensemble['members']:
-                        new_section_header = WF.updateFlaggedValues(section_header, '%%member%%', WF.formatMembers(member))
-                        self.XML.writeSectionHeader(new_section_header)
                         self.member = int(member)
                         self.Ensemble = ensemble
                         self.iterateSection(section)
-                        self.XML.writeSectionHeaderEnd()
+                        WF.print2stdout(f'##### Returning from IterateSection() to writeSections() #####')
+
+                    if self.cur_section_members_all_checked:
+                        self.handle_second_pass(section, original_section_header)
+                        WF.print2stdout(f'##### Returning from handle_second_pass() to writeSections() #####')
 
             else:
-                self.XML.writeSectionHeader(section_header)
                 self.iterateSection(section)
+                WF.print2stdout(f'##### Returning from IterateSection() to writeSections() ##### where self.memberiteration is False')
                 self.XML.writeSectionHeaderEnd()
 
+    # HELPER FUNCTION FOR writeSections #
+    def reset_section_variables(self):
+        """
+        Resets the variables that are used for tracking and checking identical plots
+        to allow for each section to be processed independently.
+        """
+
+        self.cur_section_members_all_checked = False
+        self.member_in_identical_group = False
+        self.identical_members_per_plot = {}
+        self.non_identical_members_per_plot = {}
+        self.plot_identical_members_key = {}
+        self.identical_members_key = ''
+        self.skip_identical_plot = False
+        self.second_pass_initiated = False
+        self.complete_identical_members_groups = []
+        self.identical_members_do_not_plot = []
+
+
+    def handle_second_pass(self, section, original_section_header):
+        """
+        Processes non-identical members in a second pass. Writes the section header
+        and calls `iterateSection()` for each remaining member.
+
+        :param section: The section to process.
+        :param original_section_header: The section header after placeholder replacement.
+        """
+
+        members_in_second_pass = 0
+
+        for ensemble in self.ensemblesets:
+            for member in ensemble['members']:
+                if member in self.identical_members_do_not_plot:
+                    continue
+
+                self.second_pass_initiated = True
+                self.original_section_header = original_section_header
+
+                # first section header has already been written
+                if members_in_second_pass >= 1:
+                    self.XML.writeSectionHeader(original_section_header)
+
+                self.Ensemble = ensemble
+                self.member = int(member)
+                self.iterateSection(section)
+                WF.print2stdout(f'##### Returning from IterateSection() to handle_second_pass() writing section header end #####')
+
+                self.XML.writeSectionHeaderEnd()
+                # self.process_member(section, ensemble, member)
+                members_in_second_pass += 1
+
+
     def iterateSection(self, section):
-        '''
-        iterates through objects in a section to build tables and plots
+        """
+        Iterates through objects in a section to build tables and plots
         :param section: dictionary read from XML file
-        '''
+        """
 
         for object in section['objects']:
             objtype = object['type'].lower()
@@ -3684,8 +4103,19 @@ class MakeAutomatedReport(object):
                 self.makeTimeSeriesPlot(object)
             elif objtype == 'profileplot':
                 self.makeProfilePlot(object)
-            elif objtype == 'errorstatisticstable':
-                self.makeErrorStatisticsTable(object)
+            elif objtype == 'errorstatisticstable':  #updated for 179 - KA
+                if not self.memberiteration:
+                    self.makeErrorStatisticsTable(object)
+                    continue
+                if self.cur_section_members_all_checked:
+                    WF.print2stdout('##### All members have been checked: Error Statistics Table')
+                    if self.second_pass_initiated:
+                        WF.print2stdout('####### All members have been checked and second pass initiated: calling makeErrorStatisticsTable() now. ######')
+                        self.makeErrorStatisticsTable(object)
+                else:
+                    WF.print2stdout('### Skipping Iteration Error Statistics Table creation until all members have been checked')
+                    continue
+
             elif objtype == 'monthlystatisticstable':
                 self.makeMonthlyStatisticsTable(object)
             elif objtype == 'profilestatisticstable':
@@ -3703,16 +4133,28 @@ class MakeAutomatedReport(object):
             elif objtype == 'tablefromfile':
                 self.makeTableFromFile(object)
             elif objtype == 'forecasttable':
-                self.makeForecastTable(object)
+                if not self.memberiteration:
+                    self.makeForecastTable(object)
+                    continue
+                # else:
+                if self.cur_section_members_all_checked:
+                    if self.second_pass_initiated:
+                        self.makeForecastTable(object)
+                # If section members not all checked, skip table creation
+                else:
+                    WF.print2stdout('### Skipping Iteration Forecast Table creation until all members have been checked')
+                    continue
             else:
                 WF.print2stdout('Section Type {0} not identified.'.format(objtype))
                 WF.print2stdout('Skipping Section..')
 
+        WF.print2stdout(f'##### Exiting Iterate Sections from object type: {objtype} #####')
+
     def cleanOutputDirs(self):
-        '''
-        cleans the images output directory, so pngs from old reports aren't mistakenly
-        added to new reports. Creates directory if it doesn't exist.
-        '''
+        """
+        Cleans the images output directory, so png's from old reports aren't mistakenly added to new reports.
+        Creates directory if it doesn't exist.
+        """
 
         if not os.path.exists(self.images_path):
             os.makedirs(self.images_path)
@@ -3724,60 +4166,61 @@ class MakeAutomatedReport(object):
         WF.cleanOutputDirectory(self.CSVPath, '.csv')
 
     def loadModelAlts(self, csvChapterSettings):
-        '''
-        Loads info for specified model alts. Loads correct model program class from WDR
-        :param csvChapterSettings: simulation alt dict object from self.simulation class
+        """
+        Loads info for specified model alts.
+        Loads correct model program class from WDR
+        :param csvChapterSettings: simulation alt dict object from self.simulation.
         :return: class variables
                 self.alternativeFpart
                 self.alternativeDirectory
                 self.ModelAlt - WDR class that is program specific
-        '''
+        """
 
-        self.accepted_IDs = [] #IDs are tied to Model Alts in Simulations
+        self.accepted_IDs = []  #IDs are tied to Model Alts in Simulations
         self.modelIndependent = False
 
         if len(csvChapterSettings['programs']) == 0:
-            #you can have chapters/sections in the report that are not tied to models, either of text of non model results
-            #such as boundary conditions or something
+            # you can have chapters/sections in the report that are not tied to models, either of text of non-model results
+            # such as boundary conditions or something
             WF.print2stdout('Model independent plotting occurring. If this is a mistake, check the input CSV for missing flags.')
             self.modelIndependent = True
 
         else:
             csv_programs = [n.lower() for n in csvChapterSettings['programs']]
-            if csvChapterSettings['deprecated_method'] == True: #new method does not care about this
+            if csvChapterSettings['deprecated_method']:  #new method does not care about this
                 csv_modelaltnames = [n.lower() for n in csvChapterSettings['modelaltnames']]
-            for ID in self.SimulationVariables.keys(): #for each simulation
-                if csvChapterSettings['deprecated_method'] == True: #TODO: remove this far enough into the future
+            for ID in self.SimulationVariables.keys():  #for each simulation
+                if csvChapterSettings['deprecated_method']:  #TODO: remove this far enough into the future
                     approved_modelalts = [modelalt for modelalt in self.SimulationVariables[ID]['ModelAlternatives']
-                                         if modelalt['name'].lower() in csv_modelaltnames and
-                                         modelalt['program'].lower() in csv_programs]
+                                          if modelalt['name'].lower() in csv_modelaltnames and
+                                          modelalt['program'].lower() in csv_programs]
                     if len(approved_modelalts) == 0:
-                        #this chapter does not apply to this simulation if no model alts have the correct program. do no consider.
+                        # This chapter does not apply to this simulation if no model alts have the correct program. do not consider.
                         continue
 
-                    approved_modelalt = approved_modelalts[0] #if there are many, just do the first
+                    approved_modelalt = approved_modelalts[0]  #if there are many, just do the first
 
 
                 else:
-                    #first, for each simulation, figure out which model alts per sim work
+                    # First, for each simulation, figure out which model alts per sim work
                     approved_modelalts = [modelalt for modelalt in self.SimulationVariables[ID]['ModelAlternatives']
                                           if modelalt['program'].lower() in csvChapterSettings['programs']]
 
                     if len(approved_modelalts) == 0:
-                        #this chapter does not apply to this simulation if no model alts have the correct program. do no consider.
+                        # This chapter does not apply to this simulation if no model alts have the correct program. do no consider.
                         continue
 
-                    if len(approved_modelalts) > 1: #Now, try and filter by keywords
+                    if len(approved_modelalts) > 1:  # Now, try and filter by keywords
                         keyword_approved_modelalts = []
                         keywords = csvChapterSettings['keywords']
-                        for keyword in keywords: #for each keyword
-                            for modelalt in approved_modelalts: #for each already approved model alt
+                        for keyword in keywords:  #for each keyword
+                            for modelalt in approved_modelalts:  #for each already approved model alt
                                 if keyword in modelalt['name'].lower():
                                     keyword_approved_modelalts.append(modelalt)
-                        if len(keyword_approved_modelalts) > 0: #if any worked.. none will if there are no keyword or none that apply
+                        if len(keyword_approved_modelalts) > 0:  # if any worked, none will if there are no keyword or none that apply
                             approved_modelalts = keyword_approved_modelalts
 
-                    if len(approved_modelalts) > 1: #try and filter by order now
+                    if len(approved_modelalts) > 1:  #try and filter by order now
                         try:
                             approved_modelalts = [approved_modelalts[csvChapterSettings['numtimesprogramused']-1]] #starts at 1
                         except IndexError:
@@ -3797,14 +4240,16 @@ class MakeAutomatedReport(object):
                 self.SimulationVariables[ID]['modelAltDesc'] = approved_modelalt['description']
 
                 if self.SimulationVariables[ID]['program'].lower() == "ressim":
-                    self.SimulationVariables[ID]['ModelAlt'] = WRSS.ResSim_Results(self.SimulationVariables[ID]['simulationDir'],
-                                                                                  self.SimulationVariables[ID]['alternativeFpart'],
-                                                                                  self.StartTime, self.EndTime, self)
+                    self.SimulationVariables[ID]['ModelAlt'] = WRSS.ResSim_Results(
+                        self.SimulationVariables[ID]['simulationDir'],
+                        self.SimulationVariables[ID]['alternativeFpart'],
+                        self.StartTime, self.EndTime, self)
                 elif self.SimulationVariables[ID]['program'].lower() == 'cequalw2':
-                    self.SimulationVariables[ID]['ModelAlt'] = WW2.W2_Results(self.SimulationVariables[ID]['simulationDir'],
-                                                                              self.SimulationVariables[ID]['modelAltName'],
-                                                                              self.SimulationVariables[ID]['alternativeDirectory'],
-                                                                              self.StartTime, self.EndTime, self)
+                    self.SimulationVariables[ID]['ModelAlt'] = WW2.W2_Results(
+                        self.SimulationVariables[ID]['simulationDir'],
+                        self.SimulationVariables[ID]['modelAltName'],
+                        self.SimulationVariables[ID]['alternativeDirectory'],
+                        self.StartTime, self.EndTime, self)
                 else:
                     self.SimulationVariables[ID]['ModelAlt'] == 'unknown'
 
@@ -3827,10 +4272,10 @@ class MakeAutomatedReport(object):
                     sys.exit(1)
 
     def loadCurrentID(self, ID):
-        '''
-        loads model specific settings for a given ID
+        """
+        Loads model specific settings for a given ID
         :param ID: selected ID, such as 'base' or 'alt_1'
-        '''
+        """
 
         self.currentlyloadedID = ID
         self.SimulationName = self.SimulationVariables[ID]['SimulationName']
@@ -3858,10 +4303,10 @@ class MakeAutomatedReport(object):
         self.program = modelalt['program']
 
     def loadCurrentModelAltID(self, ID):
-        '''
-        loads model alternative specific settings for a given ID
+        """
+        Loads model alternative specific settings for a given ID
         :param ID: selected ID, such as 'base' or 'alt_1'
-        '''
+        """
 
         if not self.modelIndependent:
             self.alternativeFpart = self.SimulationVariables[ID]['alternativeFpart']
@@ -3879,17 +4324,17 @@ class MakeAutomatedReport(object):
             self.modelAltName = 'none'
             self.program = 'none'
             self.ModelAlt = 'none'
-            self.ModelAltDescription = None #todo: why are these others texts?
+            self.ModelAltDescription = None  #todo: why are these others texts?
 
     def initializeXML(self):
-        '''
-        creates a new version of the template XML file, initiates the XML class and writes the cover page
+        """
+        Creates a new version of the template XML file, initiates the XML class, and writes the cover page
         :return: sets class variables
                     self.XML
-        '''
+        """
 
         # new_xml = os.path.join(self.studyDir, 'reports', 'Datasources', 'USBRAutomatedReportOutput.xml') #required name for file
-        new_xml = os.path.join(self.outputDir, 'Datasources', 'USBRAutomatedReportOutput.xml') #required name for file
+        new_xml = os.path.join(self.outputDir, 'Datasources', 'USBRAutomatedReportOutput.xml')  #required name for file
         print(f'Creating new XML at {new_xml}\n')
 
         self.XML = WXMLU.XMLReport(new_xml)
@@ -3901,26 +4346,26 @@ class MakeAutomatedReport(object):
             self.XML.writeCover('DRAFT Temperature Validation Summary Report')
 
     def initializeDataOrganizer(self):
-        '''
-        create Data_Memory dictionary
-        '''
+        """
+        Creates Data_Memory dictionary
+        """
 
         self.Data = WDO.DataOrganizer(self)
 
     def initSimulationDict(self):
-        '''
-        create simulationVariables dictionary
-        '''
+        """
+        Creates simulationVariables dictionary
+        """
 
         self.SimulationVariables = {}
 
     def loadDefaultPlotObject(self, plotobject):
-        '''
-        loads the graphic default options.
+        """
+        Loads the graphic default options.
         :param plotobject: string specifying the default graphics object
         :return:
             plot_info: dict of object settings
-        '''
+        """
 
         if plotobject in self.graphicsDefault.keys():
             plot_info = pickle.loads(pickle.dumps(self.graphicsDefault[plotobject], -1))
@@ -3930,26 +4375,26 @@ class MakeAutomatedReport(object):
         return plot_info
 
     def getLineModelType(self, Line_info):
-        '''
-        attempts to figure out what model the data is for based off the model source as an attempt to filter out data
+        """
+        Attempts to figure out which model the data is for based off the model source as an attempt to filter out data
         retrieval attempts
         :param Line_info: dictionary of settings for line
         :return: model program name if possible
-        '''
+        """
 
         for var, ident in self.Constants.model_specific_vars.items():
             if var in Line_info.keys():
                 return ident
 
-        return 'undefined' #no id either way..
+        return 'undefined'  #no id either way.
 
     def appendXMLModelIntroduction(self, simorder):
-        '''
-        Fixes intro in XML that shows what models are used for each region.
+        """
+        Fixes intro in XML that shows which models are used for each region.
         Updates a flag with used models.
         :param simorder: number of simulation file
         :return:
-        '''
+        """
 
         if not self.modelIndependent:
             modelstrs = []
@@ -3971,18 +4416,18 @@ class MakeAutomatedReport(object):
                 lastline = tmpstr
 
     def fixXMLModelIntroduction(self):
-        '''
-        removes extra flag values from the report introduction
-        '''
+        """
+        Removes extra flag values from the report introduction
+        """
 
         self.XML.removeLine('%%REPLACEINTRO_')
 
     def checkModelType(self, line_info):
-        '''
-         checks to see if current data path configuration is congruent with currently loaded model ID.
+        """
+         Checks to see if current data path configuration is congruent with currently loaded model ID.
         :param line_info: selected line or datapath
         :return: boolean
-        '''
+        """
 
         modeltype = self.getLineModelType(line_info)
         if modeltype == 'undefined':
@@ -3992,18 +4437,19 @@ class MakeAutomatedReport(object):
         return True
 
     def configureSettingsForID(self, ID, settings):
-        '''
-        loads settings for selected run ID. Mainly for comparison plots. The replaces model specific flags in settings
-        using loaded variables
+        """
+        Loads settings for selected run ID. Mainly for comparison plots.
+        Then replaces model specific flags in settings using loaded variables
         :param ID: selected ID, aka 'base' or 'alt_1'
         :param settings: dictionary of settings possibly containing flags to replace
         :return: settings with updated flags. also flags such as self.baseSimulationName are updated to current ID
-        '''
+        """
 
         self.loadCurrentID(ID)
         self.loadCurrentModelAltID(ID)
         settings = WF.replaceflaggedValues(self, settings, 'modelspecific')
         return settings
+
 
 if __name__ == '__main__':
 
@@ -4022,4 +4468,3 @@ if __name__ == '__main__':
         except:
             WF.print2stderr(traceback.format_exc())
             sys.exit(1)
-

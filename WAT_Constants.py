@@ -14,6 +14,7 @@ Created on 7/15/2021
 
 import calendar
 import datetime as dt
+import WAT_Functions as WF
 from scipy import interpolate
 
 class WAT_Constants(object):
@@ -74,6 +75,28 @@ class WAT_Constants(object):
                                           'c': r"&#176;C"}
         self.english_units = {self.units[key]['metric']: self.units[key]['english'] for key in self.units.keys()}
         self.metric_units = {v: k for k, v in self.english_units.items()}
+
+
+    def normalize_unit(self, unit):
+        """
+        Normalizes a unit to its standard form based on self.unit_alt_names.
+        :param unit: str - the unit to normalize
+        :return: str - the normalized unit
+        """
+        WF.print2stdout(f'Normalizing unit: {unit}')
+        testing_units = unit.strip()
+        if testing_units == unit:
+            WF.print2stdout(f'@@@@@ Units have no extra spaces')
+        else:
+            WF.print2stdout(f'@@@@@ Units have extra spaces')
+
+        for standard, alt_names in self.unit_alt_names.items():
+            if unit.lower().strip() in alt_names:
+                WF.print2stdout(f'Match found for {unit}, normalized to {standard}')  # Add this
+                return standard
+        WF.print2stdout(f'No match found for {unit}, returning original')  # Add this
+        return unit  # Return the original if no match is found
+
 
     def defineDefaultColors(self):
         '''
