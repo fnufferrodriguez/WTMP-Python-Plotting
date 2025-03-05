@@ -198,7 +198,7 @@ def readCollectionsDSSData(dss_file, pathname, members, startdate, enddate, debu
             if len(collection_pn) == 0:
                 WF.print2stdout(f'No records in collection for {pathname}', debug=debug)
                 fid.close()
-                return [], [], None, []
+                return [], {}, None, []
             if members == 'all':
                 members = [int(n.split('/')[6].split('|')[0].replace('C:', '')) for n in collection_pn]
             else:
@@ -235,11 +235,11 @@ def readCollectionsDSSData(dss_file, pathname, members, startdate, enddate, debu
             return times, collection_values, units, members
         else:
             WF.print2stdout(f'DSS file {dss_file} not found.', debug=True)
-            return [], [], None, []
+            return [], {}, None, []
     except:
         WF.print2stdout(f'Unable to get data from {dss_file} {pathname}')
         WF.print2stdout(traceback.format_exc(), debug=debug)
-        return [], [], None, []
+        return [], {}, None, []
 
 def readDSSData(dss_file, pathname, startdate, enddate, debug):
     '''
