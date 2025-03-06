@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 """
 
-VERSIONNUMBER = '6.0.23'
+VERSIONNUMBER = '6.0.24'
 
 import os
 import sys
@@ -274,12 +274,11 @@ class MakeAutomatedReport(object):
         object_settings = WF.replaceflaggedValues(self, object_settings, 'fancytext', exclude=['description'])
         object_settings = WF.replaceflaggedValues(self, object_settings, 'fancytext', include=['description'],
                                                   forjasper=True)
-
         object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = WF.getObjectYears(self, object_settings)
-
         object_settings = self.Plots.confirmAxis(object_settings)
 
         object_settings['years'], object_settings['yearstr'] = WF.organizePlotYears(object_settings)
+
 
         if 'description' not in object_settings.keys():
             object_settings['description'] = ''

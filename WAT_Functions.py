@@ -1343,7 +1343,7 @@ def getObjectYears(Report, object_settings, allowIncludeAllYears=True):
                         frmtyear = f'{startyear}-{endyear}'
                     if frmtyear not in years:
                         years.append(frmtyear)
-                        yearstr.append(frmtyear)
+                        yearstr.append(str(frmtyear))
 
         except TypeError:
             print2stdout(f"Invalid yearblock value: {object_settings['yearblocks']}", debug=Report.debug)
