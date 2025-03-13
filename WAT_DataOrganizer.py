@@ -340,7 +340,72 @@ class DataOrganizer(object):
                     if success:
                         numtimesused += 1
 
+            if self.Report.memberiteration:
+                line_settings = self.checkForIdenticalMembers(data, line_settings)
+
         return data, line_settings
+
+    def checkForIdenticalMembers(self, data, settings):
+        '''
+        checks if all datasets are the same for all members
+        :param data: dictionary containing data
+        :param settings: dictionary containing settings
+        :return: boolean
+        '''
+
+        for dataflag in data.keys():
+            settings[dataflag]['identicalmembers'] = []
+            for member in self.Report.allMembers:
+                membergroup = []
+                if not all([member not in n for n in settings[dataflag]['identicalmembers']]): #check to see if we've already found a match
+                    main_member_data = WF.ignoreNans(data[dataflag]['values'][member])
+                    for othermember in self.Report.allMembers: #check all other members in the list
+                        if othermember != member:
+                            if np.all(main_member_data == WF.ignoreNans(data[dataflag]['values'][othermember])):
+                                if member not in membergroup:
+                                    membergroup.append(member)
+                                membergroup.append(othermember)
+                if len(membergroup) > 0:
+                    settings[dataflag]['identicalmembers'].append(membergroup)
+        return settings
+
+    def checkForDuplicateObject(self, settings, member):
+        '''
+        checks for duplicate plot settings in a list of line settings
+        :param line_settings: list of  settings
+        :return: boolean
+        '''
+
+        fully_duplicate = True
+        if len(settings) == 0:
+            return False
+        for name, setting in settings.items():
+            if 'identicalmembers' in setting:
+                if not any([member in n for n in setting['identicalmembers']]):
+                    fully_duplicate = False
+                    break
+        return fully_duplicate
+
+    def checkForLowestMember(self, line_settings, member, linekey=None):
+        '''
+        checks for the lowest member in a list of line settings
+        :param line_settings: list of line settings
+        :return: boolean
+        '''
+        other_members = self.getOtherMembers(line_settings, member, linekey)
+        if member == min(other_members):
+            return True
+        return False
+
+    def getOtherMembers(self, line_settings, member, linekey=None):
+        if linekey == None:
+            linekey = list(line_settings.keys())[0]  # if we are here, then all the lines have the duplicate member group
+        line_members = line_settings[linekey]['identicalmembers']
+        other_members = []
+        for membergroup in line_members:
+            if member in membergroup:
+                other_members = [n for n in membergroup if n != member]
+        return other_members
 
     def getStraightLineValue(self, settings):
         '''
@@ -1109,6 +1174,9 @@ class DataOrganizer(object):
                 datamem_key = self.buildMemoryKey(dp)
                 line_settings[dp['flag']]['logoutputfilename'] = datamem_key
                 line_settings[dp['flag']].update(dp)
+
+        if self.Report.memberiteration:
+            line_settings = self.checkForIdenticalMembers(data, line_settings)
 
         return data, line_settings
 
