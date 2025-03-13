@@ -1071,6 +1071,15 @@ def getAllMonthIdx(timestamp_indexes, i):
         out_idx += yearlist[i]
     return out_idx
 
+def ignoreNans(values):
+    '''
+    ignores nans in a list of values
+    :param values: list of values
+    :return: list with no nans
+    '''
+    v = np.asarray(values)
+    return np.all(v[~np.isnan(v)])
+
 def getPlotUnits(unitslist, object_settings, axis='x'):
     '''
     gets units for the plot. Either looks at data already plotted units, or if there are no defined units
