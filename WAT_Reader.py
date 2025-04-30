@@ -157,6 +157,9 @@ def readChapterDefFile(CD_file):
         memberiteration_flags = ['memberiteration', 'Memberiteration', 'MemberIteration', 'MEMBERITERATION', 'memberIteration']
         ChapterDef['memberiteration'] = findTargetinChapterDefFile(memberiteration_flags, chapter, default='false')
 
+        groupmembers_flags = ['groupmembers', 'Groupmembers', 'GroupMembers', 'GROUPMEMBERS', 'groupMembers']
+        ChapterDef['groupmembers'] = findTargetinChapterDefFile(groupmembers_flags, chapter, default='true')
+
         cd_sections = chapter.findall('Sections/Section')
         for section in cd_sections:
             section_objects = {}

@@ -12,7 +12,7 @@ Created on 7/15/2021
 @note:
 """
 
-VERSIONNUMBER = '6.0.25'
+VERSIONNUMBER = '6.0.26'
 
 import os
 import sys
@@ -154,28 +154,6 @@ class MakeAutomatedReport(object):
             self.Ensemble = None
             self.member = None
             self.plot_name = None
-
-            self.identical_members_key = ''  # issue 179 - Kayla - identical plots dict key for updating %%member%% of identicals
-            self.cur_section_members_all_checked = False  # issue 179 - Kayla - verify all section members checked for identicals
-            self.use_identical_output_variation = False  # issue 179 - Kayla - all plots in a section were identical
-            self.use_original_output_variation = False  # issue 179 - Kayla - no identical plots were found, use original code
-            self.use_split_results_output_variation = False  # issue 179 - Kayla - some identicals and some not found in a section
-            self.member_in_identical_group = False  # issue 179 - Kayla - member is in an identical group
-            self.water_temp_line_values_dict = {} # issue 179 - Kayla
-            self.water_flow_line_values_dict = {}   # issue 179 - Kayla
-            self.identical_members_per_plot = {}  # issue 179 - Kayla
-            self.non_identical_members_per_plot = {} # issue 179 - Kayla - ex: 'plot_1': ['11', '511'], 'plot_2': ['11', '511'] --TESTING
-            self.plot_identical_members_key = {} # issue 179 - Kayla - keys attached to each plot incase multiple differing identical groups
-            self.total_plot_lines = 0 # issue 179 this will be the total number of lines in the plot
-            self.total_lines_processed = 0 # issue 179 - Kayla
-            self.total_lines_needed_for_compare = 0 # issue 179 - Kayla
-            self.non_identicals_per_plot = []
-            self.identical_groups_per_plot = []
-            self.second_pass_initiated = False
-
-            self.forecast_description_for_identicals = None
-            self.complete_identical_members_groups = []
-            self.identical_members_do_not_plot = []
 
             self.original_section_header = None
             self.skip_identical_plot = False
@@ -321,6 +299,8 @@ class MakeAutomatedReport(object):
             left_sided_axes = []
             right_sided_axes = []
             useAx = []
+            fullyduplicate = False
+
             for axi, ax_settings in enumerate(cur_obj_settings['axs']):
 
                 ax_settings = WF.copyKeysBetweenDicts(ax_settings, cur_obj_settings, ignore=['axs'])
@@ -354,21 +334,26 @@ class MakeAutomatedReport(object):
                 linedata, line_settings = self.Data.getTimeSeriesDataDictionary(ax_settings)
 
                 if self.memberiteration:
-                    if self.Data.checkForDuplicateObject(line_settings, self.member): #for member iteration plots, skip duplicates. If the first instance of a duplicate plot, plot it but change hte header + description
-                        is_lowest = self.Data.checkForLowestMember(line_settings, self.member)
-                        if not is_lowest:
-                            WF.print2stdout('Member iteration plot found to be a duplicate. Skipping.')
-                            plt.close()
-                            return
+                    if self.groupmembers:
+                        if self.Data.checkForDuplicateObject(line_settings, self.member): #for member iteration plots, skip duplicates. If the first instance of a duplicate plot, plot it but change hte header + description
+                            is_lowest = self.Data.checkForLowestMember(line_settings, self.member)
+                            if is_lowest:
+                                fullyduplicate = False #if the first instance of a duplicate plot, plot it but change the header description
+                                other_members = self.Data.getOtherMembers(line_settings, self.member)
+                                member_list_frmt = f"{WF.formatMembers(self.member)}, " + ', '.join(WF.formatMembers(other_members))
+                                cur_obj_settings['description'] = WF.updateFlaggedValues(cur_obj_settings['description'], '%%member%%', member_list_frmt)  # updates timeseriesplots png descriptions
+                                ax_settings['title'] = WF.updateFlaggedValues(ax_settings['title'], '%%member%%', member_list_frmt)
+                            else:
+                                fullyduplicate = True
+                                WF.print2stdout('Duplicate plot found. Skipping plot.')
+                                plt.close('all')
+                                return
                         else:
-                            other_members = self.Data.getOtherMembers(line_settings, self.member)
-                            member_list_frmt = f"{WF.formatMembers(self.member)}" + ', '.join(WF.formatMembers(other_members))
-                            cur_obj_settings['description'] = WF.updateFlaggedValues(cur_obj_settings['description'], '%%member%%', member_list_frmt)  # updates timeseriesplots png descriptions
-                            ax_settings['title'] = WF.updateFlaggedValues(ax_settings['title'], '%%member%%', member_list_frmt)  # updates timeseriesplots png descriptions
-                            updated_section_header = WF.updateFlaggedValues(self.original_section_header, '%%member%%', member_list_frmt)
-                            self.XML.replaceinXML(self.original_section_header, updated_section_header) #TODO: this is happening for sac and trin, it overwriting the same thing a second time.  not causing an issue, but is redundant
+                            fullyduplicate = False
+                            cur_obj_settings['description'] = WF.updateFlaggedValues(cur_obj_settings['description'], '%%member%%', WF.formatMembers(self.member))
+                            ax_settings['title'] = WF.updateFlaggedValues(ax_settings['title'], '%%member%%', WF.formatMembers(self.member))
                     else:
-                        cur_obj_settings['description'] = WF.updateFlaggedValues(cur_obj_settings['description'], '%%member%%', WF.formatMembers(self.member))
+                        cur_obj_settings['description'] = WF.updateFlaggedValues(cur_obj_settings['description'], '%%member%%',WF.formatMembers(self.member))  # updates timeseriesplots png descriptions
                         ax_settings['title'] = WF.updateFlaggedValues(ax_settings['title'], '%%member%%', WF.formatMembers(self.member))
 
                 linedata = WF.filterDataByYear(linedata, year)
@@ -392,122 +377,6 @@ class MakeAutomatedReport(object):
                             RelativeMasterSet, RelativeLineSettings['units'] = WF.convertUnitSystem(RelativeMasterSet,
                                                                                                     RelativeLineSettings['units'],
                                                                                                     ax_settings['unitsystem'])
-                # LINE DATA #
-                # if self.memberiteration and not self.second_pass_initiated:
-                #     length_of_linedata = len(linedata)
-                #     length_of_all_members = len(self.allMembers)
-                #     self.lines_processed_for_curlinedata = 0
-                #
-                #     for line in linedata:
-                #         curline = linedata[line]
-                #         curline_settings = line_settings[line]
-                #         values = curline['values']
-                #         units = curline_settings['units']
-                #
-                #
-                #
-                #         # TODO: insert testing fake data here if need be
-                #         plot_name = cur_obj_settings['title']
-                #         print('Checking', plot_name)
-                #         normalized_units = None
-                #
-                #         try:
-                #             normalized_units = self.Constants.normalize_unit(units)
-                #             WF.print2stdout(f'@@@@@ Normalized units: {normalized_units}', debug=self.debug)
-                #         except Exception as e:
-                #             WF.print2stdout(f'@@@@@ Error normalizing units: {e}', debug=True)
-                #
-                #         if normalized_units in {'c', 'm3/s', 'cfs'}:
-                #             WF.print2stdout(f'### if normalized_units in {{c, m3/s, cfs}} --- Processing Time Series Plot for  {plot_name} member {self.member}', debug=self.debug)
-                #
-                #             if normalized_units == 'c':
-                #                 data_dict = self.water_temp_line_values_dict
-                #             else:
-                #                 data_dict = self.water_flow_line_values_dict
-                #
-                #             if plot_name not in data_dict:
-                #                 data_dict[plot_name] = {}
-                #                 self.total_plot_lines += len(linedata)
-                #                 self.total_lines_needed_for_compare += length_of_linedata * length_of_all_members
-                #
-                #             if line not in data_dict[plot_name]:
-                #                 data_dict[plot_name][line] = {}
-                #
-                #             data_dict[plot_name][line].update(values)
-                #             self.total_lines_processed += 1
-                #             self.lines_processed_for_curlinedata += 1
-                #
-                #             if self.total_lines_processed != self.total_lines_needed_for_compare:
-                #                 if length_of_linedata == self.lines_processed_for_curlinedata:
-                #                     WF.print2stdout(f'Waiting for all members to be checked for {plot_name}. Skipping plot generation.', debug=self.debug)
-                #                     self.lines_processed_for_curlinedata = 0
-                #                     return
-                #                 else:
-                #                     continue
-                #         else:
-                #             WF.print2stdout(f'Normalized unit not in expected set: {normalized_units}', debug=self.debug)
-                #
-                #         # Check if lists are full and compare for identicals
-                #         if self.total_lines_processed == self.total_lines_needed_for_compare:
-                #             self.total_plot_lines = 0
-                #             self.total_lines_processed = 0
-                #             self.total_lines_needed_for_compare = 0
-                #
-                #             if self.water_flow_line_values_dict:
-                #                 self.check_for_identical_timeSeriesPlots(self.water_flow_line_values_dict)
-                #                 if self.cur_section_members_all_checked:
-                #                     self.water_flow_line_values_dict = {}
-                #                     WF.print2stdout('All water flow members checked, proceed with plot generation.')
-                #                 else:
-                #                     WF.print2stdout('Waiting for all water flow members to be checked for identical values. Skipping plot generation.')
-                #                 return
-                #
-                #             if self.water_temp_line_values_dict:
-                #                 self.check_for_identical_timeSeriesPlots(self.water_temp_line_values_dict)
-                #                 if self.cur_section_members_all_checked:
-                #                     self.water_temp_line_values_dict = {}
-                #                     WF.print2stdout('All water temp members checked, proceed with plot generation.')
-                #                 else:
-                #                     WF.print2stdout('Waiting for all water temp members to be checked for identical values. Skipping plot generation.')
-                #                 return
-                #
-                # # if not self.memberiteration: process per normal
-                # if not self.memberiteration or self.second_pass_initiated:
-                #     # if second_pass_initiated: process first identical member and skip the rest, process non-identicals
-                #     if self.second_pass_initiated:
-                #         plot_name = cur_obj_settings['title']
-                #         self.member_in_identical_group = False
-                #
-                #         if plot_name in self.identical_members_per_plot:
-                #             identical_groups = self.identical_members_per_plot[plot_name]
-                #
-                #             for group in identical_groups:
-                #                 if self.member in group:
-                #                     self.member_in_identical_group = True
-                #                     if self.member == group[0]:
-                #                         self.set_identicals_member_key(plot_name, self.member)
-                #                         WF.print2stdout(f'### Updating and outputting Time Series Plot for identical members {self.identical_members_key}', debug=self.debug)
-                #
-                #                         # update member flags for identical headers/descriptions
-                #                         WF.updateFlaggedValues(cur_obj_settings, '%%member%%', self.identical_members_key) # updates timeseriesplots png descriptions
-                #                         updated_section_header = WF.updateFlaggedValues(self.original_section_header, '%%member%%', self.identical_members_key)
-                #                         updated_forecast_table_desc = WF.updateFlaggedValues(self.forecast_description_for_identicals, '%%member%%', self.identical_members_key)
-                #                         self.XML.replaceinXML(self.original_section_header, updated_section_header) #TODO: this is happening for sac and trin, it overwriting the same thing a second time.  not causing an issue, but is redundant
-                #                         self.XML.replaceinXML(self.forecast_description_for_identicals, updated_forecast_table_desc)
-                #                         break
-                #                     else:
-                #                         self.skip_identical_plot = True
-                #                         return # skip all members for identical plots that are not the first one
-                #
-                #         if not self.member_in_identical_group and self.member in self.non_identical_members_per_plot.get(plot_name, []):
-                #             self.skip_identical_plot = False
-                #             WF.print2stdout(f'### Updating and outputting Time Series Plot for non-identical member {self.member}', debug=self.debug)
-                #             WF.updateFlaggedValues(cur_obj_settings, '%%member%%', WF.formatMembers(self.member)) # updates timeseriesplots png descriptions
-                #
-                #             updated_section_header = WF.updateFlaggedValues(self.original_section_header, '%%member%%', WF.formatMembers(self.member))#TODO: testing
-                #             updated_forecast_table_desc = WF.updateFlaggedValues(self.forecast_description_for_identicals, '%%member%%', WF.formatMembers(self.member))#TODO: testing
-                #             self.XML.replaceinXML(self.original_section_header, updated_section_header) #TODO: this is happening for sac and trin, it overwriting the same thing a second time.  not causing an issue, but is redundant
-                #             self.XML.replaceinXML(self.forecast_description_for_identicals, updated_forecast_table_desc)
 
                 for line in linedata:
                     curline = linedata[line]
@@ -518,8 +387,6 @@ class MakeAutomatedReport(object):
                     values = curline['values']
                     dates = curline['dates']
                     units = curline_settings['units']
-
-                    # TODO: insert testing fake data here if need be
 
                     if not curline_settings['collection']:  # please don't do this for collection plots
                         values = WF.ValueSum(dates, values)  # check for dict values and add them all together
@@ -1033,6 +900,12 @@ class MakeAutomatedReport(object):
             else:
                 plt.subplots_adjust(wspace=0, hspace=0)
 
+            # if self.memberiteration:
+            #     if fullyduplicate:
+            #         WF.print2stdout(f'Skipping duplicate plot for {year} {self.member}')
+            #         plt.close('all')
+            #         return
+
             basefigname = os.path.join(self.images_path, 'TimeSeriesPlot' + '_' + self.ChapterRegion.replace(' ', '_')
                                        + '_' + yearstr)
             exists = True
@@ -1051,6 +924,7 @@ class MakeAutomatedReport(object):
             else:
                 plt.savefig(figname)
             plt.close('all')
+
 
             if pageformat == 'half':
                 self.XML.writeHalfPagePlot(os.path.basename(figname), cur_obj_settings['description'])
@@ -1944,25 +1818,26 @@ class MakeAutomatedReport(object):
         object_settings['allyearsstr'] = WF.getObjectAllYears(object_settings['years'])
 
         data, data_settings = self.Data.getTableDataDictionary(object_settings)
+
+        fullyduplicate = False
         if self.memberiteration:
-            isduplicate = self.Data.checkForDuplicateObject(data_settings, self.member)  # for member iteration plots, skip duplicates. If the first instance of a duplicate plot, plot it but change hte header + description
-            if isduplicate:
-                is_lowest = self.Data.checkForLowestMember(data_settings, self.member)
-                if not is_lowest:
-                    WF.print2stdout('Member iteration table found to be a duplicate. Skipping.')
-                    plt.close()
-                    return
+            if self.groupmembers:
+                if self.Data.checkForDuplicateObject(data_settings, self.member):  # for member iteration plots, skip duplicates. If the first instance of a duplicate plot, plot it but change hte header + description
+                    is_lowest = self.Data.checkForLowestMember(data_settings, self.member)
+                    if is_lowest:
+                        fullyduplicate = False  # if the first instance of a duplicate plot, plot it but change the header description
+                        other_members = self.Data.getOtherMembers(data_settings, self.member)
+                        member_list_frmt = f"{WF.formatMembers(self.member)}, " + ', '.join(WF.formatMembers(other_members))
+                        object_settings['description'] = WF.updateFlaggedValues(object_settings['description'], '%%member%%', member_list_frmt)  # updates timeseriesplots png descriptions
+                    else:
+                        fullyduplicate = True
+                        WF.print2stdout('Duplicate object found. Skipping.', debug=self.debug)
+                        return
                 else:
-                    other_members = self.Data.getOtherMembers(line_settings, self.member)
-                    member_list_frmt = f"{WF.formatMembers(self.member)}" + ', '.join(WF.formatMembers(other_members))
-                    WF.updateFlaggedValues(object_settings['description'], '%%member%%',
-                                           member_list_frmt)  # updates timeseriesplots png descriptions
-                    WF.updateFlaggedValues(object_settings['title'], '%%member%%',
-                                           member_list_frmt)  # updates timeseriesplots png descriptions
-                    updated_section_header = WF.updateFlaggedValues(self.original_section_header, '%%member%%',
-                                                                    member_list_frmt)
-                    self.XML.replaceinXML(self.original_section_header,
-                                          updated_section_header)  # TODO: this is happening for sac and trin, it overwriting the same thing a second time.  not causing an issue, but is redundant
+                    fullyduplicate = False
+                    object_settings['description'] = WF.updateFlaggedValues(object_settings['description'], '%%member%%', WF.formatMembers(self.member))
+            else:
+                object_settings['description'] = WF.updateFlaggedValues(object_settings['description'], '%%member%%', WF.formatMembers(self.member))
 
         data, data_settings = WF.mergeLines(data, data_settings, object_settings)
 
@@ -3761,21 +3636,11 @@ class MakeAutomatedReport(object):
             members_to_plot = [int(n) for n in object_settings['members']]
         else:
             if self.memberiteration: #if we are looping through each member, we only want to table the one member, unless specified
-                members_to_plot = [self.member]
+                if self.multiMemberSection:
+                    members_to_plot = self.membersInSection
+                else:
+                    members_to_plot = [self.member]
                 desc = WF.updateFlaggedValues(desc, '%%member%%', WF.formatMembers(self.member))
-
-                # # Check if all members in the current section have been processed
-                # if self.cur_section_members_all_checked:
-                #     for group in self.complete_identical_members_groups:
-                #         if self.member in group:
-                #             if group[0] == self.member:
-                #                 # If this member is the first in the group, table all members in the group
-                #                 members_to_plot = group
-                #                 # We update the description later, once the identicals key is set
-                #                 break # Only need to do this once for the first member
-                #             else:
-                #                 # Skip generating a second table for non-primary members in the group
-                #                 return
 
             else:
                 members_to_plot = self.allMembers
@@ -3998,7 +3863,8 @@ class MakeAutomatedReport(object):
             self.ChapterText = Chapter['grouptext']
             self.ChapterResolution = Chapter['resolution']
             self.debug_boolean = Chapter['debug']
-            self.memberiteration_boolean = Chapter['memberiteration']  #TODO: is this what were doing?
+            self.memberiteration_boolean = Chapter['memberiteration']
+            self.groupmembers_boolean = Chapter['groupmembers']
 
             self.debug = False
             if self.debug_boolean.lower() == 'true':
@@ -4021,6 +3887,13 @@ class MakeAutomatedReport(object):
                 WF.print2stdout('member iteration mode activated!')
             else:
                 WF.print2stdout('member iteration mode deactivated.', debug=self.debug)
+
+            self.groupmembers = False
+            if self.groupmembers_boolean.lower() == 'true':
+                self.groupmembers = True
+                WF.print2stdout('group member mode activated!')
+            else:
+                WF.print2stdout('group member mode deactivated.', debug=self.debug)
 
             self.WAT_log.addLogEntry({'region': self.ChapterRegion})
             self.XML.writeChapterStart(WF.replaceflaggedValues(self, self.ChapterName, 'fancytext', forjasper=True),
@@ -4046,15 +3919,48 @@ class MakeAutomatedReport(object):
             # Reset variables for each section
             section_header = section['header']
             section_header = WF.replaceFlaggedValue(self, section_header, 'fancytext', forjasper=True)
+            self.multiMemberSection = False
             if self.memberiteration:
                 for ensemble in self.ensemblesets:
                     for member in ensemble['members']:
-                        new_section_header = WF.updateFlaggedValues(section_header, '%%member%%', WF.formatMembers(member))
-                        self.XML.writeSectionHeader(new_section_header)
                         self.member = int(member)
-                        self.Ensemble = ensemble
-                        self.iterateSection(section)
-                        self.XML.writeSectionHeaderEnd()
+                        if self.groupmembers:
+                            self.membersInSection, section = self.preCheckSectionForDuplicates(section) #check for section being multi-member
+                            if len(self.membersInSection) > 0:
+                                self.multiMemberSection = True
+                            else:
+                                self.multiMemberSection = False
+
+                            if self.multiMemberSection:
+                                member_already_used = self.checkForMemberUsed(member, self.membersInSection)
+                                if member_already_used:
+                                    WF.print2stdout(f'Member {member} already used in previous section. Skipping.')
+                                    continue
+
+                                member_list_frmt = f"{', '.join(WF.formatMembers(self.membersInSection))}"
+                                new_section_header = WF.updateFlaggedValues(section_header, '%%member%%', member_list_frmt)
+                                self.original_section_header = new_section_header
+                                self.XML.writeSectionHeader(new_section_header)
+                                self.Ensemble = ensemble
+                                self.iterateMultiMemberSection(section)
+                                self.XML.writeSectionHeaderEnd()
+
+                            else:
+                                new_section_header = WF.updateFlaggedValues(section_header, '%%member%%',
+                                                                            WF.formatMembers(member))
+                                self.original_section_header = new_section_header
+                                self.XML.writeSectionHeader(new_section_header)
+                                self.Ensemble = ensemble
+                                self.iterateSection(section)
+                                self.XML.writeSectionHeaderEnd()
+
+                        else:
+                            new_section_header = WF.updateFlaggedValues(section_header, '%%member%%', WF.formatMembers(member))
+                            self.original_section_header = new_section_header
+                            self.XML.writeSectionHeader(new_section_header)
+                            self.Ensemble = ensemble
+                            self.iterateSection(section)
+                            self.XML.writeSectionHeaderEnd()
 
             else:
                 self.XML.writeSectionHeader(section_header)
@@ -4069,33 +3975,55 @@ class MakeAutomatedReport(object):
 
         for object in section['objects']:
             objtype = object['type'].lower()
-            if objtype == 'timeseriesplot':
-                self.makeTimeSeriesPlot(object)
-            elif objtype == 'profileplot':
-                self.makeProfilePlot(object)
-            elif objtype == 'errorstatisticstable':
-                self.makeErrorStatisticsTable(object)
-            elif objtype == 'monthlystatisticstable':
-                self.makeMonthlyStatisticsTable(object)
-            elif objtype == 'profilestatisticstable':
-                self.makeProfileStatisticsTable(object)
-            elif objtype == 'contourplot':
-                self.makeContourPlot(object)
-            elif objtype == 'reservoircontourplot':
-                self.makeReservoirContourPlot(object)
-            elif objtype == 'singlestatistictable':
-                self.makeSingleStatisticTable(object)
-            elif objtype == 'singlestatisticprofiletable':
-                self.makeSingleStatisticProfileTable(object)
-            elif objtype == 'textbox':
-                self.makeTextBox(object)
-            elif objtype == 'tablefromfile':
-                self.makeTableFromFile(object)
-            elif objtype == 'forecasttable':
-                self.makeForecastTable(object)
+            self.makeObject(object, objtype)
+
+    def iterateMultiMemberSection(self, section):
+        for object in section['objects']:
+            objtype = object['type'].lower()
+            if 'isduplicate' in object.keys():
+                if object['isduplicate']:
+                    self.makeObject(object, objtype)
+                else:
+                    original_member = self.member
+                    for target_member in self.membersInSection:
+                        self.member = target_member
+                        self.makeObject(object, objtype)
+                    self.member = original_member
             else:
-                WF.print2stdout('Section Type {0} not identified.'.format(objtype))
-                WF.print2stdout('Skipping Section..')
+                #shouldnt be here, but just in case..
+                WF.print2stderr('WARNING: Object found to be multimember but not marked for duplicate TRUE/FALSE')
+                self.makeObject(object, objtype)
+
+
+
+    def makeObject(self, object, objtype):
+        if objtype == 'timeseriesplot':
+            self.makeTimeSeriesPlot(object)
+        elif objtype == 'profileplot':
+            self.makeProfilePlot(object)
+        elif objtype == 'errorstatisticstable':
+            self.makeErrorStatisticsTable(object)
+        elif objtype == 'monthlystatisticstable':
+            self.makeMonthlyStatisticsTable(object)
+        elif objtype == 'profilestatisticstable':
+            self.makeProfileStatisticsTable(object)
+        elif objtype == 'contourplot':
+            self.makeContourPlot(object)
+        elif objtype == 'reservoircontourplot':
+            self.makeReservoirContourPlot(object)
+        elif objtype == 'singlestatistictable':
+            self.makeSingleStatisticTable(object)
+        elif objtype == 'singlestatisticprofiletable':
+            self.makeSingleStatisticProfileTable(object)
+        elif objtype == 'textbox':
+            self.makeTextBox(object)
+        elif objtype == 'tablefromfile':
+            self.makeTableFromFile(object)
+        elif objtype == 'forecasttable':
+            self.makeForecastTable(object)
+        else:
+            WF.print2stdout('Section Type {0} not identified.'.format(objtype))
+            WF.print2stdout('Skipping Section..')
 
         WF.print2stdout(f'##### Exiting Iterate Sections from object type: {objtype} #####')
 
@@ -4398,6 +4326,55 @@ class MakeAutomatedReport(object):
         self.loadCurrentModelAltID(ID)
         settings = WF.replaceflaggedValues(self, settings, 'modelspecific')
         return settings
+
+    def preCheckSectionForDuplicates(self, section):
+        '''
+        Check if any objects in the section are duplicates. If so, mark them as such and return a list of all members
+        list of members then goes to create a group section for those members
+        :param section: dict with info about each report section
+        :return:
+        list of duplicate members
+        new section with flag confirming if duplicate or not
+        '''
+
+        duplicate_members = []
+        objects_formated = []
+        #check if we even need to do this, aka if any objects are duplicates and collect all members
+        for oi, object in enumerate(section['objects']):
+            if 'lines' in object.keys() or 'datapaths' in object.keys(): #for plots
+                linedata, line_settings = self.Data.getTimeSeriesDataDictionary(object)
+                if self.Data.checkForDuplicateObject(line_settings, self.member): #check if anything is fully duplicate
+                    # islowest = self.Data.checkForLowestMember(line_settings, self.member)
+                    # if islowest: #if not lowest, then we probably already did this
+                    for member in [self.member] + self.Data.getOtherMembers(line_settings, self.member):
+                        if member not in duplicate_members:
+                            duplicate_members.append(member)
+                    object['isduplicate'] = True
+                else:
+                    object['isduplicate'] = False
+                objects_formated.append(object)
+            else:
+                objects_formated.append(object)
+        section['object'] = objects_formated
+        return duplicate_members, section
+
+    def checkForMemberUsed(self, member, membersInSection):
+        '''
+        checks if the current member is the smallest in the batch. We generally only plot on the first member, if we are
+        doing member iterations and grouping them
+        :param member: current member
+        :param membersInSection: all members in section
+        :return: boolean
+        '''
+
+        if member != min(membersInSection): #we do everything on the first grouped member, so skip if were not them
+            return True
+        return False
+
+
+
+
+
 
 
 if __name__ == '__main__':

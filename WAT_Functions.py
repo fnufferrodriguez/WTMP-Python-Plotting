@@ -649,8 +649,10 @@ def replaceflaggedValues(Report, settings, itemset, include=[], exclude=[], forj
             if len(include) > 0:
                 if item not in include:
                     continue
-            if '%%' in item:
-                settings[i] = replaceFlaggedValue(Report, item, itemset, forjasper=forjasper)
+            if isinstance(item, str):
+                if '%%' in item:
+                    settings[i] = replaceFlaggedValue(Report, item, itemset, forjasper=forjasper)
+
 
     return settings
 
@@ -1078,7 +1080,7 @@ def ignoreNans(values):
     :return: list with no nans
     '''
     v = np.asarray(values)
-    return np.all(v[~np.isnan(v)])
+    return v[~np.isnan(v)]
 
 def getPlotUnits(unitslist, object_settings, axis='x'):
     '''

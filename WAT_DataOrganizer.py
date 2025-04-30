@@ -306,8 +306,9 @@ class DataOrganizer(object):
                 numtimesused = 0
 
                 if self.Report.memberiteration:
-                    if 'members' not in line.keys():
-                        line['members'] = [self.Report.member]
+                    # if 'members' not in line.keys():
+                    line['members'] = [self.Report.member]
+                    line['allmembers'] = self.Report.allMembers
 
                 if 'flag' not in line.keys():
                     WF.print2stdout('Flag not set for line (Computed/Observed/etc)', debug=self.Report.debug)
@@ -340,12 +341,9 @@ class DataOrganizer(object):
                     if success:
                         numtimesused += 1
 
-            if self.Report.memberiteration:
-                line_settings = self.checkForIdenticalMembers(data, line_settings)
-
         return data, line_settings
 
-    def checkForIdenticalMembers(self, data, settings):
+    def checkForIdenticalMembers(self, data, metadata):
         '''
         checks if all datasets are the same for all members
         :param data: dictionary containing data
@@ -353,21 +351,20 @@ class DataOrganizer(object):
         :return: boolean
         '''
 
-        for dataflag in data.keys():
-            settings[dataflag]['identicalmembers'] = []
-            for member in self.Report.allMembers:
-                membergroup = []
-                if not all([member not in n for n in settings[dataflag]['identicalmembers']]): #check to see if we've already found a match
-                    main_member_data = WF.ignoreNans(data[dataflag]['values'][member])
-                    for othermember in self.Report.allMembers: #check all other members in the list
-                        if othermember != member:
-                            if np.all(main_member_data == WF.ignoreNans(data[dataflag]['values'][othermember])):
-                                if member not in membergroup:
-                                    membergroup.append(member)
-                                membergroup.append(othermember)
-                if len(membergroup) > 0:
-                    settings[dataflag]['identicalmembers'].append(membergroup)
-        return settings
+        metadata['identicalmembers'] = []
+        for member in metadata['members']:
+            membergroup = []
+            if not any([member in n for n in metadata['identicalmembers']]): #check to see if we've already found a match
+                main_member_data = WF.ignoreNans(data[member])
+                for othermember in metadata['members']: #check all other members in the list
+                    if othermember != member:
+                        if np.all(main_member_data == WF.ignoreNans(data[othermember])):
+                            if member not in membergroup:
+                                membergroup.append(member)
+                            membergroup.append(othermember)
+            if len(membergroup) > 0:
+                metadata['identicalmembers'].append(membergroup)
+        return metadata
 
     def checkForDuplicateObject(self, settings, member):
         '''
@@ -393,7 +390,7 @@ class DataOrganizer(object):
         :return: boolean
         '''
         other_members = self.getOtherMembers(line_settings, member, linekey)
-        if member == min(other_members):
+        if member < min(other_members):
             return True
         return False
 
@@ -488,7 +485,9 @@ class DataOrganizer(object):
                     else: #otherwise, grab ALL in the dssfile
                         wanted_members = 'all'
                         metadata['allmembers'] = True
-                    metadata['members'] = wanted_members #keep track of the original series, as this can change
+                    #grab all the members on the first go, we will be using the data
+                    #then we can keep track of duplicates. Save to memory, but only return the wanted ones
+                    metadata['members'] = self.Report.allMembers #keep track of the original series, as this can change
 
                 if datamem_key in self.Memory.keys():
                     WF.print2stdout('Reading {0} from memory'.format(datamem_key), debug=self.Report.debug) #noisy
@@ -529,7 +528,10 @@ class DataOrganizer(object):
                             times, values, units, members = WDR.readCollectionsDSSData(Line_info['dss_filename'], Line_info['dss_path'],
                                                                                           metadata['members'], self.Report.StartTime,
                                                                                           self.Report.EndTime, self.Report.debug)
-                        metadata['members'] = members
+                        metadata['members'] = members #todo: look at this closer
+
+                        #grab the wanted guys
+                        # values = [{key: values[key]} for key in wanted_members] #this is done below, but this looks cool
                     else:
                         times, values, units = WDR.readDSSData(Line_info['dss_filename'], Line_info['dss_path'],
                                                                self.Report.StartTime, self.Report.EndTime,
@@ -691,8 +693,10 @@ class DataOrganizer(object):
             return np.array([]), np.array([]), metadata
 
         if metadata['collection']:
+            metadata = self.checkForIdenticalMembers(values, metadata)
             if wanted_members != 'all':
                 values = WF.filterByMember(values, wanted_members)
+            #we should check for duplicates here
 
         if 'omitvalue' in Line_info.keys():
             omitval = float(Line_info['omitvalue'])
@@ -1175,8 +1179,8 @@ class DataOrganizer(object):
                 line_settings[dp['flag']]['logoutputfilename'] = datamem_key
                 line_settings[dp['flag']].update(dp)
 
-        if self.Report.memberiteration:
-            line_settings = self.checkForIdenticalMembers(data, line_settings)
+        # if self.Report.memberiteration:
+        #     line_settings = self.checkForIdenticalMembers(data, line_settings)
 
         return data, line_settings
 
