@@ -252,6 +252,12 @@ class MakeAutomatedReport(object):
         object_settings = WF.replaceflaggedValues(self, object_settings, 'fancytext', exclude=['description'])
         object_settings = WF.replaceflaggedValues(self, object_settings, 'fancytext', include=['description'],
                                                   forjasper=True)
+
+        # update the title and descriptions with anything from general or model specific
+        object_settings = WF.replaceflaggedValues(self, object_settings, 'general', include=['description', 'title'])
+        object_settings = WF.replaceflaggedValues(self, object_settings, 'modelspecific',
+                                                  include=['description', 'title'])
+
         object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = WF.getObjectYears(self, object_settings)
         object_settings = self.Plots.confirmAxis(object_settings)
 
@@ -340,9 +346,16 @@ class MakeAutomatedReport(object):
                             if is_lowest:
                                 fullyduplicate = False #if the first instance of a duplicate plot, plot it but change the header description
                                 other_members = self.Data.getOtherMembers(line_settings, self.member)
-                                member_list_frmt = f"{WF.formatMembers(self.member)}, " + ', '.join(WF.formatMembers(other_members))
+                                member_list_frmt = (f"{WF.getOriginalMemberNumber(self.member, WF.matchMemberToEnsembleSet(self.ensembleSets, self.member))}, " +
+                                                    ', '.join([WF.getOriginalMemberNumber(mem, WF.matchMemberToEnsembleSet(self.ensembleSets, mem)) for mem in other_members]))
                                 cur_obj_settings['description'] = WF.updateFlaggedValues(cur_obj_settings['description'], '%%member%%', member_list_frmt)  # updates timeseriesplots png descriptions
                                 ax_settings['title'] = WF.updateFlaggedValues(ax_settings['title'], '%%member%%', member_list_frmt)
+
+                                # update met name in description and title
+                                cur_obj_settings['description'] = WF.updateFlaggedValues(cur_obj_settings['description'], '%%metname%%',
+                                                                                         WF.matchMemberToEnsembleSet(self.ensembleSets, self.member)['metname'])
+                                ax_settings['title'] = WF.updateFlaggedValues(ax_settings['title'], '%%metname%%',
+                                                                              WF.matchMemberToEnsembleSet(self.ensembleSets, self.member)['metname'])
                             else:
                                 fullyduplicate = True
                                 WF.print2stdout('Duplicate plot found. Skipping plot.')
@@ -350,11 +363,27 @@ class MakeAutomatedReport(object):
                                 return
                         else:
                             fullyduplicate = False
-                            cur_obj_settings['description'] = WF.updateFlaggedValues(cur_obj_settings['description'], '%%member%%', WF.formatMembers(self.member))
-                            ax_settings['title'] = WF.updateFlaggedValues(ax_settings['title'], '%%member%%', WF.formatMembers(self.member))
+                            # get the ensemble set for the current memeber
+                            curr_ensemble_set =  WF.matchMemberToEnsembleSet(self.ensembleSets, self.member)
+
+                            # update the member number
+                            cur_obj_settings['description'] = WF.updateFlaggedValues(cur_obj_settings['description'], '%%member%%', WF.getOriginalMemberNumber(self.member, curr_ensemble_set))
+                            ax_settings['title'] = WF.updateFlaggedValues(ax_settings['title'], '%%member%%', WF.getOriginalMemberNumber(self.member, curr_ensemble_set))
+
+                            # update met name in description and title
+                            cur_obj_settings['description'] = WF.updateFlaggedValues(cur_obj_settings['description'], '%%metname%%', curr_ensemble_set['metname'])
+                            ax_settings['title'] = WF.updateFlaggedValues(ax_settings['title'], '%%metname%%', curr_ensemble_set['metname'])
                     else:
-                        cur_obj_settings['description'] = WF.updateFlaggedValues(cur_obj_settings['description'], '%%member%%',WF.formatMembers(self.member))  # updates timeseriesplots png descriptions
-                        ax_settings['title'] = WF.updateFlaggedValues(ax_settings['title'], '%%member%%', WF.formatMembers(self.member))
+                        # get the ensemble set for the current memeber
+                        curr_ensemble_set = WF.matchMemberToEnsembleSet(self.ensembleSets, self.member)
+
+                        # update the member number
+                        cur_obj_settings['description'] = WF.updateFlaggedValues(cur_obj_settings['description'], '%%member%%', WF.getOriginalMemberNumber(self.member, curr_ensemble_set))
+                        ax_settings['title'] = WF.updateFlaggedValues(ax_settings['title'], '%%member%%', WF.getOriginalMemberNumber(self.member, curr_ensemble_set))
+
+                        # update met name in description and title
+                        cur_obj_settings['description'] = WF.updateFlaggedValues(cur_obj_settings['description'], '%%metname%%', curr_ensemble_set['metname'])
+                        ax_settings['title'] = WF.updateFlaggedValues(ax_settings['title'], '%%metname%%', curr_ensemble_set['metname'])
 
                 linedata = WF.filterDataByYear(linedata, year)
                 linedata = self.Data.filterTimeSeries(linedata, line_settings)
@@ -1814,6 +1843,10 @@ class MakeAutomatedReport(object):
         object_settings = WF.replaceflaggedValues(self, object_settings, 'fancytext', include=['description', 'thresholds'],
                                                   forjasper=True)
 
+        # update the title and descriptions with anything from general or model specific
+        object_settings = WF.replaceflaggedValues(self, object_settings, 'general', include=['description'])
+        object_settings = WF.replaceflaggedValues(self, object_settings, 'modelspecific', include=['description'])
+
         object_settings['split_by_year'], object_settings['years'], object_settings['yearstr'] = WF.getObjectYears(self, object_settings)
         object_settings['allyearsstr'] = WF.getObjectAllYears(object_settings['years'])
 
@@ -1827,17 +1860,38 @@ class MakeAutomatedReport(object):
                     if is_lowest:
                         fullyduplicate = False  # if the first instance of a duplicate plot, plot it but change the header description
                         other_members = self.Data.getOtherMembers(data_settings, self.member)
-                        member_list_frmt = f"{WF.formatMembers(self.member)}, " + ', '.join(WF.formatMembers(other_members))
+                        member_list_frmt = (f"{WF.getOriginalMemberNumber(self.member, WF.matchMemberToEnsembleSet(self.ensembleSets, self.member))}, " +
+                                            ', '.join([WF.getOriginalMemberNumber(mem, WF.matchMemberToEnsembleSet(self.ensembleSets, mem)) for mem in other_members]))
+
                         object_settings['description'] = WF.updateFlaggedValues(object_settings['description'], '%%member%%', member_list_frmt)  # updates timeseriesplots png descriptions
+
+                        # update met name in description
+                        object_settings['description'] = WF.updateFlaggedValues(object_settings['description'], '%%metname%%',
+                                                                                WF.matchMemberToEnsembleSet(self.ensembleSets, self.member)['metname'])
                     else:
                         fullyduplicate = True
                         WF.print2stdout('Duplicate object found. Skipping.', debug=self.debug)
                         return
                 else:
                     fullyduplicate = False
-                    object_settings['description'] = WF.updateFlaggedValues(object_settings['description'], '%%member%%', WF.formatMembers(self.member))
+
+                    # get the ensemble set for the current member
+                    curr_ensemble_set = WF.matchMemberToEnsembleSet(self.ensembleSets, self.member)
+
+                    # update the member number
+                    object_settings['description'] = WF.updateFlaggedValues(object_settings['description'], '%%member%%', WF.getOriginalMemberNumber(self.member, curr_ensemble_set))
+
+                    # update met name in description
+                    object_settings['description'] = WF.updateFlaggedValues(object_settings['description'], '%%metname%%', curr_ensemble_set['metname'])
             else:
-                object_settings['description'] = WF.updateFlaggedValues(object_settings['description'], '%%member%%', WF.formatMembers(self.member))
+                # get the ensemble set for the current member
+                curr_ensemble_set = WF.matchMemberToEnsembleSet(self.ensembleSets, self.member)
+
+                # update the member number
+                object_settings['description'] = WF.updateFlaggedValues(object_settings['description'], '%%member%%', WF.getOriginalMemberNumber(self.member, curr_ensemble_set))
+
+                # update met name in description
+                object_settings['description'] = WF.updateFlaggedValues(object_settings['description'], '%%metname%%', curr_ensemble_set['metname'])
 
         data, data_settings = WF.mergeLines(data, data_settings, object_settings)
 
@@ -1870,7 +1924,14 @@ class MakeAutomatedReport(object):
             members = self.Data.getMembers(object_settings, data_settings)
             object_settings['members'] = members
             if self.memberiteration:
-                object_settings = WF.updateFlaggedValues(object_settings, '%%member%%', WF.formatMembers(self.member))
+                # get the ensemble set for the current member
+                curr_ensemble_set = WF.matchMemberToEnsembleSet(self.ensembleSets, self.member)
+
+                object_settings = WF.updateFlaggedValues(object_settings, '%%member%%', WF.getOriginalMemberNumber(self.member, curr_ensemble_set))
+
+                # update metname
+                object_settings = WF.updateFlaggedValues(object_settings, '%%metname%%', curr_ensemble_set['metname'])
+
             rows = self.Tables.configureRowsForCollection(rows, object_settings)
 
         if 'description' in object_settings.keys():
@@ -3624,6 +3685,10 @@ class MakeAutomatedReport(object):
 
         object_settings = WF.replaceflaggedValues(self, object_settings, 'fancytext', forjasper=True)
 
+        # Update with anything in general or model specific
+        object_settings = WF.replaceflaggedValues(self, object_settings, 'general')
+        object_settings = WF.replaceflaggedValues(self, object_settings, 'modelspecific')
+
         if 'description' in object_settings.keys():
             desc = object_settings['description']
             # desc = WF.parseForTextFlags(desc)
@@ -3640,7 +3705,7 @@ class MakeAutomatedReport(object):
                     members_to_plot = self.membersInSection
                 else:
                     members_to_plot = [self.member]
-                desc = WF.updateFlaggedValues(desc, '%%member%%', WF.formatMembers(self.member))
+                desc = WF.updateFlaggedValues(desc, '%%member%%', WF.getOriginalMemberNumber(self.member, WF.matchMemberToEnsembleSet(self.ensembleSets, self.member)))
 
             else:
                 members_to_plot = self.allMembers
@@ -3664,13 +3729,13 @@ class MakeAutomatedReport(object):
                 if len(ensembleset.keys()) == 0:  # if for some reason, we cant find the matching ensemble set? should never happen.
                     continue
                 if primarykey == 'member':
-                    primaryitem = str(member)
+                    primaryitem = WF.getOriginalMemberNumber(member, ensembleset)
                 else:
                     primaryitem = ensembleset[primarykey]
                 row += primaryitem
                 row += '|'
                 if header == 'member':
-                    row += str(member)
+                    row += WF.getOriginalMemberNumber(member, ensembleset)
                 else:
                     row += ensembleset[header]
                 rows.append(row)
@@ -3937,8 +4002,17 @@ class MakeAutomatedReport(object):
                                     WF.print2stdout(f'Member {member} already used in previous section. Skipping.')
                                     continue
 
-                                member_list_frmt = f"{', '.join(WF.formatMembers(self.membersInSection))}"
-                                new_section_header = WF.updateFlaggedValues(section_header, '%%member%%', member_list_frmt)
+                                # get the original member numbs for each in the section
+                                member_list_frmt = ', '.join([WF.getOriginalMemberNumber(mem, WF.matchMemberToEnsembleSet(self.ensembleSets, mem)) for mem in self.membersInSection])
+
+                                # this will cover anything in 'general' or 'modelspecific' which includes SimulationName
+                                new_section_header = WF.replaceflaggedValues(self, section_header, 'modelspecific')
+                                new_section_header = WF.replaceflaggedValues(self, new_section_header, 'general')
+                                # replace met name
+                                new_section_header = WF.updateFlaggedValues(new_section_header, '%%metname%%', ensemble['metname'])
+                                # replace member number list
+                                new_section_header = WF.updateFlaggedValues(new_section_header, '%%member%%', member_list_frmt)
+
                                 self.original_section_header = new_section_header
                                 self.XML.writeSectionHeader(new_section_header)
                                 self.Ensemble = ensemble
@@ -3946,8 +4020,14 @@ class MakeAutomatedReport(object):
                                 self.XML.writeSectionHeaderEnd()
 
                             else:
-                                new_section_header = WF.updateFlaggedValues(section_header, '%%member%%',
-                                                                            WF.formatMembers(member))
+                                # this will cover anything in 'general' or 'modelspecific' which includes SimulationName
+                                new_section_header = WF.replaceflaggedValues(self, section_header, 'modelspecific')
+                                new_section_header = WF.replaceflaggedValues(self, new_section_header, 'general')
+                                # replace met name
+                                new_section_header = WF.updateFlaggedValues(new_section_header, '%%metname%%', ensemble['metname'])
+                                # replace member number, do not format
+                                new_section_header = WF.updateFlaggedValues(new_section_header, '%%member%%', WF.getOriginalMemberNumber(member, ensemble))
+
                                 self.original_section_header = new_section_header
                                 self.XML.writeSectionHeader(new_section_header)
                                 self.Ensemble = ensemble
@@ -3955,7 +4035,14 @@ class MakeAutomatedReport(object):
                                 self.XML.writeSectionHeaderEnd()
 
                         else:
-                            new_section_header = WF.updateFlaggedValues(section_header, '%%member%%', WF.formatMembers(member))
+                            # this will cover anything in 'general' or 'modelspecific' which includes SimulationName
+                            new_section_header = WF.replaceflaggedValues(self, section_header, 'modelspecific')
+                            new_section_header = WF.replaceflaggedValues(self, new_section_header, 'general')
+                            # replace met name
+                            new_section_header = WF.updateFlaggedValues(new_section_header, '%%metname%%', ensemble['metname'])
+                            # replace member number, do not format
+                            new_section_header = WF.updateFlaggedValues(new_section_header, '%%member%%', WF.getOriginalMemberNumber(member, ensemble))
+
                             self.original_section_header = new_section_header
                             self.XML.writeSectionHeader(new_section_header)
                             self.Ensemble = ensemble

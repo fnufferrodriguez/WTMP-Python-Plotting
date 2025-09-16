@@ -1941,6 +1941,35 @@ def matchMemberToEnsembleSet(ensemblesets, member):
             return ensembleset
     return {}
 
+
+def getOriginalMemberNumber(member, ensembleset):
+    """
+    Gets the original member number based on the ensemble set and current member number. This will provide the correct schedule number instead of the collection start plus the schedule number.
+    Parameters
+    ----------
+    member: int
+        member number that includes the collection
+    ensembleset: dict
+        Ensemble set that contains the memeber
+
+    Returns
+    -------
+    s_original_member: str
+        Original member number, as a string
+    """
+
+    # get the index where the current member number is
+    member_index = ensembleset['members'].index(member)
+
+    # split the original members into a list
+    sl_original_members = ensembleset['memberstoreport'].split(', ')
+
+    # get the original member number
+    s_original_member = sl_original_members[member_index]
+
+    return s_original_member
+
+
 def formatNumbers(number, numberformatsettings):
     '''
     formats numbers to use the correct amount of decimal places
