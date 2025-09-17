@@ -710,6 +710,11 @@ class DataOrganizer(object):
             times, values = WT.changeTimeSeriesInterval(times, values, Line_info, self.Report.startYear)
             metadata['interval_mod'] = True
 
+        # if a window is provided, trim to it
+        if 'window' in Line_info.keys():
+            times, values = WT.trimWindow(times, values, Line_info['window'])
+            metadata['window_mod'] = True
+
         return times, values, metadata
 
     def computeCollectionEnvelopes(self, values, envelopes):
