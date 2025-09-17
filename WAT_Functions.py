@@ -1806,10 +1806,26 @@ def NaNOmittedValues(values, omitval, debug):
         return new_values
     else:
         if len(values) > 0:
-            o_msk = np.where(values == omitval)
+            # Count the number of decimals after the value
+            count_after_decimal = str(omitval)[::-1].find('.')
+
+            # Add a check for a .0 in the value. If this occurs, treat the value like an integer and set the rounding to 0
+            if '.0' in str(omitval) and count_after_decimal == 1:
+                count_after_decimal = 0
+
+            # Determine which values are within the rounding difference of the omitted value
+            o_msk = np.where(np.round(values, count_after_decimal) == omitval)
+
+            # Mask omitted values and set to nan
             values[o_msk] = np.nan
+
+            # Convert back into an array
             new_values = np.asarray(values)
+
+            # Log that some values have been omitted based on the filter
             print2stdout('Omitted {0} values of {1}'.format(len(o_msk[0]), omitval), debug=debug)
+
+            # Return the updated values to the calling function
             return new_values
         else:
             print2stdout('No Values to omit.', debug=debug)
