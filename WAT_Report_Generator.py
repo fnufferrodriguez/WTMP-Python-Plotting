@@ -868,7 +868,7 @@ class MakeAutomatedReport(object):
 
                         if len(handles) > 0:
 
-                            if ax_settings['legend_outside'].lower() == 'true':  #TODO: calibrate the offset
+                            if ax_settings['legend_outside'].lower() == 'right':  #TODO: calibrate the offset
                                 if _usetwinx:
 
                                     ax.legend(handles=handles, labels=labels, loc='center left',
@@ -879,6 +879,23 @@ class MakeAutomatedReport(object):
                                     # right_sided_axes.append(ax)
                                     ax.legend(handles=handles, labels=labels, loc='center left',
                                               bbox_to_anchor=(1, 0.5), ncol=numcols, fontsize=legsize)
+
+                            elif ax_settings['legend_outside'].lower() == 'below':  #TODO: calibrate the offset
+                                if 'xlabel' in ax_settings.keys():
+                                    legened_y_offset = -0.15
+                                else:
+                                    legened_y_offset = -0.05
+
+                                if _usetwinx:
+
+                                    ax.legend(handles=handles, labels=labels, loc='upper center',
+                                              bbox_to_anchor=(0.5, legened_y_offset), ncol=numcols,
+                                              fontsize=legsize)
+
+                                else:
+                                    # right_sided_axes.append(ax)
+                                    ax.legend(handles=handles, labels=labels, loc='upper center',
+                                              bbox_to_anchor=(0.5, legened_y_offset), ncol=numcols, fontsize=legsize)
                             else:
                                 ax.legend(handles=handles, labels=labels, fontsize=legsize, ncol=numcols)
 
