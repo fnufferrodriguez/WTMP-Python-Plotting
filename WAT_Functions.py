@@ -1954,6 +1954,16 @@ def getOriginalMemberNumber(member, ensembleset, s_dss_file, s_f_part, o_start_t
         member number that includes the collection
     ensembleset: dict
         Ensemble set that contains the memeber
+    s_dss_file:str
+        Path to DSS file with simulation data
+    s_f_part: str
+        Alternative f-part in DSS file to use
+    o_start_time: datetime object
+        Start date of simulation
+    o_end_time: datetime object
+        End date of simulation
+    b_debug: bool
+        Flag set in report, needed for DSS reader
 
     Returns
     -------
