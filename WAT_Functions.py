@@ -1943,7 +1943,7 @@ def matchMemberToEnsembleSet(ensemblesets, member):
     return {}
 
 
-def getOriginalMemberNumber(Report, member, ensembleset):
+def getOriginalMemberNumber(member, ensembleset, s_dss_file, s_f_part, o_start_time, o_end_time, b_debug):
     """
     Gets the original member number based on the ensemble set and current member number. This will provide the correct schedule number instead of the collection start plus the schedule number.
     Parameters
@@ -1963,10 +1963,10 @@ def getOriginalMemberNumber(Report, member, ensembleset):
 
     # Check if there is a final schedule number in the dss file. This will only happen for the iterative W2 model
     # the path where the schedule number would be if it exists
-    s_final_schedule_path = f"//W2_FOLSOM_SCHEDULE_FINAL/Count/01Apr2024/1Hour/{Report.alternativeFpart}/"
+    s_final_schedule_path = f"//W2_FOLSOM_SCHEDULE_FINAL/Count/01Apr2024/1Hour/{s_f_part}/"
 
     # try and pull the values
-    times, values, units = WR.readDSSData(Report.DSSFile, s_final_schedule_path, Report.StartTime, Report.EndTime, Report.debug)
+    times, values, units = WR.readDSSData(s_dss_file, s_final_schedule_path, o_start_time, o_end_time, b_debug)
 
     # if the values array is non-empty return the first non nan value
     if len(values) > 0:
