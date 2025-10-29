@@ -60,7 +60,10 @@ class Plots(object):
                 if '%%member%%' not in collection_draw_settings[member]['label']:
                     collection_draw_settings[member]['label'] = f"{collection_draw_settings[member]['label']}: {member}"
                 else:
-                    collection_draw_settings[member]['label'] = collection_draw_settings[member]['label'].replace('%%member%%', str(WF.formatMembers(member)))
+                    # get the ensemble set for the current member
+                    curr_ensemble_set = WF.matchMemberToEnsembleSet(self.Report.ensembleSets, member)
+                    collection_draw_settings[member]['label'] = collection_draw_settings[member]['label'].replace('%%member%%', WF.getOriginalMemberNumber(member, curr_ensemble_set, self.Report.DSSFile,
+                                                                                                                                                     self.Report.alternativeFpart, self.Report.StartTime, self.Report.EndTime, self.Report.debug))
                 collection_draw_settings[member] = WF.fixDuplicateColors(collection_draw_settings[member])
             return collection_draw_settings
 
