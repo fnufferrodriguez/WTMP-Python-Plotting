@@ -27,6 +27,7 @@ import itertools
 
 import WAT_Constants as WC
 import WAT_Time as WT
+import WAT_Reader as WR
 
 constants = WC.WAT_Constants()
 
@@ -1942,21 +1943,45 @@ def matchMemberToEnsembleSet(ensemblesets, member):
     return {}
 
 
-def getOriginalMemberNumber(member, ensembleset):
+def getOriginalMemberNumber(member, ensembleset, s_dss_file, s_f_part, o_start_time, o_end_time, b_debug):
     """
     Gets the original member number based on the ensemble set and current member number. This will provide the correct schedule number instead of the collection start plus the schedule number.
     Parameters
     ----------
+    Report: object
+        Report generator object
     member: int
         member number that includes the collection
     ensembleset: dict
         Ensemble set that contains the memeber
+    s_dss_file:str
+        Path to DSS file with simulation data
+    s_f_part: str
+        Alternative f-part in DSS file to use
+    o_start_time: datetime object
+        Start date of simulation
+    o_end_time: datetime object
+        End date of simulation
+    b_debug: bool
+        Flag set in report, needed for DSS reader
 
     Returns
     -------
     s_original_member: str
         Original member number, as a string
     """
+
+    # Check if there is a final schedule number in the dss file. This will only happen for the iterative W2 model
+    # the path where the schedule number would be if it exists
+    s_final_schedule_path = f"//W2_FOLSOM_SCHEDULE_FINAL/Count/01Apr2024/1Hour/{s_f_part}/"
+
+    # try and pull the values
+    times, values, units = WR.readDSSData(s_dss_file, s_final_schedule_path, o_start_time, o_end_time, b_debug)
+
+    # if the values array is non-empty return the first non nan value
+    if len(values) > 0:
+        return str(int(values[~np.isnan(values)][0]))
+
 
     # get the index where the current member number is
     member_index = ensembleset['members'].index(member)
