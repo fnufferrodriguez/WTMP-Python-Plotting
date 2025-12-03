@@ -486,3 +486,54 @@ def translateDateFormat(lim, dateformat, fallback, StartTime, EndTime, debug=Fal
                 else:
                     WF.print2stdout('Setting to fallback.', debug=debug)
                 return fallback
+
+
+def trimWindow(dates, values, window):
+    """
+    Trim the dates and values to the given window
+    Parameters
+    ----------
+    dates: list
+        Dates that go with the values that will be trimmed
+    values: dict
+        Dictionary of sets of values that will be trimmed
+    window: str
+        Month window to trim to
+
+    Returns
+    -------
+    dates: list
+        Dates that were trimmed
+    values: dict
+        Dictionary of sets of values that were trimmed
+    """
+
+    # dictionary to convert the month names to the month number
+    c_month_to_number = {
+        "January": 1, "February": 2, "March": 3, "April": 4,
+        "May": 5, "June": 6, "July": 7, "August": 8,
+        "September": 9, "October": 10, "November": 11, "December": 12
+    }
+
+    # the window will be something like "May-November" so split into the two month
+    s_start, s_end = window.split('-')
+
+    # convert months to numbers
+    i_start_month, i_end_month = c_month_to_number[s_start], c_month_to_number[s_end]
+
+    # get the list of numbers to include
+    # if we do not cross the year change
+    if i_start_month <= i_end_month:
+        window = list(range(i_start_month, i_end_month + 1))
+
+    # if we do, we need start to 12 and 1 to end
+    else:
+        window  = list(range(i_start_month, 13)) + list(range(1, i_end_month + 1))
+
+    il_indeces = [i for i, date in enumerate(dates) if date.month in window]
+
+    # trim the dates and values
+    dates = dates[il_indeces]
+    values = {member: vals[il_indeces] for member, vals in values.items()}
+
+    return dates, values
