@@ -901,7 +901,8 @@ class MakeAutomatedReport(object):
 
                         if len(handles) > 0:
 
-                            if ax_settings['legend_outside'].lower() == 'true':  #TODO: calibrate the offset
+                            # If legend outside is set to right, put the legend to the right of the plot
+                            if ax_settings['legend_outside'].lower() == 'right':  #TODO: calibrate the offset
                                 if _usetwinx:
 
                                     ax.legend(handles=handles, labels=labels, loc='center left',
@@ -912,6 +913,21 @@ class MakeAutomatedReport(object):
                                     # right_sided_axes.append(ax)
                                     ax.legend(handles=handles, labels=labels, loc='center left',
                                               bbox_to_anchor=(1, 0.5), ncol=numcols, fontsize=legsize)
+
+                            # If legend_outside is set to below, put the legend below the plot
+                            elif ax_settings['legend_outside'].lower() == 'below':
+
+                                # If there is an xlabel, the legend needs to be farther down to account for it
+                                if 'xlabel' in ax_settings.keys():
+                                    legened_y_offset = -0.15
+                                else:
+                                    legened_y_offset = -0.05
+
+                                # the below legend does not change if we have a twin axis
+                                ax.legend(handles=handles, labels=labels, loc='upper center',
+                                              bbox_to_anchor=(0.5, legened_y_offset), ncol=numcols,
+                                              fontsize=legsize)
+
                             else:
                                 ax.legend(handles=handles, labels=labels, fontsize=legsize, ncol=numcols)
 
