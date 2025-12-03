@@ -1,0 +1,49 @@
+name: plotting-env
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11
+  - affine
+  - altgraph
+  - bzip2
+  - ca-certificates
+  - contourpy
+  - cycler
+  - fonttools
+  - h5py
+  - importlib-resources
+  - joblib
+  - kiwisolver
+  - matplotlib
+  - numpy=1.26.4
+  - packaging
+  - pandas
+  - pillow
+  - pyinstaller
+  - pyinstaller-hooks-contrib
+  - pyparsing
+  - pyproj
+  - python-dateutil
+  - pytz
+  - pywin32
+  - scikit-learn
+  - scipy
+  - six
+  - threadpoolctl
+  - tzdata
+  - zipp
+  - zope.interface
+  - pip
+  - pip:
+      - pendulum
+      - DateTime
+      - msvc_runtime==14.40.33807
+      - pefile
+      - pytzdata
+      - pywin32-ctypes
+      - pydsstools
+      - zope-interface
+      
+
+
