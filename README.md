@@ -1,3 +1,5 @@
+# USBR WTMP Python Plotting
+
 This folder will contain all Python scripts related to plotting for the USBR WQ development. 
 
 1. Check in the usbr-python-plotting folder the existence of an environment.yml file to build or update your conda environment. Make sure that the NumPy package version is 1.26.4 or newer and the msvc_runtime package is 14.40.33807 or newer. Do not include the versions of the other packages.
