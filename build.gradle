@@ -53,7 +53,8 @@ tasks.register("buildInstaller", VenvTask) {
     inputs.files(pythonSourceSet.getSourceDirectories().files)
 
     venvExec = "pyinstaller"
-    args = ["WAT_Report_Generator.spec"]
+    def specFile = layout.projectDirectory.file("WAT_Report_Generator.spec").asFile.getAbsolutePath()
+    args = [specFile]
     workingDir = pyinstallerDir
 
     outputs.file(pyinstallerDir.get().dir("dist").file("WAT_Report_Generator.exe"))
